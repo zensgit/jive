@@ -157,7 +157,7 @@
     },
     {
       "name": "JD",
-      "keywords": ["京东", "京东支付"],
+      "keywords": ["京东", "京东支付", "京东金融"],
       "parent": "品牌",
       "sub": "京东",
       "type": "expense"
@@ -195,6 +195,69 @@
       "keywords": ["饿了么"],
       "parent": "品牌",
       "sub": "饿了么",
+      "type": "expense"
+    },
+    {
+      "name": "Hema",
+      "keywords": ["盒马鲜生", "盒马"],
+      "parent": "品牌",
+      "sub": "盒马鲜生",
+      "type": "expense"
+    },
+    {
+      "name": "Xianyu",
+      "keywords": ["闲鱼"],
+      "parent": "品牌",
+      "sub": "闲鱼",
+      "type": "expense"
+    },
+    {
+      "name": "Douyin",
+      "keywords": ["抖音", "抖音支付", "抖音月付"],
+      "parent": "品牌",
+      "sub": "抖音",
+      "type": "expense"
+    },
+    {
+      "name": "Kuaishou",
+      "keywords": ["快手"],
+      "parent": "品牌",
+      "sub": "快手",
+      "type": "expense"
+    },
+    {
+      "name": "Alibaba",
+      "keywords": ["阿里巴巴"],
+      "parent": "品牌",
+      "sub": "阿里巴巴",
+      "type": "expense"
+    },
+    {
+      "name": "Ali1688",
+      "keywords": ["阿里1688"],
+      "parent": "品牌",
+      "sub": "阿里1688",
+      "type": "expense"
+    },
+    {
+      "name": "UnionPay",
+      "keywords": ["云闪付"],
+      "parent": "品牌",
+      "sub": "银联",
+      "type": "expense"
+    },
+    {
+      "name": "Huawei Pay",
+      "keywords": ["华为支付"],
+      "parent": "品牌",
+      "sub": "华为",
+      "type": "expense"
+    },
+    {
+      "name": "CCB Life",
+      "keywords": ["建行生活"],
+      "parent": "品牌",
+      "sub": "建设银行",
       "type": "expense"
     },
     {
