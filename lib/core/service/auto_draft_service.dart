@@ -104,16 +104,32 @@ class AutoDraftService {
     final accountId = await _resolveAccountId(capture.source);
     final resolved = categories.resolve(match.parent, match.sub);
 
-    final parentName = resolved.parent?.name ?? match.parent ?? '自动记账';
-    final subName = resolved.child?.name ?? match.sub ?? '未分类';
+    var parentName = resolved.parent?.name ?? match.parent ?? '自动记账';
+    var subName = resolved.child?.name ?? match.sub ?? '未分类';
     final type = capture.type ?? match.type;
+
+    if (type == 'expense') {
+      final meal = _inferMealSubCategory(
+        parentName: parentName,
+        subName: subName,
+        timestamp: capture.timestamp,
+      );
+      if (meal != null) {
+        subName = meal;
+      }
+    }
 
     if (directCommit) {
       await _commitTransaction(
         capture: capture,
         type: type,
         categoryKey: resolved.parent?.key,
-        subCategoryKey: resolved.child?.key,
+        subCategoryKey: _resolveSubKey(
+          parentName: parentName,
+          subName: subName,
+          resolved: resolved,
+          categories: categories,
+        ),
         categoryName: parentName,
         subCategoryName: subName,
         accountId: accountId,
@@ -121,6 +137,12 @@ class AutoDraftService {
       return const AutoCaptureResult(inserted: true, committed: true, duplicate: false);
     }
 
+    final subKey = _resolveSubKey(
+      parentName: parentName,
+      subName: subName,
+      resolved: resolved,
+      categories: categories,
+    );
     final draft = JiveAutoDraft()
       ..amount = capture.amount
       ..source = capture.source
@@ -130,7 +152,7 @@ class AutoDraftService {
       ..category = parentName
       ..subCategory = subName
       ..categoryKey = resolved.parent?.key
-      ..subCategoryKey = resolved.child?.key
+      ..subCategoryKey = subKey
       ..accountId = accountId
       ..dedupKey = dedupKey
       ..createdAt = DateTime.now();
@@ -196,6 +218,34 @@ class AutoDraftService {
         await isar.collection<JiveAutoDraft>().delete(draftId);
       }
     });
+  }
+
+  String? _inferMealSubCategory({
+    required String parentName,
+    required String subName,
+    required DateTime timestamp,
+  }) {
+    if (parentName != '餐饮') return null;
+    if (subName == '早餐' || subName == '午餐' || subName == '晚餐') {
+      return subName;
+    }
+    final hour = timestamp.hour;
+    if (hour >= 4 && hour < 10) return '早餐';
+    if (hour >= 10 && hour < 16) return '午餐';
+    return '晚餐';
+  }
+
+  String? _resolveSubKey({
+    required String parentName,
+    required String subName,
+    required CategoryMatch resolved,
+    required CategoryIndex categories,
+  }) {
+    if (resolved.child != null && resolved.child!.name == subName) {
+      return resolved.child!.key;
+    }
+    final updated = categories.resolve(parentName, subName);
+    return updated.child?.key;
   }
 
   Future<bool> _isDuplicate(AutoCapture capture, String dedupKey) async {
