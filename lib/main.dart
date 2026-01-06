@@ -19,6 +19,7 @@ import 'core/service/auto_draft_service.dart';
 import 'core/service/auto_settings.dart';
 import 'feature/accounts/accounts_screen.dart';
 import 'feature/auto/auto_drafts_screen.dart';
+import 'feature/auto/auto_rule_tester_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/stats/stats_screen.dart';
 import 'core/utils/logger_util.dart';
@@ -438,6 +439,15 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  Future<void> _openAutoRuleTester() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AutoRuleTesterScreen(isar: _isar),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -701,6 +711,14 @@ class _MainScreenState extends State<MainScreen> {
                           onTap: () async {
                             Navigator.pop(context);
                             await _openAutoDrafts();
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.rule),
+                          title: const Text("自动规则测试"),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await _openAutoRuleTester();
                           },
                         ),
                         ListTile(
