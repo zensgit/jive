@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/database/auto_draft_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/database/category_model.dart';
@@ -79,7 +80,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _isar = Isar.getInstance()!;
       } else {
         _isar = await Isar.open(
-          [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema],
+          [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema, JiveAutoDraftSchema],
           directory: dir.path,
         );
       }

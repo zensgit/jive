@@ -11,10 +11,14 @@ import 'core/design_system/theme.dart';
 import 'core/database/account_model.dart';
 import 'core/database/transaction_model.dart';
 import 'core/database/category_model.dart'; 
+import 'core/database/auto_draft_model.dart';
 import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
 import 'core/service/transaction_service.dart';
+import 'core/service/auto_draft_service.dart';
+import 'core/service/auto_settings.dart';
 import 'feature/accounts/accounts_screen.dart';
+import 'feature/auto/auto_drafts_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/stats/stats_screen.dart';
 import 'core/utils/logger_util.dart';
@@ -61,6 +65,11 @@ class _MainScreenState extends State<MainScreen> {
   int? _defaultAccountId;
   int _currentIndex = 0;
   bool _demoSeedEnabled = true;
+  bool _dbReady = false;
+  bool _isListening = false;
+  final List<Map<String, dynamic>> _pendingAutoEvents = [];
+  AutoSettings _autoSettings = AutoSettingsStore.defaults;
+  int _pendingDraftCount = 0;
 
   @override
   void initState() {
@@ -75,17 +84,21 @@ class _MainScreenState extends State<MainScreen> {
       _isar = Isar.getInstance()!;
     } else {
       _isar = await Isar.open(
-        [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema],
+        [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema, JiveAutoDraftSchema],
         directory: dir.path,
       );
     }
     await _loadDemoSeedPrefs();
+    await _loadAutoSettings();
     await CategoryService(_isar).initDefaultCategories();
     await AccountService(_isar).initDefaultAccounts();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
     await TransactionService(_isar).migrateTransactionAccountIds();
     _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
-    _loadTransactions();
+    await _loadTransactions();
+    await _loadAutoDraftCount();
+    _dbReady = true;
+    await _flushPendingAutoEvents();
   }
 
   Future<void> _loadDemoSeedPrefs() async {
@@ -94,6 +107,22 @@ class _MainScreenState extends State<MainScreen> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  Future<void> _loadAutoSettings() async {
+    final settings = await AutoSettingsStore.load();
+    if (!mounted) return;
+    setState(() {
+      _autoSettings = settings;
+    });
+  }
+
+  Future<void> _setAutoSettings(AutoSettings settings) async {
+    if (!mounted) return;
+    setState(() {
+      _autoSettings = settings;
+    });
+    await AutoSettingsStore.save(settings);
   }
 
   Future<void> _setDemoSeedEnabled(bool enabled) async {
@@ -298,6 +327,7 @@ class _MainScreenState extends State<MainScreen> {
       await _isar.collection<JiveTransaction>().clear();
       await _isar.collection<JiveAccount>().clear();
       await _isar.collection<JiveCategory>().clear();
+      await _isar.collection<JiveAutoDraft>().clear();
     });
     await CategoryService(_isar).initDefaultCategories();
     await AccountService(_isar).initDefaultAccounts();
@@ -305,6 +335,7 @@ class _MainScreenState extends State<MainScreen> {
     await TransactionService(_isar).migrateTransactionAccountIds();
     _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
     await _loadTransactions();
+    await _loadAutoDraftCount();
   }
 
   Future<void> _loadTransactions() async {
@@ -327,38 +358,83 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  Future<void> _loadAutoDraftCount() async {
+    final count = await _isar.collection<JiveAutoDraft>().count();
+    if (!mounted) return;
+    setState(() {
+      _pendingDraftCount = count;
+    });
+  }
+
+  Future<void> _flushPendingAutoEvents() async {
+    if (_pendingAutoEvents.isEmpty) return;
+    final events = List<Map<String, dynamic>>.from(_pendingAutoEvents);
+    _pendingAutoEvents.clear();
+    for (final event in events) {
+      await _handleAutoEvent(event);
+    }
+  }
+
+  Future<void> _handleAutoEvent(Map<String, dynamic> data) async {
+    if (!_autoSettings.enabled) return;
+    final capture = AutoCapture.fromEvent(data);
+    if (!capture.isValid) return;
+    final result = await AutoDraftService(_isar).ingestCapture(
+      capture,
+      directCommit: _autoSettings.directCommit,
+    );
+    if (!mounted) return;
+    if (result.duplicate) {
+      _showMessage("已忽略重复自动记账");
+      return;
+    }
+    await _loadAutoDraftCount();
+    if (result.committed) {
+      await _loadTransactions();
+      _showMessage("已自动入账");
+      return;
+    }
+    if (result.inserted) {
+      _showMessage("已加入待确认");
+    }
+  }
+
   void _startListening() {
+    if (_isListening) return;
+    _isListening = true;
     eventChannel.receiveBroadcastStream().listen(
       (dynamic event) async {
-        final data = Map<String, dynamic>.from(event);
-        final amount = double.tryParse(data['amount'].toString()) ?? 0.0;
-        final source = data['source'].toString();
-        final rawText = data['raw_text'].toString();
-
-        final newTx = JiveTransaction()
-          ..amount = amount
-          ..source = source
-          ..type = "expense"
-          ..category = "自动记账" 
-          ..subCategory = "未分类"
-          ..rawText = rawText
-          ..accountId = _defaultAccountId
-          ..timestamp = DateTime.now();
-
-        await _isar.writeTxn(() async {
-          await _isar.jiveTransactions.put(newTx);
-        });
-
-        _loadTransactions();
+        if (event is! Map) return;
+        final payload = Map<String, dynamic>.from(event);
+        if (!_dbReady) {
+          _pendingAutoEvents.add(payload);
+          return;
+        }
+        await _handleAutoEvent(payload);
       },
     );
   }
 
   Future<void> _openSettings() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      _showMessage("该入口仅支持 Android，iOS 请使用快捷指令");
+      return;
+    }
     try {
       await methodChannel.invokeMethod('openNotificationSettings');
     } catch (e) {
       debugPrint("Error: $e");
+    }
+  }
+
+  Future<void> _openAutoDrafts() async {
+    final changed = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AutoDraftsScreen()),
+    );
+    if (changed == true) {
+      await _loadTransactions();
+      await _loadAutoDraftCount();
     }
   }
 
@@ -533,6 +609,37 @@ class _MainScreenState extends State<MainScreen> {
                             _showMessage(inserted ? "已注入测试数据" : "已有数据，未注入测试数据");
                           },
                         ),
+                        if (kDebugMode)
+                          ListTile(
+                            leading: const Icon(Icons.restart_alt, color: Colors.orangeAccent),
+                            title: const Text("重置系统分类", style: TextStyle(color: Colors.orangeAccent)),
+                            subtitle: const Text("清空分类并重新载入系统分类"),
+                            onTap: () async {
+                              Navigator.pop(context);
+                              final confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (dialogContext) => AlertDialog(
+                                  title: const Text("重置系统分类"),
+                                  content: const Text("将清空所有分类并重新载入系统分类，是否继续？"),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(dialogContext, false),
+                                      child: const Text("取消"),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(dialogContext, true),
+                                      child: const Text("重置"),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (confirmed != true) return;
+                              await CategoryService(_isar).resetCategories();
+                              await TransactionService(_isar).migrateTransactionCategoryKeys();
+                              await _loadTransactions();
+                              _showMessage("已重置系统分类");
+                            },
+                          ),
                         ListTile(
                           leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
                           title: const Text("清空数据", style: TextStyle(color: Colors.redAccent)),
@@ -558,6 +665,42 @@ class _MainScreenState extends State<MainScreen> {
                             if (confirmed != true) return;
                             await _clearAllData();
                             _showMessage("已清空数据");
+                          },
+                        ),
+                        const Divider(height: 1),
+                        SwitchListTile(
+                          secondary: const Icon(Icons.auto_awesome),
+                          title: const Text("自动记账"),
+                          subtitle: Text(_autoSettings.enabled ? "已开启" : "已关闭"),
+                          value: _autoSettings.enabled,
+                          onChanged: (value) async {
+                            final updated = _autoSettings.copyWith(enabled: value);
+                            setSheetState(() {
+                              _autoSettings = updated;
+                            });
+                            await _setAutoSettings(updated);
+                          },
+                        ),
+                        SwitchListTile(
+                          secondary: const Icon(Icons.playlist_add_check),
+                          title: const Text("自动入账"),
+                          subtitle: const Text("关闭则进入待确认"),
+                          value: _autoSettings.directCommit,
+                          onChanged: (value) async {
+                            final updated = _autoSettings.copyWith(directCommit: value);
+                            setSheetState(() {
+                              _autoSettings = updated;
+                            });
+                            await _setAutoSettings(updated);
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.inbox_outlined),
+                          title: const Text("待确认自动记账"),
+                          subtitle: Text("当前 $_pendingDraftCount 条"),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await _openAutoDrafts();
                           },
                         ),
                         ListTile(
