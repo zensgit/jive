@@ -1,8 +1,64 @@
 {
   "version": 1,
-  "income_keywords": ["到账", "入账", "收款", "退款", "退还", "返现", "补贴", "工资"],
-  "transfer_keywords": ["转账", "转入", "转出", "内部转账"],
+  "income_keywords": ["到账", "入账", "收款", "退款", "退还", "返现", "补贴", "工资", "红包", "转账-来自", "二维码收款"],
+  "transfer_keywords": ["转账", "转入", "转出", "内部转账", "转账给", "支付宝转账"],
   "rules": [
+    {
+      "name": "Incoming Red Packet",
+      "keywords": ["微信红包-来自", "支付宝红包-来自", "的红包", "收红包"],
+      "parent": "收入",
+      "sub": "收红包",
+      "type": "income"
+    },
+    {
+      "name": "Refund Income",
+      "keywords": ["退款-来自", "转账-退款", "退款"],
+      "parent": "收入",
+      "sub": "退款",
+      "type": "income"
+    },
+    {
+      "name": "Collection Income",
+      "keywords": ["二维码收款-来自", "微信收款", "支付宝收款", "确认收款"],
+      "parent": "收入",
+      "sub": "外快",
+      "type": "income"
+    },
+    {
+      "name": "Incoming Transfer",
+      "keywords": ["转账-来自"],
+      "parent": "收入",
+      "sub": "借入",
+      "type": "income"
+    },
+    {
+      "name": "Transfer Out",
+      "keywords": ["转账给", "支付宝转账"],
+      "parent": "转账",
+      "sub": "转账",
+      "type": "transfer"
+    },
+    {
+      "name": "Breakfast",
+      "keywords": ["早餐", "早饭", "早点"],
+      "parent": "餐饮",
+      "sub": "早餐",
+      "type": "expense"
+    },
+    {
+      "name": "Lunch",
+      "keywords": ["午餐", "午饭"],
+      "parent": "餐饮",
+      "sub": "午餐",
+      "type": "expense"
+    },
+    {
+      "name": "Dinner",
+      "keywords": ["晚餐", "晚饭"],
+      "parent": "餐饮",
+      "sub": "晚餐",
+      "type": "expense"
+    },
     {
       "name": "Didi Taxi",
       "keywords": ["滴滴", "快车", "顺风车", "打车", "出租车"],
