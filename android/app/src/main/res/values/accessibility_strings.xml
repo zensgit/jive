@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Jive 自动记账服务。开启后，当您在微信或支付宝支付成功时，Jive 会自动识别金额并为您记账。</string>
+</resources>

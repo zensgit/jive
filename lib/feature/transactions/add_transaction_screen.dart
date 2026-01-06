@@ -1,0 +1,1536 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:isar/isar.dart';
+import 'package:lpinyin/lpinyin.dart';
+import 'package:path_provider/path_provider.dart';
+import '../../core/design_system/theme.dart';
+import '../../core/database/account_model.dart';
+import '../../core/database/transaction_model.dart';
+import '../../core/service/category_service.dart';
+import '../../core/service/account_service.dart';
+import '../../core/database/category_model.dart';
+import '../../core/utils/logger_util.dart';
+import '../category/category_create_dialog.dart';
+import '../category/category_create_screen.dart';
+import '../category/category_edit_dialog.dart';
+import '../category/category_manager_screen.dart';
+import '../category/category_search_delegate.dart';
+import '../stats/stats_screen.dart';
+
+enum TransactionType { expense, income, transfer }
+
+class AddTransactionScreen extends StatefulWidget {
+  const AddTransactionScreen({super.key});
+
+  @override
+  State<AddTransactionScreen> createState() => _AddTransactionScreenState();
+}
+
+class _AddTransactionScreenState extends State<AddTransactionScreen> {
+  String _amountStr = "0";
+  late Isar _isar;
+  bool _isLoading = true;
+  bool _hasDataChanges = false;
+  bool _isFallbackMode = false;
+  bool _isSearchMode = false;
+  TransactionType _txType = TransactionType.expense;
+  List<JiveCategory> _parentCategories = [];
+  List<JiveCategory> _subCategories = [];
+  JiveCategory? _selectedParent;
+  JiveCategory? _selectedSub;
+  List<JiveAccount> _accounts = [];
+  JiveAccount? _selectedAccount;
+  JiveAccount? _selectedToAccount;
+  List<CategorySearchResult> _searchItems = [];
+  final Map<String, String> _searchKeyCache = {};
+  final TextEditingController _inlineSearchController = TextEditingController();
+  final FocusNode _inlineSearchFocus = FocusNode();
+  String _searchQuery = "";
+  final Map<String, List<String>> _searchTokenCache = {};
+  final Map<String, List<String>> _systemTokenCache = {};
+  bool _searchItemsLoaded = false;
+
+  final List<String> _keys = [
+    '7', '8', '9', 'date',
+    '4', '5', '6', '+',
+    '1', '2', '3', '-',
+    '.', '0', 'DEL', 'OK'
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _initData();
+  }
+
+  @override
+  void dispose() {
+    _inlineSearchController.dispose();
+    _inlineSearchFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initData() async {
+    try {
+      JiveLogger.d(">>> INIT DATA STARTED");
+      final dir = await getApplicationDocumentsDirectory();
+      
+      if (Isar.getInstance() != null) {
+        _isar = Isar.getInstance()!;
+      } else {
+        _isar = await Isar.open(
+          [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema],
+          directory: dir.path,
+        );
+      }
+      
+      await CategoryService(_isar).initDefaultCategories();
+      await AccountService(_isar).initDefaultAccounts();
+      await _loadAccounts();
+      await _loadParentsForType();
+    } catch (e, s) {
+      JiveLogger.e("Error loading categories", e, s);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadParentsForType() async {
+    if (_txType == TransactionType.transfer) {
+      _isFallbackMode = false;
+      if (mounted) {
+        setState(() {
+          _parentCategories = [];
+          _subCategories = [];
+          _selectedParent = null;
+          _selectedSub = null;
+        });
+      }
+      return;
+    }
+
+    final showIncome = _txType == TransactionType.income;
+    var parents = await _isar.collection<JiveCategory>()
+        .filter()
+        .parentKeyIsNull()
+        .isIncomeEqualTo(showIncome)
+        .isHiddenEqualTo(false)
+        .sortByOrder()
+        .findAll();
+
+    // FALLBACK (only for expense)
+    if (parents.isEmpty && !showIncome) {
+      JiveLogger.w("!!! DB EMPTY, USING FALLBACK !!!");
+      final lib = CategoryService(_isar).getSystemLibrary(isIncome: showIncome);
+      parents = lib.keys.map((name) => JiveCategory()
+        ..key = "sys_$name"
+        ..name = name
+        ..iconName = lib[name]!['icon']
+        ..order = 0
+      ).toList();
+      _isFallbackMode = true;
+    } else {
+      _isFallbackMode = false;
+    }
+
+    if (parents.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _parentCategories = parents;
+          if (_selectedParent == null || !_parentCategories.any((p) => p.key == _selectedParent!.key)) {
+            _selectedParent = parents.first;
+            _loadSubCategories(_selectedParent!.key);
+          } else {
+            _loadSubCategories(_selectedParent!.key);
+          }
+        });
+      }
+    } else if (mounted) {
+      setState(() {
+        _parentCategories = [];
+        _subCategories = [];
+        _selectedParent = null;
+        _selectedSub = null;
+      });
+    }
+  }
+
+  Future<void> _loadAccounts() async {
+    final service = AccountService(_isar);
+    final accounts = await service.getActiveAccounts();
+    if (!mounted) return;
+
+    JiveAccount? selectedAccount = _selectedAccount;
+    if (selectedAccount == null || !accounts.any((a) => a.id == selectedAccount!.id)) {
+      selectedAccount = accounts.isNotEmpty ? accounts.first : null;
+    }
+
+    JiveAccount? selectedTo = _selectedToAccount;
+    if (selectedTo == null || (selectedAccount != null && selectedTo.id == selectedAccount.id)) {
+      if (selectedAccount != null) {
+        selectedTo = accounts.firstWhere(
+          (a) => a.id != selectedAccount!.id,
+          orElse: () => selectedAccount!,
+        );
+      } else {
+        selectedTo = null;
+      }
+    }
+
+    setState(() {
+      _accounts = accounts;
+      _selectedAccount = selectedAccount;
+      _selectedToAccount = selectedTo;
+    });
+  }
+
+  String _typeValue(TransactionType type) {
+    switch (type) {
+      case TransactionType.income:
+        return "income";
+      case TransactionType.transfer:
+        return "transfer";
+      case TransactionType.expense:
+      default:
+        return "expense";
+    }
+  }
+
+  bool get _showCategories => _txType != TransactionType.transfer;
+
+  String _currentCategoryLabel() {
+    if (_txType == TransactionType.transfer) return "转账";
+    final parentName = _selectedParent?.name ?? "";
+    final subName = _selectedSub?.name ?? "";
+    if (parentName.isEmpty) return "";
+    if (subName.isEmpty) return parentName;
+    return "$parentName · $subName";
+  }
+
+  Future<void> _switchType(TransactionType type) async {
+    if (_txType == type) return;
+    setState(() {
+      _txType = type;
+      _selectedParent = null;
+      _selectedSub = null;
+      _parentCategories = [];
+      _subCategories = [];
+      _isLoading = true;
+      _isSearchMode = false;
+      _searchItems = [];
+      _searchItemsLoaded = false;
+      _searchKeyCache.clear();
+      _searchTokenCache.clear();
+      _searchQuery = "";
+      _inlineSearchController.clear();
+    });
+    await _loadParentsForType();
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _loadSubCategories(String parentKey, {String? selectKey}) async {
+    var subs = await _isar.collection<JiveCategory>()
+        .filter()
+        .parentKeyEqualTo(parentKey)
+        .sortByOrder()
+        .findAll();
+    
+    // FALLBACK
+    if (_isFallbackMode && subs.isEmpty) {
+      final parentName = parentKey.replaceAll("sys_", "");
+      final lib = CategoryService(_isar).getSystemLibrary(isIncome: false);
+      if (lib.containsKey(parentName)) {
+        final children = lib[parentName]!['children'] as List;
+        subs = children.map<JiveCategory>((c) => JiveCategory()
+          ..key = "${parentKey}_${c['name']}"
+          ..name = c['name']
+          ..iconName = c['icon']
+        ).toList();
+      }
+    }
+
+    final preserveKey = selectKey ?? _selectedSub?.key;
+
+    if (mounted) {
+      setState(() {
+        _subCategories = subs;
+        if (subs.isNotEmpty) {
+          if (preserveKey != null) {
+            final match = subs.where((item) => item.key == preserveKey);
+            _selectedSub = match.isEmpty ? null : match.first;
+          } else {
+            _selectedSub = null;
+          }
+        } else {
+          _selectedSub = null;
+        }
+      });
+    }
+  }
+
+  Future<void> _refreshCategories() async {
+    if (!mounted) return;
+    setState(() {
+      _selectedParent = null;
+      _selectedSub = null;
+      _parentCategories = [];
+      _subCategories = [];
+      _isLoading = true;
+      _searchItems = [];
+      _searchItemsLoaded = false;
+      _searchKeyCache.clear();
+      _searchTokenCache.clear();
+      _isSearchMode = false;
+      _searchQuery = "";
+      _inlineSearchController.clear();
+    });
+    await _loadParentsForType();
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _openCategoryManager() async {
+    final changed = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CategoryManagerScreen()),
+    );
+    if (changed == true) {
+      _hasDataChanges = true;
+    }
+    await _refreshCategories();
+  }
+
+  Future<void> _openCategoryStats({
+    required JiveCategory parent,
+    JiveCategory? sub,
+  }) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StatsScreen(
+          filterCategoryKey: parent.key,
+          filterSubCategoryKey: sub?.key,
+        ),
+      ),
+    );
+  }
+
+  Future<List<CategorySearchResult>> _buildSearchItems() async {
+    if (_txType == TransactionType.transfer) return [];
+    final all = await _isar.collection<JiveCategory>().where().findAll();
+    if (all.isEmpty) return [];
+
+    final showIncome = _txType == TransactionType.income;
+    final parents = all.where((c) => c.parentKey == null && !c.isHidden && c.isIncome == showIncome).toList();
+    parents.sort((a, b) => a.order.compareTo(b.order));
+    final parentByKey = {for (final p in parents) p.key: p};
+    final items = <CategorySearchResult>[];
+    for (final parent in parents) {
+      items.add(CategorySearchResult(parent: parent));
+    }
+    final children = all.where((c) => c.parentKey != null && !c.isHidden && c.isIncome == showIncome).toList();
+    for (final child in children) {
+      final parent = parentByKey[child.parentKey];
+      if (parent == null) continue;
+      items.add(CategorySearchResult(parent: parent, sub: child));
+    }
+    return items;
+  }
+
+  Future<void> _toggleInlineSearch() async {
+    if (_txType == TransactionType.transfer) return;
+    if (_isSearchMode) {
+      _exitSearchMode();
+      return;
+    }
+    setState(() => _isSearchMode = true);
+    if (_searchItems.isEmpty) {
+      final items = await _buildSearchItems();
+      if (!mounted) return;
+      setState(() {
+        _searchItems = items;
+        _searchItemsLoaded = true;
+        _searchKeyCache.clear();
+        _searchTokenCache.clear();
+      });
+    } else if (!_searchItemsLoaded) {
+      setState(() => _searchItemsLoaded = true);
+    }
+    if (mounted) {
+      FocusScope.of(context).requestFocus(_inlineSearchFocus);
+    }
+  }
+
+  void _exitSearchMode() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _isSearchMode = false;
+      _searchQuery = "";
+      _inlineSearchController.clear();
+    });
+  }
+
+  Future<void> _promptAddSubCategory(JiveCategory parent) async {
+    final existingNames = _subCategories.map((child) => child.name).toSet();
+    final systemLibrary = CategoryService(_isar).getSystemLibrary(
+      isIncome: parent.isIncome,
+      includeIncome: true,
+    );
+    final result = await Navigator.push<CategoryCreateResult>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryCreateScreen(
+          title: "添加子类 · ${parent.name}",
+          parentName: parent.name,
+          initialIcon: parent.iconName,
+          nameLabel: "子类名称",
+          allowBatch: true,
+          systemLibrary: systemLibrary,
+          existingNames: existingNames,
+          initialGroupName: parent.name,
+          autoBatchAdd: true,
+          onBatchAdd: (suggestion, colorHex) async {
+            final created = await CategoryService(_isar).createSubCategory(
+              parent: parent,
+              name: suggestion.name,
+              iconName: suggestion.iconName,
+              colorHex: colorHex,
+              isSystem: true,
+            );
+            return created != null;
+          },
+        ),
+      ),
+    );
+    if (result == null) return;
+    if (result.hasChanges) {
+      _hasDataChanges = true;
+      setState(() => _selectedParent = parent);
+      await _loadSubCategories(parent.key);
+      return;
+    }
+    if (result.systemSelections.isEmpty && result.names.isEmpty) return;
+    final skipped = <String>[];
+    JiveCategory? lastCreated;
+    if (result.systemSelections.isNotEmpty) {
+      for (final item in result.systemSelections) {
+        final created = await CategoryService(_isar).createSubCategory(
+          parent: parent,
+          name: item.name,
+          iconName: item.iconName,
+          colorHex: result.colorHex,
+          isSystem: true,
+        );
+        if (created == null) {
+          skipped.add(item.name);
+        } else {
+          lastCreated = created;
+        }
+      }
+    } else {
+      for (final name in result.names) {
+        final iconName = result.autoMatchIcon
+            ? CategoryService(_isar).suggestIconName(name, fallback: result.iconName)
+            : result.iconName;
+        final created = await CategoryService(_isar).createSubCategory(
+          parent: parent,
+          name: name,
+          iconName: iconName,
+          colorHex: result.colorHex,
+        );
+        if (created == null) {
+          skipped.add(name);
+        } else {
+          lastCreated = created;
+        }
+      }
+    }
+
+    if (!mounted) return;
+    if (lastCreated == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("已存在同名子类")),
+      );
+      return;
+    }
+
+    _hasDataChanges = true;
+    _searchItems = [];
+    _searchItemsLoaded = false;
+    _searchKeyCache.clear();
+    _searchTokenCache.clear();
+    setState(() => _selectedParent = parent);
+    await _loadSubCategories(parent.key, selectKey: lastCreated.key);
+    if (skipped.isNotEmpty) {
+      final preview = skipped.take(3).join("、");
+      final suffix = skipped.length > 3 ? "等" : "";
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("已忽略重复: $preview$suffix")),
+      );
+    }
+  }
+
+  void _showParentActions(JiveCategory parent) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.tune),
+              title: const Text("管理"),
+              onTap: () async {
+                Navigator.pop(context);
+                await _openCategoryManager();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.pie_chart),
+              title: const Text("查看统计数据"),
+              onTap: () async {
+                Navigator.pop(context);
+                await _openCategoryStats(parent: parent);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline),
+              title: const Text("添加子类"),
+              onTap: () async {
+                Navigator.pop(context);
+                await _promptAddSubCategory(parent);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSubCategoryActions(JiveCategory sub) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: Text("编辑 '${sub.name}'"),
+              onTap: () async {
+                Navigator.pop(context);
+                final updated = await showDialog(
+                  context: context,
+                  builder: (context) => CategoryEditDialog(category: sub, isar: _isar),
+                );
+                if (updated == true) {
+                  _hasDataChanges = true;
+                  await _refreshCategories();
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.pie_chart),
+              title: const Text("查看统计数据"),
+              onTap: () async {
+                Navigator.pop(context);
+                if (_selectedParent != null) {
+                  await _openCategoryStats(parent: _selectedParent!, sub: sub);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text("删除分类", style: TextStyle(color: Colors.red)),
+              onTap: () async {
+                Navigator.pop(context);
+                final deleted = await CategoryService(_isar).deleteCategory(sub);
+                if (!mounted) return;
+                if (!deleted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("请先处理子类后再删除")),
+                  );
+                  return;
+                }
+                _hasDataChanges = true;
+                if (_selectedParent != null) {
+                  await _loadSubCategories(_selectedParent!.key);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _onKeyPress(String key) {
+    setState(() {
+      if (key == 'DEL') {
+        if (_amountStr.length > 1) {
+          _amountStr = _amountStr.substring(0, _amountStr.length - 1);
+        } else {
+          _amountStr = "0";
+        }
+      } else if (key == 'OK') {
+        _saveTransaction();
+      } else {
+        if (_amountStr == "0" && key != '.') {
+          _amountStr = key;
+        } else if (key == '.' && _amountStr.contains('.')) {
+        } else {
+          if (_amountStr.length < 10) {
+            _amountStr += key;
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> _saveTransaction() async {
+    final amount = double.tryParse(_amountStr);
+    if (amount == null || amount <= 0) return;
+    if (_txType != TransactionType.transfer && _selectedParent == null) return;
+    if (_selectedAccount == null) return;
+    if (_txType == TransactionType.transfer && _selectedToAccount == null) return;
+    if (_txType == TransactionType.transfer && _selectedToAccount?.id == _selectedAccount?.id) return;
+
+    final typeValue = _typeValue(_txType);
+    final parentName = _txType == TransactionType.transfer ? "转账" : _selectedParent!.name;
+    final subName = _txType == TransactionType.transfer ? "" : (_selectedSub?.name ?? "");
+    final rawText = _txType == TransactionType.transfer
+        ? "转账"
+        : "${_selectedParent!.name} - ${_selectedSub?.name ?? ''}";
+
+    final newTx = JiveTransaction()
+      ..amount = amount
+      ..source = "Manual"
+      ..type = typeValue
+      ..categoryKey = _txType == TransactionType.transfer ? null : _selectedParent!.key
+      ..subCategoryKey = _txType == TransactionType.transfer ? null : _selectedSub?.key
+      ..category = parentName
+      ..subCategory = subName
+      ..rawText = rawText
+      ..accountId = _selectedAccount?.id
+      ..toAccountId = _txType == TransactionType.transfer ? _selectedToAccount?.id : null
+      ..timestamp = DateTime.now();
+
+    await _isar.writeTxn(() async {
+      await _isar.jiveTransactions.put(newTx);
+    });
+
+    JiveLogger.i("Manual Transaction Saved: $amount");
+    _hasDataChanges = true;
+
+    if (mounted) {
+      Navigator.pop(context, true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(backgroundColor: Colors.white, body: Center(child: CircularProgressIndicator()));
+    }
+
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final amountFontSize = isLandscape ? 48.0 : 72.0;
+    final currencyFontSize = isLandscape ? 22.0 : 32.0;
+    final labelSpacing = isLandscape ? 4.0 : 12.0;
+    final parentTabHeight = isLandscape ? 44.0 : 68.0;
+    final subGridAspectRatio = isLandscape ? 1.2 : 0.8;
+    final subGridMainAxisSpacing = isLandscape ? 6.0 : 16.0;
+    final keyboardAspectRatio = isLandscape ? 3.4 : 1.6;
+    final keyboardPadding = EdgeInsets.fromLTRB(20, isLandscape ? 6 : 8, 20, isLandscape ? 6 : 30);
+    final keyboardMainAxisSpacing = isLandscape ? 8.0 : 12.0;
+    final keyboardCrossAxisSpacing = isLandscape ? 8.0 : 12.0;
+
+    final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+    final hideAmountInSearch = _isSearchMode && isKeyboardVisible;
+
+    final amountHeader = Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _currentCategoryLabel(),
+            style: GoogleFonts.lato(color: Colors.grey.shade500, fontSize: isLandscape ? 12 : 14),
+          ),
+          SizedBox(height: labelSpacing),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                "¥",
+                style: GoogleFonts.rubik(
+                  color: Colors.black87,
+                  fontSize: currencyFontSize,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _amountStr,
+                style: GoogleFonts.rubik(
+                  color: JiveTheme.primaryGreen,
+                  fontSize: amountFontSize,
+                  fontWeight: FontWeight.w600,
+                  height: 1.0,
+                ),
+              ),
+            ],
+          ),
+          if (_accounts.isNotEmpty) ...[
+            SizedBox(height: isLandscape ? 6 : 10),
+            _buildAccountSelector(isLandscape: isLandscape),
+          ],
+        ],
+      ),
+    );
+
+    final amountSection = hideAmountInSearch
+        ? const SizedBox.shrink()
+        : isLandscape
+        ? Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: amountHeader,
+          )
+        : Expanded(
+            flex: 1,
+            child: amountHeader,
+          );
+
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isSearchMode) {
+          _exitSearchMode();
+          return false;
+        }
+        Navigator.pop(context, _hasDataChanges);
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: Colors.black87),
+            onPressed: () => Navigator.pop(context, _hasDataChanges),
+          ),
+          actions: [
+            if (_showCategories)
+              IconButton(
+                icon: Icon(_isSearchMode ? Icons.close : Icons.search, color: Colors.black87),
+                onPressed: _toggleInlineSearch,
+              ),
+          ],
+          centerTitle: true,
+          title: _buildTypeSelector(),
+        ),
+        body: Column(
+        children: [
+          // 1. 金额显示区 (Flex 1)
+          amountSection,
+
+          // 2. 分类与键盘容器 (Flex 2)
+          Expanded(
+            flex: 2,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                boxShadow: [BoxShadow(color: Colors.grey.shade100, blurRadius: 20, offset: const Offset(0, -5))],
+              ),
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  
+                  if (_showCategories) ...[
+                    if (_isSearchMode) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                        child: _buildInlineSearchField(),
+                      ),
+                      const Divider(height: 1, color: Colors.black12),
+                    ] else ...[
+                      // A. 父分类 Tab
+                      SizedBox(
+                        height: parentTabHeight,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          itemCount: _parentCategories.length,
+                          itemBuilder: (context, index) {
+                            final cat = _parentCategories[index];
+                            final isSelected = cat.key == _selectedParent?.key;
+                            final customColor = CategoryService.parseColorHex(cat.colorHex);
+                            final activeColor = customColor ?? JiveTheme.primaryGreen;
+                            final inactiveColor = customColor?.withOpacity(0.7) ?? Colors.grey.shade500;
+                            final iconColor = isSelected ? activeColor : inactiveColor;
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedParent = cat;
+                                  _selectedSub = null;
+                                });
+                                _loadSubCategories(cat.key);
+                              },
+                              onLongPress: () => _showParentActions(cat),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                alignment: Alignment.center,
+                                decoration: isSelected
+                                    ? BoxDecoration(
+                                        border: Border(bottom: BorderSide(color: activeColor, width: 2)),
+                                      )
+                                    : null,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CategoryService.buildIcon(
+                                      cat.iconName,
+                                      size: isLandscape ? 16 : 18,
+                                      color: iconColor,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      cat.name,
+                                      style: TextStyle(
+                                        fontSize: isLandscape ? 11 : 12,
+                                        color: iconColor,
+                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const Divider(height: 1, color: Colors.black12),
+                    ],
+                  ],
+
+                  // B. 子分类网格 (Expanded)
+                  Expanded(
+                    child: _showCategories
+                        ? _buildCategoryBody(subGridAspectRatio, subGridMainAxisSpacing)
+                        : _buildTransferHint(),
+                  ),
+
+                  if (!_isSearchMode) ...[
+                    const Divider(height: 1, color: Colors.black12),
+
+                    // C. 数字键盘
+                    Container(
+                      padding: keyboardPadding,
+                      child: GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          childAspectRatio: keyboardAspectRatio,
+                          crossAxisSpacing: keyboardCrossAxisSpacing,
+                          mainAxisSpacing: keyboardMainAxisSpacing,
+                        ),
+                        itemCount: _keys.length,
+                        itemBuilder: (context, index) {
+                          return _buildKey(_keys[index]);
+                        },
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildTypeChip(TransactionType.expense, Icons.arrow_upward, "支出"),
+          _buildTypeChip(TransactionType.income, Icons.arrow_downward, "收入"),
+          _buildTypeChip(TransactionType.transfer, Icons.swap_horiz, "转账"),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypeChip(TransactionType type, IconData icon, String label) {
+    final isSelected = _txType == type;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _switchType(type),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: isSelected ? Colors.black87 : Colors.black38),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.lato(
+                color: isSelected ? Colors.black87 : Colors.black45,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccountSelector({required bool isLandscape}) {
+    final textSize = isLandscape ? 11.0 : 12.0;
+    if (_txType == TransactionType.transfer) {
+      return Row(
+        children: [
+          Expanded(
+            child: _buildAccountChip(
+              label: "从",
+              account: _selectedAccount,
+              textSize: textSize,
+              expand: true,
+              onTap: () => _showAccountPicker(pickTo: false),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(Icons.arrow_forward, size: 14, color: Colors.grey.shade500),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _buildAccountChip(
+              label: "到",
+              account: _selectedToAccount,
+              textSize: textSize,
+              expand: true,
+              onTap: () => _showAccountPicker(pickTo: true),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Center(
+      child: _buildAccountChip(
+        label: "账户",
+        account: _selectedAccount,
+        textSize: textSize,
+        expand: false,
+        onTap: () => _showAccountPicker(pickTo: false),
+      ),
+    );
+  }
+
+  Widget _buildAccountChip({
+    required String label,
+    required JiveAccount? account,
+    required double textSize,
+    required bool expand,
+    required VoidCallback onTap,
+  }) {
+    final color = AccountService.parseColorHex(account?.colorHex) ?? JiveTheme.primaryGreen;
+    final name = account?.name ?? "请选择";
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+            children: [
+              AccountService.buildIcon(
+                account?.iconName ?? 'account_balance_wallet',
+                size: 14,
+                color: color,
+              ),
+              const SizedBox(width: 6),
+              if (expand)
+                Expanded(
+                  child: Text(
+                    "$label $name",
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: textSize, color: Colors.black87),
+                  ),
+                )
+              else
+                Text(
+                  "$label $name",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: textSize, color: Colors.black87),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAccountPicker({required bool pickTo}) async {
+    if (_accounts.isEmpty) return;
+    final selected = await showModalBottomSheet<JiveAccount>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            itemCount: _accounts.length,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final account = _accounts[index];
+              final color = AccountService.parseColorHex(account.colorHex) ?? JiveTheme.primaryGreen;
+              final currentId = pickTo ? _selectedToAccount?.id : _selectedAccount?.id;
+              final isSelected = account.id == currentId;
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: color.withOpacity(0.15),
+                  child: AccountService.buildIcon(account.iconName, size: 18, color: color),
+                ),
+                title: Text(account.name),
+                subtitle: Text(account.type == AccountService.typeLiability ? "负债账户" : "资产账户"),
+                trailing: isSelected ? Icon(Icons.check, color: color) : null,
+                onTap: () => Navigator.pop(context, account),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (selected == null) return;
+    if (_txType == TransactionType.transfer) {
+      final other = pickTo ? _selectedAccount : _selectedToAccount;
+      if (other != null && other.id == selected.id) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("转出与转入账户不能相同")),
+        );
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() {
+      if (pickTo) {
+        _selectedToAccount = selected;
+      } else {
+        _selectedAccount = selected;
+      }
+    });
+  }
+
+  Widget _buildInlineSearchField() {
+    return TextField(
+      controller: _inlineSearchController,
+      focusNode: _inlineSearchFocus,
+      onChanged: _onSearchChanged,
+      decoration: InputDecoration(
+        hintText: "搜索分类",
+        prefixIcon: const Icon(Icons.search, size: 18),
+        suffixIcon: _searchQuery.isEmpty
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () {
+                  _inlineSearchController.clear();
+                  setState(() => _searchQuery = "");
+                },
+              ),
+        filled: true,
+        isDense: true,
+        fillColor: Colors.grey.shade100,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCategoryBody(double subGridAspectRatio, double subGridMainAxisSpacing) {
+    final hasQuery = _isSearchMode && _searchQuery.trim().isNotEmpty;
+    if (hasQuery && _searchItemsLoaded && _filterSearchResults(_searchQuery).isEmpty) {
+      return _buildSystemSuggestionPanel();
+    }
+    return _buildSubCategoryGrid(subGridAspectRatio, subGridMainAxisSpacing);
+  }
+
+  Widget _buildSubCategoryGrid(double subGridAspectRatio, double subGridMainAxisSpacing) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(16),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 5,
+        childAspectRatio: subGridAspectRatio,
+        mainAxisSpacing: subGridMainAxisSpacing,
+        crossAxisSpacing: 12,
+      ),
+      itemCount: _subCategories.length + 1,
+      itemBuilder: (context, index) {
+        if (index == _subCategories.length) {
+          return GestureDetector(
+            onTap: () async {
+              final parent = _selectedParent;
+              if (parent != null) {
+                await _promptAddSubCategory(parent);
+              }
+            },
+            child: Column(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: const Icon(Icons.add, color: Colors.grey, size: 24),
+                ),
+                const SizedBox(height: 4),
+                const Text("自定义", style: TextStyle(fontSize: 10, color: Colors.grey)),
+              ],
+            ),
+          );
+        }
+
+        final cat = _subCategories[index];
+        final isSelected = cat.key == _selectedSub?.key;
+        final customColor = CategoryService.parseColorHex(cat.colorHex);
+        final activeColor = customColor ?? JiveTheme.primaryGreen;
+        final inactiveColor = customColor?.withOpacity(0.7) ?? Colors.grey.shade400;
+        return GestureDetector(
+          onTap: () => setState(() => _selectedSub = cat),
+          onLongPress: () => _showSubCategoryActions(cat),
+          child: Column(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isSelected ? activeColor : Colors.grey.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: CategoryService.buildIcon(
+                  cat.iconName,
+                  size: 22,
+                  color: isSelected ? Colors.white : inactiveColor,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                cat.name,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isSelected ? Colors.black87 : Colors.grey.shade400,
+                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSystemSuggestionPanel() {
+    final suggestions = _systemSuggestionsForQuery(_searchQuery);
+    if (suggestions.isEmpty) {
+      return const Center(child: Text("未找到匹配分类"));
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      itemCount: suggestions.length + 1,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Text("系统库建议", style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                const Spacer(),
+                Text("点击添加并选中", style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+              ],
+            ),
+          );
+        }
+        final suggestion = suggestions[index - 1];
+        final title = suggestion.isSub ? suggestion.name : suggestion.parentName;
+        final subtitle = suggestion.isSub ? suggestion.parentName : "一级分类";
+        return ListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+          leading: CircleAvatar(
+            backgroundColor: Colors.grey.shade100,
+            child: CategoryService.buildIcon(
+              suggestion.iconName,
+              size: 18,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          title: Text(title, style: TextStyle(color: Colors.grey.shade700)),
+          subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+          trailing: const Icon(Icons.add, color: Colors.grey),
+          onTap: () => _applySystemSuggestion(suggestion),
+        );
+      },
+    );
+  }
+
+  List<_SystemSuggestion> _systemSuggestionsForQuery(String query) {
+    final normalized = _normalizeSearch(query);
+    if (normalized.isEmpty) return const [];
+    final isIncome = _txType == TransactionType.income;
+    final lib = CategoryService(_isar).getSystemLibrary(isIncome: isIncome);
+    final existingParents = <String>{};
+    final existingChildren = <String>{};
+    for (final item in _searchItems) {
+      existingParents.add(item.parent.name);
+      final sub = item.sub;
+      if (sub == null) continue;
+      existingChildren.add("${item.parent.name}::${sub.name}");
+    }
+
+    final suggestions = <_SystemSuggestion>[];
+    for (final entry in lib.entries) {
+      final parentName = entry.key;
+      final parentIcon = (entry.value['icon'] as String?)?.trim().isNotEmpty == true
+          ? entry.value['icon'] as String
+          : "category";
+      if (!existingParents.contains(parentName) &&
+          _matchesSystemTokens(_tokensForSystem(parentName, "p::$parentName"), normalized)) {
+        suggestions.add(_SystemSuggestion.parent(parentName, parentIcon));
+      }
+      final children = entry.value['children'] as List<dynamic>? ?? const [];
+      for (final child in children) {
+        final childName = child['name'] as String? ?? "";
+        if (childName.trim().isEmpty) continue;
+        final childIcon = (child['icon'] as String?)?.trim().isNotEmpty == true
+            ? child['icon'] as String
+            : "category";
+        final key = "$parentName::$childName";
+        if (existingChildren.contains(key)) continue;
+        final tokens = <String>[
+          ..._tokensForSystem(childName, "c::$key"),
+          ..._tokensForSystem(parentName, "cp::$parentName"),
+        ];
+        if (_matchesSystemTokens(tokens, normalized)) {
+          suggestions.add(_SystemSuggestion.child(parentName, childName, childIcon, parentIcon));
+        }
+      }
+    }
+    return suggestions;
+  }
+
+  bool _matchesSystemTokens(List<String> tokens, String query) {
+    for (final token in tokens) {
+      if (token.contains(query)) return true;
+    }
+    return false;
+  }
+
+  Future<void> _applySystemSuggestion(_SystemSuggestion suggestion) async {
+    final service = CategoryService(_isar);
+    final isIncome = _txType == TransactionType.income;
+    JiveCategory? parent = await _isar.collection<JiveCategory>()
+        .filter()
+        .parentKeyIsNull()
+        .isIncomeEqualTo(isIncome)
+        .nameEqualTo(suggestion.parentName)
+        .findFirst();
+
+    parent ??= await service.createParentCategory(
+      name: suggestion.parentName,
+      iconName: suggestion.parentIconName,
+      isIncome: isIncome,
+      isSystem: true,
+    );
+
+    if (parent == null) {
+      return;
+    }
+
+    JiveCategory? sub;
+    if (suggestion.isSub) {
+      sub = await service.createSubCategory(
+        parent: parent,
+        name: suggestion.name,
+        iconName: suggestion.iconName,
+        isSystem: true,
+      );
+      sub ??= await _isar.collection<JiveCategory>()
+          .filter()
+          .parentKeyEqualTo(parent.key)
+          .nameEqualTo(suggestion.name)
+          .findFirst();
+    }
+
+    await _reloadParentsAndSelect(parentKey: parent.key, subKey: sub?.key);
+    _hasDataChanges = true;
+    _searchItems = [];
+    _searchItemsLoaded = false;
+    _searchKeyCache.clear();
+    _searchTokenCache.clear();
+    if (mounted) {
+      _exitSearchMode();
+    }
+  }
+
+  Future<void> _reloadParentsAndSelect({required String parentKey, String? subKey}) async {
+    final showIncome = _txType == TransactionType.income;
+    var parents = await _isar.collection<JiveCategory>()
+        .filter()
+        .parentKeyIsNull()
+        .isIncomeEqualTo(showIncome)
+        .isHiddenEqualTo(false)
+        .sortByOrder()
+        .findAll();
+
+    if (parents.isEmpty && !showIncome) {
+      final lib = CategoryService(_isar).getSystemLibrary(isIncome: showIncome);
+      parents = lib.keys.map((name) => JiveCategory()
+        ..key = "sys_$name"
+        ..name = name
+        ..iconName = lib[name]!['icon']
+        ..order = 0
+      ).toList();
+      _isFallbackMode = true;
+    } else {
+      _isFallbackMode = false;
+    }
+
+    JiveCategory? selected;
+    if (parents.isNotEmpty) {
+      selected = parents.firstWhere(
+        (item) => item.key == parentKey,
+        orElse: () => parents.first,
+      );
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _parentCategories = parents;
+      _selectedParent = selected;
+    });
+    if (_selectedParent != null) {
+      await _loadSubCategories(_selectedParent!.key, selectKey: subKey);
+    } else {
+      setState(() {
+        _subCategories = [];
+        _selectedSub = null;
+      });
+    }
+  }
+
+  List<CategorySearchResult> _filterSearchResults([String? query]) {
+    final q = _normalizeSearch(query ?? _searchQuery);
+    if (q.isEmpty) return _searchItems;
+    return _searchItems.where((item) {
+      if (_matches(item.parent, q)) return true;
+      final sub = item.sub;
+      return sub != null && _matches(sub, q);
+    }).toList();
+  }
+
+  String _normalizeSearch(String input) {
+    return input.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+  }
+
+  bool _matches(JiveCategory category, String query) {
+    final key = _searchKeyCache[category.key] ??= _buildSearchKey(category);
+    return key.contains(query);
+  }
+
+  String _buildSearchKey(JiveCategory category) {
+    final name = _normalizeSearch(category.name);
+    final icon = _normalizeSearch(category.iconName);
+    final pinyin = _normalizeSearch(PinyinHelper.getPinyinE(category.name));
+    final short = _normalizeSearch(PinyinHelper.getShortPinyin(category.name));
+    return "$name $icon $pinyin $short";
+  }
+
+  List<String> _tokensForCategory(JiveCategory category) {
+    return _searchTokenCache[category.key] ??= _buildTokensForName(category.name);
+  }
+
+  List<String> _tokensForSystem(String name, String key) {
+    return _systemTokenCache[key] ??= _buildTokensForName(name);
+  }
+
+  List<String> _buildTokensForName(String name) {
+    final normalized = _normalizeSearch(name);
+    final pinyin = _normalizeSearch(PinyinHelper.getPinyinE(name));
+    final short = _normalizeSearch(PinyinHelper.getShortPinyin(name));
+    return [normalized, pinyin, short]..removeWhere((token) => token.isEmpty);
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() => _searchQuery = value);
+    if (_searchQuery.trim().isEmpty) return;
+    _applySearchSelection(_searchQuery);
+  }
+
+  Future<void> _applySearchSelection(String query) async {
+    if (_searchItems.isEmpty) return;
+    final results = _filterSearchResults(query);
+    if (results.isEmpty) return;
+    final normalized = _normalizeSearch(query);
+    final exactMatches = results.where((item) => _isExactMatch(item, normalized)).toList();
+    if (exactMatches.isNotEmpty) {
+      await _selectSearchResult(exactMatches.first);
+      return;
+    }
+    final prefixMatches = results.where((item) => _isPrefixMatch(item, normalized)).toList();
+    if (prefixMatches.length == 1) {
+      await _selectSearchResult(prefixMatches.first);
+    }
+  }
+
+  Future<void> _selectSearchResult(CategorySearchResult result) async {
+    final parent = result.parent;
+    final subKey = result.sub?.key;
+    setState(() {
+      _selectedParent = parent;
+      _selectedSub = result.sub;
+    });
+    await _loadSubCategories(parent.key, selectKey: subKey);
+  }
+
+  bool _isExactMatch(CategorySearchResult item, String query) {
+    final tokens = _tokensForCategory(item.sub ?? item.parent);
+    return tokens.contains(query);
+  }
+
+  bool _isPrefixMatch(CategorySearchResult item, String query) {
+    final tokens = _tokensForCategory(item.sub ?? item.parent);
+    for (final token in tokens) {
+      if (token.startsWith(query)) return true;
+    }
+    return false;
+  }
+
+
+  Widget _buildTransferHint() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.swap_horiz, size: 28, color: Colors.grey.shade400),
+          const SizedBox(height: 8),
+          Text("转账无需分类", style: TextStyle(color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKey(String key) {
+    bool isOk = key == 'OK';
+    bool isDel = key == 'DEL';
+    
+    if (isOk) {
+      return InkWell(
+        onTap: () => _onKeyPress(key),
+        borderRadius: BorderRadius.circular(30),
+        child: Container(
+          decoration: BoxDecoration(
+            color: JiveTheme.primaryGreen,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: [BoxShadow(color: JiveTheme.primaryGreen.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))],
+          ),
+          child: const Center(child: Icon(Icons.check, color: Colors.white, size: 28)),
+        ),
+      );
+    }
+
+    return InkWell(
+      onTap: () => _onKeyPress(key),
+      borderRadius: BorderRadius.circular(20),
+      child: Center(
+        child: isDel 
+            ? const Icon(Icons.backspace_rounded, size: 22, color: Colors.black54)
+            : ['+', '-', 'date'].contains(key)
+                ? _buildOpIcon(key)
+                : Text(key, style: GoogleFonts.rubik(fontSize: 26, color: Colors.black87, fontWeight: FontWeight.w400)),
+      ),
+    );
+  }
+
+  Widget _buildOpIcon(String key) {
+    if (key == 'date') return const Icon(Icons.calendar_today_rounded, size: 20, color: Colors.black45);
+    return Text(key, style: const TextStyle(fontSize: 24, color: Colors.black45));
+  }
+}
+
+class _SystemSuggestion {
+  final String parentName;
+  final String name;
+  final String parentIconName;
+  final String iconName;
+  final bool isSub;
+
+  const _SystemSuggestion._({
+    required this.parentName,
+    required this.name,
+    required this.parentIconName,
+    required this.iconName,
+    required this.isSub,
+  });
+
+  factory _SystemSuggestion.parent(String name, String iconName) {
+    return _SystemSuggestion._(
+      parentName: name,
+      name: name,
+      parentIconName: iconName,
+      iconName: iconName,
+      isSub: false,
+    );
+  }
+
+  factory _SystemSuggestion.child(String parentName, String name, String iconName, String parentIconName) {
+    return _SystemSuggestion._(
+      parentName: parentName,
+      name: name,
+      parentIconName: parentIconName,
+      iconName: iconName,
+      isSub: true,
+    );
+  }
+}
