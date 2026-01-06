@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "income_keywords": ["到账", "入账", "收款", "退款", "退还", "返现", "补贴", "工资", "红包", "转账-来自", "二维码收款"],
+  "income_keywords": ["到账", "入账", "收款", "退款", "退还", "返现", "补贴", "工资", "红包", "转账-来自", "二维码收款", "资金待入账", "已收款", "收款成功"],
   "transfer_keywords": ["转账", "转入", "转出", "内部转账", "转账给", "支付宝转账"],
   "rules": [
     {
@@ -19,7 +19,7 @@
     },
     {
       "name": "Collection Income",
-      "keywords": ["二维码收款-来自", "微信收款", "支付宝收款", "确认收款"],
+      "keywords": ["二维码收款-来自", "微信收款", "支付宝收款", "确认收款", "已收款", "你已收款", "资金待入账"],
       "parent": "收入",
       "sub": "外快",
       "type": "income"
@@ -37,6 +37,46 @@
       "parent": "转账",
       "sub": "转账",
       "type": "transfer"
+    },
+    {
+      "name": "WeChat Red Packet Out",
+      "keywords": ["红包金额", "个红包共", "人已领取", "发的红包", "发送微信红包"],
+      "sources": ["WeChat"],
+      "parent": "人情",
+      "sub": "发红包",
+      "type": "expense"
+    },
+    {
+      "name": "Alipay Red Packet Out",
+      "keywords": ["支付宝红包", "查看红包", "红包金额", "个红包共", "发的红包", "领取成功"],
+      "sources": ["Alipay"],
+      "parent": "人情",
+      "sub": "发红包",
+      "type": "expense"
+    },
+    {
+      "name": "WeChat Payment Success",
+      "keywords": ["支付成功", "付款成功"],
+      "sources": ["WeChat"],
+      "parent": "品牌",
+      "sub": "微信",
+      "type": "expense"
+    },
+    {
+      "name": "Alipay Payment Success",
+      "keywords": ["支付成功", "付款成功", "交易成功", "代付成功", "自动扣款成功", "亲情卡付款成功"],
+      "sources": ["Alipay"],
+      "parent": "品牌",
+      "sub": "支付宝",
+      "type": "expense"
+    },
+    {
+      "name": "Alipay Refund",
+      "keywords": ["退款成功", "已全额退款", "有退款", "赔付成功"],
+      "sources": ["Alipay"],
+      "parent": "收入",
+      "sub": "退款",
+      "type": "income"
     },
     {
       "name": "Breakfast",
@@ -110,7 +150,7 @@
     },
     {
       "name": "Red Packet",
-      "keywords": ["红包", "微信红包"],
+      "keywords": ["发红包", "发的红包", "红包金额", "个红包共"],
       "parent": "人情",
       "sub": "发红包",
       "type": "expense"
