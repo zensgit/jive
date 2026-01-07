@@ -28,6 +28,14 @@ class AddTransactionScreen extends StatefulWidget {
 }
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
+  static const List<String> _accountGroupOrder = [
+    AccountService.groupAssets,
+    AccountService.groupCredit,
+    AccountService.groupDebt,
+    AccountService.groupReimburse,
+    AccountService.groupOther,
+  ];
+
   String _amountStr = "0";
   late Isar _isar;
   bool _isLoading = true;
@@ -1001,6 +1009,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Future<void> _showAccountPicker({required bool pickTo}) async {
     if (_accounts.isEmpty) return;
+    final entries = _buildAccountPickerEntries();
     final selected = await showModalBottomSheet<JiveAccount>(
       context: context,
       backgroundColor: Colors.white,
@@ -1009,22 +1018,36 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ),
       builder: (context) {
         return SafeArea(
-          child: ListView.separated(
+          child: ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            itemCount: _accounts.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemCount: entries.length,
             itemBuilder: (context, index) {
-              final account = _accounts[index];
+              final entry = entries[index];
+              if (entry.isHeader) {
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                  child: Text(
+                    entry.header ?? '',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                );
+              }
+              final account = entry.account!;
               final color = AccountService.parseColorHex(account.colorHex) ?? JiveTheme.primaryGreen;
               final currentId = pickTo ? _selectedToAccount?.id : _selectedAccount?.id;
               final isSelected = account.id == currentId;
+              final subtitle = _accountSubtitle(account);
               return ListTile(
                 leading: CircleAvatar(
                   backgroundColor: color.withOpacity(0.15),
                   child: AccountService.buildIcon(account.iconName, size: 18, color: color),
                 ),
                 title: Text(account.name),
-                subtitle: Text(account.type == AccountService.typeLiability ? "负债账户" : "资产账户"),
+                subtitle: Text(subtitle),
                 trailing: isSelected ? Icon(Icons.check, color: color) : null,
                 onTap: () => Navigator.pop(context, account),
               );
@@ -1054,6 +1077,67 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _selectedAccount = selected;
       }
     });
+  }
+
+  List<_AccountPickerEntry> _buildAccountPickerEntries() {
+    final grouped = _groupAccounts(_accounts);
+    final entries = <_AccountPickerEntry>[];
+    for (final entry in grouped.entries) {
+      entries.add(_AccountPickerEntry.header(entry.key));
+      for (final account in entry.value) {
+        entries.add(_AccountPickerEntry.item(account));
+      }
+    }
+    return entries;
+  }
+
+  Map<String, List<JiveAccount>> _groupAccounts(List<JiveAccount> accounts) {
+    final grouped = <String, List<JiveAccount>>{};
+    for (final account in accounts) {
+      final group = AccountService.displayGroupName(account);
+      grouped.putIfAbsent(group, () => []).add(account);
+    }
+    for (final group in grouped.values) {
+      group.sort((a, b) => a.order.compareTo(b.order));
+    }
+    final ordered = <String, List<JiveAccount>>{};
+    for (final group in _accountGroupOrder) {
+      final list = grouped[group];
+      if (list != null && list.isNotEmpty) {
+        ordered[group] = list;
+      }
+    }
+    final remaining = grouped.keys.where((key) => !ordered.containsKey(key)).toList()..sort();
+    for (final key in remaining) {
+      ordered[key] = grouped[key] ?? [];
+    }
+    return ordered;
+  }
+
+  String _accountSubtitle(JiveAccount account) {
+    final parts = <String>[
+      account.type == AccountService.typeLiability ? "负债账户" : "资产账户",
+    ];
+    if (AccountService.isCreditAccount(account)) {
+      final billingDay = account.billingDay;
+      final repaymentDay = account.repaymentDay;
+      final creditLimit = account.creditLimit;
+      if (billingDay != null) {
+        parts.add("账单日$billingDay");
+      }
+      if (repaymentDay != null) {
+        parts.add("还款日$repaymentDay");
+      }
+      if (creditLimit != null && creditLimit > 0) {
+        parts.add("额度¥${_formatMoney(creditLimit)}");
+      }
+    }
+    return parts.join(" · ");
+  }
+
+  String _formatMoney(double value) {
+    final rounded = value.roundToDouble();
+    return value == rounded ? value.toStringAsFixed(0) : value.toStringAsFixed(2);
   }
 
   Widget _buildInlineSearchField() {
@@ -1498,6 +1582,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (key == 'date') return const Icon(Icons.calendar_today_rounded, size: 20, color: Colors.black45);
     return Text(key, style: const TextStyle(fontSize: 24, color: Colors.black45));
   }
+}
+
+class _AccountPickerEntry {
+  final String? header;
+  final JiveAccount? account;
+
+  const _AccountPickerEntry.header(this.header) : account = null;
+  const _AccountPickerEntry.item(this.account) : header = null;
+
+  bool get isHeader => header != null;
 }
 
 class _SystemSuggestion {
