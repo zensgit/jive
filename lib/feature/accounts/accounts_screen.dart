@@ -20,6 +20,7 @@ class AccountsScreen extends StatefulWidget {
 class _AccountsScreenState extends State<AccountsScreen> {
   late Isar _isar;
   bool _isLoading = true;
+  bool _showInactive = false;
   List<JiveAccount> _accounts = [];
   Map<int, double> _balances = {};
   AccountTotals _totals = const AccountTotals(assets: 0, liabilities: 0);
@@ -43,9 +44,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
     final service = AccountService(_isar);
     await service.initDefaultAccounts();
-    final accounts = await service.getActiveAccounts();
+    final accounts = await service.getAllAccounts();
+    final activeAccounts = accounts.where((account) => !account.isHidden && !account.isArchived).toList();
     final balances = await service.computeBalances(accounts: accounts);
-    final totals = service.calculateTotals(accounts, balances);
+    final totals = service.calculateTotals(activeAccounts, balances);
 
     if (!mounted) return;
     setState(() {
@@ -57,11 +59,85 @@ class _AccountsScreenState extends State<AccountsScreen> {
   }
 
   Future<void> _showCreateAccountDialog() async {
+    final result = await _showAccountDialog();
+    if (result == null) return;
+    final openingBalance = result.type == AccountService.typeLiability
+        ? -result.openingBalance.abs()
+        : result.openingBalance;
+
+    await AccountService(_isar).createAccount(
+      name: result.name,
+      type: result.type,
+      subType: result.subType,
+      openingBalance: openingBalance,
+      groupName: result.groupName,
+      billingDay: result.billingDay,
+      repaymentDay: result.repaymentDay,
+      creditLimit: result.creditLimit,
+      includeInBalance: result.includeInBalance,
+      isHidden: result.isHidden,
+      isArchived: result.isArchived,
+    );
+
+    if (!mounted) return;
+    _loadAccounts();
+  }
+
+  Future<void> _showEditAccountDialog(JiveAccount account) async {
+    final result = await _showAccountDialog(account: account);
+    if (result == null) return;
+    account
+      ..name = result.name
+      ..type = result.type
+      ..subType = result.subType
+      ..groupName = result.groupName
+      ..includeInBalance = result.includeInBalance
+      ..isHidden = result.isHidden
+      ..isArchived = result.isArchived
+      ..billingDay = result.billingDay
+      ..repaymentDay = result.repaymentDay
+      ..creditLimit = result.creditLimit;
+    final openingBalance = result.type == AccountService.typeLiability
+        ? -result.openingBalance.abs()
+        : result.openingBalance;
+    account.openingBalance = openingBalance;
+
+    await AccountService(_isar).updateAccount(account);
+
+    if (!mounted) return;
+    _loadAccounts();
+  }
+
+  Future<_AccountDraft?> _showAccountDialog({JiveAccount? account}) async {
     final nameController = TextEditingController();
     final balanceController = TextEditingController();
-    var type = AccountService.typeAsset;
-    var subType = 'cash';
-    var includeInBalance = true;
+    final billDayController = TextEditingController();
+    final repayDayController = TextEditingController();
+    final creditLimitController = TextEditingController();
+    var type = account?.type ?? AccountService.typeAsset;
+    var subType = account?.subType ?? 'cash';
+    var includeInBalance = account?.includeInBalance ?? true;
+    var isHidden = account?.isHidden ?? false;
+    var isArchived = account?.isArchived ?? false;
+    var groupName = account?.groupName;
+    final isEditing = account != null;
+
+    if (account != null) {
+      nameController.text = account.name;
+      if (account.openingBalance != 0) {
+        balanceController.text = account.openingBalance.abs().toStringAsFixed(2);
+      }
+      if (account.billingDay != null) {
+        billDayController.text = account.billingDay.toString();
+      }
+      if (account.repaymentDay != null) {
+        repayDayController.text = account.repaymentDay.toString();
+      }
+      final limit = account.creditLimit;
+      if (limit != null && limit != 0) {
+        creditLimitController.text = limit.toStringAsFixed(2);
+      }
+    }
 
     final result = await showDialog<_AccountDraft>(
       context: context,
@@ -72,9 +148,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
             if (!subTypes.any((item) => item.key == subType)) {
               subType = subTypes.first.key;
             }
+            final isCredit = type == AccountService.typeLiability && subType == 'credit';
             return AlertDialog(
-              title: const Text("新增账户"),
-              content: Column(
+              title: Text(isEditing ? "编辑账户" : "新增账户"),
+              content: SingleChildScrollView(
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
@@ -112,18 +190,71 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: groupName ?? AccountService.resolveGroupName(type, subType, groupName),
+                    decoration: const InputDecoration(labelText: "账户分组"),
+                    items: [
+                      for (final item in _groupOptions)
+                        DropdownMenuItem(value: item.key, child: Text(item.label)),
+                    ],
+                    onChanged: (value) {
+                      setDialogState(() {
+                        groupName = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: balanceController,
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     decoration: const InputDecoration(labelText: "期初余额"),
                   ),
+                  if (isCredit) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: creditLimitController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: "信用额度"),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: billDayController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: "账单日"),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: repayDayController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: "还款日"),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 8),
                   SwitchListTile(
                     value: includeInBalance,
                     title: const Text("计入净资产"),
                     onChanged: (value) => setDialogState(() => includeInBalance = value),
                   ),
+                  SwitchListTile(
+                    value: isHidden,
+                    title: const Text("隐藏账户"),
+                    onChanged: (value) => setDialogState(() => isHidden = value),
+                  ),
+                  SwitchListTile(
+                    value: isArchived,
+                    title: const Text("归档账户"),
+                    onChanged: (value) => setDialogState(() => isArchived = value),
+                  ),
                 ],
+              ),
               ),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text("取消")),
@@ -132,6 +263,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     final name = nameController.text.trim();
                     if (name.isEmpty) return;
                     final amount = double.tryParse(balanceController.text.trim()) ?? 0;
+                    final billingDay = int.tryParse(billDayController.text.trim());
+                    final repaymentDay = int.tryParse(repayDayController.text.trim());
+                    final creditLimit = double.tryParse(creditLimitController.text.trim());
                     Navigator.pop(
                       context,
                       _AccountDraft(
@@ -139,7 +273,13 @@ class _AccountsScreenState extends State<AccountsScreen> {
                         type: type,
                         subType: subType,
                         openingBalance: amount,
+                        groupName: groupName ?? AccountService.resolveGroupName(type, subType, groupName),
+                        billingDay: billingDay,
+                        repaymentDay: repaymentDay,
+                        creditLimit: creditLimit,
                         includeInBalance: includeInBalance,
+                        isHidden: isHidden,
+                        isArchived: isArchived,
                       ),
                     );
                   },
@@ -152,21 +292,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
       },
     );
 
-    if (result == null) return;
-    final openingBalance = result.type == AccountService.typeLiability
-        ? -result.openingBalance.abs()
-        : result.openingBalance;
-
-    await AccountService(_isar).createAccount(
-      name: result.name,
-      type: result.type,
-      subType: result.subType,
-      openingBalance: openingBalance,
-      includeInBalance: result.includeInBalance,
-    );
-
-    if (!mounted) return;
-    _loadAccounts();
+    return result;
   }
 
   @override
@@ -175,12 +301,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final assetAccounts = _accounts
-        .where((account) => account.type == AccountService.typeAsset)
-        .toList();
-    final liabilityAccounts = _accounts
-        .where((account) => account.type == AccountService.typeLiability)
-        .toList();
+    final visibleAccounts = _showInactive
+        ? _accounts
+        : _accounts.where((account) => !account.isHidden && !account.isArchived).toList();
+    final groupedAccounts = _groupAccounts(visibleAccounts);
 
     return SafeArea(
       child: RefreshIndicator(
@@ -198,12 +322,24 @@ class _AccountsScreenState extends State<AccountsScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text("显示隐藏/归档", style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600)),
+                const Spacer(),
+                Switch(
+                  value: _showInactive,
+                  onChanged: (value) => setState(() => _showInactive = value),
+                ),
+              ],
+            ),
             const SizedBox(height: 12),
             _buildSummaryCard(),
             const SizedBox(height: 24),
-            _buildSection("资产账户", assetAccounts),
-            const SizedBox(height: 16),
-            _buildSection("负债账户", liabilityAccounts),
+            for (final entry in groupedAccounts.entries) ...[
+              _buildSection(entry.key, entry.value),
+              const SizedBox(height: 16),
+            ],
             const SizedBox(height: 40),
           ],
         ),
@@ -285,6 +421,20 @@ class _AccountsScreenState extends State<AccountsScreen> {
     final displayBalance = account.type == AccountService.typeLiability ? balance.abs() : balance;
     final amountColor = account.type == AccountService.typeLiability ? Colors.redAccent : JiveTheme.primaryGreen;
     final color = AccountService.parseColorHex(account.colorHex) ?? JiveTheme.primaryGreen;
+    final status = [
+      if (account.isHidden) "已隐藏",
+      if (account.isArchived) "已归档",
+    ];
+    final groupLabel = AccountService.displayGroupName(account);
+    final creditMeta = AccountService.isCreditAccount(account)
+        ? _creditMeta(account, balance)
+        : null;
+    final detailParts = <String>[
+      groupLabel,
+      if (creditMeta != null && creditMeta.isNotEmpty) creditMeta,
+      if (status.isNotEmpty) status.join(" · "),
+    ];
+    final detailText = detailParts.where((value) => value.isNotEmpty).join(" · ");
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -299,7 +449,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
           ),
         ],
       ),
-      child: Row(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showEditAccountDialog(account),
+        child: Row(
         children: [
           CircleAvatar(
             radius: 18,
@@ -314,7 +467,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                 Text(account.name, style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 2),
                 Text(
-                  account.type == AccountService.typeLiability ? "负债账户" : "资产账户",
+                  detailText,
                   style: GoogleFonts.lato(color: Colors.grey.shade500, fontSize: 11),
                 ),
               ],
@@ -325,6 +478,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
             style: GoogleFonts.rubik(color: amountColor, fontSize: 14, fontWeight: FontWeight.w600),
           ),
         ],
+      ),
       ),
     );
   }
@@ -344,6 +498,51 @@ class _AccountsScreenState extends State<AccountsScreen> {
       _SubTypeOption('other_asset', '其他资产'),
     ];
   }
+
+  Map<String, List<JiveAccount>> _groupAccounts(List<JiveAccount> accounts) {
+    final grouped = <String, List<JiveAccount>>{};
+    for (final account in accounts) {
+      final group = AccountService.displayGroupName(account);
+      grouped.putIfAbsent(group, () => []).add(account);
+    }
+    for (final entry in grouped.entries) {
+      entry.value.sort((a, b) => a.order.compareTo(b.order));
+    }
+    final ordered = <String, List<JiveAccount>>{};
+    for (final group in _groupOptions) {
+      if (grouped.containsKey(group.key)) {
+        ordered[group.key] = grouped[group.key]!;
+      }
+    }
+    final remainingKeys = grouped.keys.where((key) => !ordered.containsKey(key)).toList()..sort();
+    for (final key in remainingKeys) {
+      ordered[key] = grouped[key]!;
+    }
+    return ordered;
+  }
+
+  String _creditMeta(JiveAccount account, double balance) {
+    final parts = <String>[];
+    if (account.billingDay != null && account.billingDay! > 0) {
+      parts.add("账单日${account.billingDay}");
+    }
+    if (account.repaymentDay != null && account.repaymentDay! > 0) {
+      parts.add("还款日${account.repaymentDay}");
+    }
+    final creditLimit = account.creditLimit ?? 0;
+    if (creditLimit > 0) {
+      final used = balance < 0 ? -balance : 0.0;
+      final available = (creditLimit - used).clamp(0, double.infinity).toDouble();
+      parts.add("额度¥${_formatCompact(creditLimit)}");
+      parts.add("已用¥${_formatCompact(used)}");
+      parts.add("可用¥${_formatCompact(available)}");
+    }
+    return parts.join(" ");
+  }
+
+  String _formatCompact(double value) {
+    return NumberFormat.compactCurrency(symbol: "", decimalDigits: 0).format(value);
+  }
 }
 
 class _AccountDraft {
@@ -351,14 +550,26 @@ class _AccountDraft {
   final String type;
   final String subType;
   final double openingBalance;
+  final String groupName;
+  final int? billingDay;
+  final int? repaymentDay;
+  final double? creditLimit;
   final bool includeInBalance;
+  final bool isHidden;
+  final bool isArchived;
 
   const _AccountDraft({
     required this.name,
     required this.type,
     required this.subType,
     required this.openingBalance,
+    required this.groupName,
+    this.billingDay,
+    this.repaymentDay,
+    this.creditLimit,
     required this.includeInBalance,
+    required this.isHidden,
+    required this.isArchived,
   });
 }
 
@@ -368,3 +579,18 @@ class _SubTypeOption {
 
   const _SubTypeOption(this.key, this.label);
 }
+
+class _GroupOption {
+  final String key;
+  final String label;
+
+  const _GroupOption(this.key, this.label);
+}
+
+const List<_GroupOption> _groupOptions = [
+  _GroupOption(AccountService.groupAssets, '资金账户'),
+  _GroupOption(AccountService.groupCredit, '信用账户'),
+  _GroupOption(AccountService.groupDebt, '债务账户'),
+  _GroupOption(AccountService.groupReimburse, '报销账户'),
+  _GroupOption(AccountService.groupOther, '其他账户'),
+];

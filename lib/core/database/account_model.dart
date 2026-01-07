@@ -12,6 +12,7 @@ class JiveAccount {
   late String name;
   late String type; // asset | liability
   String? subType;
+  String? groupName;
 
   late String currency;
   late String iconName;
@@ -21,6 +22,10 @@ class JiveAccount {
   late bool includeInBalance;
   late bool isHidden;
   late bool isArchived;
+
+  int? billingDay;
+  int? repaymentDay;
+  double? creditLimit;
 
   double openingBalance = 0;
 

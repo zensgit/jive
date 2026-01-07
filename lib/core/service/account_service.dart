@@ -15,6 +15,11 @@ class AccountTotals {
 class AccountService {
   static const String typeAsset = 'asset';
   static const String typeLiability = 'liability';
+  static const String groupAssets = '资金账户';
+  static const String groupCredit = '信用账户';
+  static const String groupDebt = '债务账户';
+  static const String groupReimburse = '报销账户';
+  static const String groupOther = '其他账户';
 
   final Isar isar;
 
@@ -26,6 +31,7 @@ class AccountService {
       name: '现金',
       type: typeAsset,
       subType: 'cash',
+      groupName: groupAssets,
       iconName: 'payments',
       colorHex: '#43A047',
     ),
@@ -34,6 +40,7 @@ class AccountService {
       name: '银行卡',
       type: typeAsset,
       subType: 'bank',
+      groupName: groupAssets,
       iconName: 'account_balance',
       colorHex: '#1E88E5',
     ),
@@ -42,6 +49,7 @@ class AccountService {
       name: '微信钱包',
       type: typeAsset,
       subType: 'wallet',
+      groupName: groupAssets,
       iconName: 'account_balance_wallet',
       colorHex: '#2E7D32',
     ),
@@ -50,6 +58,7 @@ class AccountService {
       name: '支付宝',
       type: typeAsset,
       subType: 'wallet',
+      groupName: groupAssets,
       iconName: 'account_balance_wallet',
       colorHex: '#0277BD',
     ),
@@ -58,14 +67,19 @@ class AccountService {
       name: '信用卡',
       type: typeLiability,
       subType: 'credit',
+      groupName: groupCredit,
       iconName: 'credit_card',
       colorHex: '#EF5350',
+      billingDay: null,
+      repaymentDay: null,
+      creditLimit: null,
     ),
     _AccountPreset(
       key: 'acct_loan',
       name: '借入',
       type: typeLiability,
       subType: 'loan',
+      groupName: groupDebt,
       iconName: 'request_page',
       colorHex: '#FF7043',
     ),
@@ -99,6 +113,7 @@ class AccountService {
         ..name = preset.name
         ..type = preset.type
         ..subType = preset.subType
+        ..groupName = preset.groupName ?? resolveGroupName(preset.type, preset.subType, null)
         ..currency = 'CNY'
         ..iconName = preset.iconName
         ..colorHex = preset.colorHex
@@ -106,6 +121,9 @@ class AccountService {
         ..includeInBalance = true
         ..isHidden = false
         ..isArchived = false
+        ..billingDay = preset.billingDay
+        ..repaymentDay = preset.repaymentDay
+        ..creditLimit = preset.creditLimit
         ..openingBalance = 0
         ..updatedAt = now;
       toInsert.add(account);
@@ -115,6 +133,10 @@ class AccountService {
     await isar.writeTxn(() async {
       await isar.collection<JiveAccount>().putAll(toInsert);
     });
+  }
+
+  Future<List<JiveAccount>> getAllAccounts() async {
+    return await isar.collection<JiveAccount>().where().sortByOrder().findAll();
   }
 
   Future<List<JiveAccount>> getActiveAccounts() async {
@@ -189,7 +211,13 @@ class AccountService {
     required String type,
     required String subType,
     required double openingBalance,
+    String? groupName,
+    int? billingDay,
+    int? repaymentDay,
+    double? creditLimit,
     bool includeInBalance = true,
+    bool isHidden = false,
+    bool isArchived = false,
   }) async {
     final accounts = await isar.collection<JiveAccount>().where().sortByOrder().findAll();
     final order = accounts.isEmpty ? 0 : (accounts.last.order + 1);
@@ -200,13 +228,17 @@ class AccountService {
       ..name = name
       ..type = type
       ..subType = subType
+      ..groupName = resolveGroupName(type, subType, groupName)
       ..currency = 'CNY'
       ..iconName = style?.iconName ?? 'account_balance_wallet'
       ..colorHex = style?.colorHex ?? '#66BB6A'
       ..order = order
       ..includeInBalance = includeInBalance
-      ..isHidden = false
-      ..isArchived = false
+      ..isHidden = isHidden
+      ..isArchived = isArchived
+      ..billingDay = billingDay
+      ..repaymentDay = repaymentDay
+      ..creditLimit = creditLimit
       ..openingBalance = openingBalance
       ..updatedAt = now;
 
@@ -215,6 +247,31 @@ class AccountService {
     });
 
     return account;
+  }
+
+  Future<void> updateAccount(JiveAccount account) async {
+    account.updatedAt = DateTime.now();
+    await isar.writeTxn(() async {
+      await isar.collection<JiveAccount>().put(account);
+    });
+  }
+
+  static String resolveGroupName(String type, String? subType, String? current) {
+    if (current != null && current.trim().isNotEmpty) return current.trim();
+    if (type == typeAsset) return groupAssets;
+    if (type == typeLiability) {
+      if (subType == 'credit') return groupCredit;
+      return groupDebt;
+    }
+    return groupOther;
+  }
+
+  static String displayGroupName(JiveAccount account) {
+    return resolveGroupName(account.type, account.subType, account.groupName);
+  }
+
+  static bool isCreditAccount(JiveAccount account) {
+    return account.type == typeLiability && account.subType == 'credit';
   }
 
   static IconData getIcon(String name) {
@@ -271,15 +328,23 @@ class _AccountPreset {
   final String name;
   final String type;
   final String subType;
+  final String? groupName;
   final String iconName;
   final String colorHex;
+  final int? billingDay;
+  final int? repaymentDay;
+  final double? creditLimit;
 
   const _AccountPreset({
     required this.key,
     required this.name,
     required this.type,
     required this.subType,
+    this.groupName,
     required this.iconName,
     required this.colorHex,
+    this.billingDay,
+    this.repaymentDay,
+    this.creditLimit,
   });
 }
