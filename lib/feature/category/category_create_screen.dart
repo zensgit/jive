@@ -58,6 +58,8 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   late final Map<String, SystemCategorySuggestion> _systemItemByName;
   String _selectedGroupName = "";
   int _systemGridColumns = 4;
+  final ScrollController _systemGroupController = ScrollController();
+  final ScrollController _systemGridController = ScrollController();
 
   @override
   void initState() {
@@ -81,6 +83,8 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     _iconSearchController.dispose();
     _systemSearchController.removeListener(_systemSearchListener);
     _systemSearchController.dispose();
+    _systemGroupController.dispose();
+    _systemGridController.dispose();
     super.dispose();
   }
 
@@ -152,7 +156,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         }
         continue;
       }
-      children.sort((a, b) => a.name.compareTo(b.name));
+      children.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
       groups.add(
         _SystemGroup(
           name: groupName,
@@ -165,20 +169,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     final sortedGroups = <_SystemGroup>[];
     if (allSuggestions.isNotEmpty) {
       final allList = allSuggestions.values.toList();
-      allList.sort((a, b) => a.name.compareTo(b.name));
+      allList.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
       sortedGroups.add(_SystemGroup(name: "全部", iconName: "category", children: allList));
     }
 
-    groups.sort((a, b) {
-      final aIndex = _preferredGroupOrder.indexOf(a.name);
-      final bIndex = _preferredGroupOrder.indexOf(b.name);
-      if (aIndex != -1 || bIndex != -1) {
-        if (aIndex == -1) return 1;
-        if (bIndex == -1) return -1;
-        return aIndex.compareTo(bIndex);
-      }
-      return a.name.compareTo(b.name);
-    });
+    groups.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
     sortedGroups.addAll(groups);
 
     itemByName.addAll(allSuggestions);
@@ -657,7 +652,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               );
             },
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
           Text(
             _isBatch
                 ? (widget.autoBatchAdd ? "点击即可自动添加" : "选择多个后保存即可自动添加")
@@ -699,9 +694,12 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                       width: leftWidth,
                       child: Scrollbar(
                         thumbVisibility: true,
+                        controller: _systemGroupController,
                         child: ListView.builder(
                           padding: EdgeInsets.zero,
                           primary: false,
+                          controller: _systemGroupController,
+                          addAutomaticKeepAlives: false,
                           itemCount: _systemGroups.length,
                           itemBuilder: (context, index) {
                             final group = _systemGroups[index];
@@ -762,9 +760,14 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                             )
                           : Scrollbar(
                               thumbVisibility: true,
+                              controller: _systemGridController,
                               child: GridView.builder(
                                 padding: EdgeInsets.zero,
                                 primary: false,
+                                controller: _systemGridController,
+                                cacheExtent: tileHeight * 8,
+                                addAutomaticKeepAlives: false,
+                                addRepaintBoundaries: true,
                                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                                   crossAxisCount: columns,
                                   crossAxisSpacing: gridSpacing,
@@ -779,55 +782,57 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                       ? _selectedSystemNames.contains(entry.name)
                                       : entry.name == _nameController.text.trim() && entry.iconName == _selectedIcon;
                                   final canTap = !isExisting;
-                                  return InkWell(
-                                    borderRadius: BorderRadius.circular(12),
-                                    onTap: canTap ? () => _applySuggestion(entry) : null,
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(vertical: tilePadding, horizontal: tilePadding),
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Container(
-                                            width: iconBox,
-                                            height: iconBox,
-                                            decoration: BoxDecoration(
-                                              color: isSelected ? highlightColor.withOpacity(0.15) : Colors.transparent,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Center(
-                                              child: CategoryService.buildIcon(
-                                                entry.iconName,
-                                                size: iconSize,
-                                                color: isExisting
-                                                    ? Colors.grey.shade400
-                                                    : (isSelected ? highlightColor : Colors.grey.shade700),
+                                  return RepaintBoundary(
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: canTap ? () => _applySuggestion(entry) : null,
+                                      child: Container(
+                                        padding: EdgeInsets.symmetric(vertical: tilePadding, horizontal: tilePadding),
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Container(
+                                              width: iconBox,
+                                              height: iconBox,
+                                              decoration: BoxDecoration(
+                                                color: isSelected ? highlightColor.withOpacity(0.15) : Colors.transparent,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Center(
+                                                child: CategoryService.buildIcon(
+                                                  entry.iconName,
+                                                  size: iconSize,
+                                                  color: isExisting
+                                                      ? Colors.grey.shade400
+                                                      : (isSelected ? highlightColor : Colors.grey.shade700),
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 1),
-                                          Text(
-                                            entry.name,
-                                            style: TextStyle(
-                                              fontSize: labelSize,
-                                              height: labelHeight,
-                                              color: isExisting ? Colors.grey.shade400 : Colors.grey.shade700,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                            textAlign: TextAlign.center,
-                                            maxLines: 1,
-                                          ),
-                                          if (_isBatch && !widget.autoBatchAdd && !isExisting)
-                                            Icon(
-                                              isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-                                              size: indicatorSize,
-                                              color: isSelected ? highlightColor : Colors.grey.shade400,
-                                            )
-                                          else if (isExisting)
+                                            const SizedBox(height: 1),
                                             Text(
-                                              "已添加",
-                                              style: TextStyle(fontSize: metaSize, color: Colors.grey.shade400),
+                                              entry.name,
+                                              style: TextStyle(
+                                                fontSize: labelSize,
+                                                height: labelHeight,
+                                                color: isExisting ? Colors.grey.shade400 : Colors.grey.shade700,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                              maxLines: 1,
                                             ),
-                                        ],
+                                            if (_isBatch && !widget.autoBatchAdd && !isExisting)
+                                              Icon(
+                                                isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                                                size: indicatorSize,
+                                                color: isSelected ? highlightColor : Colors.grey.shade400,
+                                              )
+                                            else if (isExisting)
+                                              Text(
+                                                "已添加",
+                                                style: TextStyle(fontSize: metaSize, color: Colors.grey.shade400),
+                                              ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   );
@@ -1359,89 +1364,29 @@ class _SystemGroup {
 const Map<String, String> _groupAliasMap = {
   '吃喝': '餐饮',
   '三餐': '餐饮',
-  '日常': '日用杂货',
-  '日用品': '日用杂货',
-  '居家工具': '日用杂货',
-  '美妆': '日用杂货',
-  '美容美发': '日用杂货',
-  '居家': '住房居家',
-  '住房': '住房居家',
-  '房租': '住房居家',
-  '房贷': '住房居家',
-  '物业费': '住房居家',
-  '水电煤': '住房居家',
-  '服饰': '服饰鞋包',
-  '鞋包': '服饰鞋包',
-  '电器数码': '数码电器',
-  '电器': '数码电器',
-  '电子产品': '数码电器',
-  '数码': '数码电器',
-  '娱乐': '娱乐休闲',
-  '休闲': '娱乐休闲',
-  '电影': '娱乐休闲',
-  '演出': '娱乐休闲',
-  'K歌': '娱乐休闲',
-  '游戏': '娱乐休闲',
-  '运动': '娱乐休闲',
-  '旅行': '娱乐休闲',
-  '门票': '娱乐休闲',
-  '教育': '教育学习',
-  '学习': '教育学习',
-  '培训': '教育学习',
-  '考试': '教育学习',
-  '学费': '教育学习',
-  '校园': '教育学习',
-  '汽车/加油': '交通',
-  '油费': '交通',
-  '洗车': '交通',
-  '车险': '交通',
-  '车贷': '交通',
-  '车检': '交通',
-  '购车款': '交通',
-  '维修保养': '交通',
-  '停车费': '交通',
-  '过路费': '交通',
-  '违章': '交通',
-  '工资': '薪酬',
-  '奖金': '薪酬',
-  '提成': '薪酬',
-  '津贴': '薪酬',
-  '补贴': '薪酬',
-  '理财': '投资',
-  '股票': '投资',
-  '基金': '投资',
-  '利息': '投资',
-  '报销': '补偿',
-  '赔付': '补偿',
-  '保险报销': '补偿',
-  '二手置换': '二手',
-  '闲鱼': '二手',
-  '人情': '人情往来',
-  '发红包': '人情往来',
-  '请客送礼': '人情往来',
-  '送礼': '人情往来',
-  '婚嫁随礼': '人情往来',
-  '寿辰': '人情往来',
-  '孝敬父母': '人情往来',
-  '乔迁': '人情往来',
-  '其它': '其他',
+  '母婴': '育儿',
+  '母婴育儿': '育儿',
+  '宝宝': '育儿',
+  '婴儿': '育儿',
+  '工资': '收入',
+  '奖金': '收入',
+  '提成': '收入',
+  '津贴': '收入',
+  '补贴': '收入',
+  '薪水': '收入',
+  '理财': '金融',
+  '股票': '金融',
+  '基金': '金融',
+  '利息': '金融',
+  '其他': '其它',
 };
 
 const Map<String, List<String>> _groupAliasReverseMap = {
   '餐饮': ['吃喝', '三餐'],
-  '住房居家': ['居家', '住房', '房租', '房贷', '物业费', '水电煤'],
-  '日用杂货': ['日常', '日用品', '居家工具', '美妆', '美容美发'],
-  '服饰鞋包': ['服饰', '鞋包'],
-  '数码电器': ['电器数码', '电器', '电子产品', '数码'],
-  '娱乐休闲': ['娱乐', '休闲', '电影', '演出', 'K歌', '游戏', '运动', '旅行', '门票'],
-  '教育学习': ['教育', '学习', '培训', '考试', '学费', '校园'],
-  '交通': ['汽车/加油', '油费', '洗车', '车险', '车贷', '车检', '购车款', '维修保养', '停车费', '过路费', '违章'],
-  '薪酬': ['工资', '奖金', '提成', '津贴', '补贴'],
-  '投资': ['理财', '股票', '基金', '利息'],
-  '补偿': ['报销', '赔付', '保险报销'],
-  '二手': ['二手置换', '闲鱼'],
-  '人情往来': ['人情', '发红包', '请客送礼', '送礼', '婚嫁随礼', '寿辰', '孝敬父母', '乔迁'],
-  '其他': ['其它'],
+  '育儿': ['母婴', '母婴育儿', '宝宝', '婴儿'],
+  '收入': ['工资', '奖金', '提成', '津贴', '补贴', '薪水'],
+  '金融': ['理财', '股票', '基金', '利息'],
+  '其它': ['其他'],
 };
 
 const List<String> _preferredGroupOrder = [

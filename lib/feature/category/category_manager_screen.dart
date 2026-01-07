@@ -9,6 +9,7 @@ import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/database/auto_draft_model.dart';
 import '../../core/service/category_service.dart';
 import '../stats/stats_screen.dart';
 import 'category_create_dialog.dart';
@@ -58,7 +59,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         _isar = Isar.getInstance()!;
       } else {
         _isar = await Isar.open(
-          [JiveCategorySchema, JiveTransactionSchema, JiveAccountSchema],
+          [JiveCategorySchema, JiveTransactionSchema, JiveAccountSchema, JiveAutoDraftSchema],
           directory: dir.path,
         );
       }

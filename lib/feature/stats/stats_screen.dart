@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/database/auto_draft_model.dart';
 
 class StatsScreen extends StatefulWidget {
   final String? filterCategoryKey;
@@ -45,7 +46,7 @@ class _StatsScreenState extends State<StatsScreen> {
       _isar = Isar.getInstance()!;
     } else {
       _isar = await Isar.open(
-        [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema],
+        [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema, JiveAutoDraftSchema],
         directory: dir.path,
       );
     }

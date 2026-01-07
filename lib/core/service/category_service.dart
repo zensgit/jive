@@ -1,9 +1,12 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:isar/isar.dart';
+import 'package:lpinyin/lpinyin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/category_model.dart';
 import '../database/transaction_model.dart';
+import '../data/category_icon_tintable.dart';
 import '../data/system_category_library.dart';
 
 class CategoryService {
@@ -129,12 +132,19 @@ class CategoryService {
     }
 
     void syncDefaults(Map<String, Map<String, dynamic>> defaults, {required bool isIncome}) {
-      defaults.forEach((pName, pData) {
+      final parents = defaults.keys.toList()
+        ..sort((a, b) => compareCategoryName(a, b));
+      for (final pName in parents) {
+        final pData = defaults[pName] ?? const {};
         ensureParent(pName, pData, isIncome: isIncome);
         final pKey = _buildSystemParentKey(pName, isIncome);
-        final children = (pData['children'] as List<dynamic>?) ?? const [];
+        final rawChildren = (pData['children'] as List<dynamic>?) ?? const [];
+        final children = rawChildren
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList()
+          ..sort((a, b) => compareCategoryName(a['name'] as String, b['name'] as String));
         ensureChildren(pKey, pName, children, isIncome: isIncome);
-      });
+      }
     }
 
     syncDefaults(kSystemExpenseLibrary, isIncome: false);
@@ -177,6 +187,20 @@ class CategoryService {
       targetName: "Apple",
       sourceNames: const ["Apple Music", "AppleTV", "Apple iTunes"],
       removeSources: true,
+    );
+    await _mergeSystemCategories(
+      targetName: "受伤",
+      sourceNames: const ["受伤"],
+      isIncome: false,
+      removeSources: true,
+      targetParentName: "医疗",
+    );
+    await _mergeSystemCategories(
+      targetName: "足球",
+      sourceNames: const ["足球"],
+      isIncome: false,
+      removeSources: true,
+      targetParentName: "运动",
     );
     await _mergeSystemCategories(
       targetName: "获得赔付",
@@ -677,6 +701,10 @@ class CategoryService {
       await isar.collection<JiveCategory>().put(child);
     });
 
+    if (isSystem) {
+      await _reorderChildrenByName(parent.key);
+    }
+
     return child;
   }
 
@@ -730,6 +758,10 @@ class CategoryService {
       await isar.collection<JiveCategory>().put(parent);
     });
 
+    if (isSystem) {
+      await _reorderParentsByName(isIncome: isIncome);
+    }
+
     return parent;
   }
 
@@ -749,6 +781,17 @@ class CategoryService {
     });
   }
 
+  Future<void> _reorderParentsByName({required bool isIncome}) async {
+    final parents = await isar.collection<JiveCategory>()
+        .filter()
+        .parentKeyIsNull()
+        .isIncomeEqualTo(isIncome)
+        .isSystemEqualTo(true)
+        .findAll();
+    parents.sort((a, b) => compareCategoryName(a.name, b.name));
+    await reorderParents(parents);
+  }
+
   Future<void> reorderChildren(String parentKey, List<JiveCategory> children) async {
     final updated = <JiveCategory>[];
     for (var i = 0; i < children.length; i++) {
@@ -764,6 +807,16 @@ class CategoryService {
     await isar.writeTxn(() async {
       await isar.collection<JiveCategory>().putAll(updated);
     });
+  }
+
+  Future<void> _reorderChildrenByName(String parentKey) async {
+    final children = await isar.collection<JiveCategory>()
+        .filter()
+        .parentKeyEqualTo(parentKey)
+        .isSystemEqualTo(true)
+        .findAll();
+    children.sort((a, b) => compareCategoryName(a.name, b.name));
+    await reorderChildren(parentKey, children);
   }
 
   Future<bool> deleteCategory(JiveCategory category) async {
@@ -866,6 +919,34 @@ class CategoryService {
     return "assets/category_icons/$name";
   }
 
+  static String _assetIconKey(String name) {
+    if (name.startsWith("assets/")) {
+      final trimmed = name.substring("assets/".length);
+      if (trimmed.startsWith("category_icons/")) {
+        return trimmed.substring("category_icons/".length);
+      }
+      final parts = trimmed.split("/");
+      return parts.isEmpty ? name : parts.last;
+    }
+    if (name.startsWith("qj/")) return name.substring(3);
+    return name;
+  }
+
+  static int _cacheWidth(double size) {
+    final views = ui.PlatformDispatcher.instance.views;
+    final ratio = views.isEmpty ? 1.0 : views.first.devicePixelRatio;
+    final pixelSize = (size * ratio).round();
+    return pixelSize <= 0 ? size.round() : pixelSize;
+  }
+
+  static int compareCategoryName(String a, String b) {
+    final aKey = PinyinHelper.getPinyinE(a).toLowerCase();
+    final bKey = PinyinHelper.getPinyinE(b).toLowerCase();
+    final cmp = aKey.compareTo(bKey);
+    if (cmp != 0) return cmp;
+    return a.compareTo(b);
+  }
+
   static Widget buildIcon(
     String name, {
     double size = 20,
@@ -873,23 +954,26 @@ class CategoryService {
   }) {
     if (_isAssetIcon(name)) {
       final path = _assetIconPath(name);
+      final iconKey = _assetIconKey(name);
+      final shouldTint = color != null && kCategoryIconNeedsTint.contains(iconKey);
       if (path.endsWith(".svg")) {
         return SvgPicture.asset(
           path,
           width: size,
           height: size,
           fit: BoxFit.contain,
-          colorFilter:
-              color != null ? ColorFilter.mode(color, BlendMode.srcIn) : null,
+          colorFilter: shouldTint ? ColorFilter.mode(color!, BlendMode.srcIn) : null,
         );
       }
+      final cacheWidth = _cacheWidth(size);
       return Image.asset(
         path,
         width: size,
         height: size,
         fit: BoxFit.contain,
-        color: color,
-        colorBlendMode: color == null ? null : BlendMode.srcIn,
+        cacheWidth: cacheWidth,
+        color: shouldTint ? color : null,
+        colorBlendMode: shouldTint ? BlendMode.srcIn : null,
         errorBuilder:
             (_, __, ___) => Icon(Icons.category, size: size, color: color),
       );
@@ -929,6 +1013,10 @@ class CategoryService {
     final cat = await isar.collection<JiveCategory>().get(id);
     if (cat == null) return;
 
+    final previousName = cat.name;
+    final previousParentKey = cat.parentKey;
+    final previousIsIncome = cat.isIncome;
+
     // 如果变成二级分类，需要生成一个新的 Key 吗？
     // 钱迹逻辑：Key/ID 不变，只改 parentKey。这样账单不会丢。
     cat.name = name;
@@ -941,6 +1029,21 @@ class CategoryService {
       await isar.collection<JiveCategory>().put(cat);
       await _syncTransactionsForCategoryChange(cat);
     });
+
+    if (cat.isSystem) {
+      final nameChanged = previousName != name;
+      final parentChanged = previousParentKey != newParentKey;
+      if (nameChanged || parentChanged) {
+        if (previousParentKey != null && previousParentKey != newParentKey) {
+          await _reorderChildrenByName(previousParentKey);
+        }
+        if (newParentKey != null) {
+          await _reorderChildrenByName(newParentKey);
+        } else {
+          await _reorderParentsByName(isIncome: previousIsIncome);
+        }
+      }
+    }
   }
 
   Future<void> _syncTransactionsForCategoryChange(JiveCategory cat) async {

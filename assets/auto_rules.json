@@ -1,0 +1,278 @@
+{
+  "version": 1,
+  "income_keywords": ["到账", "入账", "收款", "退款", "退还", "返现", "补贴", "工资", "红包", "转账-来自", "二维码收款", "资金待入账", "已收款", "收款成功"],
+  "transfer_keywords": ["转账", "转入", "转出", "内部转账", "转账给", "支付宝转账"],
+  "rules": [
+    {
+      "name": "Incoming Red Packet",
+      "keywords": ["微信红包-来自", "支付宝红包-来自", "的红包", "收红包"],
+      "parent": "收入",
+      "sub": "收红包",
+      "type": "income"
+    },
+    {
+      "name": "Refund Income",
+      "keywords": ["退款-来自", "转账-退款", "退款"],
+      "parent": "收入",
+      "sub": "退款",
+      "type": "income"
+    },
+    {
+      "name": "Collection Income",
+      "keywords": ["二维码收款-来自", "微信收款", "支付宝收款", "确认收款", "已收款", "你已收款", "资金待入账"],
+      "parent": "收入",
+      "sub": "外快",
+      "type": "income"
+    },
+    {
+      "name": "Incoming Transfer",
+      "keywords": ["转账-来自"],
+      "parent": "收入",
+      "sub": "借入",
+      "type": "income"
+    },
+    {
+      "name": "Transfer Out",
+      "keywords": ["转账给", "支付宝转账"],
+      "parent": "转账",
+      "sub": "转账",
+      "type": "transfer"
+    },
+    {
+      "name": "WeChat Red Packet Out",
+      "keywords": ["红包金额", "个红包共", "人已领取", "发的红包", "发送微信红包"],
+      "sources": ["WeChat"],
+      "parent": "人情",
+      "sub": "发红包",
+      "type": "expense"
+    },
+    {
+      "name": "Alipay Red Packet Out",
+      "keywords": ["支付宝红包", "查看红包", "红包金额", "个红包共", "发的红包", "领取成功"],
+      "sources": ["Alipay"],
+      "parent": "人情",
+      "sub": "发红包",
+      "type": "expense"
+    },
+    {
+      "name": "WeChat Payment Success",
+      "keywords": ["支付成功", "付款成功"],
+      "sources": ["WeChat"],
+      "parent": "品牌",
+      "sub": "微信",
+      "type": "expense"
+    },
+    {
+      "name": "Alipay Payment Success",
+      "keywords": ["支付成功", "付款成功", "交易成功", "代付成功", "自动扣款成功", "亲情卡付款成功"],
+      "sources": ["Alipay"],
+      "parent": "品牌",
+      "sub": "支付宝",
+      "type": "expense"
+    },
+    {
+      "name": "Alipay Refund",
+      "keywords": ["退款成功", "已全额退款", "有退款", "赔付成功"],
+      "sources": ["Alipay"],
+      "parent": "收入",
+      "sub": "退款",
+      "type": "income"
+    },
+    {
+      "name": "Breakfast",
+      "keywords": ["早餐", "早饭", "早点"],
+      "parent": "餐饮",
+      "sub": "早餐",
+      "type": "expense"
+    },
+    {
+      "name": "Lunch",
+      "keywords": ["午餐", "午饭"],
+      "parent": "餐饮",
+      "sub": "午餐",
+      "type": "expense"
+    },
+    {
+      "name": "Dinner",
+      "keywords": ["晚餐", "晚饭"],
+      "parent": "餐饮",
+      "sub": "晚餐",
+      "type": "expense"
+    },
+    {
+      "name": "Didi Taxi",
+      "keywords": ["滴滴", "快车", "顺风车", "打车", "出租车"],
+      "parent": "交通",
+      "sub": "打车",
+      "type": "expense"
+    },
+    {
+      "name": "Subway",
+      "keywords": ["地铁", "轨道"],
+      "parent": "交通",
+      "sub": "地铁",
+      "type": "expense"
+    },
+    {
+      "name": "Bus",
+      "keywords": ["公交", "公交车"],
+      "parent": "交通",
+      "sub": "公交车",
+      "type": "expense"
+    },
+    {
+      "name": "Food Delivery",
+      "keywords": ["外卖", "美团外卖", "饿了么"],
+      "parent": "餐饮",
+      "sub": "外卖",
+      "type": "expense"
+    },
+    {
+      "name": "Movie",
+      "keywords": ["电影", "影院", "淘票票", "猫眼"],
+      "parent": "娱乐",
+      "sub": "电影",
+      "type": "expense"
+    },
+    {
+      "name": "Hotel",
+      "keywords": ["酒店", "住宿", "宾馆", "民宿"],
+      "parent": "旅行",
+      "sub": "住宿",
+      "type": "expense"
+    },
+    {
+      "name": "Phone Bill",
+      "keywords": ["话费", "流量", "充值"],
+      "parent": "日常",
+      "sub": "话费",
+      "type": "expense"
+    },
+    {
+      "name": "Red Packet",
+      "keywords": ["发红包", "发的红包", "红包金额", "个红包共"],
+      "parent": "人情",
+      "sub": "发红包",
+      "type": "expense"
+    },
+    {
+      "name": "JD",
+      "keywords": ["京东", "京东支付", "京东金融"],
+      "parent": "品牌",
+      "sub": "京东",
+      "type": "expense"
+    },
+    {
+      "name": "Taobao",
+      "keywords": ["淘宝", "淘宝支付"],
+      "parent": "品牌",
+      "sub": "淘宝",
+      "type": "expense"
+    },
+    {
+      "name": "Tmall",
+      "keywords": ["天猫"],
+      "parent": "品牌",
+      "sub": "天猫",
+      "type": "expense"
+    },
+    {
+      "name": "Pinduoduo",
+      "keywords": ["拼多多"],
+      "parent": "品牌",
+      "sub": "拼多多",
+      "type": "expense"
+    },
+    {
+      "name": "Meituan",
+      "keywords": ["美团"],
+      "parent": "品牌",
+      "sub": "美团",
+      "type": "expense"
+    },
+    {
+      "name": "Eleme",
+      "keywords": ["饿了么"],
+      "parent": "品牌",
+      "sub": "饿了么",
+      "type": "expense"
+    },
+    {
+      "name": "Hema",
+      "keywords": ["盒马鲜生", "盒马"],
+      "parent": "品牌",
+      "sub": "盒马鲜生",
+      "type": "expense"
+    },
+    {
+      "name": "Xianyu",
+      "keywords": ["闲鱼"],
+      "parent": "品牌",
+      "sub": "闲鱼",
+      "type": "expense"
+    },
+    {
+      "name": "Douyin",
+      "keywords": ["抖音", "抖音支付", "抖音月付"],
+      "parent": "品牌",
+      "sub": "抖音",
+      "type": "expense"
+    },
+    {
+      "name": "Kuaishou",
+      "keywords": ["快手"],
+      "parent": "品牌",
+      "sub": "快手",
+      "type": "expense"
+    },
+    {
+      "name": "Alibaba",
+      "keywords": ["阿里巴巴"],
+      "parent": "品牌",
+      "sub": "阿里巴巴",
+      "type": "expense"
+    },
+    {
+      "name": "Ali1688",
+      "keywords": ["阿里1688"],
+      "parent": "品牌",
+      "sub": "阿里1688",
+      "type": "expense"
+    },
+    {
+      "name": "UnionPay",
+      "keywords": ["云闪付"],
+      "parent": "品牌",
+      "sub": "银联",
+      "type": "expense"
+    },
+    {
+      "name": "Huawei Pay",
+      "keywords": ["华为支付"],
+      "parent": "品牌",
+      "sub": "华为",
+      "type": "expense"
+    },
+    {
+      "name": "CCB Life",
+      "keywords": ["建行生活"],
+      "parent": "品牌",
+      "sub": "建设银行",
+      "type": "expense"
+    },
+    {
+      "name": "WeChat Pay",
+      "keywords": ["微信支付", "微信"],
+      "parent": "品牌",
+      "sub": "微信",
+      "type": "expense"
+    },
+    {
+      "name": "Alipay",
+      "keywords": ["支付宝"],
+      "parent": "品牌",
+      "sub": "支付宝",
+      "type": "expense"
+    }
+  ]
+}
