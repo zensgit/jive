@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
+import 'package:app_links/app_links.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
@@ -18,8 +21,7 @@ import 'core/service/transaction_service.dart';
 import 'core/service/auto_draft_service.dart';
 import 'core/service/auto_settings.dart';
 import 'feature/accounts/accounts_screen.dart';
-import 'feature/auto/auto_drafts_screen.dart';
-import 'feature/auto/auto_rule_tester_screen.dart';
+import 'feature/auto/auto_settings_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/stats/stats_screen.dart';
 import 'core/utils/logger_util.dart';
@@ -54,7 +56,6 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   static const eventChannel = EventChannel('com.jive.app/stream');
-  static const methodChannel = MethodChannel('com.jive.app/methods');
   static const _prefKeyDemoSeedEnabled = 'demo_seed_enabled';
 
   late Isar _isar;
@@ -68,6 +69,7 @@ class _MainScreenState extends State<MainScreen> {
   bool _demoSeedEnabled = true;
   bool _dbReady = false;
   bool _isListening = false;
+  StreamSubscription<Uri>? _appLinkSub;
   final List<Map<String, dynamic>> _pendingAutoEvents = [];
   AutoSettings _autoSettings = AutoSettingsStore.defaults;
   int _pendingDraftCount = 0;
@@ -77,6 +79,13 @@ class _MainScreenState extends State<MainScreen> {
     super.initState();
     _initDatabase();
     _startListening();
+    _startAppLinks();
+  }
+
+  @override
+  void dispose() {
+    _appLinkSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _initDatabase() async {
@@ -116,20 +125,6 @@ class _MainScreenState extends State<MainScreen> {
     setState(() {
       _autoSettings = settings;
     });
-  }
-
-  Future<void> _setAutoSettings(AutoSettings settings) async {
-    if (!mounted) return;
-    setState(() {
-      _autoSettings = settings;
-    });
-    await AutoSettingsStore.save(settings);
-  }
-
-  Future<void> _setDemoSeedEnabled(bool enabled) async {
-    _demoSeedEnabled = enabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefKeyDemoSeedEnabled, enabled);
   }
 
   void _showMessage(String message) {
@@ -416,36 +411,56 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Future<void> _openSettings() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
-      _showMessage("该入口仅支持 Android，iOS 请使用快捷指令");
-      return;
-    }
-    try {
-      await methodChannel.invokeMethod('openNotificationSettings');
-    } catch (e) {
-      debugPrint("Error: $e");
+  Future<void> _startAppLinks() async {
+    final appLinks = AppLinks();
+    _appLinkSub = appLinks.uriLinkStream.listen(
+      _handleAppLink,
+      onError: (error) => debugPrint('AppLinks error: $error'),
+    );
+    final initial = await appLinks.getInitialLink();
+    if (initial != null) {
+      _handleAppLink(initial);
     }
   }
 
-  Future<void> _openAutoDrafts() async {
+  void _handleAppLink(Uri uri) {
+    if (uri.scheme != 'jive') return;
+    final action = uri.host.isNotEmpty ? uri.host : uri.path.replaceFirst('/', '');
+    if (action != 'auto') return;
+    final params = uri.queryParameters;
+    final source = params['source'] ?? params['app'] ?? 'Shortcut';
+    final data = <String, dynamic>{
+      'source': source,
+      'raw_text': params['text'] ?? params['raw_text'] ?? '',
+      'amount': params['amount'] ?? params['money'],
+      'type': params['type'],
+      'timestamp': params['timestamp'],
+    };
+    if (!_dbReady) {
+      _pendingAutoEvents.add(data);
+      return;
+    }
+    _handleAutoEvent(data);
+  }
+
+  Future<void> _openAutoSettings() async {
     final changed = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const AutoDraftsScreen()),
+      MaterialPageRoute(
+        builder: (context) => AutoSettingsScreen(
+          isar: _isar,
+          autoSettings: _autoSettings,
+          pendingDraftCount: _pendingDraftCount,
+          demoSeedEnabled: _demoSeedEnabled,
+        ),
+      ),
     );
     if (changed == true) {
+      await _loadDemoSeedPrefs();
+      await _loadAutoSettings();
       await _loadTransactions();
       await _loadAutoDraftCount();
     }
-  }
-
-  Future<void> _openAutoRuleTester() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AutoRuleTesterScreen(isar: _isar),
-      ),
-    );
   }
 
   @override
@@ -581,169 +596,7 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
         GestureDetector(
-          onTap: () {
-            showModalBottomSheet(
-              context: context,
-              backgroundColor: Colors.white,
-              builder: (context) => SafeArea(
-                child: StatefulBuilder(
-                  builder: (context, setSheetState) {
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SwitchListTile(
-                          secondary: const Icon(Icons.science_outlined),
-                          title: const Text("测试数据开关"),
-                          subtitle: const Text("仅用于调试展示"),
-                          value: _demoSeedEnabled,
-                          onChanged: (value) async {
-                            setSheetState(() {
-                              _demoSeedEnabled = value;
-                            });
-                            await _setDemoSeedEnabled(value);
-                            _showMessage(value ? "已开启测试数据" : "已关闭测试数据");
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.auto_awesome),
-                          title: const Text("注入测试数据"),
-                          subtitle: Text(_demoSeedEnabled ? "写入一批示例数据" : "请先开启测试数据开关"),
-                          onTap: () async {
-                            if (!_demoSeedEnabled) {
-                              _showMessage("请先开启测试数据开关");
-                              return;
-                            }
-                            Navigator.pop(context);
-                            final inserted = await _seedDemoDataIfNeeded();
-                            await _loadTransactions();
-                            _showMessage(inserted ? "已注入测试数据" : "已有数据，未注入测试数据");
-                          },
-                        ),
-                        if (kDebugMode)
-                          ListTile(
-                            leading: const Icon(Icons.restart_alt, color: Colors.orangeAccent),
-                            title: const Text("重置系统分类", style: TextStyle(color: Colors.orangeAccent)),
-                            subtitle: const Text("清空分类并重新载入系统分类"),
-                            onTap: () async {
-                              Navigator.pop(context);
-                              final confirmed = await showDialog<bool>(
-                                context: context,
-                                builder: (dialogContext) => AlertDialog(
-                                  title: const Text("重置系统分类"),
-                                  content: const Text("将清空所有分类并重新载入系统分类，是否继续？"),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(dialogContext, false),
-                                      child: const Text("取消"),
-                                    ),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(dialogContext, true),
-                                      child: const Text("重置"),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirmed != true) return;
-                              await CategoryService(_isar).resetCategories();
-                              await TransactionService(_isar).migrateTransactionCategoryKeys();
-                              await _loadTransactions();
-                              _showMessage("已重置系统分类");
-                            },
-                          ),
-                        ListTile(
-                          leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
-                          title: const Text("清空数据", style: TextStyle(color: Colors.redAccent)),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (dialogContext) => AlertDialog(
-                                title: const Text("清空数据"),
-                                content: const Text("将删除全部交易、账户和分类数据，是否继续？"),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(dialogContext, false),
-                                    child: const Text("取消"),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(dialogContext, true),
-                                    child: const Text("清空"),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirmed != true) return;
-                            await _clearAllData();
-                            _showMessage("已清空数据");
-                          },
-                        ),
-                        const Divider(height: 1),
-                        SwitchListTile(
-                          secondary: const Icon(Icons.auto_awesome),
-                          title: const Text("自动记账"),
-                          subtitle: Text(_autoSettings.enabled ? "已开启" : "已关闭"),
-                          value: _autoSettings.enabled,
-                          onChanged: (value) async {
-                            final updated = _autoSettings.copyWith(enabled: value);
-                            setSheetState(() {
-                              _autoSettings = updated;
-                            });
-                            await _setAutoSettings(updated);
-                          },
-                        ),
-                        SwitchListTile(
-                          secondary: const Icon(Icons.playlist_add_check),
-                          title: const Text("自动入账"),
-                          subtitle: const Text("关闭则进入待确认"),
-                          value: _autoSettings.directCommit,
-                          onChanged: (value) async {
-                            final updated = _autoSettings.copyWith(directCommit: value);
-                            setSheetState(() {
-                              _autoSettings = updated;
-                            });
-                            await _setAutoSettings(updated);
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.inbox_outlined),
-                          title: const Text("待确认自动记账"),
-                          subtitle: Text("当前 $_pendingDraftCount 条"),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            await _openAutoDrafts();
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.rule),
-                          title: const Text("自动规则测试"),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            await _openAutoRuleTester();
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.settings),
-                          title: const Text("开启自动记账权限"),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _openSettings();
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.bug_report),
-                          title: const Text("导出调试日志"),
-                          onTap: () {
-                            Navigator.pop(context);
-                            JiveLogger.exportLogs();
-                          },
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            );
-          },
+          onTap: _openAutoSettings,
           child: CircleAvatar(
             radius: avatarRadius,
             backgroundColor: Colors.grey.shade200,

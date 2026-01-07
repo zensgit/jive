@@ -4,6 +4,7 @@ import '../database/category_model.dart';
 import '../database/transaction_model.dart';
 import '../service/account_service.dart';
 import '../service/auto_rule_engine.dart';
+import '../service/auto_supported_apps.dart';
 
 class AutoCapture {
   final double amount;
@@ -21,10 +22,13 @@ class AutoCapture {
   });
 
   factory AutoCapture.fromEvent(Map<String, dynamic> data) {
-    final amountValue = double.tryParse(data['amount']?.toString() ?? '') ?? 0;
+    var amountValue = double.tryParse(data['amount']?.toString() ?? '') ?? 0;
     final rawSource = data['source']?.toString().trim() ?? '';
     final source = _normalizeSource(rawSource);
     final rawText = data['raw_text']?.toString();
+    if (amountValue <= 0 && rawText != null && rawText.trim().isNotEmpty) {
+      amountValue = _extractAmount(rawText);
+    }
     final timestamp = _parseTimestamp(data['timestamp']);
     final type = _normalizeType(data['type']?.toString());
     return AutoCapture(
@@ -40,16 +44,47 @@ class AutoCapture {
 
   static DateTime _parseTimestamp(dynamic value) {
     if (value is int) {
-      return DateTime.fromMillisecondsSinceEpoch(value);
+      return DateTime.fromMillisecondsSinceEpoch(_normalizeEpoch(value));
     }
     if (value is double) {
-      return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+      return DateTime.fromMillisecondsSinceEpoch(_normalizeEpoch(value.toInt()));
     }
     final parsed = int.tryParse(value?.toString() ?? '');
     if (parsed != null) {
-      return DateTime.fromMillisecondsSinceEpoch(parsed);
+      return DateTime.fromMillisecondsSinceEpoch(_normalizeEpoch(parsed));
     }
     return DateTime.now();
+  }
+
+  static int _normalizeEpoch(int epoch) {
+    if (epoch < 100000000000) {
+      return epoch * 1000;
+    }
+    return epoch;
+  }
+
+  static double _extractAmount(String rawText) {
+    final cleaned = rawText.replaceAll(',', '').trim();
+    final currencyMatch = RegExp(r'(?:¥|￥|CNY|RMB)\\s*([+-]?\\d+(?:\\.\\d{1,2})?)', caseSensitive: false)
+        .firstMatch(cleaned);
+    if (currencyMatch != null) {
+      return double.tryParse(currencyMatch.group(1) ?? '')?.abs() ?? 0;
+    }
+    final yuanMatch = RegExp(r'([+-]?\\d+(?:\\.\\d{1,2})?)\\s*元').firstMatch(cleaned);
+    if (yuanMatch != null) {
+      return double.tryParse(yuanMatch.group(1) ?? '')?.abs() ?? 0;
+    }
+    final keywordMatch = RegExp(
+      r'(?:支付|收款|转账|收入|支出|消费|扣款|退款|到账)[^0-9]{0,6}([+-]?\\d+(?:\\.\\d{1,2})?)',
+    ).firstMatch(cleaned);
+    if (keywordMatch != null) {
+      return double.tryParse(keywordMatch.group(1) ?? '')?.abs() ?? 0;
+    }
+    final decimalMatch = RegExp(r'([+-]?\\d+\\.\\d{1,2})').firstMatch(cleaned);
+    if (decimalMatch != null) {
+      return double.tryParse(decimalMatch.group(1) ?? '')?.abs() ?? 0;
+    }
+    return 0;
   }
 
   static String _normalizeSource(String source) {
@@ -93,6 +128,8 @@ class AutoDraftService {
     required bool directCommit,
   }) async {
     if (!capture.isValid) return AutoCaptureResult.ignored;
+    final allowed = await AutoSupportedAppsStore.isEnabled(capture.source);
+    if (!allowed) return AutoCaptureResult.ignored;
     final dedupKey = _buildDedupKey(capture);
     final duplicate = await _isDuplicate(capture, dedupKey);
     if (duplicate) return AutoCaptureResult.duplicateHit;

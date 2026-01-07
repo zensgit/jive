@@ -4,8 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -33,16 +35,150 @@ class MainActivity: FlutterActivity() {
 
         // 2. Setup MethodChannel (Function Calls)
         io.flutter.plugin.common.MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).setMethodCallHandler { call, result ->
-            if (call.method == "openNotificationSettings") {
-                try {
-                    val intent = Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                    startActivity(intent)
-                    result.success(true)
-                } catch (e: Exception) {
-                    result.error("UNAVAILABLE", "Could not open settings.", null)
+            fun openSettings(intent: Intent) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val resolved = intent.resolveActivity(packageManager)
+                if (resolved == null) {
+                    result.error("UNAVAILABLE", "Settings screen not available.", null)
+                    return
                 }
-            } else {
-                result.notImplemented()
+                startActivity(intent)
+                result.success(true)
+            }
+
+            fun startIfResolvable(intent: Intent): Boolean {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val resolved = intent.resolveActivity(packageManager)
+                if (resolved == null) return false
+                startActivity(intent)
+                return true
+            }
+
+            fun openVendorPermissionSettings(): Boolean {
+                val manufacturer = (Build.MANUFACTURER ?: "").lowercase()
+                val brand = (Build.BRAND ?: "").lowercase()
+                val target = "$manufacturer $brand"
+                val pkg = packageName
+
+                val intents = mutableListOf<Intent>()
+
+                if (target.contains("xiaomi") || target.contains("redmi")) {
+                    intents.add(
+                        Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+                            setClassName(
+                                "com.miui.securitycenter",
+                                "com.miui.permcenter.permissions.PermissionsEditorActivity"
+                            )
+                            putExtra("extra_pkgname", pkg)
+                        }
+                    )
+                    intents.add(
+                        Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+                            setClassName(
+                                "com.miui.securitycenter",
+                                "com.miui.permcenter.permissions.AppPermissionsEditorActivity"
+                            )
+                            putExtra("extra_pkgname", pkg)
+                        }
+                    )
+                } else if (target.contains("oppo") || target.contains("realme") || target.contains("oneplus")) {
+                    intents.add(
+                        Intent().apply {
+                            setClassName(
+                                "com.coloros.safecenter",
+                                "com.coloros.safecenter.permission.PermissionManagerActivity"
+                            )
+                            putExtra("packageName", pkg)
+                        }
+                    )
+                    intents.add(
+                        Intent().apply {
+                            setClassName(
+                                "com.coloros.safecenter",
+                                "com.coloros.safecenter.permission.singlepage.PermissionSinglePageActivity"
+                            )
+                            putExtra("packageName", pkg)
+                        }
+                    )
+                    intents.add(
+                        Intent().apply {
+                            setClassName(
+                                "com.oppo.safe",
+                                "com.oppo.safe.permission.PermissionAppListActivity"
+                            )
+                            putExtra("packageName", pkg)
+                        }
+                    )
+                } else if (target.contains("vivo") || target.contains("iqoo")) {
+                    intents.add(
+                        Intent().apply {
+                            setClassName(
+                                "com.vivo.permissionmanager",
+                                "com.vivo.permissionmanager.activity.SoftPermissionDetailActivity"
+                            )
+                            putExtra("packagename", pkg)
+                        }
+                    )
+                    intents.add(
+                        Intent().apply {
+                            setClassName(
+                                "com.vivo.permissionmanager",
+                                "com.vivo.permissionmanager.activity.PermissionManagerActivity"
+                            )
+                            putExtra("packagename", pkg)
+                        }
+                    )
+                    intents.add(
+                        Intent().apply {
+                            setClassName(
+                                "com.iqoo.secure",
+                                "com.iqoo.secure.ui.phoneoptimize.SoftwareManagerActivity"
+                            )
+                        }
+                    )
+                } else {
+                    return false
+                }
+
+                for (intent in intents) {
+                    if (startIfResolvable(intent)) return true
+                }
+                return false
+            }
+
+            try {
+                when (call.method) {
+                    "openNotificationSettings" -> {
+                        openSettings(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    }
+                    "openAccessibilitySettings" -> {
+                        openSettings(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    }
+                    "openOverlaySettings" -> {
+                        val uri = Uri.fromParts("package", packageName, null)
+                        openSettings(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                uri
+                            ).putExtra("packageName", packageName)
+                        )
+                    }
+                    "openAppDetailsSettings" -> {
+                        val uri = Uri.fromParts("package", packageName, null)
+                        openSettings(
+                            Intent(
+                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                uri
+                            ).putExtra("packageName", packageName)
+                        )
+                    }
+                    "openVendorSettings" -> {
+                        result.success(openVendorPermissionSettings())
+                    }
+                    else -> result.notImplemented()
+                }
+            } catch (e: Exception) {
+                result.error("UNAVAILABLE", "Could not open settings.", null)
             }
         }
     }
