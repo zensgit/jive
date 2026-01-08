@@ -28,6 +28,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   late CategoryService _service;
   bool _isLoading = true;
   bool _showIncome = false;
+  bool _showHidden = false;
   bool _hasChanges = false;
   List<JiveCategory> _parents = [];
   Map<String, List<JiveCategory>> _childrenByParentKey = {};
@@ -76,10 +77,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   Future<void> _loadCategories() async {
     final all = await _isar.collection<JiveCategory>().where().findAll();
     final parents = all
-        .where((c) => c.parentKey == null && c.isIncome == _showIncome && !c.isHidden)
+        .where((c) => c.parentKey == null && c.isIncome == _showIncome && (_showHidden || !c.isHidden))
         .toList();
     final children = all
-        .where((c) => c.parentKey != null && c.isIncome == _showIncome && !c.isHidden)
+        .where((c) => c.parentKey != null && c.isIncome == _showIncome && (_showHidden || !c.isHidden))
         .toList();
 
     parents.sort((a, b) => a.order.compareTo(b.order));
@@ -290,6 +291,19 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     await _loadCategories();
   }
 
+  Future<void> _toggleCategoryHidden(JiveCategory category) async {
+    if (category.isSystem && !category.isHidden) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("系统分类不可隐藏")),
+        );
+      }
+      return;
+    }
+    await _service.setCategoryHidden(category.id, !category.isHidden);
+    await _reloadAndMarkChanged();
+  }
+
   Future<void> _onReorderParents(int oldIndex, int newIndex) async {
     if (newIndex > oldIndex) newIndex -= 1;
     if (oldIndex < 0 || newIndex < 0 || oldIndex >= _parents.length || newIndex >= _parents.length) {
@@ -454,6 +468,20 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       child: Text(
         label,
         style: TextStyle(fontSize: compact ? 9 : 10, color: color, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _buildHiddenBadge({bool compact = false}) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade300,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        "已隐藏",
+        style: TextStyle(fontSize: compact ? 9 : 10, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -726,6 +754,24 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             ),
             if (!parent.isSystem)
               ListTile(
+                leading: Icon(parent.isHidden ? Icons.visibility : Icons.visibility_off),
+                title: Text(parent.isHidden ? "显示" : "隐藏"),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _toggleCategoryHidden(parent);
+                },
+              )
+            else if (parent.isHidden)
+              ListTile(
+                leading: const Icon(Icons.visibility),
+                title: const Text("显示"),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _toggleCategoryHidden(parent);
+                },
+              ),
+            if (!parent.isSystem)
+              ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
                 title: const Text("删除", style: TextStyle(color: Colors.red)),
                 onTap: () async {
@@ -773,6 +819,24 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                 onTap: () async {
                   Navigator.pop(context);
                   await _deleteCategory(sub);
+                },
+              ),
+            if (!sub.isSystem)
+              ListTile(
+                leading: Icon(sub.isHidden ? Icons.visibility : Icons.visibility_off),
+                title: Text(sub.isHidden ? "显示" : "隐藏"),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _toggleCategoryHidden(sub);
+                },
+              )
+            else if (sub.isHidden)
+              ListTile(
+                leading: const Icon(Icons.visibility),
+                title: const Text("显示"),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await _toggleCategoryHidden(sub);
                 },
               ),
             ListTile(
@@ -856,6 +920,16 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                       onSelected: (_) => _switchType(true),
                       selectedColor: JiveTheme.primaryGreen.withOpacity(0.1),
                     ),
+                    const Spacer(),
+                    FilterChip(
+                      label: const Text("显示隐藏"),
+                      selected: _showHidden,
+                      onSelected: (value) async {
+                        setState(() => _showHidden = value);
+                        await _loadCategories();
+                      },
+                      selectedColor: Colors.grey.shade200,
+                    ),
                   ],
                 ),
               ),
@@ -870,7 +944,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: Text(
-                  _isSearching ? "搜索结果（排序已暂时关闭）" : "长按拖动可排序，点击可编辑，长按子类更多操作",
+                  _isSearching
+                      ? "搜索结果（排序已暂时关闭）"
+                      : _showHidden
+                          ? "长按拖动可排序，点击可编辑，长按子类更多操作 · 已显示隐藏"
+                          : "长按拖动可排序，点击可编辑，长按子类更多操作",
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                 ),
               ),
@@ -939,6 +1017,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final children = childrenOverride ?? _childrenByParentKey[parent.key] ?? [];
     final isCollapsed = allowCollapse && _collapsedParents.contains(parent.key);
     final parentTotal = _parentTotals[parent.key] ?? 0;
+    final isHidden = parent.isHidden;
+    final parentIconColor = isHidden
+        ? Colors.grey.shade400
+        : _resolveCategoryColor(parent, fallback: Colors.grey.shade700);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -948,97 +1030,104 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (allowReorder)
-                ReorderableDelayedDragStartListener(
-                  index: index,
-                  child: Listener(
-                    onPointerDown: (_) => HapticFeedback.selectionClick(),
-                    child: Icon(Icons.drag_handle, color: Colors.grey.shade400),
-                  ),
-                )
-              else
-                const SizedBox(width: 24),
-              const SizedBox(width: 6),
-              CircleAvatar(
-                backgroundColor: _resolveCategoryBackground(parent),
-                child: CategoryService.buildIcon(
-                  parent.iconName,
-                  size: 20,
-                  color: _resolveCategoryColor(parent, fallback: Colors.grey.shade700),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: _buildHighlightedText(
-                            parent.name,
-                            const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            highlightQuery,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        _buildSourceBadge(parent.isSystem),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "本月 ${_formatAmount(parentTotal)}",
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.more_horiz),
-                onPressed: () => _showParentActions(parent),
-              ),
-              if (allowCollapse)
-                IconButton(
-                  icon: Icon(isCollapsed ? Icons.expand_more : Icons.expand_less),
-                  onPressed: () {
-                    setState(() {
-                      if (isCollapsed) {
-                        _collapsedParents.remove(parent.key);
-                      } else {
-                        _collapsedParents.add(parent.key);
-                      }
-                    });
-                  },
-                ),
-            ],
-          ),
-          if (!isCollapsed) ...[
-            const SizedBox(height: 8),
-            if (children.isNotEmpty) ...[
-              _buildSubStatsRow(parent, children),
-              const SizedBox(height: 8),
-            ],
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+      child: Opacity(
+        opacity: isHidden ? 0.6 : 1,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                ...children.map((child) => _buildSubCategoryChip(
-                  child,
-                  parent,
-                  parentTotal,
-                  allowDrag: allowChildDrag,
-                  highlightQuery: highlightQuery,
-                )),
-                if (showAddChip) _buildAddSubChip(parent),
+                if (allowReorder)
+                  ReorderableDelayedDragStartListener(
+                    index: index,
+                    child: Listener(
+                      onPointerDown: (_) => HapticFeedback.selectionClick(),
+                      child: Icon(Icons.drag_handle, color: Colors.grey.shade400),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 24),
+                const SizedBox(width: 6),
+                CircleAvatar(
+                  backgroundColor: _resolveCategoryBackground(parent),
+                  child: CategoryService.buildIcon(
+                    parent.iconName,
+                    size: 20,
+                    color: parentIconColor,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: _buildHighlightedText(
+                              parent.name,
+                              const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              highlightQuery,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          _buildSourceBadge(parent.isSystem),
+                          if (parent.isHidden) ...[
+                            const SizedBox(width: 4),
+                            _buildHiddenBadge(),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "本月 ${_formatAmount(parentTotal)}",
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.more_horiz),
+                  onPressed: () => _showParentActions(parent),
+                ),
+                if (allowCollapse)
+                  IconButton(
+                    icon: Icon(isCollapsed ? Icons.expand_more : Icons.expand_less),
+                    onPressed: () {
+                      setState(() {
+                        if (isCollapsed) {
+                          _collapsedParents.remove(parent.key);
+                        } else {
+                          _collapsedParents.add(parent.key);
+                        }
+                      });
+                    },
+                  ),
               ],
             ),
+            if (!isCollapsed) ...[
+              const SizedBox(height: 8),
+              if (children.isNotEmpty) ...[
+                _buildSubStatsRow(parent, children),
+                const SizedBox(height: 8),
+              ],
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ...children.map((child) => _buildSubCategoryChip(
+                    child,
+                    parent,
+                    parentTotal,
+                    allowDrag: allowChildDrag,
+                    highlightQuery: highlightQuery,
+                  )),
+                  if (showAddChip) _buildAddSubChip(parent),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1097,82 +1186,93 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     String? highlightQuery,
   }) {
     final percent = parentTotal > 0 ? (amount / parentTotal).clamp(0.0, 1.0) : 0.0;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isTarget ? JiveTheme.primaryGreen.withOpacity(0.4) : Colors.grey.shade200,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CategoryService.buildIcon(
-            sub.iconName,
-            size: 16,
-            color: _resolveCategoryColor(sub, fallback: Colors.grey.shade700),
+    final isHidden = sub.isHidden;
+    final iconColor = isHidden
+        ? Colors.grey.shade400
+        : _resolveCategoryColor(sub, fallback: Colors.grey.shade700);
+    return Opacity(
+      opacity: isHidden ? 0.6 : 1,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isTarget ? JiveTheme.primaryGreen.withOpacity(0.4) : Colors.grey.shade200,
           ),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Flexible(
-                    child: _buildHighlightedText(
-                      sub.name,
-                      const TextStyle(fontSize: 12),
-                      highlightQuery,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CategoryService.buildIcon(
+              sub.iconName,
+              size: 16,
+              color: iconColor,
+            ),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: _buildHighlightedText(
+                        sub.name,
+                        const TextStyle(fontSize: 12),
+                        highlightQuery,
+                      ),
+                    ),
+                    if (!sub.isSystem) ...[
+                      const SizedBox(width: 4),
+                      _buildSourceBadge(false, compact: true),
+                    ],
+                    if (sub.isHidden) ...[
+                      const SizedBox(width: 4),
+                      _buildHiddenBadge(compact: true),
+                    ],
+                  ],
+                ),
+                Text(
+                  _formatAmount(amount),
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                ),
+                if (parentTotal > 0) ...[
+                  const SizedBox(height: 3),
+                  SizedBox(
+                    width: 48,
+                    height: 3,
+                    child: LinearProgressIndicator(
+                      value: percent,
+                      backgroundColor: Colors.grey.shade300,
+                      color: JiveTheme.primaryGreen,
                     ),
                   ),
-                  if (!sub.isSystem) ...[
-                    const SizedBox(width: 4),
-                    _buildSourceBadge(false, compact: true),
-                  ],
                 ],
-              ),
-              Text(
-                _formatAmount(amount),
-                style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
-              ),
-              if (parentTotal > 0) ...[
-                const SizedBox(height: 3),
-                SizedBox(
-                  width: 48,
-                  height: 3,
-                  child: LinearProgressIndicator(
-                    value: percent,
-                    backgroundColor: Colors.grey.shade300,
-                    color: JiveTheme.primaryGreen,
-                  ),
-                ),
               ],
-            ],
-          ),
-          if (showHandle) ...[
-            const SizedBox(width: 6),
-            LongPressDraggable<JiveCategory>(
-              data: sub,
-              onDragStarted: () => HapticFeedback.mediumImpact(),
-              feedback: Material(
-                color: Colors.transparent,
-                child: Transform.scale(
-                  scale: 1.03,
-                  child: _buildSubChipBody(
-                    sub,
-                    parent,
-                    amount,
-                    parentTotal: parentTotal,
-                    showHandle: false,
+            ),
+            if (showHandle) ...[
+              const SizedBox(width: 6),
+              LongPressDraggable<JiveCategory>(
+                data: sub,
+                onDragStarted: () => HapticFeedback.mediumImpact(),
+                feedback: Material(
+                  color: Colors.transparent,
+                  child: Transform.scale(
+                    scale: 1.03,
+                    child: _buildSubChipBody(
+                      sub,
+                      parent,
+                      amount,
+                      parentTotal: parentTotal,
+                      showHandle: false,
+                    ),
                   ),
                 ),
+                child: Icon(Icons.drag_indicator, size: 14, color: Colors.grey.shade500),
               ),
-              child: Icon(Icons.drag_indicator, size: 14, color: Colors.grey.shade500),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

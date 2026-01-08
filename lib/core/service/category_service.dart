@@ -1002,6 +1002,18 @@ class CategoryService {
         .filter().parentKeyIsNull().sortByOrder().findAll();
   }
 
+  Future<void> setCategoryHidden(int id, bool isHidden) async {
+    final cat = await isar.collection<JiveCategory>().get(id);
+    if (cat == null) return;
+    if (cat.isSystem && isHidden) return;
+    if (cat.isHidden == isHidden) return;
+    cat.isHidden = isHidden;
+    cat.updatedAt = DateTime.now();
+    await isar.writeTxn(() async {
+      await isar.collection<JiveCategory>().put(cat);
+    });
+  }
+
   // 更新分类 (核心逻辑: 改名、改图标、改爸爸)
   Future<void> updateCategory(
     int id,
