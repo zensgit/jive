@@ -1769,3 +1769,1733 @@ extension JiveCategoryQueryProperty
     });
   }
 }
+
+// coverage:ignore-file
+// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
+
+extension GetJiveCategoryOverrideCollection on Isar {
+  IsarCollection<JiveCategoryOverride> get jiveCategoryOverrides =>
+      this.collection();
+}
+
+const JiveCategoryOverrideSchema = CollectionSchema(
+  name: r'JiveCategoryOverride',
+  id: -1839205628893422052,
+  properties: {
+    r'colorHexOverride': PropertySchema(
+      id: 0,
+      name: r'colorHexOverride',
+      type: IsarType.string,
+    ),
+    r'iconOverride': PropertySchema(
+      id: 1,
+      name: r'iconOverride',
+      type: IsarType.string,
+    ),
+    r'isHiddenOverride': PropertySchema(
+      id: 2,
+      name: r'isHiddenOverride',
+      type: IsarType.bool,
+    ),
+    r'nameOverride': PropertySchema(
+      id: 3,
+      name: r'nameOverride',
+      type: IsarType.string,
+    ),
+    r'orderOverride': PropertySchema(
+      id: 4,
+      name: r'orderOverride',
+      type: IsarType.long,
+    ),
+    r'parentOverrideKey': PropertySchema(
+      id: 5,
+      name: r'parentOverrideKey',
+      type: IsarType.string,
+    ),
+    r'systemKey': PropertySchema(
+      id: 6,
+      name: r'systemKey',
+      type: IsarType.string,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 7,
+      name: r'updatedAt',
+      type: IsarType.dateTime,
+    )
+  },
+  estimateSize: _jiveCategoryOverrideEstimateSize,
+  serialize: _jiveCategoryOverrideSerialize,
+  deserialize: _jiveCategoryOverrideDeserialize,
+  deserializeProp: _jiveCategoryOverrideDeserializeProp,
+  idName: r'id',
+  indexes: {
+    r'systemKey': IndexSchema(
+      id: -165220230884495247,
+      name: r'systemKey',
+      unique: true,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'systemKey',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    )
+  },
+  links: {},
+  embeddedSchemas: {},
+  getId: _jiveCategoryOverrideGetId,
+  getLinks: _jiveCategoryOverrideGetLinks,
+  attach: _jiveCategoryOverrideAttach,
+  version: '3.1.0+1',
+);
+
+int _jiveCategoryOverrideEstimateSize(
+  JiveCategoryOverride object,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  var bytesCount = offsets.last;
+  {
+    final value = object.colorHexOverride;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.iconOverride;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.nameOverride;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.parentOverrideKey;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  bytesCount += 3 + object.systemKey.length * 3;
+  return bytesCount;
+}
+
+void _jiveCategoryOverrideSerialize(
+  JiveCategoryOverride object,
+  IsarWriter writer,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  writer.writeString(offsets[0], object.colorHexOverride);
+  writer.writeString(offsets[1], object.iconOverride);
+  writer.writeBool(offsets[2], object.isHiddenOverride);
+  writer.writeString(offsets[3], object.nameOverride);
+  writer.writeLong(offsets[4], object.orderOverride);
+  writer.writeString(offsets[5], object.parentOverrideKey);
+  writer.writeString(offsets[6], object.systemKey);
+  writer.writeDateTime(offsets[7], object.updatedAt);
+}
+
+JiveCategoryOverride _jiveCategoryOverrideDeserialize(
+  Id id,
+  IsarReader reader,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  final object = JiveCategoryOverride();
+  object.colorHexOverride = reader.readStringOrNull(offsets[0]);
+  object.iconOverride = reader.readStringOrNull(offsets[1]);
+  object.id = id;
+  object.isHiddenOverride = reader.readBoolOrNull(offsets[2]);
+  object.nameOverride = reader.readStringOrNull(offsets[3]);
+  object.orderOverride = reader.readLongOrNull(offsets[4]);
+  object.parentOverrideKey = reader.readStringOrNull(offsets[5]);
+  object.systemKey = reader.readString(offsets[6]);
+  object.updatedAt = reader.readDateTime(offsets[7]);
+  return object;
+}
+
+P _jiveCategoryOverrideDeserializeProp<P>(
+  IsarReader reader,
+  int propertyId,
+  int offset,
+  Map<Type, List<int>> allOffsets,
+) {
+  switch (propertyId) {
+    case 0:
+      return (reader.readStringOrNull(offset)) as P;
+    case 1:
+      return (reader.readStringOrNull(offset)) as P;
+    case 2:
+      return (reader.readBoolOrNull(offset)) as P;
+    case 3:
+      return (reader.readStringOrNull(offset)) as P;
+    case 4:
+      return (reader.readLongOrNull(offset)) as P;
+    case 5:
+      return (reader.readStringOrNull(offset)) as P;
+    case 6:
+      return (reader.readString(offset)) as P;
+    case 7:
+      return (reader.readDateTime(offset)) as P;
+    default:
+      throw IsarError('Unknown property with id $propertyId');
+  }
+}
+
+Id _jiveCategoryOverrideGetId(JiveCategoryOverride object) {
+  return object.id;
+}
+
+List<IsarLinkBase<dynamic>> _jiveCategoryOverrideGetLinks(
+    JiveCategoryOverride object) {
+  return [];
+}
+
+void _jiveCategoryOverrideAttach(
+    IsarCollection<dynamic> col, Id id, JiveCategoryOverride object) {
+  object.id = id;
+}
+
+extension JiveCategoryOverrideByIndex on IsarCollection<JiveCategoryOverride> {
+  Future<JiveCategoryOverride?> getBySystemKey(String systemKey) {
+    return getByIndex(r'systemKey', [systemKey]);
+  }
+
+  JiveCategoryOverride? getBySystemKeySync(String systemKey) {
+    return getByIndexSync(r'systemKey', [systemKey]);
+  }
+
+  Future<bool> deleteBySystemKey(String systemKey) {
+    return deleteByIndex(r'systemKey', [systemKey]);
+  }
+
+  bool deleteBySystemKeySync(String systemKey) {
+    return deleteByIndexSync(r'systemKey', [systemKey]);
+  }
+
+  Future<List<JiveCategoryOverride?>> getAllBySystemKey(
+      List<String> systemKeyValues) {
+    final values = systemKeyValues.map((e) => [e]).toList();
+    return getAllByIndex(r'systemKey', values);
+  }
+
+  List<JiveCategoryOverride?> getAllBySystemKeySync(
+      List<String> systemKeyValues) {
+    final values = systemKeyValues.map((e) => [e]).toList();
+    return getAllByIndexSync(r'systemKey', values);
+  }
+
+  Future<int> deleteAllBySystemKey(List<String> systemKeyValues) {
+    final values = systemKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndex(r'systemKey', values);
+  }
+
+  int deleteAllBySystemKeySync(List<String> systemKeyValues) {
+    final values = systemKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndexSync(r'systemKey', values);
+  }
+
+  Future<Id> putBySystemKey(JiveCategoryOverride object) {
+    return putByIndex(r'systemKey', object);
+  }
+
+  Id putBySystemKeySync(JiveCategoryOverride object, {bool saveLinks = true}) {
+    return putByIndexSync(r'systemKey', object, saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllBySystemKey(List<JiveCategoryOverride> objects) {
+    return putAllByIndex(r'systemKey', objects);
+  }
+
+  List<Id> putAllBySystemKeySync(List<JiveCategoryOverride> objects,
+      {bool saveLinks = true}) {
+    return putAllByIndexSync(r'systemKey', objects, saveLinks: saveLinks);
+  }
+}
+
+extension JiveCategoryOverrideQueryWhereSort
+    on QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QWhere> {
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterWhere>
+      anyId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+}
+
+extension JiveCategoryOverrideQueryWhere
+    on QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QWhereClause> {
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterWhereClause>
+      idEqualTo(Id id) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IdWhereClause.between(
+        lower: id,
+        upper: id,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterWhereClause>
+      idNotEqualTo(Id id) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(
+              IdWhereClause.lessThan(upper: id, includeUpper: false),
+            )
+            .addWhereClause(
+              IdWhereClause.greaterThan(lower: id, includeLower: false),
+            );
+      } else {
+        return query
+            .addWhereClause(
+              IdWhereClause.greaterThan(lower: id, includeLower: false),
+            )
+            .addWhereClause(
+              IdWhereClause.lessThan(upper: id, includeUpper: false),
+            );
+      }
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterWhereClause>
+      idGreaterThan(Id id, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IdWhereClause.greaterThan(lower: id, includeLower: include),
+      );
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterWhereClause>
+      idLessThan(Id id, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IdWhereClause.lessThan(upper: id, includeUpper: include),
+      );
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterWhereClause>
+      idBetween(
+    Id lowerId,
+    Id upperId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IdWhereClause.between(
+        lower: lowerId,
+        includeLower: includeLower,
+        upper: upperId,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterWhereClause>
+      systemKeyEqualTo(String systemKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'systemKey',
+        value: [systemKey],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterWhereClause>
+      systemKeyNotEqualTo(String systemKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'systemKey',
+              lower: [],
+              upper: [systemKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'systemKey',
+              lower: [systemKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'systemKey',
+              lower: [systemKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'systemKey',
+              lower: [],
+              upper: [systemKey],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+}
+
+extension JiveCategoryOverrideQueryFilter on QueryBuilder<JiveCategoryOverride,
+    JiveCategoryOverride, QFilterCondition> {
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'colorHexOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'colorHexOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'colorHexOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'colorHexOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'colorHexOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'colorHexOverride',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'colorHexOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'colorHexOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      colorHexOverrideContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'colorHexOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      colorHexOverrideMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'colorHexOverride',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'colorHexOverride',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> colorHexOverrideIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'colorHexOverride',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'iconOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'iconOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'iconOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'iconOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'iconOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'iconOverride',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'iconOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'iconOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      iconOverrideContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'iconOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      iconOverrideMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'iconOverride',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'iconOverride',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> iconOverrideIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'iconOverride',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> idEqualTo(Id value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> idGreaterThan(
+    Id value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> idLessThan(
+    Id value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> idBetween(
+    Id lower,
+    Id upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'id',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> isHiddenOverrideIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'isHiddenOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> isHiddenOverrideIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'isHiddenOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> isHiddenOverrideEqualTo(bool? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isHiddenOverride',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'nameOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'nameOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'nameOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'nameOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'nameOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'nameOverride',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'nameOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'nameOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      nameOverrideContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'nameOverride',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      nameOverrideMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'nameOverride',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'nameOverride',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> nameOverrideIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'nameOverride',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> orderOverrideIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'orderOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> orderOverrideIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'orderOverride',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> orderOverrideEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'orderOverride',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> orderOverrideGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'orderOverride',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> orderOverrideLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'orderOverride',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> orderOverrideBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'orderOverride',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'parentOverrideKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'parentOverrideKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'parentOverrideKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'parentOverrideKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'parentOverrideKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'parentOverrideKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'parentOverrideKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'parentOverrideKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      parentOverrideKeyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'parentOverrideKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      parentOverrideKeyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'parentOverrideKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'parentOverrideKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> parentOverrideKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'parentOverrideKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> systemKeyEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'systemKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> systemKeyGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'systemKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> systemKeyLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'systemKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> systemKeyBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'systemKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> systemKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'systemKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> systemKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'systemKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      systemKeyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'systemKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+          QAfterFilterCondition>
+      systemKeyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'systemKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> systemKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'systemKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> systemKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'systemKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> updatedAtEqualTo(DateTime value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> updatedAtGreaterThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> updatedAtLessThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'updatedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride,
+      QAfterFilterCondition> updatedAtBetween(
+    DateTime lower,
+    DateTime upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'updatedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+}
+
+extension JiveCategoryOverrideQueryObject on QueryBuilder<JiveCategoryOverride,
+    JiveCategoryOverride, QFilterCondition> {}
+
+extension JiveCategoryOverrideQueryLinks on QueryBuilder<JiveCategoryOverride,
+    JiveCategoryOverride, QFilterCondition> {}
+
+extension JiveCategoryOverrideQuerySortBy
+    on QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QSortBy> {
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByColorHexOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'colorHexOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByColorHexOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'colorHexOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByIconOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'iconOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByIconOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'iconOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByIsHiddenOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isHiddenOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByIsHiddenOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isHiddenOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByNameOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'nameOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByNameOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'nameOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByOrderOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'orderOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByOrderOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'orderOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByParentOverrideKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'parentOverrideKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByParentOverrideKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'parentOverrideKey', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortBySystemKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'systemKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortBySystemKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'systemKey', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      sortByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
+}
+
+extension JiveCategoryOverrideQuerySortThenBy
+    on QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QSortThenBy> {
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByColorHexOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'colorHexOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByColorHexOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'colorHexOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByIconOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'iconOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByIconOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'iconOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenById() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'id', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'id', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByIsHiddenOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isHiddenOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByIsHiddenOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isHiddenOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByNameOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'nameOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByNameOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'nameOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByOrderOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'orderOverride', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByOrderOverrideDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'orderOverride', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByParentOverrideKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'parentOverrideKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByParentOverrideKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'parentOverrideKey', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenBySystemKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'systemKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenBySystemKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'systemKey', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QAfterSortBy>
+      thenByUpdatedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'updatedAt', Sort.desc);
+    });
+  }
+}
+
+extension JiveCategoryOverrideQueryWhereDistinct
+    on QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QDistinct> {
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QDistinct>
+      distinctByColorHexOverride({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'colorHexOverride',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QDistinct>
+      distinctByIconOverride({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'iconOverride', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QDistinct>
+      distinctByIsHiddenOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isHiddenOverride');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QDistinct>
+      distinctByNameOverride({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'nameOverride', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QDistinct>
+      distinctByOrderOverride() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'orderOverride');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QDistinct>
+      distinctByParentOverrideKey({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'parentOverrideKey',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QDistinct>
+      distinctBySystemKey({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'systemKey', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, JiveCategoryOverride, QDistinct>
+      distinctByUpdatedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'updatedAt');
+    });
+  }
+}
+
+extension JiveCategoryOverrideQueryProperty on QueryBuilder<
+    JiveCategoryOverride, JiveCategoryOverride, QQueryProperty> {
+  QueryBuilder<JiveCategoryOverride, int, QQueryOperations> idProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'id');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, String?, QQueryOperations>
+      colorHexOverrideProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'colorHexOverride');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, String?, QQueryOperations>
+      iconOverrideProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'iconOverride');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, bool?, QQueryOperations>
+      isHiddenOverrideProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isHiddenOverride');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, String?, QQueryOperations>
+      nameOverrideProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'nameOverride');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, int?, QQueryOperations>
+      orderOverrideProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'orderOverride');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, String?, QQueryOperations>
+      parentOverrideKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'parentOverrideKey');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, String, QQueryOperations>
+      systemKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'systemKey');
+    });
+  }
+
+  QueryBuilder<JiveCategoryOverride, DateTime, QQueryOperations>
+      updatedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'updatedAt');
+    });
+  }
+}

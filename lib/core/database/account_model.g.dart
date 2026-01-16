@@ -17,68 +17,88 @@ const JiveAccountSchema = CollectionSchema(
   name: r'JiveAccount',
   id: 7074399129637375692,
   properties: {
-    r'colorHex': PropertySchema(
+    r'billingDay': PropertySchema(
       id: 0,
+      name: r'billingDay',
+      type: IsarType.long,
+    ),
+    r'colorHex': PropertySchema(
+      id: 1,
       name: r'colorHex',
       type: IsarType.string,
     ),
+    r'creditLimit': PropertySchema(
+      id: 2,
+      name: r'creditLimit',
+      type: IsarType.double,
+    ),
     r'currency': PropertySchema(
-      id: 1,
+      id: 3,
       name: r'currency',
       type: IsarType.string,
     ),
+    r'groupName': PropertySchema(
+      id: 4,
+      name: r'groupName',
+      type: IsarType.string,
+    ),
     r'iconName': PropertySchema(
-      id: 2,
+      id: 5,
       name: r'iconName',
       type: IsarType.string,
     ),
     r'includeInBalance': PropertySchema(
-      id: 3,
+      id: 6,
       name: r'includeInBalance',
       type: IsarType.bool,
     ),
     r'isArchived': PropertySchema(
-      id: 4,
+      id: 7,
       name: r'isArchived',
       type: IsarType.bool,
     ),
     r'isHidden': PropertySchema(
-      id: 5,
+      id: 8,
       name: r'isHidden',
       type: IsarType.bool,
     ),
     r'key': PropertySchema(
-      id: 6,
+      id: 9,
       name: r'key',
       type: IsarType.string,
     ),
     r'name': PropertySchema(
-      id: 7,
+      id: 10,
       name: r'name',
       type: IsarType.string,
     ),
     r'openingBalance': PropertySchema(
-      id: 8,
+      id: 11,
       name: r'openingBalance',
       type: IsarType.double,
     ),
     r'order': PropertySchema(
-      id: 9,
+      id: 12,
       name: r'order',
       type: IsarType.long,
     ),
+    r'repaymentDay': PropertySchema(
+      id: 13,
+      name: r'repaymentDay',
+      type: IsarType.long,
+    ),
     r'subType': PropertySchema(
-      id: 10,
+      id: 14,
       name: r'subType',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 11,
+      id: 15,
       name: r'type',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 12,
+      id: 16,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -124,6 +144,12 @@ int _jiveAccountEstimateSize(
     }
   }
   bytesCount += 3 + object.currency.length * 3;
+  {
+    final value = object.groupName;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.iconName.length * 3;
   bytesCount += 3 + object.key.length * 3;
   bytesCount += 3 + object.name.length * 3;
@@ -143,19 +169,23 @@ void _jiveAccountSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeString(offsets[0], object.colorHex);
-  writer.writeString(offsets[1], object.currency);
-  writer.writeString(offsets[2], object.iconName);
-  writer.writeBool(offsets[3], object.includeInBalance);
-  writer.writeBool(offsets[4], object.isArchived);
-  writer.writeBool(offsets[5], object.isHidden);
-  writer.writeString(offsets[6], object.key);
-  writer.writeString(offsets[7], object.name);
-  writer.writeDouble(offsets[8], object.openingBalance);
-  writer.writeLong(offsets[9], object.order);
-  writer.writeString(offsets[10], object.subType);
-  writer.writeString(offsets[11], object.type);
-  writer.writeDateTime(offsets[12], object.updatedAt);
+  writer.writeLong(offsets[0], object.billingDay);
+  writer.writeString(offsets[1], object.colorHex);
+  writer.writeDouble(offsets[2], object.creditLimit);
+  writer.writeString(offsets[3], object.currency);
+  writer.writeString(offsets[4], object.groupName);
+  writer.writeString(offsets[5], object.iconName);
+  writer.writeBool(offsets[6], object.includeInBalance);
+  writer.writeBool(offsets[7], object.isArchived);
+  writer.writeBool(offsets[8], object.isHidden);
+  writer.writeString(offsets[9], object.key);
+  writer.writeString(offsets[10], object.name);
+  writer.writeDouble(offsets[11], object.openingBalance);
+  writer.writeLong(offsets[12], object.order);
+  writer.writeLong(offsets[13], object.repaymentDay);
+  writer.writeString(offsets[14], object.subType);
+  writer.writeString(offsets[15], object.type);
+  writer.writeDateTime(offsets[16], object.updatedAt);
 }
 
 JiveAccount _jiveAccountDeserialize(
@@ -165,20 +195,24 @@ JiveAccount _jiveAccountDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = JiveAccount();
-  object.colorHex = reader.readStringOrNull(offsets[0]);
-  object.currency = reader.readString(offsets[1]);
-  object.iconName = reader.readString(offsets[2]);
+  object.billingDay = reader.readLongOrNull(offsets[0]);
+  object.colorHex = reader.readStringOrNull(offsets[1]);
+  object.creditLimit = reader.readDoubleOrNull(offsets[2]);
+  object.currency = reader.readString(offsets[3]);
+  object.groupName = reader.readStringOrNull(offsets[4]);
+  object.iconName = reader.readString(offsets[5]);
   object.id = id;
-  object.includeInBalance = reader.readBool(offsets[3]);
-  object.isArchived = reader.readBool(offsets[4]);
-  object.isHidden = reader.readBool(offsets[5]);
-  object.key = reader.readString(offsets[6]);
-  object.name = reader.readString(offsets[7]);
-  object.openingBalance = reader.readDouble(offsets[8]);
-  object.order = reader.readLong(offsets[9]);
-  object.subType = reader.readStringOrNull(offsets[10]);
-  object.type = reader.readString(offsets[11]);
-  object.updatedAt = reader.readDateTime(offsets[12]);
+  object.includeInBalance = reader.readBool(offsets[6]);
+  object.isArchived = reader.readBool(offsets[7]);
+  object.isHidden = reader.readBool(offsets[8]);
+  object.key = reader.readString(offsets[9]);
+  object.name = reader.readString(offsets[10]);
+  object.openingBalance = reader.readDouble(offsets[11]);
+  object.order = reader.readLong(offsets[12]);
+  object.repaymentDay = reader.readLongOrNull(offsets[13]);
+  object.subType = reader.readStringOrNull(offsets[14]);
+  object.type = reader.readString(offsets[15]);
+  object.updatedAt = reader.readDateTime(offsets[16]);
   return object;
 }
 
@@ -190,30 +224,38 @@ P _jiveAccountDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 1:
-      return (reader.readString(offset)) as P;
-    case 2:
-      return (reader.readString(offset)) as P;
-    case 3:
-      return (reader.readBool(offset)) as P;
-    case 4:
-      return (reader.readBool(offset)) as P;
-    case 5:
-      return (reader.readBool(offset)) as P;
-    case 6:
-      return (reader.readString(offset)) as P;
-    case 7:
-      return (reader.readString(offset)) as P;
-    case 8:
-      return (reader.readDouble(offset)) as P;
-    case 9:
-      return (reader.readLong(offset)) as P;
-    case 10:
       return (reader.readStringOrNull(offset)) as P;
-    case 11:
+    case 2:
+      return (reader.readDoubleOrNull(offset)) as P;
+    case 3:
       return (reader.readString(offset)) as P;
+    case 4:
+      return (reader.readStringOrNull(offset)) as P;
+    case 5:
+      return (reader.readString(offset)) as P;
+    case 6:
+      return (reader.readBool(offset)) as P;
+    case 7:
+      return (reader.readBool(offset)) as P;
+    case 8:
+      return (reader.readBool(offset)) as P;
+    case 9:
+      return (reader.readString(offset)) as P;
+    case 10:
+      return (reader.readString(offset)) as P;
+    case 11:
+      return (reader.readDouble(offset)) as P;
     case 12:
+      return (reader.readLong(offset)) as P;
+    case 13:
+      return (reader.readLongOrNull(offset)) as P;
+    case 14:
+      return (reader.readStringOrNull(offset)) as P;
+    case 15:
+      return (reader.readString(offset)) as P;
+    case 16:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -413,6 +455,80 @@ extension JiveAccountQueryWhere
 extension JiveAccountQueryFilter
     on QueryBuilder<JiveAccount, JiveAccount, QFilterCondition> {
   QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      billingDayIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'billingDay',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      billingDayIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'billingDay',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      billingDayEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'billingDay',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      billingDayGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'billingDay',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      billingDayLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'billingDay',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      billingDayBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'billingDay',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
       colorHexIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -565,6 +681,90 @@ extension JiveAccountQueryFilter
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      creditLimitIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'creditLimit',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      creditLimitIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'creditLimit',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      creditLimitEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'creditLimit',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      creditLimitGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'creditLimit',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      creditLimitLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'creditLimit',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      creditLimitBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'creditLimit',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> currencyEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -695,6 +895,160 @@ extension JiveAccountQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'currency',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'groupName',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'groupName',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'groupName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'groupName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'groupName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'groupName',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'groupName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'groupName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'groupName',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'groupName',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'groupName',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      groupNameIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'groupName',
         value: '',
       ));
     });
@@ -1301,6 +1655,80 @@ extension JiveAccountQueryFilter
   }
 
   QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      repaymentDayIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'repaymentDay',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      repaymentDayIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'repaymentDay',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      repaymentDayEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'repaymentDay',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      repaymentDayGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'repaymentDay',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      repaymentDayLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'repaymentDay',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      repaymentDayBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'repaymentDay',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
       subTypeIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -1648,6 +2076,18 @@ extension JiveAccountQueryLinks
 
 extension JiveAccountQuerySortBy
     on QueryBuilder<JiveAccount, JiveAccount, QSortBy> {
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByBillingDay() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'billingDay', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByBillingDayDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'billingDay', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByColorHex() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'colorHex', Sort.asc);
@@ -1660,6 +2100,18 @@ extension JiveAccountQuerySortBy
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByCreditLimit() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'creditLimit', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByCreditLimitDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'creditLimit', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByCurrency() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'currency', Sort.asc);
@@ -1669,6 +2121,18 @@ extension JiveAccountQuerySortBy
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByCurrencyDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'currency', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByGroupName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'groupName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByGroupNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'groupName', Sort.desc);
     });
   }
 
@@ -1771,6 +2235,19 @@ extension JiveAccountQuerySortBy
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByRepaymentDay() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'repaymentDay', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy>
+      sortByRepaymentDayDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'repaymentDay', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortBySubType() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'subType', Sort.asc);
@@ -1810,6 +2287,18 @@ extension JiveAccountQuerySortBy
 
 extension JiveAccountQuerySortThenBy
     on QueryBuilder<JiveAccount, JiveAccount, QSortThenBy> {
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByBillingDay() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'billingDay', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByBillingDayDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'billingDay', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByColorHex() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'colorHex', Sort.asc);
@@ -1822,6 +2311,18 @@ extension JiveAccountQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByCreditLimit() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'creditLimit', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByCreditLimitDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'creditLimit', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByCurrency() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'currency', Sort.asc);
@@ -1831,6 +2332,18 @@ extension JiveAccountQuerySortThenBy
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByCurrencyDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'currency', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByGroupName() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'groupName', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByGroupNameDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'groupName', Sort.desc);
     });
   }
 
@@ -1945,6 +2458,19 @@ extension JiveAccountQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByRepaymentDay() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'repaymentDay', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy>
+      thenByRepaymentDayDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'repaymentDay', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenBySubType() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'subType', Sort.asc);
@@ -1984,6 +2510,12 @@ extension JiveAccountQuerySortThenBy
 
 extension JiveAccountQueryWhereDistinct
     on QueryBuilder<JiveAccount, JiveAccount, QDistinct> {
+  QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctByBillingDay() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'billingDay');
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctByColorHex(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1991,10 +2523,23 @@ extension JiveAccountQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctByCreditLimit() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'creditLimit');
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctByCurrency(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'currency', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctByGroupName(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'groupName', caseSensitive: caseSensitive);
     });
   }
 
@@ -2050,6 +2595,12 @@ extension JiveAccountQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctByRepaymentDay() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'repaymentDay');
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctBySubType(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2079,15 +2630,33 @@ extension JiveAccountQueryProperty
     });
   }
 
+  QueryBuilder<JiveAccount, int?, QQueryOperations> billingDayProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'billingDay');
+    });
+  }
+
   QueryBuilder<JiveAccount, String?, QQueryOperations> colorHexProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'colorHex');
     });
   }
 
+  QueryBuilder<JiveAccount, double?, QQueryOperations> creditLimitProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'creditLimit');
+    });
+  }
+
   QueryBuilder<JiveAccount, String, QQueryOperations> currencyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'currency');
+    });
+  }
+
+  QueryBuilder<JiveAccount, String?, QQueryOperations> groupNameProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'groupName');
     });
   }
 
@@ -2136,6 +2705,12 @@ extension JiveAccountQueryProperty
   QueryBuilder<JiveAccount, int, QQueryOperations> orderProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'order');
+    });
+  }
+
+  QueryBuilder<JiveAccount, int?, QQueryOperations> repaymentDayProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'repaymentDay');
     });
   }
 

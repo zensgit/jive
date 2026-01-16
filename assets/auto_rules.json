@@ -5,10 +5,17 @@
   "rules": [
     {
       "name": "Incoming Red Packet",
-      "keywords": ["微信红包-来自", "支付宝红包-来自", "的红包", "收红包"],
+      "keywords": ["微信红包-来自", "支付宝红包-来自", "收到红包", "领到红包", "收红包"],
       "parent": "收入",
       "sub": "收红包",
       "type": "income"
+    },
+    {
+      "name": "Outgoing Red Packet",
+      "keywords": ["发红包", "发送红包", "红包金额", "个红包共", "发送微信红包", "发送支付宝红包"],
+      "parent": "人情",
+      "sub": "发红包",
+      "type": "expense"
     },
     {
       "name": "Refund Income",

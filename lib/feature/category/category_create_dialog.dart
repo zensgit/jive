@@ -5,8 +5,15 @@ import '../../core/service/category_service.dart';
 class SystemCategorySuggestion {
   final String name;
   final String iconName;
+  final String? parentName;
+  final bool isParent;
 
-  const SystemCategorySuggestion({required this.name, required this.iconName});
+  const SystemCategorySuggestion({
+    required this.name,
+    required this.iconName,
+    this.parentName,
+    this.isParent = false,
+  });
 }
 
 class CategoryCreateResult {

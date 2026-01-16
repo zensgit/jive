@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lpinyin/lpinyin.dart';
 import '../../core/database/category_model.dart';
+import '../../core/design_system/theme.dart';
 import '../../core/service/category_service.dart';
 
 class CategorySearchResult {
@@ -99,7 +100,7 @@ class CategorySearchDelegate extends SearchDelegate<CategorySearchResult?> {
             child: CategoryService.buildIcon(
               iconName,
               size: 18,
-              color: iconColor ?? Colors.grey.shade700,
+              color: iconColor ?? JiveTheme.categoryIconInactive,
             ),
           ),
           title: Text(item.primaryName),

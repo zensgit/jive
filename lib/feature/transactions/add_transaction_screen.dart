@@ -29,11 +29,7 @@ class AddTransactionScreen extends StatefulWidget {
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
   static const List<String> _accountGroupOrder = [
-    AccountService.groupAssets,
-    AccountService.groupCredit,
-    AccountService.groupDebt,
-    AccountService.groupReimburse,
-    AccountService.groupOther,
+    ...AccountService.groupOrder,
   ];
 
   String _amountStr = "0";
@@ -48,6 +44,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   JiveCategory? _selectedParent;
   JiveCategory? _selectedSub;
   List<JiveAccount> _accounts = [];
+  Map<int, double> _accountBalances = {};
   JiveAccount? _selectedAccount;
   JiveAccount? _selectedToAccount;
   List<CategorySearchResult> _searchItems = [];
@@ -88,7 +85,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _isar = Isar.getInstance()!;
       } else {
         _isar = await Isar.open(
-          [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema, JiveAutoDraftSchema],
+          [
+            JiveTransactionSchema,
+            JiveCategorySchema,
+            JiveCategoryOverrideSchema,
+            JiveAccountSchema,
+            JiveAutoDraftSchema,
+          ],
           directory: dir.path,
         );
       }
@@ -130,9 +133,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     // FALLBACK (only for expense)
     if (parents.isEmpty && !showIncome) {
       JiveLogger.w("!!! DB EMPTY, USING FALLBACK !!!");
-      final lib = CategoryService(_isar).getSystemLibrary(isIncome: showIncome);
+      final service = CategoryService(_isar);
+      final lib = service.getSystemLibrary(isIncome: showIncome);
       parents = lib.keys.map((name) => JiveCategory()
-        ..key = "sys_$name"
+        ..key = service.buildSystemParentKey(name, isIncome: showIncome)
         ..name = name
         ..iconName = lib[name]!['icon']
         ..order = 0
@@ -167,6 +171,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _loadAccounts() async {
     final service = AccountService(_isar);
     final accounts = await service.getActiveAccounts();
+    final balances = await service.computeBalances(accounts: accounts);
     if (!mounted) return;
 
     JiveAccount? selectedAccount = _selectedAccount;
@@ -188,6 +193,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     setState(() {
       _accounts = accounts;
+      _accountBalances = balances;
       _selectedAccount = selectedAccount;
       _selectedToAccount = selectedTo;
     });
@@ -246,12 +252,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     
     // FALLBACK
     if (_isFallbackMode && subs.isEmpty) {
-      final parentName = parentKey.replaceAll("sys_", "");
-      final lib = CategoryService(_isar).getSystemLibrary(isIncome: false);
-      if (lib.containsKey(parentName)) {
-        final children = lib[parentName]!['children'] as List;
+      final service = CategoryService(_isar);
+      final parentName = _parentCategories
+              .firstWhere(
+                (parent) => parent.key == parentKey,
+                orElse: () => JiveCategory()..name = "",
+              )
+              .name;
+      final resolvedName = parentName.isEmpty ? service.resolveSystemParentName(parentKey) : parentName;
+      if (resolvedName == null || resolvedName.isEmpty) {
+        return;
+      }
+      final lib = service.getSystemLibrary(isIncome: false);
+      if (lib.containsKey(resolvedName)) {
+        final children = lib[resolvedName]!['children'] as List;
         subs = children.map<JiveCategory>((c) => JiveCategory()
-          ..key = "${parentKey}_${c['name']}"
+          ..key = service.buildSystemChildKey(resolvedName, c['name'], isIncome: false)
           ..name = c['name']
           ..iconName = c['icon']
         ).toList();
@@ -300,7 +316,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _openCategoryManager() async {
     final changed = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const CategoryManagerScreen()),
+      MaterialPageRoute(builder: (context) => CategoryManagerScreen(isar: _isar)),
     );
     if (changed == true) {
       _hasDataChanges = true;
@@ -379,7 +395,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Future<void> _promptAddSubCategory(JiveCategory parent) async {
-    final existingNames = _subCategories.map((child) => child.name).toSet();
+    final existingNames = (await _isar.collection<JiveCategory>()
+        .filter()
+        .parentKeyEqualTo(parent.key)
+        .findAll())
+        .map((child) => child.name)
+        .toSet();
     final systemLibrary = CategoryService(_isar).getSystemLibrary(
       isIncome: parent.isIncome,
       includeIncome: true,
@@ -535,9 +556,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               title: Text("编辑 '${sub.name}'"),
               onTap: () async {
                 Navigator.pop(context);
-                final updated = await showDialog(
-                  context: context,
-                  builder: (context) => CategoryEditDialog(category: sub, isar: _isar),
+                final updated = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CategoryEditDialog(category: sub, isar: _isar),
+                    fullscreenDialog: true,
+                  ),
                 );
                 if (updated == true) {
                   _hasDataChanges = true;
@@ -654,8 +678,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final currencyFontSize = isLandscape ? 22.0 : 32.0;
     final labelSpacing = isLandscape ? 4.0 : 12.0;
     final parentTabHeight = isLandscape ? 44.0 : 68.0;
-    final subGridAspectRatio = isLandscape ? 1.2 : 0.8;
-    final subGridMainAxisSpacing = isLandscape ? 6.0 : 16.0;
+    final subGridAspectRatio = isLandscape ? 1.2 : 0.75;
+    final subGridMainAxisSpacing = isLandscape ? 6.0 : 12.0;
     final keyboardAspectRatio = isLandscape ? 3.4 : 1.6;
     final keyboardPadding = EdgeInsets.fromLTRB(20, isLandscape ? 6 : 8, 20, isLandscape ? 6 : 30);
     final keyboardMainAxisSpacing = isLandscape ? 8.0 : 12.0;
@@ -700,6 +724,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           if (_accounts.isNotEmpty) ...[
             SizedBox(height: isLandscape ? 6 : 10),
             _buildAccountSelector(isLandscape: isLandscape),
+            if (_selectedAccount != null && AccountService.isCreditAccount(_selectedAccount!))
+              Padding(
+                padding: EdgeInsets.only(top: isLandscape ? 4 : 6),
+                child: _buildSelectedCreditSummary(_selectedAccount!, isLandscape: isLandscape),
+              ),
           ],
         ],
       ),
@@ -782,7 +811,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                             final isSelected = cat.key == _selectedParent?.key;
                             final customColor = CategoryService.parseColorHex(cat.colorHex);
                             final activeColor = customColor ?? JiveTheme.primaryGreen;
-                            final inactiveColor = customColor?.withOpacity(0.7) ?? Colors.grey.shade500;
+                            final inactiveColor = JiveTheme.categoryIconInactive;
                             final iconColor = isSelected ? activeColor : inactiveColor;
                             return GestureDetector(
                               onTap: () {
@@ -1007,6 +1036,34 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
+  Widget _buildSelectedCreditSummary(JiveAccount account, {required bool isLandscape}) {
+    final limit = account.creditLimit ?? 0;
+    if (limit <= 0) {
+      return const SizedBox.shrink();
+    }
+    final balance = _accountBalances[account.id] ?? account.openingBalance;
+    final used = balance < 0 ? -balance : 0.0;
+    final available = (limit - used).clamp(0, double.infinity).toDouble();
+    final fontSize = isLandscape ? 10.0 : 11.0;
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: isLandscape ? 10 : 12,
+      runSpacing: 4,
+      children: [
+        _buildCreditMetaText("额度", limit, Colors.blueGrey, fontSize),
+        _buildCreditMetaText("已用", used, Colors.redAccent, fontSize),
+        _buildCreditMetaText("可用", available, JiveTheme.primaryGreen, fontSize),
+      ],
+    );
+  }
+
+  Widget _buildCreditMetaText(String label, double value, Color color, double fontSize) {
+    return Text(
+      "$label ¥${_formatMoney(value)}",
+      style: GoogleFonts.lato(fontSize: fontSize, color: color, fontWeight: FontWeight.w600),
+    );
+  }
+
   Future<void> _showAccountPicker({required bool pickTo}) async {
     if (_accounts.isEmpty) return;
     final entries = _buildAccountPickerEntries();
@@ -1181,10 +1238,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
+        crossAxisCount: 6,
         childAspectRatio: subGridAspectRatio,
         mainAxisSpacing: subGridMainAxisSpacing,
-        crossAxisSpacing: 12,
+        crossAxisSpacing: 8,
       ),
       itemCount: _subCategories.length + 1,
       itemBuilder: (context, index) {
@@ -1199,17 +1256,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             child: Column(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: Colors.grey.shade100,
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.grey.shade300),
                   ),
-                  child: const Icon(Icons.add, color: Colors.grey, size: 24),
+                  child: const Icon(Icons.add, color: Colors.grey, size: 20),
                 ),
-                const SizedBox(height: 4),
-                const Text("自定义", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                const SizedBox(height: 3),
+                const Text("自定义", style: TextStyle(fontSize: 9, color: Colors.grey)),
               ],
             ),
           );
@@ -1219,31 +1276,34 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         final isSelected = cat.key == _selectedSub?.key;
         final customColor = CategoryService.parseColorHex(cat.colorHex);
         final activeColor = customColor ?? JiveTheme.primaryGreen;
-        final inactiveColor = customColor?.withOpacity(0.7) ?? Colors.grey.shade400;
+        final inactiveColor = JiveTheme.categoryIconInactive;
         return GestureDetector(
           onTap: () => setState(() => _selectedSub = cat),
           onLongPress: () => _showSubCategoryActions(cat),
           child: Column(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: isSelected ? activeColor : Colors.grey.shade50,
+                  color: isSelected ? activeColor : JiveTheme.categoryIconInactiveBackground,
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected ? activeColor : JiveTheme.categoryIconInactiveBorder,
+                  ),
                 ),
                 child: CategoryService.buildIcon(
                   cat.iconName,
-                  size: 22,
+                  size: 18,
                   color: isSelected ? Colors.white : inactiveColor,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 cat.name,
                 style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected ? Colors.black87 : Colors.grey.shade400,
+                  fontSize: 9,
+                  color: isSelected ? Colors.black87 : JiveTheme.categoryLabelInactive,
                   fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -1288,11 +1348,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             child: CategoryService.buildIcon(
               suggestion.iconName,
               size: 18,
-              color: Colors.grey.shade500,
+              color: JiveTheme.categoryIconInactive,
             ),
           ),
           title: Text(title, style: TextStyle(color: Colors.grey.shade700)),
-          subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+          subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: JiveTheme.categoryLabelInactive)),
           trailing: const Icon(Icons.add, color: Colors.grey),
           onTap: () => _applySystemSuggestion(suggestion),
         );
@@ -1410,9 +1470,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         .findAll();
 
     if (parents.isEmpty && !showIncome) {
-      final lib = CategoryService(_isar).getSystemLibrary(isIncome: showIncome);
+      final service = CategoryService(_isar);
+      final lib = service.getSystemLibrary(isIncome: showIncome);
       parents = lib.keys.map((name) => JiveCategory()
-        ..key = "sys_$name"
+        ..key = service.buildSystemParentKey(name, isIncome: showIncome)
         ..name = name
         ..iconName = lib[name]!['icon']
         ..order = 0

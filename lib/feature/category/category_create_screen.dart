@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:lpinyin/lpinyin.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_service.dart';
+import 'category_icon_library.dart';
+import 'category_icon_source_picker.dart';
 import 'category_create_dialog.dart';
 
 class CategoryCreateScreen extends StatefulWidget {
@@ -9,6 +11,9 @@ class CategoryCreateScreen extends StatefulWidget {
   final String? parentName;
   final String initialIcon;
   final String? nameLabel;
+  final String? typeName;
+  final String? typeLabel;
+  final bool parentOnly;
   final bool allowBatch;
   final String? initialText;
   final bool initialBatch;
@@ -24,6 +29,9 @@ class CategoryCreateScreen extends StatefulWidget {
     required this.initialIcon,
     this.parentName,
     this.nameLabel,
+    this.typeName,
+    this.typeLabel,
+    this.parentOnly = false,
     this.allowBatch = false,
     this.initialText,
     this.initialBatch = false,
@@ -96,18 +104,54 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       return;
     }
 
+    if (_isParentCreateMode()) {
+      final parentSuggestions = <SystemCategorySuggestion>[];
+      final itemByName = <String, SystemCategorySuggestion>{};
+      for (final entry in library.entries) {
+        final groupName = _canonicalGroupName(entry.key);
+        final icon = _normalizeSystemIcon(entry.value['icon'] as String?, groupName);
+        final suggestion = SystemCategorySuggestion(
+          name: groupName,
+          iconName: icon,
+          isParent: true,
+        );
+        parentSuggestions.add(suggestion);
+        itemByName[groupName] = suggestion;
+      }
+      parentSuggestions.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+      _systemGroups = [
+        _SystemGroup(name: "全部", iconName: "category", children: parentSuggestions),
+      ];
+      _systemItemByName = itemByName;
+      _selectedGroupName = "全部";
+      return;
+    }
+
     final groupChildren = <String, List<SystemCategorySuggestion>>{};
     final groupChildNames = <String, Set<String>>{};
     final groupIcons = <String, String>{};
     final itemByName = <String, SystemCategorySuggestion>{};
     final allSuggestions = <String, SystemCategorySuggestion>{};
     final globalChildNames = <String>{};
-    void upsertSuggestion(Map<String, SystemCategorySuggestion> map, String name, String iconName) {
-      if (name.trim().isEmpty) return;
+    void upsertSuggestion(Map<String, SystemCategorySuggestion> map, SystemCategorySuggestion suggestion) {
+      final name = suggestion.name.trim();
+      if (name.isEmpty) return;
       final existing = map[name];
-      if (existing == null || (existing.iconName == "category" && iconName != "category")) {
-        map[name] = SystemCategorySuggestion(name: name, iconName: iconName);
+      if (existing == null) {
+        map[name] = suggestion;
+        return;
       }
+      final isParent = existing.isParent || suggestion.isParent;
+      final iconName = (existing.iconName == "category" && suggestion.iconName != "category")
+          ? suggestion.iconName
+          : existing.iconName;
+      final parentName = isParent ? null : (existing.parentName ?? suggestion.parentName);
+      map[name] = SystemCategorySuggestion(
+        name: name,
+        iconName: iconName,
+        parentName: parentName,
+        isParent: isParent,
+      );
     }
 
     for (final entry in library.entries) {
@@ -124,7 +168,12 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       final rawGroupName = entry.key;
       final groupName = _canonicalGroupName(rawGroupName);
       final icon = _normalizeSystemIcon(entry.value['icon'] as String?, groupName);
-      upsertSuggestion(allSuggestions, groupName, icon);
+      final parentSuggestion = SystemCategorySuggestion(
+        name: groupName,
+        iconName: icon,
+        isParent: true,
+      );
+      upsertSuggestion(allSuggestions, parentSuggestion);
 
       final childrenRaw = entry.value['children'] as List<dynamic>? ?? const [];
       final children = groupChildren.putIfAbsent(groupName, () => <SystemCategorySuggestion>[]);
@@ -140,9 +189,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         if (name.isEmpty) continue;
         if (!seenNames.add(name)) continue;
         final childIcon = _normalizeSystemIcon(child['icon'] as String?, name);
-        final suggestion = SystemCategorySuggestion(name: name, iconName: childIcon);
+        final suggestion = SystemCategorySuggestion(
+          name: name,
+          iconName: childIcon,
+          parentName: groupName,
+        );
         children.add(suggestion);
-        upsertSuggestion(allSuggestions, name, childIcon);
+        upsertSuggestion(allSuggestions, suggestion);
       }
     }
 
@@ -182,9 +235,20 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     _selectedGroupName = _resolveInitialGroup();
   }
 
+  Future<void> _pickCustomIcon() async {
+    final selected = await pickCategoryIcon(context, initialIcon: _selectedIcon);
+    if (selected != null) {
+      setState(() => _selectedIcon = selected);
+    }
+  }
+
   String _resolveInitialGroup() {
     if (_systemGroups.isEmpty) return "";
     final initial = widget.initialGroupName?.trim();
+    if (initial == "全部") {
+      final hasAll = _systemGroups.any((group) => group.name == "全部");
+      if (hasAll) return "全部";
+    }
     final groups = _systemGroups.where((group) => group.name != "全部").toList();
     if (initial != null && initial.isNotEmpty) {
       final tokens = _expandGroupTokens(initial);
@@ -290,7 +354,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   Widget _buildInfoCard() {
     final highlightColor = _resolveSelectedColor() ?? JiveTheme.primaryGreen;
     final showSystemBatch = _isBatch && _systemGroups.isNotEmpty;
-    if (widget.parentName == null) {
+    final duplicateHint = showSystemBatch ? null : _duplicateNameHint();
+    final isParentCreate = _isParentCreateMode();
+    if (isParentCreate) {
+      final typeName = _effectiveTypeName();
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -307,7 +374,24 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 const Spacer(),
               ],
             ),
-            const SizedBox(height: 12),
+            if (typeName != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    widget.typeLabel ?? "收支类型",
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  const Spacer(),
+                  Text(
+                    typeName,
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+            ] else
+              const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -329,12 +413,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                     child: TextField(
                       controller: _nameController,
                       decoration: InputDecoration(
-                        labelText: widget.nameLabel ?? "分类名称",
+                        labelText: widget.nameLabel ?? "一级分类名称",
                         border: const OutlineInputBorder(),
                       ),
                       keyboardType: _isBatch ? TextInputType.multiline : TextInputType.text,
                       textInputAction: _isBatch ? TextInputAction.newline : TextInputAction.done,
                       maxLines: _isBatch ? 4 : 1,
+                      onChanged: (_) => setState(() {}),
                       onSubmitted: _isBatch ? null : (_) => _save(),
                     ),
                   ),
@@ -370,6 +455,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               const Text(
                 "每行/逗号/分号分隔，支持粘贴，多余空格会自动忽略",
                 style: TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+            ],
+            if (duplicateHint != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                duplicateHint,
+                style: TextStyle(fontSize: 11, color: Colors.red.shade400),
               ),
             ],
             const SizedBox(height: 8),
@@ -447,20 +539,31 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                       border: InputBorder.none,
                     ),
                     textInputAction: TextInputAction.done,
+                    onChanged: (_) => setState(() {}),
                     onSubmitted: (_) => _save(),
                   ),
                 ),
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: highlightColor.withOpacity(0.12),
-                  child: CategoryService.buildIcon(
-                    _selectedIcon,
-                    size: 16,
-                    color: highlightColor,
+                GestureDetector(
+                  onTap: _pickCustomIcon,
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: highlightColor.withOpacity(0.12),
+                    child: CategoryService.buildIcon(
+                      _selectedIcon,
+                      size: 16,
+                      color: highlightColor,
+                    ),
                   ),
                 ),
               ],
             ),
+          if (duplicateHint != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              duplicateHint,
+              style: TextStyle(fontSize: 11, color: Colors.red.shade400),
+            ),
+          ],
           const SizedBox(height: 10),
           _buildColorPicker(),
         ],
@@ -471,9 +574,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   Widget _buildIconSection() {
     final query = _normalizeSearch(_iconQuery);
     final highlightColor = _resolveSelectedColor() ?? JiveTheme.primaryGreen;
-    final icons = _iconEntries.where((entry) {
+    final icons = categoryIconEntries.where((entry) {
       if (query.isEmpty) return true;
-      final key = _iconSearchCache[entry.name] ??= _buildIconSearchKey(entry);
+      final key = _iconSearchCache[entry.name] ??= buildIconSearchKey(entry);
       return key.contains(query);
     }).toList();
 
@@ -531,7 +634,17 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("分类图标", style: TextStyle(fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("分类图标", style: TextStyle(fontWeight: FontWeight.bold)),
+              TextButton.icon(
+                onPressed: _pickCustomIcon,
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+                label: const Text("更多图标"),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _iconSearchController,
@@ -584,7 +697,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                   child: CategoryService.buildIcon(
                     entry.name,
                     size: 20,
-                    color: isSelected ? highlightColor : Colors.grey.shade700,
+                    color: isSelected ? highlightColor : JiveTheme.categoryIconInactive,
                   ),
                 ),
               );
@@ -681,7 +794,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 final iconBox = _systemIconBoxForColumns(columns);
                 final labelSize = _systemLabelSizeForColumns(columns);
                 final labelHeight = _systemLabelHeightForColumns(columns);
-                final metaSize = _systemMetaSizeForColumns(columns);
                 final indicatorSize = _systemIndicatorSizeForColumns(columns);
                 final gridSpacing = _systemGridSpacingForColumns(columns);
                 final tileHeight = _systemTileHeight(context, columns);
@@ -707,7 +819,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                             return InkWell(
                               onTap: () {
                                 if (isSearching) return;
-                                setState(() => _selectedGroupName = group.name);
+                                setState(() {
+                                  _selectedGroupName = group.name;
+                                  _applyGroupSelection(group);
+                                });
                               },
                               borderRadius: BorderRadius.circular(12),
                               child: Container(
@@ -778,10 +893,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                 itemBuilder: (context, index) {
                                   final entry = items[index];
                                   final isExisting = _existingNames.contains(entry.name);
+                                  final isDisabled = _isBatch && isExisting;
                                   final isSelected = _isBatch
                                       ? _selectedSystemNames.contains(entry.name)
                                       : entry.name == _nameController.text.trim() && entry.iconName == _selectedIcon;
-                                  final canTap = !isExisting;
+                                  final canTap = !isDisabled;
                                   return RepaintBoundary(
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(12),
@@ -802,9 +918,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                                 child: CategoryService.buildIcon(
                                                   entry.iconName,
                                                   size: iconSize,
-                                                  color: isExisting
+                                                  color: isDisabled
                                                       ? Colors.grey.shade400
-                                                      : (isSelected ? highlightColor : Colors.grey.shade700),
+                                                      : (isSelected
+                                                          ? highlightColor
+                                                          : JiveTheme.categoryIconInactive),
                                                 ),
                                               ),
                                             ),
@@ -814,22 +932,19 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                               style: TextStyle(
                                                 fontSize: labelSize,
                                                 height: labelHeight,
-                                                color: isExisting ? Colors.grey.shade400 : Colors.grey.shade700,
+                                                color: isDisabled
+                                                    ? Colors.grey.shade400
+                                                    : JiveTheme.categoryLabelInactive,
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                               textAlign: TextAlign.center,
                                               maxLines: 1,
                                             ),
-                                            if (_isBatch && !widget.autoBatchAdd && !isExisting)
+                                            if (_isBatch && !widget.autoBatchAdd && !isDisabled)
                                               Icon(
                                                 isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
                                                 size: indicatorSize,
                                                 color: isSelected ? highlightColor : Colors.grey.shade400,
-                                              )
-                                            else if (isExisting)
-                                              Text(
-                                                "已添加",
-                                                style: TextStyle(fontSize: metaSize, color: Colors.grey.shade400),
                                               ),
                                           ],
                                         ),
@@ -978,7 +1093,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   }
 
   Future<void> _applySuggestion(SystemCategorySuggestion suggestion) async {
-    if (_existingNames.contains(suggestion.name)) return;
+    if (_isBatch && _existingNames.contains(suggestion.name)) return;
     if (_isBatch && widget.autoBatchAdd && widget.onBatchAdd != null) {
       await _applyBatchAdd(suggestion);
       return;
@@ -1016,6 +1131,26 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         SnackBar(content: Text("已存在: ${suggestion.name}")),
       );
     }
+  }
+
+  void _applyGroupSelection(_SystemGroup group) {
+    final allowParentPick = _isParentCreateMode();
+    if (!allowParentPick) return;
+    final suggestion = _systemItemByName[group.name];
+    if (suggestion == null) return;
+    _applySuggestion(suggestion);
+  }
+
+  bool _isParentCreateMode() {
+    final parentName = widget.parentName;
+    return widget.parentOnly || parentName == null || parentName == "支出" || parentName == "收入";
+  }
+
+  String? _effectiveTypeName() {
+    if (widget.typeName != null) return widget.typeName;
+    final parentName = widget.parentName;
+    if (parentName == "支出" || parentName == "收入") return parentName;
+    return null;
   }
 
   Widget _buildBatchActionBar() {
@@ -1116,6 +1251,23 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return names;
   }
 
+  String? _duplicateNameHint() {
+    final raw = _nameController.text.trim();
+    if (raw.isEmpty) return null;
+    if (_isBatch) {
+      final names = _parseNames();
+      final duplicates = names.where((name) => _existingNames.contains(name)).toList();
+      if (duplicates.isEmpty) return null;
+      final preview = duplicates.take(3).join("、");
+      final suffix = duplicates.length > 3 ? "等" : "";
+      return "包含已存在名称：$preview$suffix，将自动跳过";
+    }
+    if (_existingNames.contains(raw)) {
+      return "名称已存在";
+    }
+    return null;
+  }
+
   void _scrollToIcons() {
     // Keeping this for future extension (jump to icon area).
   }
@@ -1214,11 +1366,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return 1.0;
   }
 
-  double _systemMetaSizeForColumns(int columns) {
-    final size = _systemLabelSizeForColumns(columns) - 1;
-    return size < 8 ? 8 : size;
-  }
-
   double _systemIndicatorSizeForColumns(int columns) {
     if (columns <= 3) return 14;
     if (columns == 4) return 12;
@@ -1313,18 +1460,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     );
   }
 
-  String _buildIconSearchKey(_IconEntry entry) {
-    final buffer = StringBuffer();
-    buffer.write(_normalizeSearch(entry.name));
-    for (final keyword in entry.keywords) {
-      final normalized = _normalizeSearch(keyword);
-      buffer.write(" $normalized");
-      buffer.write(" ${_normalizeSearch(PinyinHelper.getPinyinE(keyword))}");
-      buffer.write(" ${_normalizeSearch(PinyinHelper.getShortPinyin(keyword))}");
-    }
-    return buffer.toString();
-  }
-
   String _buildSystemSearchKey(SystemCategorySuggestion entry) {
     final name = _normalizeSearch(entry.name);
     final icon = _normalizeSearch(entry.iconName);
@@ -1340,13 +1475,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     }
     return buffer.toString();
   }
-}
-
-class _IconEntry {
-  final String name;
-  final List<String> keywords;
-
-  const _IconEntry(this.name, this.keywords);
 }
 
 class _SystemGroup {
@@ -1419,62 +1547,4 @@ const List<Color> _categoryColorOptions = [
   Color(0xFF9C27B0),
   Color(0xFF795548),
   Color(0xFF607D8B),
-];
-
-const List<_IconEntry> _iconEntries = [
-  _IconEntry('restaurant', ['餐饮', '美食', 'food', 'restaurant']),
-  _IconEntry('bakery_dining', ['早餐', '早饭', 'breakfast']),
-  _IconEntry('lunch_dining', ['午餐', '午饭', 'lunch']),
-  _IconEntry('dinner_dining', ['晚餐', '晚饭', 'dinner']),
-  _IconEntry('tapas', ['夜宵', '宵夜', 'snack']),
-  _IconEntry('delivery_dining', ['外卖', 'delivery']),
-  _IconEntry('local_cafe', ['饮料', '奶茶', '咖啡', '茶', 'coffee', 'tea']),
-  _IconEntry('icecream', ['零食', '甜品', 'icecream']),
-  _IconEntry('shopping_basket', ['买菜', '生鲜', 'grocery']),
-  _IconEntry('nutrition', ['水果', '果蔬', 'fruit', 'veg']),
-  _IconEntry('celebration', ['聚会', 'party']),
-  _IconEntry('liquor', ['酒', '酒水', 'liquor', 'wine']),
-  _IconEntry('shopping_bag', ['购物', 'shopping']),
-  _IconEntry('checkroom', ['服饰', '衣服', 'clothes']),
-  _IconEntry('cases', ['鞋包', '包', 'shoes', 'bag']),
-  _IconEntry('phone_iphone', ['数码', '手机', 'digital']),
-  _IconEntry('kitchen', ['家电', 'appliance']),
-  _IconEntry('chair', ['家居', '家具', 'home']),
-  _IconEntry('local_shipping', ['快递', '物流', 'delivery']),
-  _IconEntry('directions_car', ['交通', '出行', 'car']),
-  _IconEntry('local_taxi', ['打车', '出租', 'taxi']),
-  _IconEntry('subway', ['地铁', 'subway']),
-  _IconEntry('directions_bus', ['公交', 'bus']),
-  _IconEntry('local_gas_station', ['加油', 'gas']),
-  _IconEntry('local_parking', ['停车', 'parking']),
-  _IconEntry('train', ['火车', '高铁', 'train']),
-  _IconEntry('flight', ['飞机', '机票', 'flight']),
-  _IconEntry('house', ['居住', '住房', 'house']),
-  _IconEntry('key', ['房租', '租房', 'rent']),
-  _IconEntry('wifi', ['宽带', '网络', 'wifi']),
-  _IconEntry('phone_android', ['话费', '手机费', 'phone']),
-  _IconEntry('lightbulb', ['水电', '电费', 'water']),
-  _IconEntry('business', ['物业', 'property']),
-  _IconEntry('sports_esports', ['娱乐', '游戏', 'game']),
-  _IconEntry('movie', ['电影', 'movie']),
-  _IconEntry('videogame_asset', ['游戏', 'game']),
-  _IconEntry('mic', ['KTV', '唱歌', 'karaoke']),
-  _IconEntry('sports_basketball', ['运动', '健身', 'sport']),
-  _IconEntry('landscape', ['旅行', '旅游', 'travel']),
-  _IconEntry('card_membership', ['会员', 'member']),
-  _IconEntry('local_hospital', ['医疗', '医院', 'hospital']),
-  _IconEntry('medication', ['药品', '药', 'medicine']),
-  _IconEntry('local_pharmacy', ['挂号', 'pharmacy']),
-  _IconEntry('monitor_heart', ['检查', '体检']),
-  _IconEntry('people', ['人情', '社交', 'people']),
-  _IconEntry('redeem', ['红包', 'gift', 'bonus']),
-  _IconEntry('local_dining', ['请客', '聚餐']),
-  _IconEntry('pets', ['宠物', 'pet']),
-  _IconEntry('pest_control_rodent', ['猫粮', '狗粮', 'petfood']),
-  _IconEntry('trending_up', ['理财', '收益', 'invest']),
-  _IconEntry('attach_money', ['工资', '收入', 'salary']),
-  _IconEntry('military_tech', ['奖金', 'bonus']),
-  _IconEntry('work', ['兼职', '工作', 'job']),
-  _IconEntry('sell', ['二手', '卖出', 'sell']),
-  _IconEntry('category', ['默认', '分类', 'category']),
 ];

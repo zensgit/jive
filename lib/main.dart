@@ -16,12 +16,18 @@ import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
 import 'core/service/transaction_service.dart';
 import 'core/service/auto_draft_service.dart';
+import 'core/service/auto_app_registry.dart';
+import 'core/service/auto_app_settings.dart';
+import 'core/service/auto_permission_service.dart';
 import 'core/service/auto_settings.dart';
 import 'feature/accounts/accounts_screen.dart';
 import 'feature/auto/auto_drafts_screen.dart';
 import 'feature/auto/auto_rule_tester_screen.dart';
+import 'feature/auto/auto_supported_apps_screen.dart';
+import 'feature/auto/auto_settings_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/stats/stats_screen.dart';
+import 'feature/category/category_manager_screen.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -52,9 +58,8 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   static const eventChannel = EventChannel('com.jive.app/stream');
-  static const methodChannel = MethodChannel('com.jive.app/methods');
   static const _prefKeyDemoSeedEnabled = 'demo_seed_enabled';
 
   late Isar _isar;
@@ -71,12 +76,29 @@ class _MainScreenState extends State<MainScreen> {
   final List<Map<String, dynamic>> _pendingAutoEvents = [];
   AutoSettings _autoSettings = AutoSettingsStore.defaults;
   int _pendingDraftCount = 0;
+  Map<String, bool> _autoAppEnabled = {};
+  int _autoAppEnabledCount = AutoAppRegistry.apps.length;
+  bool _permissionDialogVisible = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initDatabase();
     _startListening();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _checkAutoPermissions();
+    }
   }
 
   Future<void> _initDatabase() async {
@@ -85,12 +107,19 @@ class _MainScreenState extends State<MainScreen> {
       _isar = Isar.getInstance()!;
     } else {
       _isar = await Isar.open(
-        [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema, JiveAutoDraftSchema],
+        [
+          JiveTransactionSchema,
+          JiveCategorySchema,
+          JiveCategoryOverrideSchema,
+          JiveAccountSchema,
+          JiveAutoDraftSchema,
+        ],
         directory: dir.path,
       );
     }
     await _loadDemoSeedPrefs();
     await _loadAutoSettings();
+    await _loadAutoAppSettings();
     await CategoryService(_isar).initDefaultCategories();
     await AccountService(_isar).initDefaultAccounts();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
@@ -100,6 +129,7 @@ class _MainScreenState extends State<MainScreen> {
     await _loadAutoDraftCount();
     _dbReady = true;
     await _flushPendingAutoEvents();
+    await _checkAutoPermissions();
   }
 
   Future<void> _loadDemoSeedPrefs() async {
@@ -118,12 +148,57 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
+  Future<void> _loadAutoAppSettings() async {
+    final map = await AutoAppSettingsStore.loadEnabledMap();
+    if (!mounted) return;
+    setState(() {
+      _autoAppEnabled = map;
+      _autoAppEnabledCount = AutoAppSettingsStore.enabledCount(map);
+    });
+  }
+
   Future<void> _setAutoSettings(AutoSettings settings) async {
     if (!mounted) return;
     setState(() {
       _autoSettings = settings;
     });
     await AutoSettingsStore.save(settings);
+    await _checkAutoPermissions();
+  }
+
+  Future<void> _checkAutoPermissions() async {
+    if (!_dbReady) return;
+    if (!_autoSettings.enabled) return;
+    final status = await AutoPermissionService.getStatus();
+    if (!mounted) return;
+    if (status.allRequired) return;
+    if (_permissionDialogVisible) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _permissionDialogVisible) return;
+      _permissionDialogVisible = true;
+      final missing = status.missingRequiredLabels();
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('自动记账权限未开启'),
+          content: Text('未开启：${missing.join('、')}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('稍后'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _openAutoSettings();
+              },
+              child: const Text('去设置'),
+            ),
+          ],
+        ),
+      );
+      _permissionDialogVisible = false;
+    });
   }
 
   Future<void> _setDemoSeedEnabled(bool enabled) async {
@@ -377,16 +452,42 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _handleAutoEvent(Map<String, dynamic> data) async {
-    if (!_autoSettings.enabled) return;
+    if (!_autoSettings.enabled) {
+      JiveLogger.w("AutoCapture ignored: auto disabled");
+      return;
+    }
+    final packageName = _resolveAutoPackageName(data);
+    if (!_isAutoAppEnabled(packageName)) {
+      JiveLogger.w("AutoCapture ignored: app disabled package=$packageName");
+      return;
+    }
+    if (_autoSettings.keywordFilterEnabled) {
+      final rawText = data['raw_text']?.toString() ?? '';
+      if (rawText.isNotEmpty && !_containsAnyKeyword(rawText, _autoSettings.keywordFilters)) {
+        JiveLogger.w("AutoCapture ignored: keyword filter raw=$rawText");
+        return;
+      }
+    }
     final capture = AutoCapture.fromEvent(data);
-    if (!capture.isValid) return;
+    if (!capture.isValid) {
+      JiveLogger.w("AutoCapture invalid: source=${capture.source} amount=${capture.amount}");
+      return;
+    }
+    JiveLogger.i("AutoCapture received: source=${capture.source} amount=${capture.amount} type=${capture.type} raw=${capture.rawText}");
     final result = await AutoDraftService(_isar).ingestCapture(
       capture,
       directCommit: _autoSettings.directCommit,
+      settings: _autoSettings,
     );
     if (!mounted) return;
+    JiveLogger.i("AutoCapture result: inserted=${result.inserted} committed=${result.committed} duplicate=${result.duplicate}");
     if (result.duplicate) {
       _showMessage("已忽略重复自动记账");
+      return;
+    }
+    if (result.merged) {
+      _showMessage("已合并转账记录");
+      await _loadAutoDraftCount();
       return;
     }
     await _loadAutoDraftCount();
@@ -398,6 +499,28 @@ class _MainScreenState extends State<MainScreen> {
     if (result.inserted) {
       _showMessage("已加入待确认");
     }
+  }
+
+  bool _containsAnyKeyword(String text, List<String> keywords) {
+    if (keywords.isEmpty) return true;
+    for (final keyword in keywords) {
+      if (keyword.isEmpty) continue;
+      if (text.contains(keyword)) return true;
+    }
+    return false;
+  }
+
+  String? _resolveAutoPackageName(Map<String, dynamic> data) {
+    final pkg = data['package_name']?.toString();
+    if (pkg != null && pkg.isNotEmpty) return pkg;
+    final source = data['source']?.toString();
+    return AutoAppRegistry.resolvePackage(source);
+  }
+
+  bool _isAutoAppEnabled(String? packageName) {
+    if (packageName == null) return true;
+    if (!AutoAppRegistry.isSupported(packageName)) return true;
+    return AutoAppSettingsStore.isEnabled(_autoAppEnabled, packageName);
   }
 
   void _startListening() {
@@ -416,16 +539,17 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  Future<void> _openSettings() async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
-      _showMessage("该入口仅支持 Android，iOS 请使用快捷指令");
+  Future<void> _openAutoSettings() async {
+    if (!_dbReady) {
+      _showMessage("数据库尚未就绪");
       return;
     }
-    try {
-      await methodChannel.invokeMethod('openNotificationSettings');
-    } catch (e) {
-      debugPrint("Error: $e");
-    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => AutoSettingsScreen(isar: _isar)),
+    );
+    await _loadAutoSettings();
+    await _loadAutoDraftCount();
   }
 
   Future<void> _openAutoDrafts() async {
@@ -446,6 +570,33 @@ class _MainScreenState extends State<MainScreen> {
         builder: (context) => AutoRuleTesterScreen(isar: _isar),
       ),
     );
+  }
+
+  Future<void> _openAutoSupportedApps() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AutoSupportedAppsScreen()),
+    );
+    await _loadAutoAppSettings();
+  }
+
+  Future<void> _openCategoryManager() async {
+    if (!_dbReady) {
+      _showMessage("数据库尚未就绪");
+      return;
+    }
+    final changed = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryManagerScreen(
+          isar: _isar,
+          onlyUserCategories: true,
+        ),
+      ),
+    );
+    if (changed == true) {
+      await _loadTransactions();
+    }
   }
 
   @override
@@ -585,12 +736,20 @@ class _MainScreenState extends State<MainScreen> {
             showModalBottomSheet(
               context: context,
               backgroundColor: Colors.white,
+              isScrollControlled: true,
               builder: (context) => SafeArea(
-                child: StatefulBuilder(
-                  builder: (context, setSheetState) {
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+                child: DraggableScrollableSheet(
+                  expand: false,
+                  initialChildSize: 0.75,
+                  minChildSize: 0.5,
+                  maxChildSize: 0.95,
+                  builder: (context, scrollController) {
+                    return StatefulBuilder(
+                      builder: (context, setSheetState) {
+                        return ListView(
+                          controller: scrollController,
+                          padding: const EdgeInsets.only(bottom: 12),
+                          children: [
                         SwitchListTile(
                           secondary: const Icon(Icons.science_outlined),
                           title: const Text("测试数据开关"),
@@ -617,6 +776,33 @@ class _MainScreenState extends State<MainScreen> {
                             final inserted = await _seedDemoDataIfNeeded();
                             await _loadTransactions();
                             _showMessage(inserted ? "已注入测试数据" : "已有数据，未注入测试数据");
+                          },
+                        ),
+                        if (kDebugMode)
+                          ListTile(
+                            leading: const Icon(Icons.bolt_outlined),
+                            title: const Text("模拟自动记账"),
+                            subtitle: const Text("写入一条自动记账事件"),
+                            onTap: () async {
+                              Navigator.pop(context);
+                              final now = DateTime.now();
+                              await _handleAutoEvent({
+                                "source": "WeChat",
+                                "amount": "12.34",
+                                "raw_text": "微信 支付成功 测试 12.34",
+                                "type": "expense",
+                                "timestamp": now.millisecondsSinceEpoch,
+                                "package_name": "com.tencent.mm",
+                              });
+                            },
+                          ),
+                        ListTile(
+                          leading: const Icon(Icons.category_outlined),
+                          title: const Text("分类管理"),
+                          subtitle: const Text("管理自定义分类"),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await _openCategoryManager();
                           },
                         ),
                         if (kDebugMode)
@@ -705,6 +891,15 @@ class _MainScreenState extends State<MainScreen> {
                           },
                         ),
                         ListTile(
+                          leading: const Icon(Icons.apps),
+                          title: const Text("自动记账支持的应用"),
+                          subtitle: Text("已启用 $_autoAppEnabledCount / ${AutoAppRegistry.apps.length}"),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await _openAutoSupportedApps();
+                          },
+                        ),
+                        ListTile(
                           leading: const Icon(Icons.inbox_outlined),
                           title: const Text("待确认自动记账"),
                           subtitle: Text("当前 $_pendingDraftCount 条"),
@@ -723,10 +918,10 @@ class _MainScreenState extends State<MainScreen> {
                         ),
                         ListTile(
                           leading: const Icon(Icons.settings),
-                          title: const Text("开启自动记账权限"),
+                          title: const Text("自动记账设置"),
                           onTap: () {
                             Navigator.pop(context);
-                            _openSettings();
+                            _openAutoSettings();
                           },
                         ),
                         ListTile(
@@ -737,7 +932,9 @@ class _MainScreenState extends State<MainScreen> {
                             JiveLogger.exportLogs();
                           },
                         ),
-                      ],
+                          ],
+                        );
+                      },
                     );
                   },
                 ),

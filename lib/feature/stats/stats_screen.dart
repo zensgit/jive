@@ -8,6 +8,7 @@ import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
+import '../../core/service/account_service.dart';
 
 class StatsScreen extends StatefulWidget {
   final String? filterCategoryKey;
@@ -33,6 +34,9 @@ class _StatsScreenState extends State<StatsScreen> {
   List<CategoryStat> _categoryStats = [];
   int _touchedIndex = -1; // 当前点击的饼图区块索引
   bool _showIncomeStats = false;
+  double _creditLimit = 0;
+  double _creditUsed = 0;
+  double _creditAvailable = 0;
 
   @override
   void initState() {
@@ -46,7 +50,13 @@ class _StatsScreenState extends State<StatsScreen> {
       _isar = Isar.getInstance()!;
     } else {
       _isar = await Isar.open(
-        [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema, JiveAutoDraftSchema],
+        [
+          JiveTransactionSchema,
+          JiveCategorySchema,
+          JiveCategoryOverrideSchema,
+          JiveAccountSchema,
+          JiveAutoDraftSchema,
+        ],
         directory: dir.path,
       );
     }
@@ -55,6 +65,10 @@ class _StatsScreenState extends State<StatsScreen> {
     final categoryMap = {for (final c in categories) c.key: c};
 
     final showIncome = _shouldShowIncomeStats(categoryMap);
+    final accountService = AccountService(_isar);
+    final accounts = await accountService.getActiveAccounts();
+    final balances = await accountService.computeBalances(accounts: accounts);
+    final creditSummary = _computeCreditSummary(accounts, balances);
 
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
@@ -105,6 +119,9 @@ class _StatsScreenState extends State<StatsScreen> {
         _categoryStats = stats;
         _isLoading = false;
         _showIncomeStats = showIncome;
+        _creditLimit = creditSummary.limit;
+        _creditUsed = creditSummary.used;
+        _creditAvailable = creditSummary.available;
       });
     }
   }
@@ -228,9 +245,11 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildPortraitBody() {
+    final chartHeight = _creditLimit > 0 ? 260.0 : 300.0;
     return Column(
       children: [
-        SizedBox(height: 300, child: _buildPieChart()),
+        if (_creditLimit > 0) _buildCreditSummary(),
+        SizedBox(height: chartHeight, child: _buildPieChart()),
         Expanded(child: _buildStatsList(const EdgeInsets.symmetric(horizontal: 20))),
       ],
     );
@@ -250,7 +269,18 @@ class _StatsScreenState extends State<StatsScreen> {
                 child: _buildPieChart(),
               ),
               const SizedBox(width: 16),
-              Expanded(child: _buildStatsList(const EdgeInsets.only(right: 4))),
+              Expanded(
+                child: Column(
+                  children: [
+                    if (_creditLimit > 0)
+                      _buildCreditSummary(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        dense: true,
+                      ),
+                    Expanded(child: _buildStatsList(const EdgeInsets.only(right: 4))),
+                  ],
+                ),
+              ),
             ],
           ),
         );
@@ -356,6 +386,73 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
+  Widget _buildCreditSummary({EdgeInsets? margin, bool dense = false}) {
+    return Container(
+      margin: margin ?? const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: dense ? 8 : 10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "信用卡概览",
+            style: GoogleFonts.lato(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black87),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 16,
+            runSpacing: 6,
+            children: [
+              _buildCreditMeta("额度", _creditLimit),
+              _buildCreditMeta("已用", _creditUsed),
+              _buildCreditMeta("可用", _creditAvailable),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCreditMeta(String label, double value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: GoogleFonts.lato(color: Colors.grey.shade600, fontSize: 11)),
+        const SizedBox(width: 4),
+        Text(
+          NumberFormat.compactCurrency(symbol: "¥", decimalDigits: 0).format(value),
+          style: GoogleFonts.lato(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+
+  _CreditSummary _computeCreditSummary(List<JiveAccount> accounts, Map<int, double> balances) {
+    double limit = 0;
+    double used = 0;
+    double available = 0;
+
+    for (final account in accounts) {
+      if (!AccountService.isCreditAccount(account)) continue;
+      final accountLimit = account.creditLimit;
+      if (accountLimit == null || accountLimit <= 0) continue;
+      final balance = balances[account.id] ?? account.openingBalance;
+      final usedForAccount = balance < 0 ? -balance : 0.0;
+      limit += accountLimit;
+      used += usedForAccount;
+      final availableForAccount = accountLimit - usedForAccount;
+      if (availableForAccount > 0) {
+        available += availableForAccount;
+      }
+    }
+
+    return _CreditSummary(limit: limit, used: used, available: available);
+  }
+
   List<PieChartSectionData> _buildPieSections() {
     return List.generate(_categoryStats.length, (i) {
       final isTouched = i == _touchedIndex;
@@ -397,4 +494,16 @@ class CategoryStat {
   final Color color;
 
   CategoryStat({required this.name, required this.amount, required this.color});
+}
+
+class _CreditSummary {
+  final double limit;
+  final double used;
+  final double available;
+
+  const _CreditSummary({
+    required this.limit,
+    required this.used,
+    required this.available,
+  });
 }

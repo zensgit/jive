@@ -8,7 +8,7 @@ class JiveCategory {
   Id id = Isar.autoIncrement;
 
   @Index(unique: true)
-  late String key;          // 唯一标识 (例如: "sys_food_lunch")
+  late String key;          // 唯一标识 (例如: "sys_<hash>")
 
   late String name;         // 显示名称 (用户可修改)
   late String iconName;     // 图标名称 (例如: "restaurant")
@@ -24,4 +24,21 @@ class JiveCategory {
   late bool isIncome;       // true=收入, false=支出
 
   late DateTime updatedAt;  // 同步用
+}
+
+@collection
+class JiveCategoryOverride {
+  Id id = Isar.autoIncrement;
+
+  @Index(unique: true)
+  late String systemKey;        // 系统分类 Key
+
+  String? nameOverride;         // 自定义名称
+  String? iconOverride;         // 自定义图标
+  String? colorHexOverride;     // 自定义颜色 (#RRGGBB)
+  String? parentOverrideKey;    // 自定义父级 Key
+  int? orderOverride;           // 自定义排序
+  bool? isHiddenOverride;       // 自定义隐藏状态
+
+  late DateTime updatedAt;      // 同步用
 }
