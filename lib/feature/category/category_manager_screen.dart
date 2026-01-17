@@ -699,10 +699,88 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     }
   }
 
+  List<_UserCategorySeed> _filterCommonSeeds(List<_UserCategorySeed> seeds) {
+    if (seeds.isEmpty) return const [];
+    final Map<String, Set<String>> userChildrenByParentName = {};
+    for (final parent in _parents) {
+      final children = _childrenByParentKey[parent.key] ?? const [];
+      userChildrenByParentName[parent.name] = children.map((c) => c.name).toSet();
+    }
+    final filtered = <_UserCategorySeed>[];
+    for (final seed in seeds) {
+      final existing = userChildrenByParentName[seed.parent] ?? const <String>{};
+      final missing = seed.children.where((name) => !existing.contains(name)).toList();
+      if (missing.isEmpty) continue;
+      filtered.add(_UserCategorySeed(seed.parent, missing));
+    }
+    return filtered;
+  }
+
+  Map<String, Map<String, dynamic>> _mergeSystemLibraries() {
+    final expense = _service.getSystemLibrary(isIncome: false);
+    final income = _service.getSystemLibrary(isIncome: true);
+    if (expense.isEmpty && income.isEmpty) return {};
+    final merged = <String, Map<String, dynamic>>{};
+
+    void merge(Map<String, Map<String, dynamic>> source) {
+      for (final entry in source.entries) {
+        final parentName = entry.key;
+        final icon = entry.value['icon'] as String?;
+        final rawChildren = entry.value['children'] as List<dynamic>? ?? const [];
+        final children = <Map<String, dynamic>>[];
+        for (final child in rawChildren) {
+          if (child is Map) {
+            children.add(Map<String, dynamic>.from(child));
+          }
+        }
+
+        final existing = merged[parentName];
+        if (existing == null) {
+          merged[parentName] = {
+            'icon': icon ?? "category",
+            'children': children,
+          };
+          continue;
+        }
+
+        final existingIcon = existing['icon'] as String?;
+        if ((existingIcon == null || existingIcon.isEmpty || existingIcon == "category") &&
+            icon != null &&
+            icon.isNotEmpty) {
+          existing['icon'] = icon;
+        }
+
+        final existingChildren = (existing['children'] as List<dynamic>? ?? []);
+        final existingNames = <String>{};
+        for (final child in existingChildren) {
+          if (child is Map) {
+            final name = (child['name'] as String? ?? "").trim();
+            if (name.isNotEmpty) existingNames.add(name);
+          }
+        }
+        for (final child in children) {
+          final name = (child['name'] as String? ?? "").trim();
+          if (name.isEmpty || existingNames.contains(name)) continue;
+          existingChildren.add(Map<String, dynamic>.from(child));
+          existingNames.add(name);
+        }
+        existing['children'] = existingChildren;
+      }
+    }
+
+    merge(expense);
+    merge(income);
+    return merged;
+  }
+
   List<_UserCategorySeed> _commonSeedsForCurrentType() {
+    final fallbackSeeds = _showIncome ? _fallbackIncomeSeeds : _fallbackExpenseSeeds;
+    if (widget.onlyUserCategories) {
+      return _filterCommonSeeds(fallbackSeeds);
+    }
     final lib = _service.getSystemLibrary(isIncome: _showIncome);
     if (lib.isEmpty) {
-      return _showIncome ? _fallbackIncomeSeeds : _fallbackExpenseSeeds;
+      return _filterCommonSeeds(fallbackSeeds);
     }
 
     final userParents = _parents;
@@ -925,7 +1003,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         .findAll())
         .map((parent) => parent.name)
         .toSet();
-    final systemLibrary = _service.getSystemLibrary(isIncome: _showIncome);
+    final systemLibrary = _mergeSystemLibraries();
     final childParentIndex = _buildSystemChildParentIndex(systemLibrary);
     final result = await Navigator.push<CategoryCreateResult>(
       context,

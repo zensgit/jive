@@ -105,25 +105,57 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     }
 
     if (_isParentCreateMode()) {
-      final parentSuggestions = <SystemCategorySuggestion>[];
+      final groups = <_SystemGroup>[];
       final itemByName = <String, SystemCategorySuggestion>{};
+      final allChildren = <String, SystemCategorySuggestion>{};
+
       for (final entry in library.entries) {
         final groupName = _canonicalGroupName(entry.key);
         final icon = _normalizeSystemIcon(entry.value['icon'] as String?, groupName);
-        final suggestion = SystemCategorySuggestion(
+        final parentSuggestion = SystemCategorySuggestion(
           name: groupName,
           iconName: icon,
           isParent: true,
         );
-        parentSuggestions.add(suggestion);
-        itemByName[groupName] = suggestion;
+        itemByName[groupName] = parentSuggestion;
+        final childrenRaw = entry.value['children'] as List<dynamic>? ?? const [];
+        final seenChildren = <String>{};
+        final children = <SystemCategorySuggestion>[];
+        for (final child in childrenRaw) {
+          final name = (child['name'] as String? ?? "").trim();
+          if (name.isEmpty || !seenChildren.add(name)) continue;
+          final childIcon = _normalizeSystemIcon(child['icon'] as String?, name);
+          final suggestion = SystemCategorySuggestion(
+            name: name,
+            iconName: childIcon,
+            parentName: groupName,
+            isParent: false,
+          );
+          children.add(suggestion);
+          allChildren.putIfAbsent(name, () => suggestion);
+        }
+
+        children.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+        groups.add(
+          _SystemGroup(
+            name: groupName,
+            iconName: icon,
+            children: children,
+          ),
+        );
       }
-      parentSuggestions.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
-      _systemGroups = [
-        _SystemGroup(name: "全部", iconName: "category", children: parentSuggestions),
-      ];
+
+      groups.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+      final sortedGroups = <_SystemGroup>[];
+      if (allChildren.isNotEmpty) {
+        final allList = allChildren.values.toList();
+        allList.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+        sortedGroups.add(_SystemGroup(name: "全部", iconName: "category", children: allList));
+      }
+      sortedGroups.addAll(groups);
+      _systemGroups = sortedGroups;
       _systemItemByName = itemByName;
-      _selectedGroupName = "全部";
+      _selectedGroupName = _resolveInitialGroup();
       return;
     }
 
@@ -341,7 +373,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 title: const Text("批量添加"),
               ),
             _buildInfoCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             if (hasSystemLibrary) _buildSystemCategorySection(),
             if (!hasSystemLibrary) _buildIconSection(),
           ],
@@ -469,11 +501,16 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
             const SizedBox(height: 4),
             if (!showSystemBatch)
               SwitchListTile(
+                dense: true,
+                visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
                 contentPadding: EdgeInsets.zero,
                 value: _autoMatchIcon,
                 onChanged: (value) => setState(() => _autoMatchIcon = value),
-                title: const Text("自动匹配图标"),
-                subtitle: const Text("根据名称自动选择更合适的图标"),
+                title: const Text("自动匹配图标", style: TextStyle(fontSize: 12)),
+                subtitle: Text(
+                  "根据名称自动选择更合适的图标",
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
               ),
           ],
         ),
@@ -772,7 +809,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 : "点击可填充名称与图标",
             style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           SizedBox(
             height: listHeight,
             child: LayoutBuilder(
@@ -893,10 +930,15 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                 itemBuilder: (context, index) {
                                   final entry = items[index];
                                   final isExisting = _existingNames.contains(entry.name);
-                                  final isDisabled = _isBatch && isExisting;
+                                  final isParentCreate = _isParentCreateMode();
+                                  final isChildInParentCreate = isParentCreate && !entry.isParent;
+                                  final isDisabled = _isBatch && (isExisting || isChildInParentCreate);
                                   final isSelected = _isBatch
                                       ? _selectedSystemNames.contains(entry.name)
-                                      : entry.name == _nameController.text.trim() && entry.iconName == _selectedIcon;
+                                      : (isParentCreate
+                                          ? entry.iconName == _selectedIcon
+                                          : entry.name == _nameController.text.trim() &&
+                                              entry.iconName == _selectedIcon);
                                   final canTap = !isDisabled;
                                   return RepaintBoundary(
                                     child: InkWell(
@@ -1093,7 +1135,15 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   }
 
   Future<void> _applySuggestion(SystemCategorySuggestion suggestion) async {
+    final isParentCreate = _isParentCreateMode();
     if (_isBatch && _existingNames.contains(suggestion.name)) return;
+    if (_isBatch && isParentCreate && !suggestion.isParent) {
+      ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("批量添加仅支持一级分类")),
+      );
+      return;
+    }
     if (_isBatch && widget.autoBatchAdd && widget.onBatchAdd != null) {
       await _applyBatchAdd(suggestion);
       return;
@@ -1109,6 +1159,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       return;
     }
     setState(() => _selectedIcon = suggestion.iconName);
+    if (isParentCreate && !suggestion.isParent) {
+      return;
+    }
     _nameController.text = suggestion.name;
     _nameController.selection = TextSelection.collapsed(offset: _nameController.text.length);
   }

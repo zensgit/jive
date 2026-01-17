@@ -606,8 +606,8 @@ class CategoryService {
       if (overridesByKey[cat.key]?.iconOverride != null) continue;
       final desired = iconByKey[cat.key];
       if (desired == null || desired == "category") continue;
-      if (cat.iconName == desired) continue;
-      if (cat.iconName.isNotEmpty && cat.iconName != "category") continue;
+      if (_isFileIcon(cat.iconName) || _isTextIcon(cat.iconName)) continue;
+      if (_normalizeIconKey(cat.iconName) == _normalizeIconKey(desired)) continue;
       cat.iconName = desired;
       cat.updatedAt = now;
       updated.add(cat);
