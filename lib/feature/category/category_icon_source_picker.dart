@@ -30,7 +30,7 @@ Future<String?> pickCategoryIcon(BuildContext context, {required String initialI
           ),
           ListTile(
             leading: const Icon(Icons.text_fields),
-            title: const Text("文字图标"),
+            title: const Text("表情/文字"),
             onTap: () => Navigator.pop(sheetContext, _CategoryIconSource.text),
           ),
         ],
@@ -86,7 +86,7 @@ Future<String?> _pickTextIcon(BuildContext context, {required String initialIcon
     builder: (dialogContext) => StatefulBuilder(
       builder: (dialogContext, setStateDialog) {
         return AlertDialog(
-          title: const Text("文字图标"),
+          title: const Text("表情/文字"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -95,7 +95,7 @@ Future<String?> _pickTextIcon(BuildContext context, {required String initialIcon
                 onChanged: (value) => setStateDialog(() => current = value.trim()),
                 maxLength: 4,
                 decoration: const InputDecoration(
-                  hintText: "输入文字 (1-4字)",
+                  hintText: "输入表情或文字 (1-4字)",
                   counterText: "",
                   border: OutlineInputBorder(),
                 ),

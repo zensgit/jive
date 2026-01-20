@@ -136,15 +136,23 @@ class _TagPickerSheetState extends State<TagPickerSheet> {
     final selected = _selectedKeys.contains(tag.key);
     final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
     final label = tagDisplayName(tag);
+    final showIcon = hasTagIcon(tag);
+    final labelStyle = TextStyle(
+      color: color,
+      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+    );
     return FilterChip(
       selected: selected,
-      label: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-        ),
-      ),
+      label: showIcon
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                tagIconWidget(tag, size: 12, color: color),
+                const SizedBox(width: 4),
+                Text(label, style: labelStyle),
+              ],
+            )
+          : Text(label, style: labelStyle),
       backgroundColor: color.withOpacity(0.08),
       selectedColor: color.withOpacity(0.18),
       side: BorderSide(color: color.withOpacity(selected ? 0.6 : 0.3)),

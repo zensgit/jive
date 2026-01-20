@@ -119,7 +119,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       final tags = tagsByGroup[group.key] ?? [];
       if (tags.isNotEmpty || (showEmptyGroups && !group.isArchived)) {
         groupCards.add(_buildGroupCard(
-          title: group.name,
+          title: groupDisplayName(group),
           tags: tags,
           group: group,
         ));
@@ -141,8 +141,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
               : Column(
                   children: [
                     _buildModeTabs(filteredTags.length),
+                    if (!_showArchived) _buildInfoBanner(),
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
                       child: TextField(
                         controller: _searchController,
                         decoration: InputDecoration(
@@ -163,7 +164,6 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                         onChanged: (value) => setState(() => _query = value.trim()),
                       ),
                     ),
-                    if (!_showArchived) _buildInfoBanner(),
                     Expanded(
                       child: groupCards.isEmpty
                           ? _buildEmptyState()
@@ -322,6 +322,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       fontSize: 11,
       decoration: tag.isArchived ? TextDecoration.lineThrough : null,
     );
+    final showIcon = hasTagIcon(tag);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -335,7 +336,16 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: color.withOpacity(0.35)),
           ),
-          child: Text(tagDisplayName(tag), style: textStyle),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showIcon) ...[
+                tagIconWidget(tag, size: 12, color: color),
+                const SizedBox(width: 4),
+              ],
+              Text(tagDisplayName(tag), style: textStyle),
+            ],
+          ),
         ),
       ),
     );
@@ -485,6 +495,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   }
 
   Future<bool?> _openTagSheet({JiveTag? tag, String? groupKey}) async {
+    final groupCount = (await TagService(_isar).getGroups(includeArchived: false)).length;
+    final initialSize = _tagSheetInitialSize(groupCount);
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -492,7 +504,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       builder: (context) {
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.66,
+          initialChildSize: initialSize,
           maxChildSize: 0.95,
           minChildSize: 0.45,
           builder: (context, controller) {
@@ -516,7 +528,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       builder: (context) {
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.66,
+          initialChildSize: 0.5,
           maxChildSize: 0.95,
           minChildSize: 0.45,
           builder: (context, controller) {
@@ -545,6 +557,15 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   Future<void> _createGroup() async {
     final result = await _openGroupSheet();
     if (result == true) await _loadData();
+  }
+
+  double _tagSheetInitialSize(int groupCount) {
+    final chipCount = groupCount + 1;
+    final rows = ((chipCount + 3) ~/ 4).clamp(1, 8);
+    final size = 0.62 + rows * 0.03;
+    if (size < 0.64) return 0.64;
+    if (size > 0.86) return 0.86;
+    return size;
   }
 
   Future<void> _editGroup(JiveTagGroup group) async {

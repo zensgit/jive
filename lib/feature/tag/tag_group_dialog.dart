@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:isar/isar.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/service/tag_service.dart';
+import '../category/category_icon_source_picker.dart';
 import 'tag_icon_catalog.dart';
 import 'tag_color_picker_sheet.dart';
 
@@ -23,7 +25,6 @@ class TagGroupDialog extends StatefulWidget {
 
 class _TagGroupDialogState extends State<TagGroupDialog> {
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _iconTextController = TextEditingController();
   String? _selectedColor;
   String? _selectedIcon;
   bool _loading = false;
@@ -36,8 +37,10 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
     if (group != null) {
       _nameController.text = group.name;
       _selectedColor = group.colorHex;
-      _selectedIcon = group.iconName;
-      _iconTextController.text = group.iconText ?? '';
+      final iconText = group.iconText?.trim() ?? '';
+      _selectedIcon = (group.iconName == null || group.iconName!.trim().isEmpty) && iconText.isNotEmpty
+          ? 'text:$iconText'
+          : group.iconName;
     } else {
       _selectedColor = TagService.defaultColors.first;
     }
@@ -46,7 +49,6 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
   @override
   void dispose() {
     _nameController.dispose();
-    _iconTextController.dispose();
     super.dispose();
   }
 
@@ -56,7 +58,6 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
       setState(() => _error = '请输入分组名称');
       return;
     }
-    final iconText = _iconTextController.text.trim();
     setState(() {
       _error = null;
       _loading = true;
@@ -68,14 +69,13 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
           name: name,
           colorHex: _selectedColor,
           iconName: _selectedIcon,
-          iconText: iconText.isEmpty ? null : iconText,
         );
       } else {
         final group = widget.group!
           ..name = name
           ..colorHex = _selectedColor
           ..iconName = _selectedIcon
-          ..iconText = iconText.isEmpty ? null : iconText;
+          ..iconText = null;
         await service.updateGroup(group);
       }
       if (!mounted) return;
@@ -99,81 +99,101 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final primary = Theme.of(context).colorScheme.primary;
+    final cancelStyle = OutlinedButton.styleFrom(
+      minimumSize: const Size.fromHeight(36),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      foregroundColor: Colors.grey.shade700,
+      side: BorderSide(color: Colors.grey.shade300),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+    final actionStyle = ElevatedButton.styleFrom(
+      minimumSize: const Size.fromHeight(36),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      backgroundColor: primary,
+      foregroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
     return Material(
       color: Colors.white,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       child: SafeArea(
         top: false,
-        child: ListView(
-          controller: widget.scrollController,
-          padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
+        child: Column(
           children: [
             _buildSheetHandle(),
-            if (_loading) ...[
-              const SizedBox(height: 80),
-              const Center(child: CircularProgressIndicator()),
-              const SizedBox(height: 80),
-            ] else ...[
-              Row(
-                children: [
-                  Text(
-                    widget.group == null ? '创建分组' : '编辑分组',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            if (_loading)
+              const Expanded(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else ...[
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: widget.scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            widget.group == null ? '创建分组' : '编辑分组',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _nameController,
+                        maxLength: 12,
+                        maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                        decoration: InputDecoration(
+                          labelText: '分组名称',
+                          hintText: '最多12字',
+                          errorText: _error,
+                          counterText: '',
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('颜色', style: TextStyle(fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 8),
+                      _buildColorGrid(),
+                      const SizedBox(height: 12),
+                      _buildIconPicker(),
+                    ],
                   ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: '分组名称',
-                  errorText: _error,
-                  border: const OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _iconTextController,
-                decoration: const InputDecoration(
-                  labelText: '分组图标(Emoji)',
-                  hintText: '例如 ✈️',
-                  border: OutlineInputBorder(),
+              Container(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 8 + bottomInset),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
                 ),
-              ),
-              const SizedBox(height: 12),
-              const Text('颜色', style: TextStyle(fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
-              _buildColorGrid(),
-              const SizedBox(height: 12),
-              const Text('图标', style: TextStyle(fontWeight: FontWeight.w500)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildIconChoice(null, Icons.cancel_outlined),
-                  ...tagIconMap.entries.map((entry) => _buildIconChoice(entry.key, entry.value)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('取消'),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _loading ? null : _save,
-                    child: Text(widget.group == null ? '创建' : '保存'),
-                  ),
-                ],
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: cancelStyle,
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('取消'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: actionStyle,
+                        onPressed: _loading ? null : _save,
+                        child: Text(widget.group == null ? '创建' : '保存'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ],
@@ -208,6 +228,22 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
       children: [
         for (final color in colors) _buildColorDot(color),
         _buildCustomColorDot(isCustomSelected, customHex: _selectedColor),
+      ],
+    );
+  }
+
+  Widget _buildIconPicker() {
+    final iconColor = Colors.grey.shade700;
+    final icon = iconWidgetForName(_selectedIcon, size: 18, color: iconColor);
+    return Row(
+      children: [
+        const Text('图标', style: TextStyle(fontWeight: FontWeight.w500)),
+        const Spacer(),
+        OutlinedButton.icon(
+          onPressed: _loading ? null : _pickIcon,
+          icon: icon,
+          label: const Text('选择图标'),
+        ),
       ],
     );
   }
@@ -277,20 +313,14 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
     setState(() => _selectedColor = colorHex);
   }
 
-  Widget _buildIconChoice(String? key, IconData icon) {
-    final selected = _selectedIcon == key;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedIcon = key),
-      child: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(10),
-          border: selected ? Border.all(color: Colors.black87, width: 2) : null,
-        ),
-        child: Icon(icon, size: 20, color: selected ? Colors.black87 : Colors.black45),
-      ),
+  Future<void> _pickIcon() async {
+    final selected = await pickCategoryIcon(
+      context,
+      initialIcon: _selectedIcon ?? 'category',
     );
+    if (selected == null) return;
+    setState(() {
+      _selectedIcon = selected;
+    });
   }
 }

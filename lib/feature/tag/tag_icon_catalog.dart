@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/database/tag_model.dart';
+import '../../core/service/category_service.dart';
 
 const Map<String, IconData> tagIconMap = {
   'work': Icons.work,
@@ -23,11 +24,42 @@ const Map<String, IconData> tagIconMap = {
 
 IconData tagIconFor(String? key) {
   if (key == null || key.isEmpty) return Icons.label;
-  return tagIconMap[key] ?? Icons.label;
+  return tagIconMap[key] ?? CategoryService.getIcon(key);
 }
 
 String tagDisplayName(JiveTag tag) {
   return tag.name;
+}
+
+bool hasTagIcon(JiveTag tag) {
+  final iconText = tag.iconText?.trim() ?? '';
+  final iconName = tag.iconName?.trim() ?? '';
+  return iconText.isNotEmpty || iconName.isNotEmpty;
+}
+
+Widget iconWidgetForName(
+  String? iconName, {
+  double size = 16,
+  Color? color,
+}) {
+  final trimmed = iconName?.trim() ?? '';
+  if (trimmed.isEmpty) {
+    return Icon(Icons.label, size: size, color: color);
+  }
+  final mapped = tagIconMap[trimmed];
+  if (mapped != null) {
+    return Icon(mapped, size: size, color: color);
+  }
+  return CategoryService.buildIcon(trimmed, size: size, color: color);
+}
+
+String? _iconTextFromName(String? iconName) {
+  final trimmed = iconName?.trim() ?? '';
+  if (trimmed.startsWith('text:')) {
+    final value = trimmed.substring('text:'.length).trim();
+    if (value.isNotEmpty) return value;
+  }
+  return null;
 }
 
 Widget tagIconWidget(
@@ -37,9 +69,9 @@ Widget tagIconWidget(
 }) {
   final iconText = tag.iconText?.trim();
   if (iconText != null && iconText.isNotEmpty) {
-    return Text(iconText, style: TextStyle(fontSize: size));
+    return Text(iconText, style: TextStyle(fontSize: size, color: color));
   }
-  return Icon(tagIconFor(tag.iconName), size: size, color: color);
+  return iconWidgetForName(tag.iconName, size: size, color: color);
 }
 
 
@@ -53,15 +85,19 @@ Widget groupIconWidget(
   }
   final iconText = group.iconText?.trim();
   if (iconText != null && iconText.isNotEmpty) {
-    return Text(iconText, style: TextStyle(fontSize: size));
+    return Text(iconText, style: TextStyle(fontSize: size, color: color));
   }
-  return Icon(tagIconFor(group.iconName), size: size, color: color);
+  return iconWidgetForName(group.iconName, size: size, color: color);
 }
 
 String groupDisplayName(JiveTagGroup group) {
   final iconText = group.iconText?.trim();
   if (iconText != null && iconText.isNotEmpty) {
     return '$iconText ${group.name}';
+  }
+  final textIcon = _iconTextFromName(group.iconName);
+  if (textIcon != null) {
+    return '$textIcon ${group.name}';
   }
   return group.name;
 }

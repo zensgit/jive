@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:isar/isar.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/service/tag_service.dart';
+import '../category/category_icon_source_picker.dart';
 import 'tag_icon_catalog.dart';
 import 'tag_color_picker_sheet.dart';
 
@@ -29,12 +31,14 @@ class _TagEditDialogState extends State<TagEditDialog> {
   List<JiveTagGroup> _groups = [];
   String? _selectedGroupKey;
   String? _selectedColor;
+  String? _selectedIcon;
   String _groupQuery = '';
   String? _groupError;
   bool _ungroupedSelected = false;
   bool _followGroupColor = false;
   bool _loading = true;
   String? _error;
+  bool _iconDirty = false;
 
   @override
   void initState() {
@@ -44,6 +48,10 @@ class _TagEditDialogState extends State<TagEditDialog> {
       _nameController.text = tag.name;
       _selectedGroupKey = tag.groupKey;
       _selectedColor = tag.colorHex ?? TagService.defaultColors.first;
+      final iconText = tag.iconText?.trim() ?? '';
+      _selectedIcon = (tag.iconName == null || tag.iconName!.trim().isEmpty) && iconText.isNotEmpty
+          ? 'text:$iconText'
+          : tag.iconName;
       if (tag.groupKey == null) {
         _ungroupedSelected = true;
       }
@@ -91,6 +99,12 @@ class _TagEditDialogState extends State<TagEditDialog> {
   Future<void> _createGroupFromQuery() async {
     final name = _groupQuery.trim();
     if (name.isEmpty) return;
+    if (name.length > 12) {
+      setState(() {
+        _groupError = '分组名称最多12字';
+      });
+      return;
+    }
     setState(() {
       _groupError = null;
       _loading = true;
@@ -151,15 +165,18 @@ class _TagEditDialogState extends State<TagEditDialog> {
         await service.createTag(
           name: name,
           colorHex: colorHex,
+          iconName: _selectedIcon,
           groupKey: _selectedGroupKey,
         );
       } else {
         final tag = widget.tag!
           ..name = name
           ..colorHex = colorHex
-          ..iconName = null
-          ..iconText = null
           ..groupKey = _selectedGroupKey;
+        if (_iconDirty) {
+          tag.iconName = _selectedIcon;
+          tag.iconText = null;
+        }
         await service.updateTag(tag);
       }
       if (!mounted) return;
@@ -190,70 +207,106 @@ class _TagEditDialogState extends State<TagEditDialog> {
     final canCreateGroup = _groupQuery.trim().isNotEmpty &&
         !_groups.any((group) => group.name.toLowerCase() == _groupQuery.toLowerCase());
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final primary = Theme.of(context).colorScheme.primary;
+    final cancelStyle = OutlinedButton.styleFrom(
+      minimumSize: const Size.fromHeight(36),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      foregroundColor: Colors.grey.shade700,
+      side: BorderSide(color: Colors.grey.shade300),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+    final actionStyle = ElevatedButton.styleFrom(
+      minimumSize: const Size.fromHeight(36),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      backgroundColor: primary,
+      foregroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
     return Material(
       color: Colors.white,
       borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       child: SafeArea(
         top: false,
-        child: ListView(
-          controller: widget.scrollController,
-          padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
+        child: Column(
           children: [
             _buildSheetHandle(),
-            if (_loading) ...[
-              const SizedBox(height: 80),
-              const Center(child: CircularProgressIndicator()),
-              const SizedBox(height: 80),
-            ] else ...[
-              Row(
-                children: [
-                  Text(
-                    widget.tag == null ? '创建标签' : '编辑标签',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            if (_loading)
+              const Expanded(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else ...[
+              Expanded(
+                child: SingleChildScrollView(
+                  controller: widget.scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            widget.tag == null ? '创建标签' : '编辑标签',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _nameController,
+                        decoration: InputDecoration(
+                          labelText: '标签名称',
+                          errorText: _error,
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      _buildIconPicker(),
+                      const SizedBox(height: 12),
+                      _buildColorHeader(),
+                      const SizedBox(height: 8),
+                      if (_followGroupColor) ...[
+                        _buildFollowColorPreview(),
+                      ] else ...[
+                        _buildColorGrid(),
+                      ],
+                      const SizedBox(height: 16),
+                      _buildGroupSection(
+                        filteredGroups: filteredGroups,
+                        canCreateGroup: canCreateGroup,
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: '标签名称',
-                  errorText: _error,
-                  border: const OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 12),
-              _buildColorHeader(),
-              const SizedBox(height: 8),
-              if (_followGroupColor) ...[
-                _buildFollowColorPreview(),
-              ] else ...[
-                _buildColorGrid(),
-              ],
-              const SizedBox(height: 16),
-              _buildGroupSection(
-                filteredGroups: filteredGroups,
-                canCreateGroup: canCreateGroup,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('取消'),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: _loading ? null : _save,
-                    child: Text(widget.tag == null ? '创建' : '保存'),
-                  ),
-                ],
+              Container(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 8 + bottomInset),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: cancelStyle,
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('取消'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: actionStyle,
+                        onPressed: _loading ? null : _save,
+                        child: Text(widget.tag == null ? '创建' : '保存'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ],
@@ -273,6 +326,21 @@ class _TagEditDialogState extends State<TagEditDialog> {
           borderRadius: BorderRadius.circular(2),
         ),
       ),
+    );
+  }
+
+  Widget _buildIconPicker() {
+    final iconColor = Colors.grey.shade700;
+    return Row(
+      children: [
+        const Text('图标', style: TextStyle(fontWeight: FontWeight.w500)),
+        const Spacer(),
+        OutlinedButton.icon(
+          onPressed: _loading ? null : _pickIcon,
+          icon: iconWidgetForName(_selectedIcon, size: 18, color: iconColor),
+          label: const Text('选择图标'),
+        ),
+      ],
     );
   }
 
@@ -403,6 +471,9 @@ class _TagEditDialogState extends State<TagEditDialog> {
     required bool canCreateGroup,
   }) {
     final showOnlyUngrouped = _ungroupedSelected;
+    final chipCount = filteredGroups.length + 1;
+    final shouldClamp = chipCount > 12;
+    final maxHeight = MediaQuery.of(context).size.height * 0.18;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -410,8 +481,12 @@ class _TagEditDialogState extends State<TagEditDialog> {
         const SizedBox(height: 6),
         TextField(
           controller: _groupSearchController,
+          maxLength: 12,
+          maxLengthEnforcement: MaxLengthEnforcement.enforced,
           decoration: InputDecoration(
             labelText: '搜索或新建分组',
+            hintText: '最多12字（新建）',
+            counterText: '',
             border: const OutlineInputBorder(),
             isDense: true,
             suffixIcon: _groupQuery.isEmpty
@@ -475,29 +550,42 @@ class _TagEditDialogState extends State<TagEditDialog> {
         else
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Wrap(
-              spacing: 4,
-              runSpacing: 4,
-              children: [
-                ChoiceChip(
-                  label: const Text('未分组', style: TextStyle(fontSize: 10)),
-                  selected: _ungroupedSelected,
-                  visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-                  onSelected: (selected) => _toggleUngrouped(selected),
-                ),
-                for (final group in filteredGroups)
-                  ChoiceChip(
-                    label: Text(groupDisplayName(group), style: const TextStyle(fontSize: 10)),
-                    selected: _selectedGroupKey == group.key,
-                    visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-                    onSelected: (_) => _selectGroup(group.key),
-                  ),
-              ],
-            ),
+            child: shouldClamp
+                ? ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: maxHeight),
+                    child: SingleChildScrollView(
+                      primary: false,
+                      physics: const ClampingScrollPhysics(),
+                      child: _buildGroupChips(filteredGroups),
+                    ),
+                  )
+                : _buildGroupChips(filteredGroups),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildGroupChips(List<JiveTagGroup> filteredGroups) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        ChoiceChip(
+          label: const Text('未分组', style: TextStyle(fontSize: 10)),
+          selected: _ungroupedSelected,
+          visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+          onSelected: (selected) => _toggleUngrouped(selected),
+        ),
+        for (final group in filteredGroups)
+          ChoiceChip(
+            label: Text(groupDisplayName(group), style: const TextStyle(fontSize: 10)),
+            selected: _selectedGroupKey == group.key,
+            visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+            onSelected: (_) => _selectGroup(group.key),
           ),
       ],
     );
@@ -519,6 +607,18 @@ class _TagEditDialogState extends State<TagEditDialog> {
     setState(() {
       _selectedColor = colorHex;
       _followGroupColor = false;
+    });
+  }
+
+  Future<void> _pickIcon() async {
+    final selected = await pickCategoryIcon(
+      context,
+      initialIcon: _selectedIcon ?? 'category',
+    );
+    if (selected == null) return;
+    setState(() {
+      _selectedIcon = selected;
+      _iconDirty = true;
     });
   }
 
