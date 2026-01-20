@@ -6,6 +6,7 @@ import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
+import '../../core/database/tag_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/design_system/theme.dart';
 
@@ -53,6 +54,8 @@ class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
             JiveCategoryOverrideSchema,
             JiveAccountSchema,
             JiveAutoDraftSchema,
+            JiveTagSchema,
+            JiveTagGroupSchema,
           ],
           directory: dir.path,
         );

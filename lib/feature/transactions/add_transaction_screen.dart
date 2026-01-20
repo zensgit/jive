@@ -7,8 +7,10 @@ import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
+import '../../core/database/tag_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/tag_service.dart';
 import '../../core/database/category_model.dart';
 import '../../core/utils/logger_util.dart';
 import '../category/category_create_dialog.dart';
@@ -17,6 +19,8 @@ import '../category/category_edit_dialog.dart';
 import '../category/category_manager_screen.dart';
 import '../category/category_search_delegate.dart';
 import '../stats/stats_screen.dart';
+import '../tag/tag_icon_catalog.dart';
+import '../tag/tag_picker_sheet.dart';
 
 enum TransactionType { expense, income, transfer }
 
@@ -47,6 +51,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Map<int, double> _accountBalances = {};
   JiveAccount? _selectedAccount;
   JiveAccount? _selectedToAccount;
+  List<JiveTag> _tags = [];
+  List<String> _selectedTagKeys = [];
   List<CategorySearchResult> _searchItems = [];
   final Map<String, String> _searchKeyCache = {};
   final TextEditingController _inlineSearchController = TextEditingController();
@@ -91,6 +97,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             JiveCategoryOverrideSchema,
             JiveAccountSchema,
             JiveAutoDraftSchema,
+            JiveTagSchema,
+            JiveTagGroupSchema,
           ],
           directory: dir.path,
         );
@@ -98,7 +106,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       
       await CategoryService(_isar).initDefaultCategories();
       await AccountService(_isar).initDefaultAccounts();
+      await TagService(_isar).initDefaultGroups();
       await _loadAccounts();
+      await _loadTags();
       await _loadParentsForType();
     } catch (e, s) {
       JiveLogger.e("Error loading categories", e, s);
@@ -196,6 +206,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _accountBalances = balances;
       _selectedAccount = selectedAccount;
       _selectedToAccount = selectedTo;
+    });
+  }
+
+  Future<void> _loadTags() async {
+    final tags = await TagService(_isar).getTags(includeArchived: false);
+    if (!mounted) return;
+    setState(() {
+      _tags = tags;
+      _selectedTagKeys = _selectedTagKeys.where((key) => tags.any((t) => t.key == key)).toList();
     });
   }
 
@@ -653,11 +672,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ..rawText = rawText
       ..accountId = _selectedAccount?.id
       ..toAccountId = _txType == TransactionType.transfer ? _selectedToAccount?.id : null
+      ..tagKeys = List<String>.from(_selectedTagKeys)
       ..timestamp = DateTime.now();
 
     await _isar.writeTxn(() async {
       await _isar.jiveTransactions.put(newTx);
     });
+    if (_selectedTagKeys.isNotEmpty) {
+      await TagService(_isar).markTagsUsed(_selectedTagKeys, newTx.timestamp);
+    }
 
     JiveLogger.i("Manual Transaction Saved: $amount");
     _hasDataChanges = true;
@@ -730,6 +753,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 child: _buildSelectedCreditSummary(_selectedAccount!, isLandscape: isLandscape),
               ),
           ],
+          SizedBox(height: isLandscape ? 6 : 10),
+          _buildTagSelector(isLandscape: isLandscape),
         ],
       ),
     );
@@ -982,6 +1007,68 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         onTap: () => _showAccountPicker(pickTo: false),
       ),
     );
+  }
+
+  Widget _buildTagSelector({required bool isLandscape}) {
+    final textSize = isLandscape ? 10.0 : 12.0;
+    final selectedTags = _tags.where((tag) => _selectedTagKeys.contains(tag.key)).toList();
+    return Align(
+      alignment: Alignment.center,
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        alignment: WrapAlignment.center,
+        children: [
+          for (final tag in selectedTags)
+            _buildSelectedTagChip(tag, textSize),
+          ActionChip(
+            label: Text(selectedTags.isEmpty ? '添加标签' : '编辑标签', style: TextStyle(fontSize: textSize)),
+            avatar: const Icon(Icons.label_outline, size: 14, color: Colors.black54),
+            onPressed: _showTagPicker,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedTagChip(JiveTag tag, double textSize) {
+    final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+    return InputChip(
+      label: Text(
+        tagDisplayName(tag),
+        style: TextStyle(fontSize: textSize, color: color, fontWeight: FontWeight.w600),
+      ),
+      backgroundColor: color.withOpacity(0.12),
+      side: BorderSide(color: color.withOpacity(0.4)),
+      onDeleted: () => setState(() => _selectedTagKeys.remove(tag.key)),
+    );
+  }
+
+
+  Future<void> _showTagPicker() async {
+    final picked = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return TagPickerSheet(
+          tags: _tags,
+          selectedKeys: _selectedTagKeys,
+          onCreateTag: (name) async {
+            final created = await TagService(_isar).createTag(name: name);
+            await _loadTags();
+            return created;
+          },
+        );
+      },
+    );
+    if (picked == null) return;
+    setState(() {
+      _selectedTagKeys = picked;
+    });
   }
 
   Widget _buildAccountChip({

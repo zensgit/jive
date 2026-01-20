@@ -7,6 +7,7 @@ import '../service/account_service.dart';
 import '../service/auto_account_mapping.dart';
 import '../service/auto_rule_engine.dart';
 import '../service/auto_settings.dart';
+import '../service/tag_service.dart';
 
 class AutoCapture {
   final double amount;
@@ -176,6 +177,9 @@ class AutoDraftService {
     final engine = await AutoRuleEngine.instance();
     final categories = await _buildCategoryIndex();
     final match = engine.match(text: capture.rawText ?? '', source: capture.source);
+    final tagKeys = match.tags.isEmpty
+        ? <String>[]
+        : await TagService(isar).resolveTagKeysByNames(match.tags);
 
     final accounts = await AccountService(isar).getActiveAccounts();
     final mappings = await AutoAccountMappingStore.load();
@@ -215,6 +219,7 @@ class AutoDraftService {
         resolved: resolved,
         parentName: parentName,
         subName: subName,
+        tagKeys: tagKeys,
         dedupKey: dedupKey,
       );
       if (merged) return AutoCaptureResult.mergedHit;
@@ -237,6 +242,7 @@ class AutoDraftService {
         subCategoryName: subName,
         accountId: accountId,
         toAccountId: toAccountId,
+        tagKeys: tagKeys,
       );
       return const AutoCaptureResult(inserted: true, committed: true, duplicate: false, merged: false);
     }
@@ -261,6 +267,7 @@ class AutoDraftService {
       ..subCategoryKey = subKey
       ..accountId = accountId
       ..toAccountId = toAccountId
+      ..tagKeys = tagKeys
       ..dedupKey = dedupKey
       ..createdAt = DateTime.now();
 
@@ -294,6 +301,7 @@ class AutoDraftService {
       subCategoryName: subCategoryName,
       accountId: draft.accountId,
       toAccountId: draft.toAccountId,
+      tagKeys: draft.tagKeys,
       draftId: draft.id,
     );
   }
@@ -313,6 +321,7 @@ class AutoDraftService {
     required String? subCategoryName,
     required int? accountId,
     int? toAccountId,
+    List<String>? tagKeys,
     int? draftId,
   }) async {
     final account = accountId ?? (await AccountService(isar).getDefaultAccount())?.id;
@@ -332,7 +341,8 @@ class AutoDraftService {
       ..category = normalizedCategory
       ..subCategory = normalizedSub
       ..accountId = account
-      ..toAccountId = toAccountId;
+      ..toAccountId = toAccountId
+      ..tagKeys = tagKeys == null ? [] : List<String>.from(tagKeys);
 
     await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
@@ -340,6 +350,9 @@ class AutoDraftService {
         await isar.collection<JiveAutoDraft>().delete(draftId);
       }
     });
+    if (tagKeys != null && tagKeys.isNotEmpty) {
+      await TagService(isar).markTagsUsed(tagKeys, capture.timestamp);
+    }
   }
 
   String? _inferMealSubCategory({
@@ -381,6 +394,7 @@ class AutoDraftService {
     required CategoryMatch resolved,
     required String parentName,
     required String subName,
+    required List<String> tagKeys,
     required String dedupKey,
   }) async {
     final window = Duration(seconds: windowSeconds.clamp(10, 300));
@@ -414,6 +428,7 @@ class AutoDraftService {
         matchType: matchType,
         accountId: accountId,
         toAccountId: toAccountId,
+        tagKeys: tagKeys,
       );
       if (!merged) continue;
 
@@ -431,6 +446,7 @@ class AutoDraftService {
     required String matchType,
     required int? accountId,
     required int? toAccountId,
+    required List<String> tagKeys,
   }) {
     final draftType = draft.type ?? 'expense';
     final fromId = _resolveFromAccountId(
@@ -456,6 +472,13 @@ class AutoDraftService {
     draft.accountId = fromId ?? draft.accountId ?? accountId;
     draft.toAccountId = toId ?? draft.toAccountId ?? toAccountId;
     draft.rawText = _mergeRawText(draft.rawText, capture.rawText);
+    if (tagKeys.isNotEmpty) {
+      final mergedTags = <String>{
+        ...draft.tagKeys,
+        ...tagKeys,
+      };
+      draft.tagKeys = mergedTags.toList();
+    }
     return true;
   }
 

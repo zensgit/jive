@@ -17,6 +17,9 @@ class JiveCategory {
   @Index()
   String? parentKey;        // 父分类 Key (空则为一级)
 
+  @Index()
+  String? sourceTagKey;     // 来源标签 Key (由标签转换而来)
+
   late int order;           // 排序权重 (越小越前)
   
   late bool isSystem;       // 是否系统预置 (预置分类不可彻底删除，只能隐藏)

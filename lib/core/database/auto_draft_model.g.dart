@@ -67,18 +67,23 @@ const JiveAutoDraftSchema = CollectionSchema(
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
-    r'timestamp': PropertySchema(
+    r'tagKeys': PropertySchema(
       id: 10,
+      name: r'tagKeys',
+      type: IsarType.stringList,
+    ),
+    r'timestamp': PropertySchema(
+      id: 11,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'toAccountId': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'toAccountId',
       type: IsarType.long,
     ),
     r'type': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'type',
       type: IsarType.string,
     )
@@ -193,6 +198,13 @@ int _jiveAutoDraftEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.tagKeys.length * 3;
+  {
+    for (var i = 0; i < object.tagKeys.length; i++) {
+      final value = object.tagKeys[i];
+      bytesCount += value.length * 3;
+    }
+  }
   {
     final value = object.type;
     if (value != null) {
@@ -218,9 +230,10 @@ void _jiveAutoDraftSerialize(
   writer.writeString(offsets[7], object.source);
   writer.writeString(offsets[8], object.subCategory);
   writer.writeString(offsets[9], object.subCategoryKey);
-  writer.writeDateTime(offsets[10], object.timestamp);
-  writer.writeLong(offsets[11], object.toAccountId);
-  writer.writeString(offsets[12], object.type);
+  writer.writeStringList(offsets[10], object.tagKeys);
+  writer.writeDateTime(offsets[11], object.timestamp);
+  writer.writeLong(offsets[12], object.toAccountId);
+  writer.writeString(offsets[13], object.type);
 }
 
 JiveAutoDraft _jiveAutoDraftDeserialize(
@@ -241,9 +254,10 @@ JiveAutoDraft _jiveAutoDraftDeserialize(
   object.source = reader.readString(offsets[7]);
   object.subCategory = reader.readStringOrNull(offsets[8]);
   object.subCategoryKey = reader.readStringOrNull(offsets[9]);
-  object.timestamp = reader.readDateTime(offsets[10]);
-  object.toAccountId = reader.readLongOrNull(offsets[11]);
-  object.type = reader.readStringOrNull(offsets[12]);
+  object.tagKeys = reader.readStringList(offsets[10]) ?? [];
+  object.timestamp = reader.readDateTime(offsets[11]);
+  object.toAccountId = reader.readLongOrNull(offsets[12]);
+  object.type = reader.readStringOrNull(offsets[13]);
   return object;
 }
 
@@ -275,10 +289,12 @@ P _jiveAutoDraftDeserializeProp<P>(
     case 9:
       return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 11:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 12:
+      return (reader.readLongOrNull(offset)) as P;
+    case 13:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1994,6 +2010,231 @@ extension JiveAutoDraftQueryFilter
   }
 
   QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'tagKeys',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'tagKeys',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'tagKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'tagKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      tagKeysLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
       timestampEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -2703,6 +2944,12 @@ extension JiveAutoDraftQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QDistinct> distinctByTagKeys() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'tagKeys');
+    });
+  }
+
   QueryBuilder<JiveAutoDraft, JiveAutoDraft, QDistinct> distinctByTimestamp() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'timestamp');
@@ -2790,6 +3037,13 @@ extension JiveAutoDraftQueryProperty
       subCategoryKeyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'subCategoryKey');
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, List<String>, QQueryOperations>
+      tagKeysProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'tagKeys');
     });
   }
 

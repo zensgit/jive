@@ -12,6 +12,7 @@ import 'core/database/account_model.dart';
 import 'core/database/transaction_model.dart';
 import 'core/database/category_model.dart'; 
 import 'core/database/auto_draft_model.dart';
+import 'core/database/tag_model.dart';
 import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
 import 'core/service/transaction_service.dart';
@@ -20,6 +21,7 @@ import 'core/service/auto_app_registry.dart';
 import 'core/service/auto_app_settings.dart';
 import 'core/service/auto_permission_service.dart';
 import 'core/service/auto_settings.dart';
+import 'core/service/tag_service.dart';
 import 'feature/accounts/accounts_screen.dart';
 import 'feature/auto/auto_drafts_screen.dart';
 import 'feature/auto/auto_rule_tester_screen.dart';
@@ -28,6 +30,8 @@ import 'feature/auto/auto_settings_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/stats/stats_screen.dart';
 import 'feature/category/category_manager_screen.dart';
+import 'feature/tag/tag_management_screen.dart';
+import 'feature/tag/tag_icon_catalog.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -65,6 +69,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   late Isar _isar;
   List<JiveTransaction> _transactions = [];
   Map<String, JiveCategory> _categoryByKey = {};
+  Map<String, JiveTag> _tagByKey = {};
   bool _isLoading = true;
   double _totalAssets = 0;
   double _totalLiabilities = 0;
@@ -113,6 +118,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           JiveCategoryOverrideSchema,
           JiveAccountSchema,
           JiveAutoDraftSchema,
+          JiveTagSchema,
+          JiveTagGroupSchema,
         ],
         directory: dir.path,
       );
@@ -122,6 +129,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await _loadAutoAppSettings();
     await CategoryService(_isar).initDefaultCategories();
     await AccountService(_isar).initDefaultAccounts();
+    await TagService(_isar).initDefaultGroups();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
     await TransactionService(_isar).migrateTransactionAccountIds();
     _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
@@ -404,9 +412,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       await _isar.collection<JiveAccount>().clear();
       await _isar.collection<JiveCategory>().clear();
       await _isar.collection<JiveAutoDraft>().clear();
+      await _isar.collection<JiveTag>().clear();
+      await _isar.collection<JiveTagGroup>().clear();
     });
     await CategoryService(_isar).initDefaultCategories();
     await AccountService(_isar).initDefaultAccounts();
+    await TagService(_isar).initDefaultGroups();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
     await TransactionService(_isar).migrateTransactionAccountIds();
     _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
@@ -418,6 +429,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final list = await _isar.jiveTransactions.where().sortByTimestampDesc().findAll();
     final categories = await _isar.collection<JiveCategory>().where().findAll();
     final categoryMap = {for (final c in categories) c.key: c};
+    final tags = await _isar.collection<JiveTag>().where().findAll();
+    final tagMap = {for (final t in tags) t.key: t};
     final accountService = AccountService(_isar);
     final accounts = await accountService.getActiveAccounts();
     final balances = await accountService.computeBalances(accounts: accounts);
@@ -427,6 +440,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       setState(() {
         _transactions = list;
         _categoryByKey = categoryMap;
+        _tagByKey = tagMap;
         _totalAssets = totals.assets;
         _totalLiabilities = totals.liabilities;
         _isLoading = false;
@@ -805,6 +819,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             await _openCategoryManager();
                           },
                         ),
+                        ListTile(
+                          leading: const Icon(Icons.label_outline),
+                          title: const Text("标签管理"),
+                          subtitle: const Text("管理交易标签"),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TagManagementScreen(isar: _isar),
+                              ),
+                            );
+                            await _loadTransactions();
+                          },
+                        ),
                         if (kDebugMode)
                           ListTile(
                             leading: const Icon(Icons.restart_alt, color: Colors.orangeAccent),
@@ -1143,6 +1172,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final amountColor = isTransfer ? Colors.blueGrey : (isIncome ? Colors.green : Colors.redAccent);
     final parentName = _displayCategoryName(item.categoryKey, item.category);
     final subName = _displayCategoryName(item.subCategoryKey, item.subCategory);
+    final tags = item.tagKeys
+        .map((key) => _tagByKey[key])
+        .whereType<JiveTag>()
+        .toList();
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -1164,6 +1197,28 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               children: [
                 Text(parentName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 Text("$subName • ${DateFormat('MM-dd HH:mm').format(item.timestamp)}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: tags.take(3).map((tag) {
+                      final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: color.withOpacity(0.4)),
+                        ),
+                        child: Text(
+                          tagDisplayName(tag),
+                          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ],
             ),
           ),

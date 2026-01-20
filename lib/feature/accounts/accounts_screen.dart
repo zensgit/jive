@@ -13,6 +13,7 @@ import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
+import '../../core/database/tag_model.dart';
 import '../../core/service/account_service.dart';
 
 class AccountsScreen extends StatefulWidget {
@@ -71,6 +72,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
         JiveCategoryOverrideSchema,
         JiveAccountSchema,
         JiveAutoDraftSchema,
+        JiveTagSchema,
+        JiveTagGroupSchema,
       ], directory: dir.path);
     }
 

@@ -23,4 +23,5 @@ class JiveTransaction {
   String? note;               // 备注
   int? accountId;             // 账户 ID
   int? toAccountId;           // 转账目标账户 ID
+  List<String> tagKeys = [];  // 标签 Key 列表 (UUID)
 }

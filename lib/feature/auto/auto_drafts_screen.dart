@@ -10,6 +10,10 @@ import '../../core/database/transaction_model.dart';
 import '../../core/service/auto_draft_service.dart';
 import '../../core/service/auto_account_mapping.dart';
 import '../../core/service/account_service.dart';
+import '../../core/database/tag_model.dart';
+import '../../core/service/tag_service.dart';
+import '../tag/tag_icon_catalog.dart';
+import '../tag/tag_picker_sheet.dart';
 
 class AutoDraftsScreen extends StatefulWidget {
   const AutoDraftsScreen({super.key});
@@ -45,6 +49,8 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
           JiveCategoryOverrideSchema,
           JiveAccountSchema,
           JiveAutoDraftSchema,
+          JiveTagSchema,
+          JiveTagGroupSchema,
         ],
         directory: dir.path,
       );
@@ -77,6 +83,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     draft.subCategoryKey = result.subCategoryKey;
     draft.accountId = result.accountId;
     draft.toAccountId = result.toAccountId;
+    draft.tagKeys = result.tagKeys;
     await _isar.writeTxn(() async {
       await _isar.collection<JiveAutoDraft>().put(draft);
     });
@@ -109,6 +116,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       await _loadDrafts();
     }
     final options = await _loadCategoryOptions();
+    final tagService = TagService(_isar);
+    await tagService.initDefaultGroups();
+    final tags = await tagService.getTags(includeArchived: false);
+    var selectedTagKeys = List<String>.from(draft.tagKeys);
     var type = draft.type ?? (_isTransferDraft(draft) ? 'transfer' : 'expense');
     var amountText = draft.amount.toStringAsFixed(2);
     final amountController = TextEditingController(text: amountText);
@@ -152,6 +163,32 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final selectedTags = tags.where((tag) => selectedTagKeys.contains(tag.key)).toList();
+            Future<void> pickTags() async {
+              final picked = await showModalBottomSheet<List<String>>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (context) {
+                  return TagPickerSheet(
+                    tags: tags,
+                    selectedKeys: selectedTagKeys,
+                    onCreateTag: (name) async {
+                      final created = await TagService(_isar).createTag(name: name);
+                      await _loadDrafts();
+                      return created;
+                    },
+                  );
+                },
+              );
+              if (picked == null) return;
+              setSheetState(() {
+                selectedTagKeys = picked;
+              });
+            }
             void refreshCategories() {
               parentOptions = _parentsForType(type, options);
               selectedParent = _pickCategory(parentOptions, draft.categoryKey, draft.category);
@@ -324,6 +361,28 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                 ),
                               ],
                               const SizedBox(height: 12),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    for (final tag in selectedTags)
+                                      _buildDraftTagChip(
+                                        tag,
+                                        () => setSheetState(() {
+                                          selectedTagKeys.remove(tag.key);
+                                        }),
+                                      ),
+                                    ActionChip(
+                                      label: Text(selectedTags.isEmpty ? '添加标签' : '编辑标签'),
+                                      avatar: const Icon(Icons.label_outline, size: 16, color: Colors.black54),
+                                      onPressed: pickTags,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
                               if ((draft.rawText ?? '').isNotEmpty)
                                 ExpansionTile(
                                   tilePadding: EdgeInsets.zero,
@@ -397,6 +456,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                       subCategoryName: type == 'transfer'
                                           ? '转账'
                                           : (selectedSub?.name ?? draft.subCategory ?? '未分类'),
+                                      tagKeys: List<String>.from(selectedTagKeys),
                                     ),
                                   );
                                 },
@@ -522,6 +582,20 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       ],
     );
   }
+
+  Widget _buildDraftTagChip(JiveTag tag, VoidCallback onDeleted) {
+    final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+    return InputChip(
+      label: Text(
+        tagDisplayName(tag),
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+      ),
+      backgroundColor: color.withOpacity(0.12),
+      side: BorderSide(color: color.withOpacity(0.4)),
+      onDeleted: onDeleted,
+    );
+  }
+
 
   Widget _buildDraftCard(JiveAutoDraft draft) {
     final type = draft.type ?? 'expense';
@@ -1247,6 +1321,7 @@ class _DraftConfirmResult {
   final String? subCategoryKey;
   final String? categoryName;
   final String? subCategoryName;
+  final List<String> tagKeys;
 
   const _DraftConfirmResult({
     required this.amount,
@@ -1257,6 +1332,7 @@ class _DraftConfirmResult {
     required this.subCategoryKey,
     required this.categoryName,
     required this.subCategoryName,
+    required this.tagKeys,
   });
 }
 
