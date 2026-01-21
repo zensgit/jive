@@ -28,6 +28,7 @@ import 'feature/auto/auto_rule_tester_screen.dart';
 import 'feature/auto/auto_supported_apps_screen.dart';
 import 'feature/auto/auto_settings_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
+import 'feature/transactions/transaction_detail_screen.dart';
 import 'feature/stats/stats_screen.dart';
 import 'feature/category/category_manager_screen.dart';
 import 'feature/tag/tag_management_screen.dart';
@@ -1217,57 +1218,72 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         .map((key) => _tagByKey[key])
         .whereType<JiveTag>()
         .toList();
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: leadingBg,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(leadingIcon, color: leadingColor),
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () async {
+        final updated = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TransactionDetailScreen(transactionId: item.id),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(parentName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text("$subName • ${DateFormat('MM-dd HH:mm').format(item.timestamp)}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                if (tags.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: tags.take(3).map((tag) {
-                      final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: color.withOpacity(0.4)),
-                        ),
-                        child: Text(
-                          tagDisplayName(tag),
-                          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
-                        ),
-                      );
-                    }).toList(),
-                  ),
+        );
+        if (updated == true) {
+          await _loadTransactions();
+          _notifyDataChanged();
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: leadingBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(leadingIcon, color: leadingColor),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(parentName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text("$subName • ${DateFormat('MM-dd HH:mm').format(item.timestamp)}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  if (tags.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: tags.take(3).map((tag) {
+                        final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: color.withOpacity(0.4)),
+                          ),
+                          child: Text(
+                            tagDisplayName(tag),
+                            style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          Text(
-            "$amountPrefix¥${item.amount.toStringAsFixed(2)}",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: amountColor),
-          ),
-        ],
+            Text(
+              "$amountPrefix¥${item.amount.toStringAsFixed(2)}",
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: amountColor),
+            ),
+          ],
+        ),
       ),
     );
   }

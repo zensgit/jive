@@ -9,6 +9,7 @@ import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../../core/service/category_service.dart';
+import '../transactions/transaction_detail_screen.dart';
 
 class CategoryTransactionsScreen extends StatefulWidget {
   final String title;
@@ -484,52 +485,66 @@ class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
     final title = (tx.subCategory ?? '').isNotEmpty ? tx.subCategory! : (tx.category ?? '未分类');
     final parent = (tx.subCategory ?? '').isNotEmpty ? (tx.category ?? '') : '';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(
-              child: CategoryService.buildIcon(
-                icon,
-                size: 20,
-                color: Colors.grey.shade700,
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        final updated = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => TransactionDetailScreen(transactionId: tx.id),
+          ),
+        );
+        if (updated == true && mounted) {
+          await _load();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: CategoryService.buildIcon(
+                  icon,
+                  size: 20,
+                  color: Colors.grey.shade700,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  [if (parent.isNotEmpty) parent, _dateFormat.format(tx.timestamp)].join(' · '),
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                ),
-              ],
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    [if (parent.isNotEmpty) parent, _dateFormat.format(tx.timestamp)].join(' · '),
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Text(
-            '$amountPrefix${tx.amount.toStringAsFixed(2)}',
-            style: TextStyle(fontWeight: FontWeight.w600, color: amountColor),
-          ),
-        ],
+            Text(
+              '$amountPrefix${tx.amount.toStringAsFixed(2)}',
+              style: TextStyle(fontWeight: FontWeight.w600, color: amountColor),
+            ),
+          ],
+        ),
       ),
     );
   }
