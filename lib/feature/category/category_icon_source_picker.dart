@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'category_icon_picker_screen.dart';
 
-enum _CategoryIconSource { system, gallery, text }
+enum _CategoryIconSource { system, emoji, gallery, text }
 
 Future<String?> pickCategoryIcon(BuildContext context, {required String initialIcon}) async {
   final action = await showModalBottomSheet<_CategoryIconSource>(
@@ -24,13 +24,18 @@ Future<String?> pickCategoryIcon(BuildContext context, {required String initialI
             onTap: () => Navigator.pop(sheetContext, _CategoryIconSource.system),
           ),
           ListTile(
+            leading: const Icon(Icons.emoji_emotions_outlined),
+            title: const Text("表情符号"),
+            onTap: () => Navigator.pop(sheetContext, _CategoryIconSource.emoji),
+          ),
+          ListTile(
             leading: const Icon(Icons.photo_library_outlined),
             title: const Text("从相册选择"),
             onTap: () => Navigator.pop(sheetContext, _CategoryIconSource.gallery),
           ),
           ListTile(
             leading: const Icon(Icons.text_fields),
-            title: const Text("表情/文字"),
+            title: const Text("文字图标"),
             onTap: () => Navigator.pop(sheetContext, _CategoryIconSource.text),
           ),
         ],
@@ -43,7 +48,21 @@ Future<String?> pickCategoryIcon(BuildContext context, {required String initialI
       return await Navigator.push<String>(
         context,
         MaterialPageRoute(
-          builder: (context) => CategoryIconPickerScreen(initialIcon: initialIcon),
+          builder: (context) => CategoryIconPickerScreen(
+            initialIcon: initialIcon,
+            initialMode: CategoryIconPickerMode.category,
+          ),
+          fullscreenDialog: true,
+        ),
+      );
+    case _CategoryIconSource.emoji:
+      return await Navigator.push<String>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CategoryIconPickerScreen(
+            initialIcon: initialIcon,
+            initialMode: CategoryIconPickerMode.emoji,
+          ),
           fullscreenDialog: true,
         ),
       );
@@ -86,7 +105,7 @@ Future<String?> _pickTextIcon(BuildContext context, {required String initialIcon
     builder: (dialogContext) => StatefulBuilder(
       builder: (dialogContext, setStateDialog) {
         return AlertDialog(
-          title: const Text("表情/文字"),
+          title: const Text("文字图标"),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -95,7 +114,7 @@ Future<String?> _pickTextIcon(BuildContext context, {required String initialIcon
                 onChanged: (value) => setStateDialog(() => current = value.trim()),
                 maxLength: 4,
                 decoration: const InputDecoration(
-                  hintText: "输入表情或文字 (1-4字)",
+                  hintText: "输入文字 (1-4字)",
                   counterText: "",
                   border: OutlineInputBorder(),
                 ),

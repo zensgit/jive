@@ -6,7 +6,7 @@ class JiveTheme {
   static const Color accentLime = Color(0xFFDCE775);   // 嫩芽黄
   static const Color surfaceWhite = Color(0xFFF5F7FA); // 灰白背景
   static const Color cardWhite = Colors.white;
-  static const Color categoryIconInactive = Color(0xFF616161);
+  static const Color categoryIconInactive = Color(0xFF202020);
   static const Color categoryLabelInactive = Color(0xFF8E8E8E);
   static const Color categoryIconInactiveBackground = Color(0xFFF5F5F5);
   static const Color categoryIconInactiveBorder = Color(0xFFBDBDBD);

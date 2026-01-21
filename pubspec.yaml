@@ -83,6 +83,7 @@ flutter:
     - assets/account_icons/
     - assets/account_icons/banks/
     - assets/account_icons/brands/
+    - assets/emoji/
     - assets/auto_rules.json
   fonts:
     - family: Lato

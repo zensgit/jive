@@ -11,7 +11,6 @@ import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
-import '../../core/database/tag_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/utils/logger_util.dart';
 import '../stats/stats_screen.dart';
@@ -107,8 +106,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             JiveTransactionSchema,
             JiveAccountSchema,
             JiveAutoDraftSchema,
-            JiveTagSchema,
-            JiveTagGroupSchema,
           ],
           directory: dir.path,
         );
@@ -223,7 +220,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     Map<String, List<JiveCategory>> childrenByParent,
     Map<String, double> parentTotals,
   ) {
-    if (_showIncome || widget.onlyUserCategories) return [];
     final lib = _service.getSystemLibrary(isIncome: _showIncome);
     if (lib.isEmpty) return [];
 
@@ -702,10 +698,88 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     }
   }
 
+  List<_UserCategorySeed> _filterCommonSeeds(List<_UserCategorySeed> seeds) {
+    if (seeds.isEmpty) return const [];
+    final Map<String, Set<String>> userChildrenByParentName = {};
+    for (final parent in _parents) {
+      final children = _childrenByParentKey[parent.key] ?? const [];
+      userChildrenByParentName[parent.name] = children.map((c) => c.name).toSet();
+    }
+    final filtered = <_UserCategorySeed>[];
+    for (final seed in seeds) {
+      final existing = userChildrenByParentName[seed.parent] ?? const <String>{};
+      final missing = seed.children.where((name) => !existing.contains(name)).toList();
+      if (missing.isEmpty) continue;
+      filtered.add(_UserCategorySeed(seed.parent, missing));
+    }
+    return filtered;
+  }
+
+  Map<String, Map<String, dynamic>> _mergeSystemLibraries() {
+    final expense = _service.getSystemLibrary(isIncome: false);
+    final income = _service.getSystemLibrary(isIncome: true);
+    if (expense.isEmpty && income.isEmpty) return {};
+    final merged = <String, Map<String, dynamic>>{};
+
+    void merge(Map<String, Map<String, dynamic>> source) {
+      for (final entry in source.entries) {
+        final parentName = entry.key;
+        final icon = entry.value['icon'] as String?;
+        final rawChildren = entry.value['children'] as List<dynamic>? ?? const [];
+        final children = <Map<String, dynamic>>[];
+        for (final child in rawChildren) {
+          if (child is Map) {
+            children.add(Map<String, dynamic>.from(child));
+          }
+        }
+
+        final existing = merged[parentName];
+        if (existing == null) {
+          merged[parentName] = {
+            'icon': icon ?? "category",
+            'children': children,
+          };
+          continue;
+        }
+
+        final existingIcon = existing['icon'] as String?;
+        if ((existingIcon == null || existingIcon.isEmpty || existingIcon == "category") &&
+            icon != null &&
+            icon.isNotEmpty) {
+          existing['icon'] = icon;
+        }
+
+        final existingChildren = (existing['children'] as List<dynamic>? ?? []);
+        final existingNames = <String>{};
+        for (final child in existingChildren) {
+          if (child is Map) {
+            final name = (child['name'] as String? ?? "").trim();
+            if (name.isNotEmpty) existingNames.add(name);
+          }
+        }
+        for (final child in children) {
+          final name = (child['name'] as String? ?? "").trim();
+          if (name.isEmpty || existingNames.contains(name)) continue;
+          existingChildren.add(Map<String, dynamic>.from(child));
+          existingNames.add(name);
+        }
+        existing['children'] = existingChildren;
+      }
+    }
+
+    merge(expense);
+    merge(income);
+    return merged;
+  }
+
   List<_UserCategorySeed> _commonSeedsForCurrentType() {
+    final fallbackSeeds = _showIncome ? _fallbackIncomeSeeds : _fallbackExpenseSeeds;
+    if (widget.onlyUserCategories) {
+      return _filterCommonSeeds(fallbackSeeds);
+    }
     final lib = _service.getSystemLibrary(isIncome: _showIncome);
     if (lib.isEmpty) {
-      return _showIncome ? _fallbackIncomeSeeds : _fallbackExpenseSeeds;
+      return _filterCommonSeeds(fallbackSeeds);
     }
 
     final userParents = _parents;
@@ -783,32 +857,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     return _service.suggestIconName(childName, fallback: _resolveSystemParentIcon(parentName));
   }
 
-  Map<String, String> _buildSystemChildParentIndex(Map<String, Map<String, dynamic>> lib) {
-    final index = <String, String>{};
-    for (final entry in lib.entries) {
-      final parentName = entry.key;
-      final children = entry.value['children'] as List<dynamic>? ?? const [];
-      for (final child in children) {
-        final name = (child['name'] as String? ?? "").trim();
-        if (name.isEmpty) continue;
-        index.putIfAbsent(name, () => parentName);
-      }
-    }
-    return index;
-  }
-
-  bool _isSystemParentSuggestion(SystemCategorySuggestion suggestion, Map<String, Map<String, dynamic>> lib) {
-    return suggestion.isParent || lib.containsKey(suggestion.name);
-  }
-
-  String? _resolveParentForSuggestion(
-    SystemCategorySuggestion suggestion,
-    Map<String, String> childParentIndex,
-  ) {
-    return suggestion.parentName ?? childParentIndex[suggestion.name];
-  }
-
-  Future<JiveCategory?> _ensureUserParent(String name, {String? colorHex}) async {
+  Future<JiveCategory?> _ensureUserParent(
+    String name, {
+    String? colorHex,
+    String? iconName,
+  }) async {
     final existing = await _isar.collection<JiveCategory>()
         .filter()
         .parentKeyIsNull()
@@ -817,10 +870,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         .nameEqualTo(name)
         .findFirst();
     if (existing != null) return existing;
-    final iconName = _resolveSystemParentIcon(name);
+    final resolvedIcon = iconName ?? _resolveSystemParentIcon(name);
     return await _service.createParentCategory(
       name: name,
-      iconName: iconName,
+      iconName: resolvedIcon,
       isIncome: _showIncome,
       isSystem: false,
       colorHex: colorHex,
@@ -928,8 +981,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         .findAll())
         .map((parent) => parent.name)
         .toSet();
-    final systemLibrary = _service.getSystemLibrary(isIncome: _showIncome);
-    final childParentIndex = _buildSystemChildParentIndex(systemLibrary);
+    final systemLibrary = _mergeSystemLibraries();
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
@@ -955,46 +1007,30 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final skipped = <String>[];
     var createdAny = false;
 
+    final existingParentNames = {...existingNames};
     for (final selection in result.systemSelections) {
-      if (_isSystemParentSuggestion(selection, systemLibrary)) {
-        final parent = await _ensureUserParent(selection.name, colorHex: result.colorHex);
-        if (parent != null) {
-          createdAny = true;
-        } else {
-          skipped.add(selection.name);
-        }
+      if (existingParentNames.contains(selection.name)) {
+        skipped.add(selection.name);
         continue;
       }
-      final parentName = _resolveParentForSuggestion(selection, childParentIndex);
-      if (parentName == null) {
-        final parent = await _ensureUserParent(selection.name, colorHex: result.colorHex);
-        if (parent != null) {
-          createdAny = true;
-        } else {
-          skipped.add(selection.name);
-        }
-        continue;
-      }
-      final parent = await _ensureUserParent(parentName, colorHex: result.colorHex);
-      if (parent == null) {
-        skipped.add("${parentName}·${selection.name}");
-        continue;
-      }
-      final created = await _service.createSubCategory(
-        parent: parent,
-        name: selection.name,
-        iconName: selection.iconName,
+      final parent = await _ensureUserParent(
+        selection.name,
         colorHex: result.colorHex,
-        isSystem: false,
+        iconName: selection.iconName,
       );
-      if (created == null) {
-        skipped.add("${parentName}·${selection.name}");
-      } else {
+      if (parent != null) {
         createdAny = true;
+        existingParentNames.add(selection.name);
+      } else {
+        skipped.add(selection.name);
       }
     }
 
     for (final name in result.names) {
+      if (existingParentNames.contains(name)) {
+        skipped.add(name);
+        continue;
+      }
       final iconName = result.autoMatchIcon
           ? _service.suggestIconName(name, fallback: result.iconName)
           : result.iconName;
@@ -1008,6 +1044,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         skipped.add(name);
       } else {
         createdAny = true;
+        existingParentNames.add(name);
       }
     }
 
@@ -1680,7 +1717,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _initData,
-              style: ElevatedButton.styleFrom(backgroundColor: JiveTheme.primaryGreen),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: JiveTheme.primaryGreen,
+                foregroundColor: Colors.white,
+              ),
               child: const Text("重试"),
             ),
           ],
@@ -1751,6 +1791,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
   Widget _buildCommonUserSection() {
     if (!widget.onlyUserCategories) return const SizedBox.shrink();
+    if (_parents.isNotEmpty) return const SizedBox.shrink();
     final seeds = _commonSeedsForCurrentType();
     if (seeds.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -2316,7 +2357,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _isAddingCommonSeeds ? null : _addAllCommonSeeds,
-              style: ElevatedButton.styleFrom(backgroundColor: JiveTheme.primaryGreen),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: JiveTheme.primaryGreen,
+                foregroundColor: Colors.white,
+              ),
               child: Text(_isAddingCommonSeeds ? "添加中..." : "一键添加常用分类"),
             ),
           ],
@@ -2337,7 +2381,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => _promptAddParentCategory(initialText: query),
-            style: ElevatedButton.styleFrom(backgroundColor: JiveTheme.primaryGreen),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: JiveTheme.primaryGreen,
+              foregroundColor: Colors.white,
+            ),
             child: const Text("创建一级分类"),
           ),
           const SizedBox(height: 8),
