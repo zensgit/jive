@@ -14,9 +14,17 @@ import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/service/account_service.dart';
+import 'account_reconcile_screen.dart';
 
 class AccountsScreen extends StatefulWidget {
-  const AccountsScreen({super.key});
+  final ValueListenable<int>? reloadSignal;
+  final VoidCallback? onDataChanged;
+
+  const AccountsScreen({
+    super.key,
+    this.reloadSignal,
+    this.onDataChanged,
+  });
 
   @override
   State<AccountsScreen> createState() => _AccountsScreenState();
@@ -58,6 +66,26 @@ class _AccountsScreenState extends State<AccountsScreen> {
   void initState() {
     super.initState();
     _loadAccounts();
+    widget.reloadSignal?.addListener(_handleReload);
+  }
+
+  @override
+  void didUpdateWidget(covariant AccountsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reloadSignal != widget.reloadSignal) {
+      oldWidget.reloadSignal?.removeListener(_handleReload);
+      widget.reloadSignal?.addListener(_handleReload);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.reloadSignal?.removeListener(_handleReload);
+    super.dispose();
+  }
+
+  void _handleReload() {
+    _loadAccounts();
   }
 
   Future<void> _loadAccounts() async {
@@ -97,6 +125,18 @@ class _AccountsScreenState extends State<AccountsScreen> {
     final draft = await _showAccountFormSheet();
     if (draft == null) return;
     await _applyAccountDraft(draft);
+  }
+
+  Future<void> _openReconcile(JiveAccount account) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AccountReconcileScreen(
+          accountId: account.id,
+          onDataChanged: widget.onDataChanged,
+        ),
+      ),
+    );
   }
 
   Future<void> _applyAccountDraft(_AccountDraft draft) async {
@@ -1298,13 +1338,40 @@ class _AccountsScreenState extends State<AccountsScreen> {
                 ],
               ),
             ),
-            Text(
-              NumberFormat.currency(symbol: "¥").format(displayBalance),
-              style: GoogleFonts.rubik(
-                color: amountColor,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  NumberFormat.currency(symbol: "¥").format(displayBalance),
+                  style: GoogleFonts.rubik(
+                    color: amountColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                TextButton(
+                  onPressed: () => _openReconcile(account),
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: Colors.grey.shade600,
+                    textStyle: GoogleFonts.lato(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.receipt_long, size: 14),
+                      SizedBox(width: 4),
+                      Text('对账'),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ),

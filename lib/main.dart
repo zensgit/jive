@@ -28,6 +28,7 @@ import 'feature/auto/auto_settings_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/stats/stats_screen.dart';
 import 'feature/category/category_manager_screen.dart';
+import 'feature/category/category_transactions_screen.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -79,6 +80,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Map<String, bool> _autoAppEnabled = {};
   int _autoAppEnabledCount = AutoAppRegistry.apps.length;
   bool _permissionDialogVisible = false;
+  final ValueNotifier<int> _dataReloadSignal = ValueNotifier(0);
 
   @override
   void initState() {
@@ -91,7 +93,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _dataReloadSignal.dispose();
     super.dispose();
+  }
+
+  void _notifyDataChanged() {
+    _dataReloadSignal.value += 1;
   }
 
   @override
@@ -412,6 +419,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
     await _loadTransactions();
     await _loadAutoDraftCount();
+    _notifyDataChanged();
   }
 
   Future<void> _loadTransactions() async {
@@ -493,6 +501,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await _loadAutoDraftCount();
     if (result.committed) {
       await _loadTransactions();
+      _notifyDataChanged();
       _showMessage("已自动入账");
       return;
     }
@@ -560,6 +569,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (changed == true) {
       await _loadTransactions();
       await _loadAutoDraftCount();
+      _notifyDataChanged();
     }
   }
 
@@ -606,8 +616,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         index: _currentIndex,
         children: [
           _buildHomeContent(),
-          const StatsScreen(),
-          const AccountsScreen(),
+          StatsScreen(reloadSignal: _dataReloadSignal),
+          AccountsScreen(
+            reloadSignal: _dataReloadSignal,
+            onDataChanged: _notifyDataChanged,
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -618,6 +631,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           );
           if (result == true) {
             _loadTransactions();
+            _notifyDataChanged();
           }
         },
         child: const Icon(Icons.add, size: 32),
@@ -626,7 +640,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         backgroundColor: Colors.white,
         elevation: 0,
         selectedIndex: _currentIndex,
-        onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+        onDestinationSelected: (idx) {
+          setState(() => _currentIndex = idx);
+          if (idx == 1 || idx == 2) {
+            _notifyDataChanged();
+          }
+        },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_filled), label: "Home"),
           NavigationDestination(icon: Icon(Icons.pie_chart), label: "Stats"),
@@ -775,6 +794,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             Navigator.pop(context);
                             final inserted = await _seedDemoDataIfNeeded();
                             await _loadTransactions();
+                            if (inserted) {
+                              _notifyDataChanged();
+                            }
                             _showMessage(inserted ? "已注入测试数据" : "已有数据，未注入测试数据");
                           },
                         ),
@@ -1029,7 +1051,26 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text("Recent Transactions", style: GoogleFonts.lato(fontSize: titleSize, fontWeight: FontWeight.bold, color: Colors.black87)),
-          Text("View All", style: GoogleFonts.lato(color: JiveTheme.primaryGreen, fontWeight: FontWeight.bold, fontSize: actionSize)),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CategoryTransactionsScreen(
+                    title: "全部账单",
+                  ),
+                ),
+              );
+            },
+            child: Text(
+              "View All",
+              style: GoogleFonts.lato(
+                color: JiveTheme.primaryGreen,
+                fontWeight: FontWeight.bold,
+                fontSize: actionSize,
+              ),
+            ),
+          ),
         ],
       ),
     );
