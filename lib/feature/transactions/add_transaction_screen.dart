@@ -1,8 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/transaction_model.dart';
@@ -21,11 +25,17 @@ import '../category/category_search_delegate.dart';
 import '../stats/stats_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
+import 'note_field_with_chips.dart';
 
 enum TransactionType { expense, income, transfer }
 
 class AddTransactionScreen extends StatefulWidget {
-  const AddTransactionScreen({super.key});
+  final JiveTransaction? editingTransaction;
+
+  const AddTransactionScreen({
+    super.key,
+    this.editingTransaction,
+  });
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -35,6 +45,31 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   static const List<String> _accountGroupOrder = [
     ...AccountService.groupOrder,
   ];
+  static const List<String> _expenseNoteSuggestions = [
+    '早餐',
+    '午餐',
+    '晚餐',
+    '交通',
+    '打车',
+    '网购',
+    '房租',
+    '水电',
+  ];
+  static const List<String> _incomeNoteSuggestions = [
+    '工资',
+    '报销',
+    '奖金',
+    '退款',
+    '理财',
+    '兼职',
+  ];
+  static const List<String> _transferNoteSuggestions = [
+    '还款',
+    '储蓄',
+    '调拨',
+    '借还',
+  ];
+  static const String _noteTagUsageKeyPrefix = 'note_tag_usage_v1_';
 
   String _amountStr = "0";
   late Isar _isar;
@@ -42,7 +77,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   bool _hasDataChanges = false;
   bool _isFallbackMode = false;
   bool _isSearchMode = false;
+  bool _isEditing = false;
   TransactionType _txType = TransactionType.expense;
+  DateTime _selectedTime = DateTime.now();
+  final TextEditingController _noteController = TextEditingController();
+  final Map<TransactionType, Map<String, int>> _noteTagUsage = {};
+  int? _editingAccountId;
+  int? _editingToAccountId;
+  String? _editingParentKey;
+  String? _editingParentName;
+  String? _editingSubKey;
+  String? _editingSubName;
   List<JiveCategory> _parentCategories = [];
   List<JiveCategory> _subCategories = [];
   JiveCategory? _selectedParent;
@@ -57,6 +102,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final Map<String, String> _searchKeyCache = {};
   final TextEditingController _inlineSearchController = TextEditingController();
   final FocusNode _inlineSearchFocus = FocusNode();
+  final DateFormat _dateTimeFormat = DateFormat('MM-dd HH:mm');
   String _searchQuery = "";
   final Map<String, List<String>> _searchTokenCache = {};
   final Map<String, List<String>> _systemTokenCache = {};
@@ -72,6 +118,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeEditingState();
+    _loadNoteTagUsage();
     _initData();
   }
 
@@ -79,7 +127,25 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void dispose() {
     _inlineSearchController.dispose();
     _inlineSearchFocus.dispose();
+    _noteController.dispose();
     super.dispose();
+  }
+
+  void _initializeEditingState() {
+    final editing = widget.editingTransaction;
+    if (editing == null) return;
+    _isEditing = true;
+    _amountStr = _formatAmountInput(editing.amount);
+    _selectedTime = editing.timestamp;
+    _txType = _parseTxType(editing.type);
+    _editingAccountId = editing.accountId;
+    _editingToAccountId = editing.toAccountId;
+    _editingParentKey = editing.categoryKey;
+    _editingParentName = editing.category;
+    _editingSubKey = editing.subCategoryKey;
+    _editingSubName = editing.subCategory;
+    _noteController.text = editing.note ?? '';
+    _selectedTagKeys = List<String>.from(editing.tagKeys);
   }
 
   Future<void> _initData() async {
@@ -109,7 +175,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       await TagService(_isar).initDefaultGroups();
       await _loadAccounts();
       await _loadTags();
-      await _loadParentsForType();
+      await _loadTags();
+      await _loadParentsForType(
+        selectParentKey: _editingParentKey,
+        selectParentName: _editingParentName,
+        selectSubKey: _editingSubKey,
+        selectSubName: _editingSubName,
+      );
     } catch (e, s) {
       JiveLogger.e("Error loading categories", e, s);
     } finally {
@@ -117,7 +189,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
-  Future<void> _loadParentsForType() async {
+  Future<void> _loadParentsForType({
+    String? selectParentKey,
+    String? selectParentName,
+    String? selectSubKey,
+    String? selectSubName,
+  }) async {
     if (_txType == TransactionType.transfer) {
       _isFallbackMode = false;
       if (mounted) {
@@ -157,17 +234,41 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     if (parents.isNotEmpty) {
+      JiveCategory? selected;
+      if (selectParentKey != null) {
+        for (final parent in parents) {
+          if (parent.key == selectParentKey) {
+            selected = parent;
+            break;
+          }
+        }
+      }
+      if (selected == null && selectParentName != null && selectParentName.isNotEmpty) {
+        for (final parent in parents) {
+          if (parent.name == selectParentName) {
+            selected = parent;
+            break;
+          }
+        }
+      }
+      if (selected == null &&
+          _selectedParent != null &&
+          parents.any((p) => p.key == _selectedParent!.key)) {
+        selected = _selectedParent;
+      }
+      selected ??= parents.first;
+
       if (mounted) {
         setState(() {
           _parentCategories = parents;
-          if (_selectedParent == null || !_parentCategories.any((p) => p.key == _selectedParent!.key)) {
-            _selectedParent = parents.first;
-            _loadSubCategories(_selectedParent!.key);
-          } else {
-            _loadSubCategories(_selectedParent!.key);
-          }
+          _selectedParent = selected;
         });
       }
+      await _loadSubCategories(
+        selected.key,
+        selectKey: selectSubKey,
+        selectName: selectSubName,
+      );
     } else if (mounted) {
       setState(() {
         _parentCategories = [];
@@ -185,20 +286,31 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (!mounted) return;
 
     JiveAccount? selectedAccount = _selectedAccount;
-    if (selectedAccount == null || !accounts.any((a) => a.id == selectedAccount!.id)) {
-      selectedAccount = accounts.isNotEmpty ? accounts.first : null;
+    if (accounts.isEmpty) {
+      selectedAccount = null;
+    } else if (_editingAccountId != null) {
+      selectedAccount = accounts.firstWhere(
+        (a) => a.id == _editingAccountId,
+        orElse: () => accounts.first,
+      );
+    } else if (selectedAccount == null || !accounts.any((a) => a.id == selectedAccount!.id)) {
+      selectedAccount = accounts.first;
     }
 
     JiveAccount? selectedTo = _selectedToAccount;
+    if (_editingToAccountId != null && accounts.isNotEmpty) {
+      selectedTo = accounts.firstWhere(
+        (a) => a.id == _editingToAccountId,
+        orElse: () => selectedTo ?? accounts.first,
+      );
+    }
     if (selectedTo == null || (selectedAccount != null && selectedTo.id == selectedAccount.id)) {
-      if (selectedAccount != null) {
-        selectedTo = accounts.firstWhere(
-          (a) => a.id != selectedAccount!.id,
-          orElse: () => selectedAccount!,
-        );
-      } else {
-        selectedTo = null;
-      }
+      selectedTo = selectedAccount == null
+          ? null
+          : accounts.firstWhere(
+              (a) => a.id != selectedAccount!.id,
+              orElse: () => selectedAccount!,
+            );
     }
 
     setState(() {
@@ -262,7 +374,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  Future<void> _loadSubCategories(String parentKey, {String? selectKey}) async {
+  Future<void> _loadSubCategories(
+    String parentKey, {
+    String? selectKey,
+    String? selectName,
+  }) async {
     var subs = await _isar.collection<JiveCategory>()
         .filter()
         .parentKeyEqualTo(parentKey)
@@ -301,6 +417,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         if (subs.isNotEmpty) {
           if (preserveKey != null) {
             final match = subs.where((item) => item.key == preserveKey);
+            _selectedSub = match.isEmpty ? null : match.first;
+          } else if (selectName != null && selectName.isNotEmpty) {
+            final match = subs.where((item) => item.name == selectName);
             _selectedSub = match.isEmpty ? null : match.first;
           } else {
             _selectedSub = null;
@@ -624,6 +743,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   void _onKeyPress(String key) {
+    if (key == 'date') {
+      _pickTransactionDate();
+      return;
+    }
     setState(() {
       if (key == 'DEL') {
         if (_amountStr.length > 1) {
@@ -646,6 +769,30 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     });
   }
 
+  Future<void> _pickTransactionDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedTime,
+      firstDate: DateTime(2010),
+      lastDate: DateTime.now(),
+    );
+    if (date == null) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_selectedTime),
+    );
+    if (time == null) return;
+    setState(() {
+      _selectedTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
   Future<void> _saveTransaction() async {
     final amount = double.tryParse(_amountStr);
     if (amount == null || amount <= 0) return;
@@ -661,25 +808,31 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ? "转账"
         : "${_selectedParent!.name} - ${_selectedSub?.name ?? ''}";
 
-    final newTx = JiveTransaction()
+    final tx = widget.editingTransaction ?? JiveTransaction();
+    final source = _isEditing ? tx.source : "Manual";
+    final note = _noteController.text.trim();
+    final existingRawText = tx.rawText;
+    final useRawText = _isEditing && source != "Manual" && existingRawText != null;
+    tx
       ..amount = amount
-      ..source = "Manual"
+      ..source = source ?? "Manual"
       ..type = typeValue
       ..categoryKey = _txType == TransactionType.transfer ? null : _selectedParent!.key
       ..subCategoryKey = _txType == TransactionType.transfer ? null : _selectedSub?.key
       ..category = parentName
       ..subCategory = subName
-      ..rawText = rawText
+      ..rawText = useRawText ? existingRawText : rawText
+      ..note = note.isEmpty ? null : note
       ..accountId = _selectedAccount?.id
       ..toAccountId = _txType == TransactionType.transfer ? _selectedToAccount?.id : null
       ..tagKeys = List<String>.from(_selectedTagKeys)
-      ..timestamp = DateTime.now();
+      ..timestamp = _selectedTime;
 
     await _isar.writeTxn(() async {
-      await _isar.jiveTransactions.put(newTx);
+      await _isar.jiveTransactions.put(tx);
     });
     if (_selectedTagKeys.isNotEmpty) {
-      await TagService(_isar).markTagsUsed(_selectedTagKeys, newTx.timestamp);
+      await TagService(_isar).markTagsUsed(_selectedTagKeys, tx.timestamp);
     }
 
     JiveLogger.i("Manual Transaction Saved: $amount");
@@ -710,6 +863,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
     final hideAmountInSearch = _isSearchMode && isKeyboardVisible;
+    final showCustomKeyboard = !_isSearchMode && !isKeyboardVisible;
 
     final amountHeader = Center(
       child: Column(
@@ -718,6 +872,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           Text(
             _currentCategoryLabel(),
             style: GoogleFonts.lato(color: Colors.grey.shade500, fontSize: isLandscape ? 12 : 14),
+          ),
+          SizedBox(height: isLandscape ? 4 : 8),
+          GestureDetector(
+            onTap: _pickTransactionDate,
+            child: Text(
+              _dateTimeFormat.format(_selectedTime),
+              style: GoogleFonts.lato(
+                color: Colors.grey.shade500,
+                fontSize: isLandscape ? 11 : 12,
+              ),
+            ),
           ),
           SizedBox(height: labelSpacing),
           Row(
@@ -754,6 +919,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ),
           ],
           SizedBox(height: isLandscape ? 6 : 10),
+          _buildNoteField(isLandscape: isLandscape),
+          SizedBox(height: isLandscape ? 6 : 8),
           _buildTagSelector(isLandscape: isLandscape),
         ],
       ),
@@ -766,9 +933,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             padding: const EdgeInsets.only(top: 8, bottom: 4),
             child: amountHeader,
           )
-        : Expanded(
-            flex: 1,
-            child: amountHeader,
+        : Flexible(
+            fit: FlexFit.loose,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: amountHeader,
+            ),
           );
 
     return WillPopScope(
@@ -890,7 +1060,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                         : _buildTransferHint(),
                   ),
 
-                  if (!_isSearchMode) ...[
+                  if (showCustomKeyboard) ...[
                     const Divider(height: 1, color: Colors.black12),
 
                     // C. 数字键盘
@@ -1282,6 +1452,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   String _formatMoney(double value) {
     final rounded = value.roundToDouble();
     return value == rounded ? value.toStringAsFixed(0) : value.toStringAsFixed(2);
+  }
+
+  String _formatAmountInput(double value) {
+    final text = value.toStringAsFixed(2);
+    return text.replaceAll(RegExp(r'\.?0+$'), '');
+  }
+
+  TransactionType _parseTxType(String? type) {
+    switch (type) {
+      case 'income':
+        return TransactionType.income;
+      case 'transfer':
+        return TransactionType.transfer;
+      default:
+        return TransactionType.expense;
+    }
   }
 
   Widget _buildInlineSearchField() {
@@ -1678,6 +1864,90 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       if (token.startsWith(query)) return true;
     }
     return false;
+  }
+
+  Future<void> _loadNoteTagUsage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loaded = <TransactionType, Map<String, int>>{};
+    for (final type in TransactionType.values) {
+      final raw = prefs.getString('$_noteTagUsageKeyPrefix${type.name}');
+      if (raw == null) continue;
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(raw);
+      } catch (_) {
+        continue;
+      }
+      if (decoded is! Map) continue;
+      final map = <String, int>{};
+      decoded.forEach((key, value) {
+        if (key is String && value is num) {
+          map[key] = value.toInt();
+        }
+      });
+      if (map.isNotEmpty) {
+        loaded[type] = map;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _noteTagUsage
+        ..clear()
+        ..addAll(loaded);
+    });
+  }
+
+  Future<void> _persistNoteTagUsage(TransactionType type) async {
+    final prefs = await SharedPreferences.getInstance();
+    final usage = _noteTagUsage[type];
+    final key = '$_noteTagUsageKeyPrefix${type.name}';
+    if (usage == null || usage.isEmpty) {
+      await prefs.remove(key);
+      return;
+    }
+    await prefs.setString(key, jsonEncode(usage));
+  }
+
+  void _trackNoteTagUsage(TransactionType type, String tag) {
+    final usage = _noteTagUsage.putIfAbsent(type, () => {});
+    usage[tag] = (usage[tag] ?? 0) + 1;
+    _persistNoteTagUsage(type);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  List<String> _noteSuggestionsForType(TransactionType type) {
+    final base = switch (type) {
+      TransactionType.income => _incomeNoteSuggestions,
+      TransactionType.transfer => _transferNoteSuggestions,
+      _ => _expenseNoteSuggestions,
+    };
+    final usage = _noteTagUsage[type];
+    if (usage == null || usage.isEmpty) return base;
+    final order = <String, int>{
+      for (var i = 0; i < base.length; i++) base[i]: i,
+    };
+    final sorted = [...base];
+    sorted.sort((a, b) {
+      final countA = usage[a] ?? 0;
+      final countB = usage[b] ?? 0;
+      if (countA != countB) {
+        return countB.compareTo(countA);
+      }
+      return (order[a] ?? 0).compareTo(order[b] ?? 0);
+    });
+    return sorted;
+  }
+
+  Widget _buildNoteField({required bool isLandscape}) {
+    final currentType = _txType;
+    return NoteFieldWithChips(
+      controller: _noteController,
+      isLandscape: isLandscape,
+      suggestions: _noteSuggestionsForType(currentType),
+      onTagSelected: (tag) => _trackNoteTagUsage(currentType, tag),
+    );
   }
 
 

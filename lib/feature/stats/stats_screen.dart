@@ -1,4 +1,5 @@
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -14,11 +15,13 @@ import '../../core/service/account_service.dart';
 class StatsScreen extends StatefulWidget {
   final String? filterCategoryKey;
   final String? filterSubCategoryKey;
+  final ValueListenable<int>? reloadSignal;
 
   const StatsScreen({
     super.key,
     this.filterCategoryKey,
     this.filterSubCategoryKey,
+    this.reloadSignal,
   });
 
   @override
@@ -42,6 +45,26 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   void initState() {
     super.initState();
+    _loadStats();
+    widget.reloadSignal?.addListener(_handleReload);
+  }
+
+  @override
+  void didUpdateWidget(covariant StatsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reloadSignal != widget.reloadSignal) {
+      oldWidget.reloadSignal?.removeListener(_handleReload);
+      widget.reloadSignal?.addListener(_handleReload);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.reloadSignal?.removeListener(_handleReload);
+    super.dispose();
+  }
+
+  void _handleReload() {
     _loadStats();
   }
 

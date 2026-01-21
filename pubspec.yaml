@@ -49,6 +49,7 @@ dependencies:
   lpinyin: ^2.0.3
   crypto: ^3.0.6
   flutter_colorpicker: ^1.1.0
+  table_calendar: ^3.0.9
 
 dev_dependencies:
   flutter_test:

@@ -21,7 +21,9 @@ class JiveTransaction {
   String? subCategoryKey;     // 子分类 Key (稳定标识)
   String? type;               // expense | income | transfer
   String? note;               // 备注
+  @Index()
   int? accountId;             // 账户 ID
+  @Index()
   int? toAccountId;           // 转账目标账户 ID
   List<String> tagKeys = [];  // 标签 Key 列表 (UUID)
 }

@@ -127,6 +127,32 @@ const JiveTransactionSchema = CollectionSchema(
           caseSensitive: true,
         )
       ],
+    ),
+    r'accountId': IndexSchema(
+      id: -1591555361937770434,
+      name: r'accountId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'accountId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'toAccountId': IndexSchema(
+      id: 1956423193434608400,
+      name: r'toAccountId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'toAccountId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
     )
   },
   links: {},
@@ -304,6 +330,22 @@ extension JiveTransactionQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'timestamp'),
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhere> anyAccountId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'accountId'),
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhere> anyToAccountId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'toAccountId'),
       );
     });
   }
@@ -603,6 +645,236 @@ extension JiveTransactionQueryWhere
               includeUpper: false,
             ));
       }
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      accountIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'accountId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      accountIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'accountId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      accountIdEqualTo(int? accountId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'accountId',
+        value: [accountId],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      accountIdNotEqualTo(int? accountId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'accountId',
+              lower: [],
+              upper: [accountId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'accountId',
+              lower: [accountId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'accountId',
+              lower: [accountId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'accountId',
+              lower: [],
+              upper: [accountId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      accountIdGreaterThan(
+    int? accountId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'accountId',
+        lower: [accountId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      accountIdLessThan(
+    int? accountId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'accountId',
+        lower: [],
+        upper: [accountId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      accountIdBetween(
+    int? lowerAccountId,
+    int? upperAccountId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'accountId',
+        lower: [lowerAccountId],
+        includeLower: includeLower,
+        upper: [upperAccountId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      toAccountIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'toAccountId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      toAccountIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'toAccountId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      toAccountIdEqualTo(int? toAccountId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'toAccountId',
+        value: [toAccountId],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      toAccountIdNotEqualTo(int? toAccountId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'toAccountId',
+              lower: [],
+              upper: [toAccountId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'toAccountId',
+              lower: [toAccountId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'toAccountId',
+              lower: [toAccountId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'toAccountId',
+              lower: [],
+              upper: [toAccountId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      toAccountIdGreaterThan(
+    int? toAccountId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'toAccountId',
+        lower: [toAccountId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      toAccountIdLessThan(
+    int? toAccountId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'toAccountId',
+        lower: [],
+        upper: [toAccountId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      toAccountIdBetween(
+    int? lowerToAccountId,
+    int? upperToAccountId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'toAccountId',
+        lower: [lowerToAccountId],
+        includeLower: includeLower,
+        upper: [upperToAccountId],
+        includeUpper: includeUpper,
+      ));
     });
   }
 }
