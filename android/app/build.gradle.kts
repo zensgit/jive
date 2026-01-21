@@ -1,3 +1,7 @@
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -9,6 +13,7 @@ android {
     namespace = "com.jive.app"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
+    val buildTime = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -31,6 +36,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            versionNameSuffix = "-$buildTime"
+        }
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
