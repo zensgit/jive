@@ -8,19 +8,24 @@ import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/database/tag_model.dart';
+import '../../core/database/tag_conversion_log.dart';
 import '../../core/design_system/theme.dart';
 import 'add_transaction_screen.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final int transactionId;
+  final bool isSheet;
 
   const TransactionDetailScreen({
     super.key,
     required this.transactionId,
+    this.isSheet = false,
   });
 
   @override
-  State<TransactionDetailScreen> createState() => _TransactionDetailScreenState();
+  State<TransactionDetailScreen> createState() =>
+      _TransactionDetailScreenState();
 }
 
 class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
@@ -52,10 +57,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       if (tx == null) {
         throw StateError('transaction_missing');
       }
-      final categories =
-          await isar.collection<JiveCategory>().where().findAll();
-      final accounts =
-          await isar.collection<JiveAccount>().where().findAll();
+      final categories = await isar
+          .collection<JiveCategory>()
+          .where()
+          .findAll();
+      final accounts = await isar.collection<JiveAccount>().where().findAll();
 
       if (!mounted) return;
       setState(() {
@@ -84,16 +90,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       return _isar!;
     }
     final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open(
-      [
-        JiveTransactionSchema,
-        JiveCategorySchema,
-        JiveCategoryOverrideSchema,
-        JiveAccountSchema,
-        JiveAutoDraftSchema,
-      ],
-      directory: dir.path,
-    );
+    _isar = await Isar.open([
+      JiveTransactionSchema,
+      JiveCategorySchema,
+      JiveCategoryOverrideSchema,
+      JiveAccountSchema,
+      JiveAutoDraftSchema,
+      JiveTagSchema,
+      JiveTagGroupSchema,
+      JiveTagConversionLogSchema,
+    ], directory: dir.path);
     return _isar!;
   }
 
@@ -109,6 +115,23 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (updated == true) {
       _hasDataChanges = true;
       await _loadData();
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  Future<void> _copyTransaction() async {
+    final tx = _transaction;
+    if (tx == null) return;
+    final updated = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddTransactionScreen(prefillTransaction: tx),
+      ),
+    );
+    if (updated == true) {
+      _hasDataChanges = true;
       if (mounted) {
         setState(() {});
       }
@@ -150,24 +173,84 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         Navigator.pop(context, _hasDataChanges);
         return false;
       },
-      child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context, _hasDataChanges),
-          ),
-          title: Text(
-            '交易详情',
-            style: GoogleFonts.lato(fontWeight: FontWeight.w600),
-          ),
-          centerTitle: true,
+      child: widget.isSheet ? _buildSheet() : _buildScreen(),
+    );
+  }
+
+  Widget _buildScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context, _hasDataChanges),
         ),
-        body: _buildBody(),
+        title: Text(
+          '交易详情',
+          style: GoogleFonts.lato(fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildSheet() {
+    return SafeArea(
+      top: false,
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.67,
+        minChildSize: 0.5,
+        maxChildSize: 1.0,
+        expand: false,
+        builder: (context, scrollController) {
+          return Material(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '交易详情',
+                          style: GoogleFonts.lato(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () =>
+                            Navigator.pop(context, _hasDataChanges),
+                        icon: const Icon(Icons.close),
+                        tooltip: '关闭',
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(child: _buildBody(scrollController: scrollController)),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody({ScrollController? scrollController}) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -209,14 +292,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         if (subtitle.isNotEmpty)
           Text(
             subtitle,
-            style: GoogleFonts.lato(
-              fontSize: 12,
-              color: Colors.grey.shade500,
-            ),
+            style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade500),
           ),
         const SizedBox(height: 20),
         Expanded(
           child: ListView(
+            controller: scrollController,
+            physics: scrollController == null
+                ? const ClampingScrollPhysics()
+                : const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 20),
             children: [
               _buildDetailCard([
@@ -226,18 +310,22 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               ]),
               const SizedBox(height: 12),
               _buildDetailCard([
-                if (!isTransfer)
-                  _buildDetailRow('分类', _categoryTitle(tx)),
-                if (!isTransfer)
-                  _buildDetailRow('子类', _categorySubtitle(tx)),
+                if (!isTransfer) _buildDetailRow('分类', _categoryTitle(tx)),
+                if (!isTransfer) _buildDetailRow('子类', _categorySubtitle(tx)),
                 _buildDetailRow('账户', _resolveAccountName(tx.accountId)),
                 if (isTransfer)
                   _buildDetailRow('转入账户', _resolveAccountName(tx.toAccountId)),
               ]),
               const SizedBox(height: 12),
               _buildDetailCard([
-                _buildDetailRow('备注', tx.note?.trim().isEmpty ?? true ? '无' : tx.note!.trim()),
-                _buildDetailRow('原始信息', tx.rawText?.trim().isEmpty ?? true ? '无' : tx.rawText!.trim()),
+                _buildDetailRow(
+                  '备注',
+                  tx.note?.trim().isEmpty ?? true ? '无' : tx.note!.trim(),
+                ),
+                _buildDetailRow(
+                  '原始信息',
+                  tx.rawText?.trim().isEmpty ?? true ? '无' : tx.rawText!.trim(),
+                ),
               ]),
               const SizedBox(height: 80),
             ],
@@ -247,34 +335,47 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           top: false,
           minimum: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _deleteTransaction,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.redAccent,
-                    side: const BorderSide(color: Colors.redAccent),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('删除'),
-                ),
+              _buildActionIcon(
+                icon: Icons.delete_outline_rounded,
+                color: Colors.redAccent,
+                tooltip: '删除',
+                onPressed: _deleteTransaction,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _editTransaction,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: JiveTheme.primaryGreen,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('编辑'),
-                ),
+              _buildActionIcon(
+                icon: Icons.copy_rounded,
+                color: Colors.blueGrey,
+                tooltip: '复制',
+                onPressed: _copyTransaction,
+              ),
+              _buildActionIcon(
+                icon: Icons.edit_rounded,
+                color: JiveTheme.primaryGreen,
+                tooltip: '编辑',
+                onPressed: _editTransaction,
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildActionIcon({
+    required IconData icon,
+    required Color color,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: color.withOpacity(0.12),
+      shape: const CircleBorder(),
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(icon, color: color),
+        tooltip: tooltip,
+      ),
     );
   }
 
@@ -332,15 +433,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            message,
-            style: GoogleFonts.lato(color: Colors.grey.shade600),
-          ),
+          Text(message, style: GoogleFonts.lato(color: Colors.grey.shade600)),
           const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: _loadData,
-            child: const Text('重试'),
-          ),
+          OutlinedButton(onPressed: _loadData, child: const Text('重试')),
         ],
       ),
     );
@@ -391,4 +486,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (accountId == null) return '未指定';
     return _accountById[accountId]?.name ?? '未指定';
   }
+}
+
+Future<bool?> showTransactionDetailSheet(
+  BuildContext context,
+  int transactionId,
+) {
+  return showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) =>
+        TransactionDetailScreen(transactionId: transactionId, isSheet: true),
+  );
 }

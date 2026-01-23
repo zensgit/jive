@@ -10,6 +10,8 @@ import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/database/tag_model.dart';
+import '../../core/database/tag_conversion_log.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/reconcile_service.dart';
 import '../../core/widgets/date_range_picker_sheet.dart';
@@ -54,6 +56,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
   _SummaryMode _summaryMode = _SummaryMode.all;
   _ReconcileSortField _sortField = _ReconcileSortField.date;
   _ReconcileSortDirection _sortDirection = _ReconcileSortDirection.desc;
+  bool _groupByDay = true;
   String _searchQuery = '';
   String? _searchCategoryKey;
   int? _searchAccountId;
@@ -63,7 +66,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
   DateTime? _maxTransactionDate;
   Set<int> _transactionYears = {};
 
-  static const double _floatingBarHeight = 60;
+  static const double _floatingBarHeight = 118;
 
   @override
   void initState() {
@@ -91,15 +94,18 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     try {
       await _loadViewPrefs();
       final isar = await _ensureIsar();
-      final account = await isar.collection<JiveAccount>().get(widget.accountId);
+      final account = await isar.collection<JiveAccount>().get(
+        widget.accountId,
+      );
       if (account == null) {
         throw StateError('account_missing');
       }
 
-      final categories =
-          await isar.collection<JiveCategory>().where().findAll();
-      final accounts =
-          await isar.collection<JiveAccount>().where().findAll();
+      final categories = await isar
+          .collection<JiveCategory>()
+          .where()
+          .findAll();
+      final accounts = await isar.collection<JiveAccount>().where().findAll();
 
       final storedStatement = await _loadStatementBalance();
       final result = await ReconcileService(isar).reconcileAccount(
@@ -119,8 +125,9 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
           ..clear()
           ..addEntries(accounts.map((a) => MapEntry(a.id, a)));
         _statementBalance = storedStatement;
-        _statementController.text =
-            storedStatement != null ? _formatStatementInput(storedStatement) : '';
+        _statementController.text = storedStatement != null
+            ? _formatStatementInput(storedStatement)
+            : '';
         _minTransactionDate = result.minDate;
         _maxTransactionDate = result.maxDate;
         _transactionYears = result.transactionYears;
@@ -143,16 +150,16 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       return _isar!;
     }
     final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open(
-      [
-        JiveTransactionSchema,
-        JiveCategorySchema,
-        JiveCategoryOverrideSchema,
-        JiveAccountSchema,
-        JiveAutoDraftSchema,
-      ],
-      directory: dir.path,
-    );
+    _isar = await Isar.open([
+      JiveTransactionSchema,
+      JiveCategorySchema,
+      JiveCategoryOverrideSchema,
+      JiveAccountSchema,
+      JiveAutoDraftSchema,
+      JiveTagSchema,
+      JiveTagGroupSchema,
+      JiveTagConversionLogSchema,
+    ], directory: dir.path);
     return _isar!;
   }
 
@@ -160,10 +167,16 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     FocusScope.of(context).unfocus();
     final minDate = _minTransactionDate;
     final maxDate = _maxTransactionDate;
-    final enabledYears =
-        _transactionYears.isNotEmpty ? _transactionYears : null;
+    final now = DateTime.now();
+    final viewStart = DateTime((minDate?.year ?? now.year) - 1, 1, 1);
+    final viewEnd = DateTime((maxDate?.year ?? now.year) + 1, 12, 31);
+    final enabledYears = _transactionYears.isNotEmpty
+        ? _transactionYears
+        : null;
     final initialRange = DateTimeRange(
-      start: minDate != null && _startDate.isBefore(minDate) ? minDate : _startDate,
+      start: minDate != null && _startDate.isBefore(minDate)
+          ? minDate
+          : _startDate,
       end: maxDate != null && _endDate.isAfter(maxDate) ? maxDate : _endDate,
     );
     await showModalBottomSheet<void>(
@@ -173,12 +186,23 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       builder: (context) {
         return DateRangePickerSheet(
           initialRange: initialRange,
-          firstDay: minDate,
-          lastDay: maxDate,
+          firstDay: viewStart,
+          lastDay: viewEnd,
+          minSelectableDay: minDate,
+          maxSelectableDay: maxDate,
           enabledYears: enabledYears,
           bottomLabel: '选择对账日期范围',
           onChanged: (range) async {
-            if (range == null) return;
+            if (range == null) {
+              final fallbackStart = minDate ?? DateTime.now();
+              final fallbackEnd = maxDate ?? DateTime.now();
+              setState(() {
+                _startDate = _startOfDay(fallbackStart);
+                _endDate = _endOfDay(fallbackEnd);
+              });
+              await _loadData();
+              return;
+            }
             setState(() {
               _startDate = _startOfDay(range.start);
               _endDate = _endOfDay(range.end);
@@ -219,7 +243,8 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
 
   Future<void> _seedTestData() async {
     final isar = await _ensureIsar();
-    final account = _account ?? await isar.collection<JiveAccount>().get(widget.accountId);
+    final account =
+        _account ?? await isar.collection<JiveAccount>().get(widget.accountId);
     if (account == null) {
       _showSnack('账户不存在，无法生成测试数据');
       return;
@@ -251,10 +276,12 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
 
     final categories = await isar.collection<JiveCategory>().where().findAll();
     final accounts = await isar.collection<JiveAccount>().where().findAll();
-    final expenseCategories =
-        categories.where((cat) => !cat.isIncome && !cat.isHidden).toList();
-    final incomeCategories =
-        categories.where((cat) => cat.isIncome && !cat.isHidden).toList();
+    final expenseCategories = categories
+        .where((cat) => !cat.isIncome && !cat.isHidden)
+        .toList();
+    final incomeCategories = categories
+        .where((cat) => cat.isIncome && !cat.isHidden)
+        .toList();
     JiveAccount? otherAccount;
     for (final candidate in accounts) {
       if (candidate.id != account.id) {
@@ -347,9 +374,9 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
 
   void _showSnack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _buildBody() {
@@ -371,11 +398,12 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         CustomScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           slivers: [
-            SliverToBoxAdapter(child: _buildRangeHeader()),
             SliverToBoxAdapter(child: _buildQuickRanges()),
             SliverToBoxAdapter(child: _buildFilterChips()),
             SliverToBoxAdapter(child: _buildSummaryModeToggle()),
-            SliverToBoxAdapter(child: _buildSummaryCard(summary, _summaryTitle())),
+            SliverToBoxAdapter(
+              child: _buildSummaryCard(summary, _summaryTitle()),
+            ),
             if (items.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
@@ -388,20 +416,17 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
               SliverPadding(
                 padding: EdgeInsets.only(top: 8, bottom: bottomInset),
                 sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final item = items[index];
-                      if (item is _ReconcileDayHeader) {
-                        return _buildDayHeader(item);
-                      }
-                      if (item is _ReconcileGroupHeader) {
-                        return _buildGroupHeader(item);
-                      }
-                      final entryItem = item as _ReconcileEntryItem;
-                      return _buildEntryRow(entryItem.entry);
-                    },
-                    childCount: items.length,
-                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final item = items[index];
+                    if (item is _ReconcileDayHeader) {
+                      return _buildDayHeader(item);
+                    }
+                    if (item is _ReconcileGroupHeader) {
+                      return _buildGroupHeader(item);
+                    }
+                    final entryItem = item as _ReconcileEntryItem;
+                    return _buildEntryRow(entryItem.entry);
+                  }, childCount: items.length),
                 ),
               ),
           ],
@@ -546,10 +571,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     return ChoiceChip(
       label: Text(
         label,
-        style: GoogleFonts.lato(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+        style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w600),
       ),
       selected: selected,
       selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
@@ -565,10 +587,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     return ChoiceChip(
       label: Text(
         label,
-        style: GoogleFonts.lato(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
+        style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w600),
       ),
       selected: selected,
       selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
@@ -599,10 +618,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         children: [
           Text(
             title,
-            style: GoogleFonts.lato(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
+            style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           Row(
@@ -625,7 +641,11 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              _buildSummaryItem('净变动', summary.netChange, JiveTheme.primaryGreen),
+              _buildSummaryItem(
+                '净变动',
+                summary.netChange,
+                JiveTheme.primaryGreen,
+              ),
               const SizedBox(width: 12),
               _buildSummaryItem('期末', summary.endBalance, Colors.blueGrey),
             ],
@@ -633,10 +653,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
           const SizedBox(height: 6),
           Text(
             '期初 ${_currency.format(summary.startBalance)}',
-            style: GoogleFonts.lato(
-              color: Colors.grey.shade600,
-              fontSize: 12,
-            ),
+            style: GoogleFonts.lato(color: Colors.grey.shade600, fontSize: 12),
           ),
           if (_summaryMode == _SummaryMode.filtered) ...[
             const SizedBox(height: 4),
@@ -659,10 +676,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
           const SizedBox(height: 6),
           Text(
             '差异 = 账单期末 - 计算期末',
-            style: GoogleFonts.lato(
-              color: Colors.grey.shade500,
-              fontSize: 11,
-            ),
+            style: GoogleFonts.lato(color: Colors.grey.shade500, fontSize: 11),
           ),
         ],
       ),
@@ -672,7 +686,10 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
   Widget _buildStatementInput() {
     return TextField(
       controller: _statementController,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+        signed: true,
+      ),
       decoration: InputDecoration(
         labelText: '账单期末余额',
         hintText: '输入银行账单余额',
@@ -756,9 +773,11 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
 
   Widget _buildFloatingToolsBar() {
     final hasSearch = _hasSearchFilters();
-    final hasFilters = _searchCategoryKey != null ||
+    final hasFilters =
+        _searchCategoryKey != null ||
         _searchAccountId != null ||
         (_searchTag?.isNotEmpty ?? false);
+    final rangeLabel = '${_formatDate(_startDate)} - ${_formatDate(_endDate)}';
     return Material(
       elevation: 6,
       shadowColor: Colors.black.withOpacity(0.08),
@@ -766,76 +785,146 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       color: Colors.white,
       child: SizedBox(
         height: _floatingBarHeight,
-        child: Row(
+        child: Column(
           children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                child: TextField(
-                  controller: _searchController,
-                  focusNode: _searchFocus,
-                  onChanged: _onSearchChanged,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: '查找账单',
-                    prefixIcon: Icon(Icons.search, size: 18, color: Colors.grey.shade600),
-                    filled: true,
-                    isDense: true,
-                    fillColor: Colors.grey.shade100,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '日期范围 $rangeLabel',
+                      style: GoogleFonts.lato(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
                     ),
-                    suffixIconConstraints: const BoxConstraints(minHeight: 32, minWidth: 0),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          onPressed: _openSearchSheet,
-                          icon: Stack(
-                            clipBehavior: Clip.none,
+                  ),
+                  TextButton(
+                    onPressed: _pickDateRange,
+                    style: TextButton.styleFrom(
+                      foregroundColor: JiveTheme.primaryGreen,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      minimumSize: const Size(0, 28),
+                      textStyle: GoogleFonts.lato(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: const Text('修改'),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        focusNode: _searchFocus,
+                        onChanged: _onSearchChanged,
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: '查找账单',
+                          prefixIcon: Icon(
+                            Icons.search,
+                            size: 18,
+                            color: Colors.grey.shade600,
+                          ),
+                          filled: true,
+                          isDense: true,
+                          fillColor: Colors.grey.shade100,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            borderSide: BorderSide.none,
+                          ),
+                          suffixIconConstraints: const BoxConstraints(
+                            minHeight: 32,
+                            minWidth: 0,
+                          ),
+                          suffixIcon: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.tune, size: 18, color: Colors.grey.shade700),
-                              if (hasFilters)
-                                Positioned(
-                                  right: -1,
-                                  top: -1,
-                                  child: Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.redAccent,
-                                      shape: BoxShape.circle,
+                              IconButton(
+                                onPressed: _openSearchSheet,
+                                icon: Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    Icon(
+                                      Icons.tune,
+                                      size: 18,
+                                      color: Colors.grey.shade700,
                                     ),
+                                    if (hasFilters)
+                                      Positioned(
+                                        right: -1,
+                                        top: -1,
+                                        child: Container(
+                                          width: 7,
+                                          height: 7,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.redAccent,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                splashRadius: 18,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 32,
+                                ),
+                              ),
+                              if (hasSearch)
+                                IconButton(
+                                  onPressed: _clearSearch,
+                                  icon: Icon(
+                                    Icons.close,
+                                    size: 18,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  splashRadius: 18,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 32,
+                                    minHeight: 32,
                                   ),
                                 ),
                             ],
                           ),
-                          splashRadius: 18,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                         ),
-                        if (hasSearch)
-                          IconButton(
-                            onPressed: _clearSearch,
-                            icon: Icon(Icons.close, size: 18, color: Colors.grey.shade600),
-                            splashRadius: 18,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                          ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: IconButton(
-                onPressed: _openSortSheet,
-                tooltip: _sortSummary(),
-                icon: Icon(Icons.sort, size: 20, color: Colors.grey.shade700),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: IconButton(
+                      onPressed: _openSortSheet,
+                      tooltip: _sortSummary(),
+                      icon: Icon(
+                        Icons.sort,
+                        size: 20,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -846,10 +935,9 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
 
   Future<void> _openSearchSheet() async {
     FocusScope.of(context).unfocus();
-    final categories = _categoryByKey.values
-        .where((category) => !category.isHidden)
-        .toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final categories =
+        _categoryByKey.values.where((category) => !category.isHidden).toList()
+          ..sort((a, b) => a.name.compareTo(b.name));
     final accounts = _accountById.values.toList()
       ..sort((a, b) => a.name.compareTo(b.name));
     await showModalBottomSheet<void>(
@@ -886,6 +974,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     FocusScope.of(context).unfocus();
     var field = _sortField;
     var direction = _sortDirection;
+    var groupByDay = _groupByDay;
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -919,7 +1008,9 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                         return ChoiceChip(
                           label: Text(label),
                           selected: field == value,
-                          selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+                          selectedColor: JiveTheme.primaryGreen.withOpacity(
+                            0.18,
+                          ),
                           onSelected: (_) => setModalState(() => field = value),
                         );
                       }).toList(),
@@ -941,10 +1032,30 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                         return ChoiceChip(
                           label: Text(label),
                           selected: direction == value,
-                          selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
-                          onSelected: (_) => setModalState(() => direction = value),
+                          selectedColor: JiveTheme.primaryGreen.withOpacity(
+                            0.18,
+                          ),
+                          onSelected: (_) =>
+                              setModalState(() => direction = value),
                         );
                       }).toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '分组',
+                      style: GoogleFonts.lato(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('按日期分组'),
+                      value: groupByDay,
+                      onChanged: (value) =>
+                          setModalState(() => groupByDay = value),
                     ),
                     const SizedBox(height: 16),
                     Align(
@@ -954,6 +1065,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                           setState(() {
                             _sortField = field;
                             _sortDirection = direction;
+                            _groupByDay = groupByDay;
                           });
                           await _persistViewPrefs();
                           if (context.mounted) Navigator.pop(context);
@@ -991,8 +1103,9 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     setState(() {
       _searchCategoryKey = categoryKey;
       _searchAccountId = accountId;
-      _searchTag =
-          (normalizedTag == null || normalizedTag.isEmpty) ? null : normalizedTag;
+      _searchTag = (normalizedTag == null || normalizedTag.isEmpty)
+          ? null
+          : normalizedTag;
       _searchDateRange = dateRange;
     });
   }
@@ -1084,6 +1197,11 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
 
   Widget _buildDayHeader(_ReconcileDayHeader header) {
     final highlighted = _highlightDays.contains(header.day);
+    final dateLabel = _dayFormat.format(header.day);
+    final weekdayLabel = _weekdayLabel(header.day);
+    final countLabel = '${header.count}笔';
+    final incomeLabel = _currency.format(header.income);
+    final expenseLabel = _currency.format(header.expense);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 4),
       child: Container(
@@ -1098,20 +1216,16 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
             : null,
         child: Row(
           children: [
-            Text(
-              _dayFormat.format(header.day),
-              style: GoogleFonts.lato(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '${header.count} 笔',
-              style: GoogleFonts.lato(
-                fontSize: 12,
-                color: Colors.grey.shade600,
+            Expanded(
+              child: Text(
+                '$dateLabel $weekdayLabel · $countLabel',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.lato(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
+                ),
               ),
             ),
             if (highlighted) ...[
@@ -1132,6 +1246,34 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                 ),
               ),
             ],
+            const SizedBox(width: 8),
+            Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: '收 $incomeLabel',
+                    style: GoogleFonts.lato(
+                      fontSize: 11,
+                      color: Colors.green.shade600,
+                    ),
+                  ),
+                  TextSpan(
+                    text: ' / ',
+                    style: GoogleFonts.lato(
+                      fontSize: 11,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '支 $expenseLabel',
+                    style: GoogleFonts.lato(
+                      fontSize: 11,
+                      color: Colors.red.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -1154,10 +1296,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
           const SizedBox(width: 8),
           Text(
             '${header.count} 笔',
-            style: GoogleFonts.lato(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
+            style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600),
           ),
         ],
       ),
@@ -1182,13 +1321,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     final iconMeta = _buildIconMeta(isTransfer, isIncome);
     return InkWell(
       onTap: () async {
-        final changed = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                TransactionDetailScreen(transactionId: tx.id),
-          ),
-        );
+        final changed = await showTransactionDetailSheet(context, tx.id);
         if (changed == true) {
           await _loadData();
         }
@@ -1281,15 +1414,9 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            message,
-            style: GoogleFonts.lato(color: Colors.grey.shade600),
-          ),
+          Text(message, style: GoogleFonts.lato(color: Colors.grey.shade600)),
           const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: _loadData,
-            child: const Text('重试'),
-          ),
+          OutlinedButton(onPressed: _loadData, child: const Text('重试')),
         ],
       ),
     );
@@ -1300,6 +1427,47 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     final entries = _applyListFilters(result.entries);
     if (entries.isEmpty) return items;
 
+    if (_groupByDay) {
+      final grouped = <DateTime, List<ReconcileEntry>>{};
+      for (final entry in entries) {
+        grouped.putIfAbsent(entry.day, () => []).add(entry);
+      }
+      final days = grouped.keys.toList()
+        ..sort((a, b) {
+          if (_sortField == _ReconcileSortField.date) {
+            final compare = a.compareTo(b);
+            return _sortDirection == _ReconcileSortDirection.desc
+                ? -compare
+                : compare;
+          }
+          return b.compareTo(a);
+        });
+      for (final day in days) {
+        final dayEntries = grouped[day] ?? const [];
+        var income = 0.0;
+        var expense = 0.0;
+        for (final entry in dayEntries) {
+          final type = entry.transaction.type ?? 'expense';
+          if (type == 'income') {
+            income += entry.transaction.amount.abs();
+          } else if (type == 'expense') {
+            expense += entry.transaction.amount.abs();
+          }
+        }
+        final sorted = _sortEntries(dayEntries);
+        items.add(
+          _ReconcileDayHeader(
+            day: day,
+            count: dayEntries.length,
+            income: income,
+            expense: expense,
+          ),
+        );
+        items.addAll(sorted.map(_ReconcileEntryItem.new));
+      }
+      return items;
+    }
+
     if (_sortField == _ReconcileSortField.amount) {
       final sorted = _sortEntries(entries);
       for (final entry in sorted) {
@@ -1309,21 +1477,8 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     }
 
     if (_sortField == _ReconcileSortField.date) {
-      DateTime? currentDay;
       final sorted = _sortEntries(entries);
-      final dayCounts = <DateTime, int>{};
       for (final entry in sorted) {
-        dayCounts[entry.day] = (dayCounts[entry.day] ?? 0) + 1;
-      }
-      for (final entry in sorted) {
-        final day = entry.day;
-        if (currentDay == null || currentDay != day) {
-          items.add(_ReconcileDayHeader(
-            day: day,
-            count: dayCounts[day] ?? 0,
-          ));
-          currentDay = day;
-        }
         items.add(_ReconcileEntryItem(entry));
       }
       return items;
@@ -1337,20 +1492,22 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     final labels = grouped.keys.toList();
     labels.sort((a, b) {
       final compare = a.compareTo(b);
-      return _sortDirection == _ReconcileSortDirection.desc ? -compare : compare;
+      return _sortDirection == _ReconcileSortDirection.desc
+          ? -compare
+          : compare;
     });
     for (final label in labels) {
       final groupEntries = grouped[label]!;
       groupEntries.sort((a, b) {
-        final timeCompare =
-            b.transaction.timestamp.compareTo(a.transaction.timestamp);
+        final timeCompare = b.transaction.timestamp.compareTo(
+          a.transaction.timestamp,
+        );
         if (timeCompare != 0) return timeCompare;
         return b.transaction.id.compareTo(a.transaction.id);
       });
-      items.add(_ReconcileGroupHeader(
-        label: label,
-        count: groupEntries.length,
-      ));
+      items.add(
+        _ReconcileGroupHeader(label: label, count: groupEntries.length),
+      );
       items.addAll(groupEntries.map(_ReconcileEntryItem.new));
     }
     return items;
@@ -1424,14 +1581,28 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
   }
 
   bool _withinDateRange(DateTime timestamp, DateTimeRange range) {
-    final start = DateTime(range.start.year, range.start.month, range.start.day);
-    final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+    final start = DateTime(
+      range.start.year,
+      range.start.month,
+      range.start.day,
+    );
+    final end = DateTime(
+      range.end.year,
+      range.end.month,
+      range.end.day,
+      23,
+      59,
+      59,
+      999,
+    );
     return !timestamp.isBefore(start) && !timestamp.isAfter(end);
   }
 
   String _formatRange(DateTimeRange range) {
-    final start = '${range.start.year}-${_two(range.start.month)}-${_two(range.start.day)}';
-    final end = '${range.end.year}-${_two(range.end.month)}-${_two(range.end.day)}';
+    final start =
+        '${range.start.year}-${_two(range.start.month)}-${_two(range.start.day)}';
+    final end =
+        '${range.end.year}-${_two(range.end.month)}-${_two(range.end.day)}';
     return '$start - $end';
   }
 
@@ -1460,7 +1631,9 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       if (compare == 0) {
         compare = a.transaction.id.compareTo(b.transaction.id);
       }
-      return _sortDirection == _ReconcileSortDirection.desc ? -compare : compare;
+      return _sortDirection == _ReconcileSortDirection.desc
+          ? -compare
+          : compare;
     });
     return sorted;
   }
@@ -1534,8 +1707,10 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
   List<String> _extractNoteTags(String? note) {
     final raw = note?.trim() ?? '';
     if (raw.isEmpty) return const [];
-    final tokens =
-        raw.split(RegExp(r'\s+')).where((item) => item.isNotEmpty).toList();
+    final tokens = raw
+        .split(RegExp(r'\s+'))
+        .where((item) => item.isNotEmpty)
+        .toList();
     return tokens;
   }
 
@@ -1650,7 +1825,27 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
   }
 
   String _formatTime(DateTime time) {
-    return '${_two(time.hour)}:${_two(time.minute)}';
+    return '${_dayFormat.format(time)} ${_two(time.hour)}:${_two(time.minute)}';
+  }
+
+  String _weekdayLabel(DateTime date) {
+    switch (date.weekday) {
+      case DateTime.monday:
+        return '周一';
+      case DateTime.tuesday:
+        return '周二';
+      case DateTime.wednesday:
+        return '周三';
+      case DateTime.thursday:
+        return '周四';
+      case DateTime.friday:
+        return '周五';
+      case DateTime.saturday:
+        return '周六';
+      case DateTime.sunday:
+        return '周日';
+    }
+    return '';
   }
 
   String _two(int value) {
@@ -1713,7 +1908,11 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         end = thisMonth.subtract(const Duration(milliseconds: 1));
         break;
       case _QuickRange.last7Days:
-        start = DateTime(now.year, now.month, now.day).subtract(const Duration(days: 6));
+        start = DateTime(
+          now.year,
+          now.month,
+          now.day,
+        ).subtract(const Duration(days: 6));
         end = _endOfDay(now);
         break;
       case _QuickRange.debugSeed:
@@ -1760,6 +1959,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     final storedSummary = prefs.getString(_summaryKey());
     final storedSort = prefs.getString(_sortKey());
     final storedDirection = prefs.getString(_sortDirectionKey());
+    final storedGrouping = prefs.getBool(_groupByDayKey());
     if (storedFilter != null) {
       _filter = _ReconcileFilter.values.firstWhere(
         (value) => value.name == storedFilter,
@@ -1784,6 +1984,9 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         orElse: () => _ReconcileSortDirection.desc,
       );
     }
+    if (storedGrouping != null) {
+      _groupByDay = storedGrouping;
+    }
   }
 
   Future<void> _persistViewPrefs() async {
@@ -1792,6 +1995,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     await prefs.setString(_summaryKey(), _summaryMode.name);
     await prefs.setString(_sortKey(), _sortField.name);
     await prefs.setString(_sortDirectionKey(), _sortDirection.name);
+    await prefs.setBool(_groupByDayKey(), _groupByDay);
   }
 
   String _statementKey() {
@@ -1812,6 +2016,10 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
 
   String _sortDirectionKey() {
     return 'reconcile_sort_dir_v1_${widget.accountId}';
+  }
+
+  String _groupByDayKey() {
+    return 'reconcile_group_by_day_v1_${widget.accountId}';
   }
 
   String _formatKeyDate(DateTime date) {
@@ -1847,24 +2055,11 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
   }
 }
 
-enum _QuickRange {
-  currentMonth,
-  lastMonth,
-  last7Days,
-  debugSeed,
-}
+enum _QuickRange { currentMonth, lastMonth, last7Days, debugSeed }
 
-enum _ReconcileFilter {
-  all,
-  income,
-  expense,
-  transfer,
-}
+enum _ReconcileFilter { all, income, expense, transfer }
 
-enum _SummaryMode {
-  all,
-  filtered,
-}
+enum _SummaryMode { all, filtered }
 
 class _IconMeta {
   final IconData icon;
@@ -1885,10 +2080,14 @@ abstract class _ReconcileListItem {
 class _ReconcileDayHeader extends _ReconcileListItem {
   final DateTime day;
   final int count;
+  final double income;
+  final double expense;
 
   const _ReconcileDayHeader({
     required this.day,
     required this.count,
+    required this.income,
+    required this.expense,
   });
 }
 
@@ -1902,21 +2101,9 @@ class _ReconcileGroupHeader extends _ReconcileListItem {
   final String label;
   final int count;
 
-  const _ReconcileGroupHeader({
-    required this.label,
-    required this.count,
-  });
+  const _ReconcileGroupHeader({required this.label, required this.count});
 }
 
-enum _ReconcileSortField {
-  date,
-  amount,
-  category,
-  account,
-  tag,
-}
+enum _ReconcileSortField { date, amount, category, account, tag }
 
-enum _ReconcileSortDirection {
-  desc,
-  asc,
-}
+enum _ReconcileSortDirection { desc, asc }

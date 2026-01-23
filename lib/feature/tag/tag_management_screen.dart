@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../core/database/tag_model.dart';
+import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
@@ -12,6 +13,7 @@ import '../../core/service/tag_service.dart';
 import 'tag_edit_dialog.dart';
 import 'tag_group_dialog.dart';
 import 'tag_transactions_screen.dart';
+import 'tag_conversion_log_screen.dart';
 import 'tag_icon_catalog.dart';
 
 class TagManagementScreen extends StatefulWidget {
@@ -64,6 +66,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
             JiveAutoDraftSchema,
             JiveTagSchema,
             JiveTagGroupSchema,
+            JiveTagConversionLogSchema,
           ],
           directory: dir.path,
         );
@@ -81,6 +84,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
 
   Future<void> _loadData() async {
     final service = TagService(_isar);
+    await service.refreshUsageCounts();
     final tags = await service.getTags(includeArchived: true);
     final groups = await service.getGroups(includeArchived: true);
     if (!mounted) return;
@@ -132,6 +136,20 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         title: Text('标签管理', style: GoogleFonts.lato(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
+        actions: [
+          IconButton(
+            tooltip: '转换记录',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => TagConversionLogScreen(isar: _isar),
+                ),
+              );
+            },
+            icon: const Icon(Icons.history),
+          ),
+        ],
       ),
       bottomNavigationBar: _isLoading ? null : _buildBottomActions(),
       body: _isLoading
@@ -322,6 +340,11 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       fontSize: 11,
       decoration: tag.isArchived ? TextDecoration.lineThrough : null,
     );
+    final countStyle = TextStyle(
+      color: color,
+      fontWeight: FontWeight.w600,
+      fontSize: 10,
+    );
     final showIcon = hasTagIcon(tag);
     return Material(
       color: Colors.transparent,
@@ -344,6 +367,15 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                 const SizedBox(width: 4),
               ],
               Text(tagDisplayName(tag), style: textStyle),
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('${tag.usageCount}', style: countStyle),
+              ),
             ],
           ),
         ),
@@ -649,49 +681,229 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     final categories = await _isar.collection<JiveCategory>().where().findAll();
     final parentsExpense = categories.where((c) => c.parentKey == null && !c.isIncome).toList();
     final parentsIncome = categories.where((c) => c.parentKey == null && c.isIncome).toList();
+    final tagTxs = await _isar.jiveTransactions
+        .filter()
+        .tagKeysElementEqualTo(tag.key)
+        .findAll();
+    final request = await _showConvertTagSheet(
+      tag: tag,
+      parentsExpense: parentsExpense,
+      parentsIncome: parentsIncome,
+      allCategories: categories,
+      tagTransactions: tagTxs,
+    );
+    if (request == null) return;
+    final result = await TagService(_isar).convertTagToCategory(
+      tagKey: tag.key,
+      isIncome: request.isIncome,
+      parentKey: request.asSub ? request.parentKey : null,
+      migratePolicy: request.policy,
+      keepTagActive: request.keepTagActive,
+      renameTo: request.name,
+      existingCategoryKey: request.existingCategoryKey,
+    );
+    if (result != null) {
+      await _loadData();
+      final log = await _isar
+          .collection<JiveTagConversionLog>()
+          .filter()
+          .tagKeyEqualTo(tag.key)
+          .sortByCreatedAtDesc()
+          .findFirst();
+      if (log == null) {
+        _showMessage('已转换为分类 "${result.name}"');
+      } else {
+        _showMessage('已转换为分类 "${result.name}"，更新 ${log.updatedTransactionCount}/${log.taggedTransactionCount} 笔交易');
+      }
+    } else {
+      _showMessage('转换失败');
+    }
+  }
+
+  Future<_TagConvertRequest?> _showConvertTagSheet({
+    required JiveTag tag,
+    required List<JiveCategory> parentsExpense,
+    required List<JiveCategory> parentsIncome,
+    required List<JiveCategory> allCategories,
+    required List<JiveTransaction> tagTransactions,
+  }) async {
     TagMigratePolicy policy = TagMigratePolicy.onlyNull;
     bool isIncome = false;
     bool keepTagActive = true;
     bool asSub = false;
     String? parentKey;
+    bool useExistingCategory = true;
+    final categoryNameByKey = {for (final item in allCategories) item.key: item.name};
     final renameController = TextEditingController(text: tag.name);
-    final confirmed = await showDialog<bool>(
+    final result = await showModalBottomSheet<_TagConvertRequest>(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final parents = isIncome ? parentsIncome : parentsExpense;
-            return AlertDialog(
-              title: const Text('转换为分类'),
-              content: SingleChildScrollView(
-                child: Column(
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.85,
+          minChildSize: 0.58,
+          maxChildSize: 0.96,
+          builder: (context, scrollController) {
+            return StatefulBuilder(
+              builder: (context, setSheetState) {
+                final parents = isIncome ? parentsIncome : parentsExpense;
+                final resolvedParentKey = asSub ? parentKey : null;
+                final existing = _findExistingCategory(
+                  categories: allCategories,
+                  name: renameController.text.trim(),
+                  isIncome: isIncome,
+                  parentKey: resolvedParentKey,
+                );
+                final hasExisting = existing != null;
+                final parentName = hasExisting && existing!.parentKey != null
+                    ? categoryNameByKey[existing.parentKey!]
+                    : null;
+                final estimate = _estimateConversion(
+                  transactions: tagTransactions,
+                  categories: allCategories,
+                  isIncome: isIncome,
+                  policy: policy,
+                );
+                if (!hasExisting && useExistingCategory) {
+                  useExistingCategory = false;
+                }
+                return ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                   children: [
+                    Row(
+                      children: [
+                        const SizedBox(width: 40),
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              '转换为分类',
+                              style: GoogleFonts.lato(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '该标签已关联 ${tag.usageCount} 笔交易',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
                     TextField(
                       controller: renameController,
-                      decoration: const InputDecoration(labelText: '分类名称'),
+                      onChanged: (_) => setSheetState(() {}),
+                      decoration: const InputDecoration(
+                        labelText: '分类名称',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
                     ),
+                    if (hasExisting) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF3F6FF),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '已存在分类：${existing!.name}',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            if (parentName != null && parentName.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  '父级：$parentName',
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                ),
+                              ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('使用已有分类'),
+                                  selected: useExistingCategory,
+                                  onSelected: (selected) => setSheetState(() {
+                                    useExistingCategory = true;
+                                  }),
+                                ),
+                                ChoiceChip(
+                                  label: const Text('改名新建'),
+                                  selected: !useExistingCategory,
+                                  onSelected: (selected) => setSheetState(() {
+                                    useExistingCategory = false;
+                                  }),
+                                ),
+                              ],
+                            ),
+                            if (!useExistingCategory)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(
+                                  '改名后将创建新分类',
+                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<bool>(
-                      value: isIncome,
-                      decoration: const InputDecoration(labelText: '分类类型'),
-                      items: const [
-                        DropdownMenuItem(value: false, child: Text('支出')),
-                        DropdownMenuItem(value: true, child: Text('收入')),
+                    Text('分类类型', style: TextStyle(color: Colors.grey.shade700)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('支出'),
+                          selected: !isIncome,
+                          onSelected: (selected) {
+                            if (!selected) return;
+                            setSheetState(() {
+                              isIncome = false;
+                              parentKey = null;
+                            });
+                          },
+                        ),
+                        ChoiceChip(
+                          label: const Text('收入'),
+                          selected: isIncome,
+                          onSelected: (selected) {
+                            if (!selected) return;
+                            setSheetState(() {
+                              isIncome = true;
+                              parentKey = null;
+                            });
+                          },
+                        ),
                       ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setDialogState(() {
-                          isIncome = value;
-                          parentKey = null;
-                        });
-                      },
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
                     SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
                       value: asSub,
                       title: const Text('创建为子分类'),
                       onChanged: (value) {
-                        setDialogState(() {
+                        setSheetState(() {
                           asSub = value;
                           if (!asSub) parentKey = null;
                         });
@@ -700,63 +912,113 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                     if (asSub)
                       DropdownButtonFormField<String?>(
                         value: parentKey,
-                        decoration: const InputDecoration(labelText: '父分类'),
+                        decoration: const InputDecoration(
+                          labelText: '父分类',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
                         items: [
                           for (final parent in parents)
                             DropdownMenuItem(value: parent.key, child: Text(parent.name)),
                         ],
-                        onChanged: (value) => setDialogState(() => parentKey = value),
+                        onChanged: (value) => setSheetState(() => parentKey = value),
                       ),
                     const SizedBox(height: 12),
-                    DropdownButtonFormField<TagMigratePolicy>(
-                      value: policy,
-                      decoration: const InputDecoration(labelText: '迁移交易'),
-                      items: const [
-                        DropdownMenuItem(value: TagMigratePolicy.onlyNull, child: Text('仅补全空分类')),
-                        DropdownMenuItem(value: TagMigratePolicy.overwrite, child: Text('覆盖现有分类')),
-                        DropdownMenuItem(value: TagMigratePolicy.none, child: Text('不迁移')),
-                      ],
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setDialogState(() => policy = value);
-                      },
+                    Text('交易处理方式', style: TextStyle(color: Colors.grey.shade700)),
+                    const SizedBox(height: 8),
+                    _buildEstimateBanner(estimate),
+                    const SizedBox(height: 8),
+                    RadioListTile<TagMigratePolicy>(
+                      value: TagMigratePolicy.onlyNull,
+                      groupValue: policy,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text('仅补全空分类'),
+                      subtitle: const Text('不会修改已设置分类的交易'),
+                      onChanged: (value) => setSheetState(() => policy = value!),
+                    ),
+                    RadioListTile<TagMigratePolicy>(
+                      value: TagMigratePolicy.overwrite,
+                      groupValue: policy,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text('覆盖同类型分类'),
+                      subtitle: const Text('仅在分类类型一致时覆盖已有分类'),
+                      onChanged: (value) => setSheetState(() => policy = value!),
+                    ),
+                    RadioListTile<TagMigratePolicy>(
+                      value: TagMigratePolicy.none,
+                      groupValue: policy,
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      title: const Text('不迁移'),
+                      subtitle: const Text('仅创建分类，不改交易'),
+                      onChanged: (value) => setSheetState(() => policy = value!),
                     ),
                     SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
                       value: keepTagActive,
                       title: const Text('保留标签'),
-                      onChanged: (value) => setDialogState(() => keepTagActive = value),
+                      onChanged: (value) => setSheetState(() => keepTagActive = value),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('取消'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final name = renameController.text.trim();
+                          if (name.isEmpty) {
+                            _showMessage('请输入分类名称');
+                            return;
+                          }
+                          if (hasExisting && !useExistingCategory) {
+                            if (name == existing.name) {
+                              _showMessage('已存在同名分类，请修改名称或选择使用已有分类');
+                              return;
+                            }
+                          }
+                          if (asSub && parentKey == null) {
+                            _showMessage('请选择父分类');
+                            return;
+                          }
+                              Navigator.pop(
+                                context,
+                                _TagConvertRequest(
+                                  name: name,
+                                  isIncome: isIncome,
+                                  asSub: asSub,
+                                  parentKey: parentKey,
+                                  policy: policy,
+                                  keepTagActive: keepTagActive,
+                                  useExistingCategory: useExistingCategory,
+                                  existingCategoryKey:
+                                      useExistingCategory ? existing?.key : null,
+                                ),
+                              );
+                            },
+                            child: const Text('转换'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('转换')),
-              ],
+                );
+              },
             );
           },
         );
       },
     );
-    if (confirmed != true) return;
-    if (asSub && parentKey == null) {
-      _showMessage('请选择父分类');
-      return;
-    }
-    final result = await TagService(_isar).convertTagToCategory(
-      tagKey: tag.key,
-      isIncome: isIncome,
-      parentKey: asSub ? parentKey : null,
-      migratePolicy: policy,
-      keepTagActive: keepTagActive,
-      renameTo: renameController.text.trim(),
-    );
-    if (result != null) {
-      await _loadData();
-      _showMessage('已转换为分类 "${result.name}"');
-    } else {
-      _showMessage('转换失败');
-    }
+    renameController.dispose();
+    return result;
   }
 
   void _openTagTransactions(JiveTag tag) {
@@ -775,8 +1037,154 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
+
+  Widget _buildEstimateBanner(_TagConversionEstimate estimate) {
+    final textColor = Colors.grey.shade700;
+    if (estimate.totalCount == 0) {
+      return Text('暂无关联交易', style: TextStyle(color: textColor, fontSize: 12));
+    }
+    final base = '预计更新 ${estimate.updatedCount}/${estimate.totalCount} 笔交易';
+    final skipParts = <String>[];
+    if (estimate.skippedByPolicyCount > 0) {
+      skipParts.add('不迁移 ${estimate.skippedByPolicyCount}');
+    }
+    if (estimate.skippedExistingCount > 0) {
+      skipParts.add('已有分类 ${estimate.skippedExistingCount}');
+    }
+    if (estimate.skippedTypeMismatchCount > 0) {
+      skipParts.add('类型不一致 ${estimate.skippedTypeMismatchCount}');
+    }
+    if (estimate.skippedUnknownCategoryCount > 0) {
+      skipParts.add('分类缺失 ${estimate.skippedUnknownCategoryCount}');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(base, style: TextStyle(color: textColor, fontSize: 12)),
+        if (skipParts.isNotEmpty)
+          Text(
+            '跳过：${skipParts.join(' / ')}',
+            style: TextStyle(color: textColor, fontSize: 12),
+          ),
+      ],
+    );
+  }
+
+  _TagConversionEstimate _estimateConversion({
+    required List<JiveTransaction> transactions,
+    required List<JiveCategory> categories,
+    required bool isIncome,
+    required TagMigratePolicy policy,
+  }) {
+    final total = transactions.length;
+    var updated = 0;
+    var skippedExisting = 0;
+    var skippedMismatch = 0;
+    var skippedUnknown = 0;
+    var skippedByPolicy = 0;
+    if (policy == TagMigratePolicy.none) {
+      skippedByPolicy = total;
+      return _TagConversionEstimate(
+        totalCount: total,
+        updatedCount: updated,
+        skippedExistingCount: skippedExisting,
+        skippedTypeMismatchCount: skippedMismatch,
+        skippedUnknownCategoryCount: skippedUnknown,
+        skippedByPolicyCount: skippedByPolicy,
+      );
+    }
+    final categoryTypeByKey = <String, bool>{
+      for (final item in categories) item.key: item.isIncome,
+    };
+    for (final tx in transactions) {
+      final categoryEmpty = tx.categoryKey == null || tx.categoryKey!.isEmpty;
+      if (policy == TagMigratePolicy.onlyNull) {
+        if (!categoryEmpty) {
+          skippedExisting += 1;
+          continue;
+        }
+      } else if (policy == TagMigratePolicy.overwrite) {
+        if (!categoryEmpty) {
+          final type = categoryTypeByKey[tx.categoryKey!];
+          if (type == null) {
+            skippedUnknown += 1;
+            continue;
+          }
+          if (type != isIncome) {
+            skippedMismatch += 1;
+            continue;
+          }
+        }
+      }
+      updated += 1;
+    }
+    return _TagConversionEstimate(
+      totalCount: total,
+      updatedCount: updated,
+      skippedExistingCount: skippedExisting,
+      skippedTypeMismatchCount: skippedMismatch,
+      skippedUnknownCategoryCount: skippedUnknown,
+      skippedByPolicyCount: skippedByPolicy,
+    );
+  }
+
+  JiveCategory? _findExistingCategory({
+    required List<JiveCategory> categories,
+    required String name,
+    required bool isIncome,
+    String? parentKey,
+  }) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return null;
+    for (final item in categories) {
+      if (item.isIncome != isIncome) continue;
+      if ((item.parentKey ?? '') != (parentKey ?? '')) continue;
+      if (item.name == trimmed) return item;
+    }
+    return null;
+  }
 }
 
 enum _TagAction { edit, archive, delete, merge, convert }
+
+class _TagConvertRequest {
+  const _TagConvertRequest({
+    required this.name,
+    required this.isIncome,
+    required this.asSub,
+    required this.parentKey,
+    required this.policy,
+    required this.keepTagActive,
+    required this.useExistingCategory,
+    required this.existingCategoryKey,
+  });
+
+  final String name;
+  final bool isIncome;
+  final bool asSub;
+  final String? parentKey;
+  final TagMigratePolicy policy;
+  final bool keepTagActive;
+  final bool useExistingCategory;
+  final String? existingCategoryKey;
+}
+
+class _TagConversionEstimate {
+  const _TagConversionEstimate({
+    required this.totalCount,
+    required this.updatedCount,
+    required this.skippedExistingCount,
+    required this.skippedTypeMismatchCount,
+    required this.skippedUnknownCategoryCount,
+    required this.skippedByPolicyCount,
+  });
+
+  final int totalCount;
+  final int updatedCount;
+  final int skippedExistingCount;
+  final int skippedTypeMismatchCount;
+  final int skippedUnknownCategoryCount;
+  final int skippedByPolicyCount;
+}
 
 enum _GroupAction { edit, archive, delete }

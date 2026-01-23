@@ -17,7 +17,8 @@ class TransactionFilterSheet extends StatefulWidget {
     int? accountId,
     String? tag,
     DateTimeRange? dateRange,
-  ) onChanged;
+  )
+  onChanged;
   final VoidCallback onClear;
   final String title;
   final String hint;
@@ -97,15 +98,56 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     widget.onClear();
   }
 
+  void _clearCategory() {
+    if (_categoryKey == null) return;
+    setState(() => _categoryKey = null);
+    _notifyChange();
+  }
+
+  void _clearAccount() {
+    if (_accountId == null) return;
+    setState(() => _accountId = null);
+    _notifyChange();
+  }
+
+  void _clearTag() {
+    if (_tagController.text.trim().isEmpty) return;
+    setState(() => _tagController.clear());
+    _notifyChange();
+  }
+
+  void _clearDateRange() {
+    if (_dateRange == null) return;
+    setState(() => _dateRange = null);
+    _notifyChange();
+  }
+
+  Widget _buildClearIcon(VoidCallback onPressed) {
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(Icons.close, size: 16, color: Colors.grey.shade600),
+      padding: EdgeInsets.zero,
+      splashRadius: 16,
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+    );
+  }
+
   String _formatRange(DateTimeRange range) {
-    final start = '${range.start.year}-${_two(range.start.month)}-${_two(range.start.day)}';
-    final end = '${range.end.year}-${_two(range.end.month)}-${_two(range.end.day)}';
+    final start =
+        '${range.start.year}-${_two(range.start.month)}-${_two(range.start.day)}';
+    final end =
+        '${range.end.year}-${_two(range.end.month)}-${_two(range.end.day)}';
     return '$start - $end';
   }
 
   String _two(int value) => value.toString().padLeft(2, '0');
 
   Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final minSelectable = widget.minDate;
+    final maxSelectable = widget.maxDate;
+    final viewStart = DateTime((minSelectable?.year ?? now.year) - 1, 1, 1);
+    final viewEnd = DateTime((maxSelectable?.year ?? now.year) + 1, 12, 31);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -113,8 +155,10 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
       builder: (context) {
         return DateRangePickerSheet(
           initialRange: _dateRange,
-          firstDay: widget.minDate,
-          lastDay: widget.maxDate,
+          firstDay: viewStart,
+          lastDay: viewEnd,
+          minSelectableDay: minSelectable,
+          maxSelectableDay: maxSelectable,
           enabledYears: widget.enabledYears,
           onChanged: (range) {
             setState(() => _dateRange = range);
@@ -193,7 +237,12 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                           style: GoogleFonts.lato(fontSize: 13),
                         ),
                       ),
-                      Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade600),
+                      if (_dateRange != null) _buildClearIcon(_clearDateRange),
+                      Icon(
+                        Icons.calendar_today,
+                        size: 16,
+                        color: Colors.grey.shade600,
+                      ),
                     ],
                   ),
                 ),
@@ -211,6 +260,13 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
+                suffixIcon: _categoryKey == null
+                    ? null
+                    : _buildClearIcon(_clearCategory),
+              ),
+              icon: Icon(
+                Icons.keyboard_arrow_down,
+                color: Colors.grey.shade600,
               ),
               items: [
                 const DropdownMenuItem<String?>(
@@ -244,12 +300,16 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
+                suffixIcon: _accountId == null
+                    ? null
+                    : _buildClearIcon(_clearAccount),
+              ),
+              icon: Icon(
+                Icons.keyboard_arrow_down,
+                color: Colors.grey.shade600,
               ),
               items: [
-                const DropdownMenuItem<int?>(
-                  value: null,
-                  child: Text('全部账户'),
-                ),
+                const DropdownMenuItem<int?>(value: null, child: Text('全部账户')),
                 ...widget.accounts.map((account) {
                   return DropdownMenuItem<int?>(
                     value: account.id,
@@ -274,8 +334,14 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
+                suffixIcon: _tagController.text.trim().isEmpty
+                    ? null
+                    : _buildClearIcon(_clearTag),
               ),
-              onChanged: (_) => _notifyChange(),
+              onChanged: (_) {
+                setState(() {});
+                _notifyChange();
+              },
             ),
             const SizedBox(height: 16),
             Row(
@@ -283,7 +349,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                 Expanded(
                   child: OutlinedButton(
                     onPressed: _handleClear,
-                    child: const Text('清除'),
+                    child: const Text('全部清除'),
                   ),
                 ),
               ],

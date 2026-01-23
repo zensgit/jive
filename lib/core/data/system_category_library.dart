@@ -2706,10 +2706,6 @@ const Map<String, Map<String, dynamic>> kSystemExpenseLibrary = {
         'icon': '品牌__阿联酋航空__Brand__Emirates.png',
       },
       {
-        'name': '阿迪达斯',
-        'icon': '品牌__阿迪达斯__Brand__Adidas.png',
-      },
-      {
         'name': '阿里1688',
         'icon': '品牌__阿里1688__Brand__Alibaba1688.png',
       },

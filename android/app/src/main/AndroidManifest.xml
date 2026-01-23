@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
-        android:label="Jive"
+        android:label="Jive 标签测试"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
@@ -13,7 +13,7 @@
         <service android:name="com.jive.app.JiveAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
-            android:label="Jive 自动记账 (无障碍版)">
+            android:label="Jive 标签测试 (无障碍版)">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
@@ -24,7 +24,7 @@
 
         <!-- Keep Notification Listener as backup -->
         <service android:name="com.jive.app.JiveNotificationService"
-            android:label="Jive Auto Tracker"
+            android:label="Jive 标签测试"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>

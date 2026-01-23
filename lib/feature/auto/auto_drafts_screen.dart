@@ -11,6 +11,7 @@ import '../../core/service/auto_draft_service.dart';
 import '../../core/service/auto_account_mapping.dart';
 import '../../core/service/account_service.dart';
 import '../../core/database/tag_model.dart';
+import '../../core/database/tag_conversion_log.dart';
 import '../../core/service/tag_service.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
@@ -51,6 +52,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
           JiveAutoDraftSchema,
           JiveTagSchema,
           JiveTagGroupSchema,
+          JiveTagConversionLogSchema,
         ],
         directory: dir.path,
       );

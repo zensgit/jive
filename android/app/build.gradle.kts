@@ -13,7 +13,8 @@ android {
     namespace = "com.jive.app"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
-    val buildTime = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
+    val buildTimeName = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
+    val buildTimeCode = 2_100_000_000 + ((System.currentTimeMillis() / 60000L).toInt() % 10_000_000)
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -31,13 +32,13 @@ android {
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        versionCode = buildTimeCode
+        versionName = "${flutter.versionName}-$buildTimeName"
     }
 
     buildTypes {
         debug {
-            versionNameSuffix = "-$buildTime"
+            // versionName already includes build time for easier installs.
         }
         release {
             // TODO: Add your own signing config for the release build.

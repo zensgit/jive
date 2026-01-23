@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:isar/isar.dart';
 import '../database/tag_model.dart';
+import '../database/tag_conversion_log.dart';
 import '../database/transaction_model.dart';
 import '../database/category_model.dart';
 import 'category_service.dart';
@@ -413,6 +414,7 @@ class TagService {
     TagMigratePolicy migratePolicy = TagMigratePolicy.onlyNull,
     bool keepTagActive = true,
     String? renameTo,
+    String? existingCategoryKey,
   }) async {
     final tag = await isar.collection<JiveTag>()
         .filter()
@@ -424,14 +426,21 @@ class TagService {
           .filter()
           .keyEqualTo(tag.redirectCategoryKey!)
           .findFirst();
-      return existing;
+      if (existing != null) return existing;
+      tag.redirectCategoryKey = null;
     }
     final targetName = (renameTo ?? tag.name).trim();
     if (targetName.isEmpty) return null;
 
     final categoryService = CategoryService(isar);
     JiveCategory? category;
-    if (parentKey != null) {
+    if (existingCategoryKey != null && existingCategoryKey.isNotEmpty) {
+      category = await isar.collection<JiveCategory>()
+          .filter()
+          .keyEqualTo(existingCategoryKey)
+          .findFirst();
+    }
+    if (category == null && parentKey != null) {
       final parent = await isar.collection<JiveCategory>()
           .filter()
           .keyEqualTo(parentKey)
@@ -443,7 +452,7 @@ class TagService {
         iconName: tag.iconName ?? categoryService.suggestIconName(targetName),
         colorHex: tag.colorHex,
       );
-    } else {
+    } else if (category == null) {
       category = await categoryService.createParentCategory(
         name: targetName,
         iconName: tag.iconName ?? categoryService.suggestIconName(targetName),
@@ -475,8 +484,19 @@ class TagService {
     final txs = await isar.jiveTransactions
         .filter()
         .tagKeysElementEqualTo(tag.key)
-      .findAll();
+        .findAll();
     final updatedTxs = <JiveTransaction>[];
+    var skippedExisting = 0;
+    var skippedTypeMismatch = 0;
+    var skippedUnknown = 0;
+    var skippedByPolicy = 0;
+    final categoryTypeByKey = <String, bool>{};
+    if (migratePolicy == TagMigratePolicy.overwrite) {
+      final allCategories = await isar.collection<JiveCategory>().where().findAll();
+      for (final item in allCategories) {
+        categoryTypeByKey[item.key] = item.isIncome;
+      }
+    }
     String? parentName;
     if (category.parentKey != null) {
       final parent = await isar.collection<JiveCategory>()
@@ -488,8 +508,23 @@ class TagService {
     if (migratePolicy != TagMigratePolicy.none) {
       for (final tx in txs) {
         final categoryEmpty = tx.categoryKey == null || tx.categoryKey!.isEmpty;
-        if (migratePolicy == TagMigratePolicy.onlyNull && !categoryEmpty) {
-          continue;
+        if (migratePolicy == TagMigratePolicy.onlyNull) {
+          if (!categoryEmpty) {
+            skippedExisting += 1;
+            continue;
+          }
+        } else if (migratePolicy == TagMigratePolicy.overwrite) {
+          if (!categoryEmpty) {
+            final type = categoryTypeByKey[tx.categoryKey!];
+            if (type == null) {
+              skippedUnknown += 1;
+              continue;
+            }
+            if (type != isIncome) {
+              skippedTypeMismatch += 1;
+              continue;
+            }
+          }
         }
         if (category.parentKey == null) {
           tx.categoryKey = category.key;
@@ -504,11 +539,33 @@ class TagService {
         }
         updatedTxs.add(tx);
       }
+    } else {
+      skippedByPolicy = txs.length;
     }
+
+    final log = JiveTagConversionLog()
+      ..tagKey = tag.key
+      ..tagName = tag.name
+      ..categoryKey = category.key
+      ..parentCategoryKey = category.parentKey
+      ..categoryName = category.name
+      ..parentCategoryName = parentName
+      ..categoryIsIncome = category.isIncome
+      ..migratePolicy = migratePolicy.name
+      ..keepTagActive = keepTagActive
+      ..taggedTransactionCount = txs.length
+      ..updatedTransactionCount = updatedTxs.length
+      ..skippedExistingCategoryCount = skippedExisting
+      ..skippedTypeMismatchCount = skippedTypeMismatch
+      ..skippedUnknownCategoryCount = skippedUnknown
+      ..skippedByPolicyCount = skippedByPolicy
+      ..updatedTransactionIds = updatedTxs.map((tx) => tx.id).toList()
+      ..createdAt = now;
 
     await isar.writeTxn(() async {
       await isar.collection<JiveCategory>().put(category!);
       await isar.collection<JiveTag>().put(tag);
+      await isar.collection<JiveTagConversionLog>().put(log);
       if (updatedTxs.isNotEmpty) {
         await isar.jiveTransactions.putAll(updatedTxs);
       }
