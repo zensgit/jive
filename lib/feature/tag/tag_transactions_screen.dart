@@ -10,6 +10,7 @@ import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/design_system/theme.dart';
+import '../transactions/transaction_detail_screen.dart';
 
 class TagTransactionsScreen extends StatefulWidget {
   final String tagKey;
@@ -339,38 +340,64 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
     final amountColor = isTransfer ? Colors.blueGrey : (isIncome ? Colors.green : Colors.redAccent);
     final parentName = _displayCategoryName(tx.categoryKey, tx.category);
     final subName = _displayCategoryName(tx.subCategoryKey, tx.subCategory);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [
-        BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 4)),
-      ]),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(10),
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () async {
+        final updated = await showTransactionDetailSheet(context, tx.id);
+        if (updated == true) {
+          await _load();
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
-            child: Icon(Icons.receipt_long, color: JiveTheme.primaryGreen, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(parentName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                Text('$subName • ${_dateFormat.format(tx.timestamp)}',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-              ],
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.receipt_long,
+                color: JiveTheme.primaryGreen,
+                size: 18,
+              ),
             ),
-          ),
-          Text(
-            '$amountPrefix¥${tx.amount.toStringAsFixed(2)}',
-            style: TextStyle(fontWeight: FontWeight.w600, color: amountColor),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    parentName,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  Text(
+                    '$subName • ${_dateFormat.format(tx.timestamp)}',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              '$amountPrefix¥${tx.amount.toStringAsFixed(2)}',
+              style: TextStyle(fontWeight: FontWeight.w600, color: amountColor),
+            ),
+          ],
+        ),
       ),
     );
   }

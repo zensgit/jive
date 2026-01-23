@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -74,6 +76,26 @@ class JiveApp extends StatelessWidget {
   }
 }
 
+class _RandomSeedResult {
+  final int accounts;
+  final int tags;
+  final int transactions;
+
+  const _RandomSeedResult({
+    required this.accounts,
+    required this.tags,
+    required this.transactions,
+  });
+}
+
+class _RandomAccountSeed {
+  final String name;
+  final String type;
+  final String subType;
+
+  const _RandomAccountSeed(this.name, this.type, this.subType);
+}
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -104,6 +126,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _autoAppEnabledCount = AutoAppRegistry.apps.length;
   bool _permissionDialogVisible = false;
   final ValueNotifier<int> _dataReloadSignal = ValueNotifier(0);
+  final Random _random = Random();
 
   @override
   void initState() {
@@ -430,6 +453,208 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       await _isar.jiveTransactions.putAll([...demoTxs, transfer]);
     });
     return true;
+  }
+
+  Future<void> _handleRandomSeed() async {
+    const accountCount = 3;
+    const tagCount = 12;
+    const transactionCount = 80;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('生成随机测试数据'),
+        content: const Text('将追加随机测试数据：3 个账户、12 个标签、80 笔交易。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('继续'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final result = await _seedRandomTestData(
+      accountCount: accountCount,
+      tagCount: tagCount,
+      transactionCount: transactionCount,
+    );
+    await _loadTransactions();
+    await _loadAutoDraftCount();
+    _notifyDataChanged();
+    _showMessage(
+      '已生成随机测试数据：账户${result.accounts}、标签${result.tags}、交易${result.transactions}',
+    );
+  }
+
+  Future<_RandomSeedResult> _seedRandomTestData({
+    required int accountCount,
+    required int tagCount,
+    required int transactionCount,
+  }) async {
+    final accountService = AccountService(_isar);
+    final tagService = TagService(_isar);
+    await accountService.initDefaultAccounts();
+    await tagService.initDefaultGroups();
+    await CategoryService(_isar).initDefaultCategories();
+
+    final accountTemplates = <_RandomAccountSeed>[
+      _RandomAccountSeed('测试钱包', AccountService.typeAsset, 'wallet'),
+      _RandomAccountSeed('测试现金', AccountService.typeAsset, 'cash'),
+      _RandomAccountSeed('测试银行卡', AccountService.typeAsset, 'bank'),
+      _RandomAccountSeed('测试微信', AccountService.typeAsset, 'wechat'),
+      _RandomAccountSeed('测试支付宝', AccountService.typeAsset, 'alipay'),
+      _RandomAccountSeed('测试信用卡', AccountService.typeLiability, 'credit'),
+      _RandomAccountSeed('测试借入', AccountService.typeLiability, 'loan'),
+    ];
+
+    final createdAccounts = <JiveAccount>[];
+    for (var i = 0; i < accountCount; i++) {
+      final seed = accountTemplates[_random.nextInt(accountTemplates.length)];
+      final name = '${seed.name}${_randomSuffix()}';
+      final amount = 200 + _random.nextInt(9800);
+      final openingBalance = seed.type == AccountService.typeLiability
+          ? -amount.toDouble()
+          : amount.toDouble();
+      final account = await accountService.createAccount(
+        name: name,
+        type: seed.type,
+        subType: seed.subType,
+        openingBalance: openingBalance,
+      );
+      createdAccounts.add(account);
+    }
+
+    final groups = await tagService.getGroups(includeArchived: false);
+    if (groups.isEmpty) {
+      await tagService.createGroup(name: '随机分组');
+    }
+    final refreshedGroups = await tagService.getGroups(includeArchived: false);
+    final createdTags = <JiveTag>[];
+    for (var i = 0; i < tagCount; i++) {
+      final name = '随机标签${_randomSuffix()}';
+      final group = refreshedGroups.isEmpty
+          ? null
+          : refreshedGroups[_random.nextInt(refreshedGroups.length)];
+      final color = TagService.defaultColors[
+          _random.nextInt(TagService.defaultColors.length)];
+      try {
+        final tag = await tagService.createTag(
+          name: name,
+          groupKey: group?.key,
+          colorHex: color,
+        );
+        createdTags.add(tag);
+      } catch (_) {
+        // Ignore duplicates; use a new suffix next time.
+      }
+    }
+
+    final accounts = await accountService.getActiveAccounts();
+    final tags = await tagService.getTags(includeArchived: false);
+    final categories = await _isar.collection<JiveCategory>().where().findAll();
+    final expenseParents = categories
+        .where((cat) => cat.parentKey == null && !cat.isIncome && !cat.isHidden)
+        .toList();
+    final incomeParents = categories
+        .where((cat) => cat.parentKey == null && cat.isIncome && !cat.isHidden)
+        .toList();
+
+    JiveCategory? pickParent(List<JiveCategory> parents) {
+      if (parents.isEmpty) return null;
+      return parents[_random.nextInt(parents.length)];
+    }
+
+    JiveCategory? pickChild(String parentKey) {
+      final children = categories
+          .where((cat) => cat.parentKey == parentKey && !cat.isHidden)
+          .toList();
+      if (children.isEmpty) return null;
+      return children[_random.nextInt(children.length)];
+    }
+
+    List<String> pickTags() {
+      if (tags.isEmpty) return [];
+      final count = _random.nextInt(3);
+      if (count == 0) return [];
+      final pool = List<JiveTag>.from(tags)..shuffle(_random);
+      return pool.take(count).map((tag) => tag.key).toList();
+    }
+
+    final now = DateTime.now();
+    final transactions = <JiveTransaction>[];
+    for (var i = 0; i < transactionCount; i++) {
+      final roll = _random.nextInt(100);
+      final type = roll < 15
+          ? 'income'
+          : (roll < 25 ? 'transfer' : 'expense');
+      final timestamp = now.subtract(
+        Duration(
+          days: _random.nextInt(120),
+          minutes: _random.nextInt(1440),
+        ),
+      );
+      final account = accounts[_random.nextInt(accounts.length)];
+      if (type == 'transfer') {
+        final others = accounts.where((a) => a.id != account.id).toList();
+        if (others.isEmpty) continue;
+        final toAccount = others[_random.nextInt(others.length)];
+        final amount = 50 + _random.nextInt(3000);
+        transactions.add(
+          JiveTransaction()
+            ..amount = amount.toDouble()
+            ..source = 'SeedRandom'
+            ..type = 'transfer'
+            ..timestamp = timestamp
+            ..accountId = account.id
+            ..toAccountId = toAccount.id
+            ..tagKeys = pickTags(),
+        );
+        continue;
+      }
+
+      final parent =
+          type == 'income' ? pickParent(incomeParents) : pickParent(expenseParents);
+      final child = parent == null ? null : pickChild(parent.key);
+      final amount = type == 'income'
+          ? 200 + _random.nextInt(12000)
+          : 10 + _random.nextInt(1200);
+      transactions.add(
+        JiveTransaction()
+          ..amount = amount.toDouble()
+          ..source = 'SeedRandom'
+          ..type = type
+          ..timestamp = timestamp
+          ..accountId = account.id
+          ..categoryKey = parent?.key
+          ..subCategoryKey = child?.key
+          ..category = parent?.name ?? ''
+          ..subCategory = child?.name ?? ''
+          ..rawText = '随机测试数据'
+          ..note = '随机测试数据'
+          ..tagKeys = pickTags(),
+      );
+    }
+
+    await _isar.writeTxn(() async {
+      if (transactions.isNotEmpty) {
+        await _isar.jiveTransactions.putAll(transactions);
+      }
+    });
+    await tagService.refreshUsageCounts();
+
+    return _RandomSeedResult(
+      accounts: createdAccounts.length,
+      tags: createdTags.length,
+      transactions: transactions.length,
+    );
+  }
+
+  String _randomSuffix() {
+    return '${1000 + _random.nextInt(9000)}';
   }
 
   Future<void> _clearAllData() async {
@@ -856,6 +1081,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 _showMessage(
                                   inserted ? "已注入测试数据" : "已有数据，未注入测试数据",
                                 );
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.auto_awesome_motion),
+                              title: const Text("生成随机测试数据"),
+                              subtitle: Text(
+                                _demoSeedEnabled
+                                    ? "随机生成账户/标签/交易"
+                                    : "请先开启测试数据开关",
+                              ),
+                              onTap: () async {
+                                if (!_demoSeedEnabled) {
+                                  _showMessage("请先开启测试数据开关");
+                                  return;
+                                }
+                                Navigator.pop(context);
+                                await _handleRandomSeed();
                               },
                             ),
                             if (kDebugMode)
