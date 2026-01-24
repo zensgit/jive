@@ -6,7 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'category_icon_picker_screen.dart';
 
-enum _CategoryIconSource { system, gallery, text }
+enum _CategoryIconSource { system, emoji, gallery, text }
 
 Future<String?> pickCategoryIcon(BuildContext context, {required String initialIcon}) async {
   final action = await showModalBottomSheet<_CategoryIconSource>(
@@ -22,6 +22,11 @@ Future<String?> pickCategoryIcon(BuildContext context, {required String initialI
             leading: const Icon(Icons.grid_view_rounded),
             title: const Text("系统图标"),
             onTap: () => Navigator.pop(sheetContext, _CategoryIconSource.system),
+          ),
+          ListTile(
+            leading: const Icon(Icons.emoji_emotions_outlined),
+            title: const Text("表情符号"),
+            onTap: () => Navigator.pop(sheetContext, _CategoryIconSource.emoji),
           ),
           ListTile(
             leading: const Icon(Icons.photo_library_outlined),
@@ -43,7 +48,21 @@ Future<String?> pickCategoryIcon(BuildContext context, {required String initialI
       return await Navigator.push<String>(
         context,
         MaterialPageRoute(
-          builder: (context) => CategoryIconPickerScreen(initialIcon: initialIcon),
+          builder: (context) => CategoryIconPickerScreen(
+            initialIcon: initialIcon,
+            initialMode: CategoryIconPickerMode.category,
+          ),
+          fullscreenDialog: true,
+        ),
+      );
+    case _CategoryIconSource.emoji:
+      return await Navigator.push<String>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CategoryIconPickerScreen(
+            initialIcon: initialIcon,
+            initialMode: CategoryIconPickerMode.emoji,
+          ),
           fullscreenDialog: true,
         ),
       );

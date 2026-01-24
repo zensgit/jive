@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,6 +35,7 @@ import 'core/utils/logger_util.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
+  await initializeDateFormatting('zh_CN', null);
   await JiveLogger.init();
   runApp(const JiveApp());
 }
@@ -535,17 +537,31 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void _startListening() {
     if (_isListening) return;
     _isListening = true;
-    eventChannel.receiveBroadcastStream().listen(
-      (dynamic event) async {
-        if (event is! Map) return;
-        final payload = Map<String, dynamic>.from(event);
-        if (!_dbReady) {
-          _pendingAutoEvents.add(payload);
-          return;
-        }
-        await _handleAutoEvent(payload);
-      },
-    );
+    if (!_supportsAutoEventChannel()) {
+      return;
+    }
+    try {
+      eventChannel.receiveBroadcastStream().listen(
+        (dynamic event) async {
+          if (event is! Map) return;
+          final payload = Map<String, dynamic>.from(event);
+          if (!_dbReady) {
+            _pendingAutoEvents.add(payload);
+            return;
+          }
+          await _handleAutoEvent(payload);
+        },
+        onError: (_) {},
+      );
+    } on MissingPluginException {
+      // Unsupported platform; ignore.
+    }
+  }
+
+  bool _supportsAutoEventChannel() {
+    if (kIsWeb) return false;
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
   }
 
   Future<void> _openAutoSettings() async {
@@ -816,6 +832,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 "timestamp": now.millisecondsSinceEpoch,
                                 "package_name": "com.tencent.mm",
                               });
+                            },
+                          ),
+                        if (kDebugMode)
+                          SwitchListTile(
+                            secondary: const Icon(Icons.data_object),
+                            title: const Text("调试：显示自动记账元数据"),
+                            subtitle: const Text("待确认列表显示解析信息"),
+                            value: _autoSettings.debugShowDraftMetadata,
+                            onChanged: (value) async {
+                              final updated =
+                                  _autoSettings.copyWith(debugShowDraftMetadata: value);
+                              setSheetState(() {
+                                _autoSettings = updated;
+                              });
+                              await _setAutoSettings(updated);
                             },
                           ),
                         ListTile(

@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:isar/isar.dart';
 import '../database/auto_draft_model.dart';
 import '../database/account_model.dart';
@@ -12,6 +14,7 @@ class AutoCapture {
   final double amount;
   final String source;
   final String? rawText;
+  final String? metadataJson;
   final DateTime timestamp;
   final String? type;
 
@@ -39,6 +42,7 @@ class AutoCapture {
     required this.amount,
     required this.source,
     required this.rawText,
+    required this.metadataJson,
     required this.timestamp,
     required this.type,
   });
@@ -48,6 +52,7 @@ class AutoCapture {
     final rawSource = data['source']?.toString().trim() ?? '';
     final source = _normalizeSource(rawSource);
     final rawText = data['raw_text']?.toString();
+    final metadataJson = data['metadata']?.toString();
     final timestamp = _parseTimestamp(data['timestamp']);
     final normalizedType = _normalizeType(data['type']?.toString());
     final inferredType = _inferTypeFromText(rawText);
@@ -56,6 +61,7 @@ class AutoCapture {
       amount: amountValue.abs(),
       source: source.isEmpty ? 'Unknown' : source,
       rawText: rawText?.trim(),
+      metadataJson: metadataJson?.trim(),
       timestamp: timestamp,
       type: type,
     );
@@ -162,12 +168,21 @@ class AutoDraftService {
     '转至',
   ];
 
+  static const _toAccountAnchorKeywords = [
+    '到账',
+    '收款',
+    '转入',
+    '还款到',
+    '退款至',
+  ];
+
   Future<AutoCaptureResult> ingestCapture(
     AutoCapture capture, {
     required bool directCommit,
     AutoSettings? settings,
   }) async {
     if (!capture.isValid) return AutoCaptureResult.ignored;
+    if (_looksLikeListRecord(capture.rawText)) return AutoCaptureResult.ignored;
     final effectiveSettings = settings ?? AutoSettingsStore.defaults;
     final dedupKey = _buildDedupKey(capture);
     final duplicate = await _isDuplicate(capture, dedupKey);
@@ -176,18 +191,26 @@ class AutoDraftService {
     final engine = await AutoRuleEngine.instance();
     final categories = await _buildCategoryIndex();
     final match = engine.match(text: capture.rawText ?? '', source: capture.source);
+    final type = capture.type ?? match.type;
 
     final accounts = await AccountService(isar).getActiveAccounts();
     final mappings = await AutoAccountMappingStore.load();
-    final accountId = _resolveAccountIdFromAccounts(accounts, capture.source, capture.rawText, mappings);
-    final toAccountId = capture.type == 'transfer'
-        ? _resolveToAccountIdFromAccounts(accounts, capture.rawText, mappings)
+    final metadata = _parseMetadata(capture.metadataJson);
+    final accountId = _resolveAccountIdFromAccounts(
+      accounts,
+      capture.source,
+      capture.rawText,
+      metadata,
+      mappings,
+      allowFallback: type != 'transfer',
+    );
+    final toAccountId = type == 'transfer'
+        ? _resolveToAccountIdFromAccounts(accounts, capture.rawText, metadata, mappings)
         : null;
     final resolved = categories.resolve(match.parent, match.sub);
 
     var parentName = resolved.parent?.name ?? match.parent ?? '自动记账';
     var subName = resolved.child?.name ?? match.sub ?? '未分类';
-    final type = capture.type ?? match.type;
 
     if (type == 'transfer') {
       parentName = '转账';
@@ -203,7 +226,10 @@ class AutoDraftService {
       }
     }
 
-    if (!directCommit && effectiveSettings.autoTransferRecognition) {
+    final requiresManualTransfer = type == 'transfer' && (accountId == null || toAccountId == null);
+    final shouldCommitNow = directCommit && !requiresManualTransfer;
+
+    if (!shouldCommitNow && effectiveSettings.autoTransferRecognition) {
       final merged = await _mergeTransferDraftIfNeeded(
         capture: capture,
         matchType: type,
@@ -220,7 +246,7 @@ class AutoDraftService {
       if (merged) return AutoCaptureResult.mergedHit;
     }
 
-    if (directCommit) {
+    if (shouldCommitNow) {
       await _commitTransaction(
         capture: capture,
         type: type,
@@ -254,6 +280,7 @@ class AutoDraftService {
       ..source = capture.source
       ..timestamp = capture.timestamp
       ..rawText = capture.rawText
+      ..metadataJson = capture.metadataJson
       ..type = type
       ..category = parentName
       ..subCategory = subName
@@ -284,6 +311,7 @@ class AutoDraftService {
         amount: draft.amount,
         source: draft.source,
         rawText: draft.rawText,
+        metadataJson: draft.metadataJson,
         timestamp: draft.timestamp,
         type: type,
       ),
@@ -494,6 +522,20 @@ class AutoDraftService {
   }
 
   Future<bool> _isDuplicate(AutoCapture capture, String dedupKey) async {
+    if (dedupKey.contains('|order:')) {
+      final draft = await isar.collection<JiveAutoDraft>()
+          .filter()
+          .dedupKeyEqualTo(dedupKey)
+          .findFirst();
+      if (draft != null) return true;
+    }
+    if (dedupKey.contains('|time:')) {
+      final draft = await isar.collection<JiveAutoDraft>()
+          .filter()
+          .dedupKeyEqualTo(dedupKey)
+          .findFirst();
+      if (draft != null) return true;
+    }
     final start = capture.timestamp.subtract(const Duration(minutes: 5));
     final end = capture.timestamp.add(const Duration(minutes: 5));
     final draft = await isar.collection<JiveAutoDraft>()
@@ -523,8 +565,15 @@ class AutoDraftService {
           .amountEqualTo(capture.amount)
           .sourceEqualTo(capture.source)
           .timestampBetween(narrowStart, narrowEnd, includeUpper: true)
-          .findFirst();
-      if (nearDraft != null) return true;
+          .findAll();
+      final normalizedIncoming = _normalizeText(capture.rawText ?? '');
+      for (final draft in nearDraft) {
+        final other = _normalizeText(draft.rawText ?? '');
+        if (other.isEmpty) continue;
+        if (_longestCommonSubstring(normalizedIncoming, other) >= 80) {
+          return true;
+        }
+      }
       final nearTx = await isar.collection<JiveTransaction>()
           .filter()
           .amountEqualTo(capture.amount)
@@ -537,17 +586,79 @@ class AutoDraftService {
   }
 
   String _buildDedupKey(AutoCapture capture) {
+    final metadata = _parseMetadata(capture.metadataJson);
+    final orderId = _metadataValue(metadata, const [
+      'order_id',
+      'orderId',
+      'trade_no',
+      'tradeNo',
+      'bill_no',
+      'billNo',
+      'merchant_order_id',
+      'merchantOrderId',
+    ]);
+    if (orderId != null) {
+      return '${capture.source}|order:$orderId';
+    }
+    final detailTime = _metadataValue(metadata, const [
+      'detail_time',
+      'trade_time',
+      'pay_time',
+      'created_time',
+      'time',
+    ]);
+    final normalizedTime = _normalizeDetailTime(detailTime) ?? _extractDetailTimeFromRawText(capture.rawText);
+    if (normalizedTime != null) {
+      final type = capture.type ?? '';
+      return '${capture.source}|${type}|${capture.amount.toStringAsFixed(2)}|time:$normalizedTime';
+    }
     final normalized = _normalizeText(capture.rawText ?? '');
     return '${capture.source}|${capture.amount.toStringAsFixed(2)}|$normalized';
+  }
+
+  String? _normalizeDetailTime(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final match = RegExp(r'(\\d{4})[年\\./-](\\d{1,2})[月\\./-](\\d{1,2})[^\\d]*(\\d{1,2}):(\\d{2})').firstMatch(raw);
+    if (match != null) {
+      final year = match.group(1);
+      final month = match.group(2)?.padLeft(2, '0');
+      final day = match.group(3)?.padLeft(2, '0');
+      final hour = match.group(4)?.padLeft(2, '0');
+      final minute = match.group(5)?.padLeft(2, '0');
+      if (year != null && month != null && day != null && hour != null && minute != null) {
+        return '$year$month$day$hour$minute';
+      }
+    }
+    return null;
+  }
+
+  String? _extractDetailTimeFromRawText(String? rawText) {
+    if (rawText == null || rawText.trim().isEmpty) return null;
+    return _normalizeDetailTime(rawText);
   }
 
   int? _resolveAccountIdFromAccounts(
     List<JiveAccount> accounts,
     String source,
     String? rawText,
+    Map<String, dynamic> metadata,
     List<AutoAccountMapping> mappings,
+    {required bool allowFallback}
   ) {
     if (accounts.isEmpty) return null;
+    final metaFrom = _metadataValue(metadata, const ['from_asset', 'asset', 'fromAsset']);
+    if (metaFrom != null) {
+      final mapped = _resolveMappingAccountId(accounts, mappings, metaFrom);
+      if (mapped != null) return mapped;
+      final hint = _hintFromMetadataValue(metaFrom);
+      if (hint != null) {
+        final matched = _matchAccountByHint(accounts, hint);
+        if (matched != null) return matched;
+        if (_hintIndicatesBank(hint)) {
+          return null;
+        }
+      }
+    }
     final fromHint = _extractFromAccountHint(rawText);
     if (fromHint != null) {
       final mapped = _resolveMappingAccountId(accounts, mappings, fromHint.name);
@@ -556,7 +667,11 @@ class AutoDraftService {
     if (fromHint != null) {
       final matched = _matchAccountByHint(accounts, fromHint);
       if (matched != null) return matched;
+      if (_hintIndicatesBank(fromHint)) {
+        return null;
+      }
     }
+    if (!allowFallback) return null;
     if (source.contains('WeChat') || source.contains('微信')) {
       return _matchAccountByName(accounts, ['微信', '零钱', '微信钱包']) ?? accounts.first.id;
     }
@@ -572,13 +687,70 @@ class AutoDraftService {
   int? _resolveToAccountIdFromAccounts(
     List<JiveAccount> accounts,
     String? rawText,
+    Map<String, dynamic> metadata,
     List<AutoAccountMapping> mappings,
   ) {
-    final hint = _extractToAccountHint(rawText);
+    final metaFrom = _metadataValue(metadata, const ['from_asset', 'asset', 'fromAsset']);
+    var metaTo = _metadataValue(metadata, const ['to_asset', 'toAccount', 'to_asset_name']);
+    if (metaFrom != null && metaTo != null) {
+      final normalizedFrom = _sanitizeHintName(metaFrom) ?? metaFrom;
+      final normalizedTo = _sanitizeHintName(metaTo) ?? metaTo;
+      if (normalizedFrom == normalizedTo && _walletHintKeywords.contains(normalizedFrom)) {
+        metaTo = null;
+      }
+    }
+    if (metaTo != null) {
+      final mapped = _resolveMappingAccountId(accounts, mappings, metaTo);
+      if (mapped != null) return mapped;
+      final hint = _hintFromMetadataValue(metaTo);
+      if (hint != null) {
+        final matched = _matchAccountByHint(accounts, hint);
+        if (matched != null) return matched;
+      }
+    }
+    final hint = _hasToAccountAnchors(rawText) ? _extractToAccountHint(rawText) : null;
     if (hint == null) return null;
     final mapped = _resolveMappingAccountId(accounts, mappings, hint.name);
     if (mapped != null) return mapped;
     return _matchAccountByHint(accounts, hint);
+  }
+
+  Map<String, dynamic> _parseMetadata(String? jsonText) {
+    if (jsonText == null || jsonText.trim().isEmpty) return const {};
+    try {
+      final decoded = json.decode(jsonText);
+      if (decoded is Map<String, dynamic>) return decoded;
+    } catch (_) {}
+    return const {};
+  }
+
+  String? _metadataValue(Map<String, dynamic> metadata, List<String> keys) {
+    for (final key in keys) {
+      final raw = metadata[key];
+      if (raw == null) continue;
+      final value = raw.toString().trim();
+      if (value.isEmpty) continue;
+      return value;
+    }
+    return null;
+  }
+
+  _AccountHint? _hintFromMetadataValue(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(value)?.group(1) ??
+        RegExp(r'[（(]\s*(\d{3,4})\s*[）)]').firstMatch(value)?.group(1);
+    var cleaned = value.replaceAll(RegExp(r'[（(]\s*\d{3,4}\s*[）)]'), '').trim();
+    final normalized = _sanitizeHintName(cleaned) ?? _sanitizeHintName(value);
+    if (normalized == null || normalized.isEmpty) return null;
+    return _AccountHint(name: normalized, tail: tail);
+  }
+
+  bool _hintIndicatesBank(_AccountHint hint) {
+    if (hint.tail != null) return true;
+    if (hint.name.contains('银行卡') || hint.name.contains('储蓄卡') || hint.name.contains('信用卡')) {
+      return true;
+    }
+    return _extractBankName(hint.name) != null;
   }
 
   int? _resolveMappingAccountId(
@@ -625,7 +797,7 @@ class AutoDraftService {
     final text = rawText.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     if (text.isEmpty) return null;
     final patterns = [
-      RegExp(r'(?:到账银行卡|到账卡|收款银行卡|收款卡|收款账号|收款账户|转入卡|转出卡|银行卡)[:：]?\s*([^\s，,。;；]{2,30})'),
+      RegExp(r'(?:到账银行卡|到账卡|收款银行卡|收款卡|收款账号|收款账户|转入卡|转出卡|转入账户|到账账户|还款到|退款至)[:：]?\s*([^\s，,。;；]{2,30})'),
       RegExp(r'(?:转账到|转到|转至|转入至|到账至)[:：]?\s*([^\s，,。;；]{2,30})'),
     ];
 
@@ -638,12 +810,8 @@ class AutoDraftService {
       }
     }
 
-    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
-        RegExp(r'[（(](\d{3,4})[）)]').firstMatch(text)?.group(1);
-
     if (name == null || name.trim().isEmpty) {
-      if (tail == null) return _inferAccountHintFromContext(text, preferWallet: false);
-      return _AccountHint(name: tail, tail: tail);
+      return _inferAccountHintFromContext(text, preferWallet: false);
     }
 
     var cleaned = name.replaceAll(RegExp(r'[，,。\s]+$'), '').trim();
@@ -667,8 +835,9 @@ class AutoDraftService {
     if (normalized == null || normalized.isEmpty) {
       return _inferAccountHintFromContext(text, preferWallet: false);
     }
-    final resolvedTail = tailFromName ??
-        (RegExp(r'^\d{3,4}$').hasMatch(normalized) ? normalized : null);
+    final tailNearName = tailFromName == null ? _extractTailNearName(text, name) : null;
+    final resolvedTail =
+        tailFromName ?? tailNearName ?? (RegExp(r'^\d{3,4}$').hasMatch(normalized) ? normalized : null);
     return _AccountHint(name: normalized, tail: resolvedTail);
   }
 
@@ -690,12 +859,8 @@ class AutoDraftService {
       }
     }
 
-    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
-        RegExp(r'[（(](\d{3,4})[）)]').firstMatch(text)?.group(1);
-
     if (name == null || name.trim().isEmpty) {
-      if (tail == null) return _inferAccountHintFromContext(text, preferWallet: true);
-      return _AccountHint(name: tail, tail: tail);
+      return _inferAccountHintFromContext(text, preferWallet: true);
     }
 
     var cleaned = name.replaceAll(RegExp(r'[，,。\s]+$'), '').trim();
@@ -719,13 +884,27 @@ class AutoDraftService {
     if (normalized == null || normalized.isEmpty) {
       return _inferAccountHintFromContext(text, preferWallet: true);
     }
-    final resolvedTail = tailFromName ??
-        (RegExp(r'^\d{3,4}$').hasMatch(normalized) ? normalized : null);
+    final tailNearName = tailFromName == null ? _extractTailNearName(text, name) : null;
+    final resolvedTail =
+        tailFromName ?? tailNearName ?? (RegExp(r'^\d{3,4}$').hasMatch(normalized) ? normalized : null);
     return _AccountHint(name: normalized, tail: resolvedTail);
+  }
+
+  String? _extractTailNearName(String text, String name) {
+    if (text.isEmpty || name.isEmpty) return null;
+    final index = text.indexOf(name);
+    if (index < 0) return null;
+    var end = index + name.length + 12;
+    if (end > text.length) end = text.length;
+    final slice = text.substring(index, end);
+    return RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(slice)?.group(1) ??
+        RegExp(r'[（(]\s*(\d{3,4})\s*[）)]').firstMatch(slice)?.group(1);
   }
 
   _AccountHint? _inferAccountHintFromContext(String text, {required bool preferWallet}) {
     final bank = _extractBankName(text);
+    final bankTail = bank == null ? null : _extractTailNearName(text, bank);
+    final hasCardMarker = text.contains('银行卡') || text.contains('储蓄卡') || text.contains('信用卡');
     String? wallet;
     for (final keyword in _walletHintKeywords) {
       if (text.contains(keyword)) {
@@ -733,11 +912,19 @@ class AutoDraftService {
         break;
       }
     }
-    final primary = preferWallet ? (wallet ?? bank) : (bank ?? wallet);
+    final preferBank = bank != null && (bankTail != null || hasCardMarker);
+    final primary = preferBank ? bank : (preferWallet ? (wallet ?? bank) : (bank ?? wallet));
     if (primary == null) return null;
-    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
-        RegExp(r'[（(](\d{3,4})[）)]').firstMatch(text)?.group(1);
+    final tail = _extractTailNearName(text, primary);
     return _AccountHint(name: primary, tail: tail);
+  }
+
+  bool _hasToAccountAnchors(String? rawText) {
+    if (rawText == null || rawText.trim().isEmpty) return false;
+    for (final keyword in _toAccountAnchorKeywords) {
+      if (rawText.contains(keyword)) return true;
+    }
+    return false;
   }
 
   String? _sanitizeHintName(String name) {
@@ -753,7 +940,7 @@ class AutoDraftService {
       if (trimmed.contains(keyword)) return keyword;
     }
     if (RegExp(r'^\d{3,4}$').hasMatch(trimmed)) return trimmed;
-    if (RegExp(r'(?:元|今日|今天|昨天|交易|支付|消费|退款|收款|转入|转出|支出|收入|成功|失败|单次|定时|投资|理财)')
+    if (RegExp(r'(?:元|今日|今天|昨天|交易|支付|消费|退款|收款|转入|转出|支出|收入|成功|失败|单次|定时|投资|理财|帮助|更多|查看|详情|疑问|问题|账单管理|往来流水|AA收款|联系商家|申请电子回单)')
         .hasMatch(trimmed)) {
       return null;
     }
@@ -889,6 +1076,20 @@ class AutoDraftService {
     }
     final currencyHits = RegExp(r'[¥￥]').allMatches(text).length;
     return currencyHits >= 3;
+  }
+
+  bool _looksLikeListRecord(String? rawText) {
+    if (rawText == null || rawText.trim().isEmpty) return false;
+    final text = rawText.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.contains('搜索交易记录')) return true;
+    if (text.contains('筛选') && text.contains('全部') && text.contains('支出') && text.contains('转账')) {
+      return true;
+    }
+    if ((text.contains('账单列表') || text.contains('账单记录') || text.contains('交易记录')) &&
+        (text.contains('筛选') || text.contains('搜索'))) {
+      return true;
+    }
+    return false;
   }
 }
 

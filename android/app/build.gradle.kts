@@ -22,6 +22,7 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.jivemoney.app"
+        resValue("string", "app_name", "Jive")
         // You can update the following values to match your application needs.
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         minSdk = flutter.minSdkVersion
@@ -31,6 +32,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".auto"
+            versionNameSuffix = "-auto"
+            resValue("string", "app_name", "Jive Auto")
+        }
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.

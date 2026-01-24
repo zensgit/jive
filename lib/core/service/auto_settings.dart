@@ -7,6 +7,7 @@ class AutoSettings {
   final List<String> keywordFilters;
   final bool autoTransferRecognition;
   final int autoTransferWindowSeconds;
+  final bool debugShowDraftMetadata;
 
   const AutoSettings({
     required this.enabled,
@@ -15,6 +16,7 @@ class AutoSettings {
     required this.keywordFilters,
     required this.autoTransferRecognition,
     required this.autoTransferWindowSeconds,
+    required this.debugShowDraftMetadata,
   });
 
   AutoSettings copyWith({
@@ -24,6 +26,7 @@ class AutoSettings {
     List<String>? keywordFilters,
     bool? autoTransferRecognition,
     int? autoTransferWindowSeconds,
+    bool? debugShowDraftMetadata,
   }) {
     return AutoSettings(
       enabled: enabled ?? this.enabled,
@@ -32,6 +35,7 @@ class AutoSettings {
       keywordFilters: keywordFilters ?? this.keywordFilters,
       autoTransferRecognition: autoTransferRecognition ?? this.autoTransferRecognition,
       autoTransferWindowSeconds: autoTransferWindowSeconds ?? this.autoTransferWindowSeconds,
+      debugShowDraftMetadata: debugShowDraftMetadata ?? this.debugShowDraftMetadata,
     );
   }
 }
@@ -43,6 +47,7 @@ class AutoSettingsStore {
   static const _keyKeywordFilters = 'auto_keyword_filters';
   static const _keyAutoTransferRecognition = 'auto_transfer_recognition';
   static const _keyAutoTransferWindowSeconds = 'auto_transfer_window_seconds';
+  static const _keyDebugShowDraftMetadata = 'auto_debug_show_draft_metadata';
 
   static const defaultKeywordFilters = [
     '支付成功',
@@ -69,6 +74,7 @@ class AutoSettingsStore {
     keywordFilters: defaultKeywordFilters,
     autoTransferRecognition: true,
     autoTransferWindowSeconds: 60,
+    debugShowDraftMetadata: false,
   );
 
   static Future<AutoSettings> load() async {
@@ -82,6 +88,8 @@ class AutoSettingsStore {
       autoTransferRecognition: prefs.getBool(_keyAutoTransferRecognition) ?? defaults.autoTransferRecognition,
       autoTransferWindowSeconds:
           prefs.getInt(_keyAutoTransferWindowSeconds) ?? defaults.autoTransferWindowSeconds,
+      debugShowDraftMetadata:
+          prefs.getBool(_keyDebugShowDraftMetadata) ?? defaults.debugShowDraftMetadata,
     );
   }
 
@@ -93,5 +101,6 @@ class AutoSettingsStore {
     await prefs.setStringList(_keyKeywordFilters, settings.keywordFilters);
     await prefs.setBool(_keyAutoTransferRecognition, settings.autoTransferRecognition);
     await prefs.setInt(_keyAutoTransferWindowSeconds, settings.autoTransferWindowSeconds);
+    await prefs.setBool(_keyDebugShowDraftMetadata, settings.debugShowDraftMetadata);
   }
 }

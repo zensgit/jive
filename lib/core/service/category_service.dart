@@ -16,13 +16,34 @@ class CategoryService {
   static const int _systemCategorySeedVersion = 4;
   static const String _systemCategorySeedKey = 'system_category_seed_version';
   static const String _noParentOverrideKey = '__no_parent__';
-  static const Color _defaultIconColor = Color(0xFF616161);
+  static const Color _defaultIconColor = Color(0xFF202020);
+  static const Set<String> _softIconKeys = {
+    '装修__搬家__Renovation__Moving.png',
+    '餐饮__请客__Catering__Treat.png',
+    '餐饮__三餐__Catering__ThreeMeals.png',
+    '餐饮__烧烤__Catering__Barbecue.png',
+    '餐饮__生鲜__Catering__FreshFood.png',
+    '餐饮__外卖__Catering__Takeaway.png',
+    '餐饮__午餐__Catering__Lunch.png',
+    '餐饮__西餐__Catering__WesternFood.png',
+    '餐饮__烟酒__Catering__SmokeAndWine.png',
+  };
   static const List<double> _grayscaleMatrix = [
     0.2126, 0.7152, 0.0722, 0, 0,
     0.2126, 0.7152, 0.0722, 0, 0,
     0.2126, 0.7152, 0.0722, 0, 0,
     0, 0, 0, 1, 0,
   ];
+  static const double _contrastFactor = 1.02;
+  static const double _contrastOffset = 128 * (1 - _contrastFactor);
+  static const List<double> _contrastMatrix = [
+    _contrastFactor, 0, 0, 0, _contrastOffset,
+    0, _contrastFactor, 0, 0, _contrastOffset,
+    0, 0, _contrastFactor, 0, _contrastOffset,
+    0, 0, 0, 1, 0,
+  ];
+  static const double _defaultLiftTarget = 0.40;
+  static const double _softLiftTarget = 0.95;
   static const Map<String, String> _systemParentAliases = {
     "心情": "表情",
   };
@@ -37,6 +58,7 @@ class CategoryService {
     await _applySystemOverrides();
     await _mergeSystemCategoryVariants();
     await _syncSystemCategoryIcons();
+    await _syncCategoryIconsFromSystemLibrary();
     if (migrated) {
       await _refreshTransactionCategoryNames();
     }
@@ -51,6 +73,7 @@ class CategoryService {
     await _applySystemOverrides();
     await _mergeSystemCategoryVariants();
     await _syncSystemCategoryIcons();
+    await _syncCategoryIconsFromSystemLibrary();
   }
 
   Future<bool> _applySystemSeedIfNeeded() async {
@@ -608,6 +631,90 @@ class CategoryService {
       if (desired == null || desired == "category") continue;
       if (_isFileIcon(cat.iconName) || _isTextIcon(cat.iconName)) continue;
       if (_normalizeIconKey(cat.iconName) == _normalizeIconKey(desired)) continue;
+      cat.iconName = desired;
+      cat.updatedAt = now;
+      updated.add(cat);
+    }
+
+    if (updated.isEmpty) return;
+    await isar.writeTxn(() async {
+      await isar.collection<JiveCategory>().putAll(updated);
+    });
+  }
+
+  Future<void> _syncCategoryIconsFromSystemLibrary() async {
+    final merged = _mergeSystemLibraries(kSystemExpenseLibrary, kSystemIncomeLibrary);
+    if (merged.isEmpty) return;
+
+    final parentIconByName = <String, String>{};
+    final childIconByName = <String, String>{};
+
+    for (final entry in merged.entries) {
+      final rawParentName = entry.key;
+      final parentName = _systemParentAliases[rawParentName] ?? rawParentName;
+      final parentKey = _normalizeMatchName(parentName);
+      final parentIcon = _normalizeIconName(entry.value['icon'] as String?, parentName);
+      if (parentIcon != "category") {
+        parentIconByName[parentKey] = parentIcon;
+      }
+
+      final children = entry.value['children'] as List<dynamic>? ?? const [];
+      for (final child in children) {
+        final childName = (child['name'] as String? ?? "").trim();
+        if (childName.isEmpty) continue;
+        final childKey = "${parentKey}|${_normalizeMatchName(childName)}";
+        final childIcon = _normalizeIconName(
+          child['icon'] as String?,
+          childName,
+          parentName: parentName,
+        );
+        if (childIcon != "category") {
+          childIconByName[childKey] = childIcon;
+        }
+      }
+    }
+
+    final overridesByKey = await _loadOverridesByKey();
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    if (categories.isEmpty) return;
+
+    final parentNameByKey = {
+      for (final cat in categories)
+        if (cat.parentKey == null) cat.key: cat.name,
+    };
+    final systemIconKeys = <String>{
+      for (final icon in parentIconByName.values) _normalizeIconKey(icon),
+      for (final icon in childIconByName.values) _normalizeIconKey(icon),
+    };
+
+    final now = DateTime.now();
+    final updated = <JiveCategory>[];
+    for (final cat in categories) {
+      if (_isFileIcon(cat.iconName) || _isTextIcon(cat.iconName) || _isEmojiIcon(cat.iconName)) continue;
+      if (cat.isSystem && overridesByKey[cat.key]?.iconOverride != null) continue;
+
+      String? desired;
+      if (cat.parentKey == null) {
+        final parentName = _systemParentAliases[cat.name] ?? cat.name;
+        desired = parentIconByName[_normalizeMatchName(parentName)];
+      } else {
+        final parentName = parentNameByKey[cat.parentKey];
+        if (parentName == null) continue;
+        final parentKey = _normalizeMatchName(_systemParentAliases[parentName] ?? parentName);
+        final childKey = "${parentKey}|${_normalizeMatchName(cat.name)}";
+        desired = childIconByName[childKey];
+      }
+
+      if (desired == null || desired == "category") continue;
+      final desiredKey = _normalizeIconKey(desired);
+      final currentKey = _normalizeIconKey(cat.iconName);
+      if (currentKey == desiredKey) continue;
+      final shouldUpdate = cat.isSystem ||
+          cat.iconName == "category" ||
+          cat.iconName == "attach_money" ||
+          systemIconKeys.contains(currentKey);
+      if (!shouldUpdate) continue;
+
       cat.iconName = desired;
       cat.updatedAt = now;
       updated.add(cat);
@@ -1402,19 +1509,64 @@ class CategoryService {
     return name;
   }
 
+  static Color _resolveIconTone(String name, Color base) {
+    if (!_isNeutralGray(base)) return base;
+    final key = _assetIconKey(name);
+    if (_softIconKeys.contains(key)) {
+      return const Color(0xFFC0C0C0);
+    }
+    return base;
+  }
+
+  static bool _isSoftIcon(String name) {
+    final key = _assetIconKey(name);
+    return _softIconKeys.contains(key);
+  }
+
   static bool _isBrandIcon(String name) {
     final key = _assetIconKey(name);
     return key.startsWith("品牌__") || key.contains("__Brand__");
   }
 
-  static Widget _applyDetailPreservingTint(Widget child, Color color) {
+  static Widget _applyDetailPreservingTint(
+    Widget child,
+    Color color, {
+    bool soften = false,
+    double? liftTarget,
+  }) {
+    var toned = color;
+    if (_isNeutralGray(toned)) {
+      toned = _liftGray(toned, targetLuminance: liftTarget ?? _defaultLiftTarget);
+    } else if (soften) {
+      toned = Color.lerp(toned, Colors.black, 0.06) ?? toned;
+    }
     return ColorFiltered(
       colorFilter: const ColorFilter.matrix(_grayscaleMatrix),
       child: ColorFiltered(
-        colorFilter: ColorFilter.mode(color, BlendMode.modulate),
-        child: child,
+        colorFilter: const ColorFilter.matrix(_contrastMatrix),
+        child: ColorFiltered(
+          colorFilter: ColorFilter.mode(toned, BlendMode.modulate),
+          child: child,
+        ),
       ),
     );
+  }
+
+  static bool _isNeutralGray(Color color) {
+    final r = color.red;
+    final g = color.green;
+    final b = color.blue;
+    final maxChannel = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    final minChannel = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    return (maxChannel - minChannel) <= 4;
+  }
+
+  static Color _liftGray(Color color, {double targetLuminance = _defaultLiftTarget}) {
+    final luminance = color.computeLuminance();
+    if (luminance >= targetLuminance) return color;
+    final raw = (targetLuminance - luminance) / (1.0 - luminance);
+    final t = raw < 0 ? 0.0 : (raw > 0.55 ? 0.55 : raw);
+    return Color.lerp(color, Colors.white, t) ?? color;
   }
 
   static bool _isFileIcon(String name) {
@@ -1425,8 +1577,31 @@ class CategoryService {
     return name.startsWith("text:");
   }
 
+  static bool _isEmojiIcon(String name) {
+    return name.startsWith("emoji:");
+  }
+
   static String _textIconValue(String name) {
     return name.substring("text:".length).trim();
+  }
+
+  static String _emojiSequence(String name) {
+    return name.substring("emoji:".length).trim();
+  }
+
+  static String _emojiAssetPath(String sequence) {
+    return "assets/emoji/emoji_u$sequence.png";
+  }
+
+  static String _emojiFromSequence(String sequence) {
+    try {
+      final codepoints = sequence.split("_").where((part) => part.isNotEmpty);
+      return String.fromCharCodes(
+        codepoints.map((part) => int.parse(part, radix: 16)),
+      );
+    } catch (_) {
+      return "?";
+    }
   }
 
   static int _cacheWidth(double size) {
@@ -1450,6 +1625,8 @@ class CategoryService {
     Color? color,
   }) {
     final resolvedColor = color ?? _defaultIconColor;
+    final isSoft = _isSoftIcon(name);
+    final tonedColor = _resolveIconTone(name, resolvedColor);
     if (_isTextIcon(name)) {
       final text = _textIconValue(name);
       return Center(
@@ -1460,8 +1637,23 @@ class CategoryService {
           style: TextStyle(
             fontSize: size * 0.6,
             fontWeight: FontWeight.w600,
-            color: resolvedColor,
+            color: tonedColor,
           ),
+        ),
+      );
+    }
+    if (_isEmojiIcon(name)) {
+      final sequence = _emojiSequence(name);
+      final cacheWidth = _cacheWidth(size);
+      return Image.asset(
+        _emojiAssetPath(sequence),
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        cacheWidth: cacheWidth,
+        errorBuilder: (_, __, ___) => Text(
+          _emojiFromSequence(sequence),
+          style: TextStyle(fontSize: size * 0.8),
         ),
       );
     }
@@ -1474,7 +1666,7 @@ class CategoryService {
         height: size,
         fit: BoxFit.contain,
         cacheWidth: cacheWidth,
-        errorBuilder: (_, __, ___) => Icon(Icons.category, size: size, color: resolvedColor),
+        errorBuilder: (_, __, ___) => Icon(Icons.category, size: size, color: tonedColor),
       );
     }
     if (_isAssetIcon(name)) {
@@ -1485,9 +1677,13 @@ class CategoryService {
           width: size,
           height: size,
           fit: BoxFit.contain,
-          colorFilter: _isBrandIcon(name) ? null : ColorFilter.mode(resolvedColor, BlendMode.srcIn),
         );
-        return _isBrandIcon(name) ? _applyDetailPreservingTint(svg, resolvedColor) : svg;
+        return _applyDetailPreservingTint(
+          svg,
+          tonedColor,
+          soften: _isBrandIcon(name),
+          liftTarget: isSoft ? _softLiftTarget : _defaultLiftTarget,
+        );
       }
       final cacheWidth = _cacheWidth(size);
       final image = Image.asset(
@@ -1496,14 +1692,17 @@ class CategoryService {
         height: size,
         fit: BoxFit.contain,
         cacheWidth: cacheWidth,
-        color: _isBrandIcon(name) ? null : resolvedColor,
-        colorBlendMode: _isBrandIcon(name) ? null : BlendMode.srcIn,
         errorBuilder:
-            (_, __, ___) => Icon(Icons.category, size: size, color: resolvedColor),
+            (_, __, ___) => Icon(Icons.category, size: size, color: tonedColor),
       );
-      return _isBrandIcon(name) ? _applyDetailPreservingTint(image, resolvedColor) : image;
+      return _applyDetailPreservingTint(
+        image,
+        tonedColor,
+        soften: _isBrandIcon(name),
+        liftTarget: isSoft ? _softLiftTarget : _defaultLiftTarget,
+      );
     }
-    return Icon(getIcon(name), size: size, color: resolvedColor);
+    return Icon(getIcon(name), size: size, color: tonedColor);
   }
 
   static Color? parseColorHex(String? value) {

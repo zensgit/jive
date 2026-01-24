@@ -114,6 +114,7 @@ class MainActivity: FlutterActivity() {
                 val amount = intent.getStringExtra("amount")
                 val rawText = intent.getStringExtra("raw_text")
                 val type = intent.getStringExtra("type")
+                val metadata = intent.getStringExtra("metadata")
                 val timestamp = intent.getLongExtra("timestamp", System.currentTimeMillis())
                 val packageName = intent.getStringExtra("package_name")
 
@@ -124,6 +125,7 @@ class MainActivity: FlutterActivity() {
                     "amount" to amount,
                     "raw_text" to rawText,
                     "type" to type,
+                    "metadata" to metadata,
                     "timestamp" to timestamp,
                     "package_name" to packageName
                 )

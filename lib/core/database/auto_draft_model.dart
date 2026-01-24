@@ -13,6 +13,7 @@ class JiveAutoDraft {
   late DateTime timestamp;
 
   String? rawText;
+  String? metadataJson;
   String? type; // expense | income | transfer
 
   String? category;

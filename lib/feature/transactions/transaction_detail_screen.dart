@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
@@ -10,6 +12,11 @@ import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
 import 'add_transaction_screen.dart';
+import 'widgets/transaction_action_bar.dart';
+import 'widgets/transaction_hero_section.dart';
+import 'widgets/transaction_info_card.dart';
+import 'widgets/transaction_note_card.dart';
+import 'widgets/transaction_raw_text_card.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final int transactionId;
@@ -24,15 +31,14 @@ class TransactionDetailScreen extends StatefulWidget {
 }
 
 class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
-  late final NumberFormat _currency = NumberFormat.currency(symbol: "¥");
-  late final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
-
   Isar? _isar;
   bool _isLoading = true;
   String? _errorMessage;
   JiveTransaction? _transaction;
-  final Map<String, JiveCategory> _categoryByKey = {};
-  final Map<int, JiveAccount> _accountById = {};
+  JiveCategory? _category;
+  JiveCategory? _subCategory;
+  JiveAccount? _account;
+  JiveAccount? _toAccount;
   bool _hasDataChanges = false;
 
   @override
@@ -46,26 +52,48 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       _isLoading = true;
       _errorMessage = null;
     });
+
     try {
       final isar = await _ensureIsar();
       final tx = await isar.jiveTransactions.get(widget.transactionId);
       if (tx == null) {
         throw StateError('transaction_missing');
       }
-      final categories =
-          await isar.collection<JiveCategory>().where().findAll();
-      final accounts =
-          await isar.collection<JiveAccount>().where().findAll();
+
+      // 加载分类
+      JiveCategory? category;
+      JiveCategory? subCategory;
+      if (tx.categoryKey != null) {
+        category = await isar.jiveCategorys
+            .filter()
+            .keyEqualTo(tx.categoryKey!)
+            .findFirst();
+      }
+      if (tx.subCategoryKey != null) {
+        subCategory = await isar.jiveCategorys
+            .filter()
+            .keyEqualTo(tx.subCategoryKey!)
+            .findFirst();
+      }
+
+      // 加载账户
+      JiveAccount? account;
+      if (tx.accountId != null) {
+        account = await isar.jiveAccounts.get(tx.accountId!);
+      }
+
+      JiveAccount? toAccount;
+      if (tx.toAccountId != null) {
+        toAccount = await isar.jiveAccounts.get(tx.toAccountId!);
+      }
 
       if (!mounted) return;
       setState(() {
         _transaction = tx;
-        _categoryByKey
-          ..clear()
-          ..addEntries(categories.map((c) => MapEntry(c.key, c)));
-        _accountById
-          ..clear()
-          ..addEntries(accounts.map((a) => MapEntry(a.id, a)));
+        _category = category;
+        _subCategory = subCategory;
+        _account = account;
+        _toAccount = toAccount;
         _isLoading = false;
       });
     } catch (e) {
@@ -130,6 +158,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('删除'),
           ),
         ],
@@ -143,6 +172,173 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     Navigator.pop(context, true);
   }
 
+  Future<void> _copyTransaction() async {
+    final tx = _transaction;
+    if (tx == null) return;
+
+    // 复制一条新交易（时间为当前时间），然后打开编辑页面
+    final newTx = JiveTransaction()
+      ..amount = tx.amount
+      ..type = tx.type
+      ..source = '复制'
+      ..timestamp = DateTime.now()
+      ..accountId = tx.accountId
+      ..toAccountId = tx.toAccountId
+      ..categoryKey = tx.categoryKey
+      ..subCategoryKey = tx.subCategoryKey
+      ..category = tx.category
+      ..subCategory = tx.subCategory
+      ..note = tx.note;
+
+    // 先保存交易
+    await _isar!.writeTxn(() async {
+      await _isar!.jiveTransactions.put(newTx);
+    });
+
+    _hasDataChanges = true;
+    if (!mounted) return;
+
+    // 打开编辑页面让用户修改
+    final updated = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddTransactionScreen(editingTransaction: newTx),
+      ),
+    );
+
+    if (updated == true) {
+      // 用户保存了修改
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('交易已复制并保存')),
+      );
+    } else {
+      // 用户取消了编辑，删除刚创建的交易
+      await _isar!.writeTxn(() async {
+        await _isar!.jiveTransactions.delete(newTx.id);
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已取消复制')),
+      );
+    }
+  }
+
+  Future<void> _createRefund() async {
+    final tx = _transaction;
+    if (tx == null) return;
+
+    // 弹出对话框让用户输入退款金额
+    final amountController = TextEditingController(text: tx.amount.toString());
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('创建退款'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '原交易金额: ¥${tx.amount.toStringAsFixed(2)}',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: amountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: '退款金额',
+                prefixText: '¥ ',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确认退款'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final refundAmount = double.tryParse(amountController.text.trim());
+    if (refundAmount == null || refundAmount <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入有效的退款金额')),
+      );
+      return;
+    }
+
+    if (refundAmount > tx.amount) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('退款金额不能超过原交易金额')),
+      );
+      return;
+    }
+
+    // 创建退款交易（类型相反）
+    final refundType = tx.type == 'income' ? 'expense' : 'income';
+    final isPartial = refundAmount < tx.amount;
+    final refundTx = JiveTransaction()
+      ..amount = refundAmount
+      ..type = refundType
+      ..source = '退款'
+      ..timestamp = DateTime.now()
+      ..accountId = tx.accountId
+      ..categoryKey = tx.categoryKey
+      ..subCategoryKey = tx.subCategoryKey
+      ..category = tx.category
+      ..subCategory = tx.subCategory
+      ..note = isPartial
+          ? '部分退款 (原¥${tx.amount.toStringAsFixed(2)}): ${tx.note ?? ''}'
+          : '退款: ${tx.note ?? ''}';
+
+    await _isar!.writeTxn(() async {
+      await _isar!.jiveTransactions.put(refundTx);
+    });
+
+    _hasDataChanges = true;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isPartial
+            ? '已创建部分退款 ¥${refundAmount.toStringAsFixed(2)}'
+            : '已创建全额退款'),
+      ),
+    );
+  }
+
+  void _shareTransaction() {
+    final tx = _transaction;
+    if (tx == null) return;
+
+    final typeLabel = tx.type == 'income' ? '收入' : (tx.type == 'transfer' ? '转账' : '支出');
+    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(tx.timestamp);
+    final categoryName = _category?.name ?? tx.category ?? '未分类';
+    final accountName = _account?.name ?? '未知账户';
+
+    final text = '''
+【Jive记账】
+$typeLabel: ¥${tx.amount.toStringAsFixed(2)}
+分类: $categoryName
+账户: $accountName
+时间: $dateStr
+${tx.note != null && tx.note!.isNotEmpty ? '备注: ${tx.note}' : ''}
+'''.trim();
+
+    Share.share(text, subject: 'Jive记账 - $typeLabel');
+  }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -151,18 +347,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         return false;
       },
       child: Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context, _hasDataChanges),
-          ),
-          title: Text(
-            '交易详情',
-            style: GoogleFonts.lato(fontWeight: FontWeight.w600),
-          ),
-          centerTitle: true,
-        ),
+        backgroundColor: JiveTheme.surfaceWhite,
         body: _buildBody(),
+        bottomNavigationBar: _transaction != null
+            ? TransactionActionBar(
+                onDelete: _deleteTransaction,
+                onEdit: _editTransaction,
+                onCopy: _copyTransaction,
+                onSaveAsTemplate: null, // 模板功能后续实现
+                onMarkRefund: _createRefund,
+                onShare: _shareTransaction,
+              )
+            : null,
       ),
     );
   }
@@ -178,151 +374,69 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (tx == null) {
       return _buildErrorState('暂无数据');
     }
-    final type = tx.type ?? 'expense';
-    final isTransfer = type == 'transfer';
-    final amountColor = isTransfer
-        ? Colors.blueGrey
-        : (type == 'income' ? Colors.green : Colors.redAccent);
-    final amountPrefix = isTransfer ? '' : (type == 'income' ? '+ ' : '- ');
-    final title = isTransfer ? _transferTitle(tx) : _categoryTitle(tx);
-    final subtitle = isTransfer ? _transferSubtitle(tx) : _categorySubtitle(tx);
-    return Column(
-      children: [
-        const SizedBox(height: 16),
-        Text(
-          '$amountPrefix${_currency.format(tx.amount)}',
-          style: GoogleFonts.rubik(
-            fontSize: 32,
-            fontWeight: FontWeight.w700,
-            color: amountColor,
+
+    return CustomScrollView(
+      slivers: [
+        // 透明 AppBar
+        SliverAppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: _buildBackButton(),
+          pinned: true,
+        ),
+        // Hero 区域
+        SliverToBoxAdapter(
+          child: TransactionHeroSection(
+            transaction: tx,
+            category: _category,
+            subCategory: _subCategory,
+            account: _account,
+            toAccount: _toAccount,
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          title,
-          style: GoogleFonts.lato(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey.shade700,
+        // 信息卡片
+        SliverToBoxAdapter(
+          child: TransactionInfoCard(
+            transaction: tx,
           ),
         ),
-        if (subtitle.isNotEmpty)
-          Text(
-            subtitle,
-            style: GoogleFonts.lato(
-              fontSize: 12,
-              color: Colors.grey.shade500,
-            ),
+        // 备注卡片
+        if (tx.note != null && tx.note!.trim().isNotEmpty)
+          SliverToBoxAdapter(
+            child: TransactionNoteCard(note: tx.note!),
           ),
-        const SizedBox(height: 20),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            children: [
-              _buildDetailCard([
-                _buildDetailRow('类型', _typeLabel(type)),
-                _buildDetailRow('时间', _dateTimeFormat.format(tx.timestamp)),
-                _buildDetailRow('来源', tx.source),
-              ]),
-              const SizedBox(height: 12),
-              _buildDetailCard([
-                if (!isTransfer)
-                  _buildDetailRow('分类', _categoryTitle(tx)),
-                if (!isTransfer)
-                  _buildDetailRow('子类', _categorySubtitle(tx)),
-                _buildDetailRow('账户', _resolveAccountName(tx.accountId)),
-                if (isTransfer)
-                  _buildDetailRow('转入账户', _resolveAccountName(tx.toAccountId)),
-              ]),
-              const SizedBox(height: 12),
-              _buildDetailCard([
-                _buildDetailRow('备注', tx.note?.trim().isEmpty ?? true ? '无' : tx.note!.trim()),
-                _buildDetailRow('原始信息', tx.rawText?.trim().isEmpty ?? true ? '无' : tx.rawText!.trim()),
-              ]),
-              const SizedBox(height: 80),
-            ],
+        // 原始通知
+        if (tx.rawText != null && tx.rawText!.trim().isNotEmpty)
+          SliverToBoxAdapter(
+            child: TransactionRawTextCard(rawText: tx.rawText!),
           ),
-        ),
-        SafeArea(
-          top: false,
-          minimum: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _deleteTransaction,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.redAccent,
-                    side: const BorderSide(color: Colors.redAccent),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('删除'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _editTransaction,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: JiveTheme.primaryGreen,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('编辑'),
-                ),
-              ),
-            ],
-          ),
+        // 底部留白
+        const SliverToBoxAdapter(
+          child: SizedBox(height: 120),
         ),
       ],
     );
   }
 
-  Widget _buildDetailCard(List<Widget> children) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(children: children),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildBackButton() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 72,
-            child: Text(
-              label,
-              style: GoogleFonts.lato(
-                fontSize: 12,
-                color: Colors.grey.shade600,
+      padding: const EdgeInsets.all(8.0),
+      child: GestureDetector(
+        onTap: () => Navigator.pop(context, _hasDataChanges),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.lato(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-        ],
+          child: const Icon(Icons.arrow_back, size: 20),
+        ),
       ),
     );
   }
@@ -332,11 +446,20 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Icon(
+            Icons.error_outline,
+            size: 48,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 16),
           Text(
             message,
-            style: GoogleFonts.lato(color: Colors.grey.shade600),
+            style: GoogleFonts.lato(
+              fontSize: 16,
+              color: Colors.grey.shade600,
+            ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           OutlinedButton(
             onPressed: _loadData,
             child: const Text('重试'),
@@ -344,51 +467,5 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         ],
       ),
     );
-  }
-
-  String _typeLabel(String type) {
-    switch (type) {
-      case 'income':
-        return '收入';
-      case 'transfer':
-        return '转账';
-      default:
-        return '支出';
-    }
-  }
-
-  String _categoryTitle(JiveTransaction tx) {
-    return _displayCategoryName(tx.categoryKey, tx.category);
-  }
-
-  String _categorySubtitle(JiveTransaction tx) {
-    final sub = _displayCategoryName(tx.subCategoryKey, tx.subCategory);
-    return sub == '未分类' ? '' : sub;
-  }
-
-  String _transferTitle(JiveTransaction tx) {
-    return '转账';
-  }
-
-  String _transferSubtitle(JiveTransaction tx) {
-    final fromName = _resolveAccountName(tx.accountId);
-    final toName = _resolveAccountName(tx.toAccountId);
-    if (fromName.isEmpty && toName.isEmpty) return '';
-    if (fromName.isEmpty) return '到 $toName';
-    if (toName.isEmpty) return '来自 $fromName';
-    return '$fromName → $toName';
-  }
-
-  String _displayCategoryName(String? key, String? fallback) {
-    if (key != null && _categoryByKey.containsKey(key)) {
-      return _categoryByKey[key]!.name;
-    }
-    if (fallback != null && fallback.isNotEmpty) return fallback;
-    return '未分类';
-  }
-
-  String _resolveAccountName(int? accountId) {
-    if (accountId == null) return '未指定';
-    return _accountById[accountId]?.name ?? '未指定';
   }
 }

@@ -220,7 +220,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     Map<String, List<JiveCategory>> childrenByParent,
     Map<String, double> parentTotals,
   ) {
-    if (_showIncome || widget.onlyUserCategories) return [];
     final lib = _service.getSystemLibrary(isIncome: _showIncome);
     if (lib.isEmpty) return [];
 
@@ -858,32 +857,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     return _service.suggestIconName(childName, fallback: _resolveSystemParentIcon(parentName));
   }
 
-  Map<String, String> _buildSystemChildParentIndex(Map<String, Map<String, dynamic>> lib) {
-    final index = <String, String>{};
-    for (final entry in lib.entries) {
-      final parentName = entry.key;
-      final children = entry.value['children'] as List<dynamic>? ?? const [];
-      for (final child in children) {
-        final name = (child['name'] as String? ?? "").trim();
-        if (name.isEmpty) continue;
-        index.putIfAbsent(name, () => parentName);
-      }
-    }
-    return index;
-  }
-
-  bool _isSystemParentSuggestion(SystemCategorySuggestion suggestion, Map<String, Map<String, dynamic>> lib) {
-    return suggestion.isParent || lib.containsKey(suggestion.name);
-  }
-
-  String? _resolveParentForSuggestion(
-    SystemCategorySuggestion suggestion,
-    Map<String, String> childParentIndex,
-  ) {
-    return suggestion.parentName ?? childParentIndex[suggestion.name];
-  }
-
-  Future<JiveCategory?> _ensureUserParent(String name, {String? colorHex}) async {
+  Future<JiveCategory?> _ensureUserParent(
+    String name, {
+    String? colorHex,
+    String? iconName,
+  }) async {
     final existing = await _isar.collection<JiveCategory>()
         .filter()
         .parentKeyIsNull()
@@ -892,10 +870,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         .nameEqualTo(name)
         .findFirst();
     if (existing != null) return existing;
-    final iconName = _resolveSystemParentIcon(name);
+    final resolvedIcon = iconName ?? _resolveSystemParentIcon(name);
     return await _service.createParentCategory(
       name: name,
-      iconName: iconName,
+      iconName: resolvedIcon,
       isIncome: _showIncome,
       isSystem: false,
       colorHex: colorHex,
@@ -1004,7 +982,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         .map((parent) => parent.name)
         .toSet();
     final systemLibrary = _mergeSystemLibraries();
-    final childParentIndex = _buildSystemChildParentIndex(systemLibrary);
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
@@ -1030,46 +1007,30 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final skipped = <String>[];
     var createdAny = false;
 
+    final existingParentNames = {...existingNames};
     for (final selection in result.systemSelections) {
-      if (_isSystemParentSuggestion(selection, systemLibrary)) {
-        final parent = await _ensureUserParent(selection.name, colorHex: result.colorHex);
-        if (parent != null) {
-          createdAny = true;
-        } else {
-          skipped.add(selection.name);
-        }
+      if (existingParentNames.contains(selection.name)) {
+        skipped.add(selection.name);
         continue;
       }
-      final parentName = _resolveParentForSuggestion(selection, childParentIndex);
-      if (parentName == null) {
-        final parent = await _ensureUserParent(selection.name, colorHex: result.colorHex);
-        if (parent != null) {
-          createdAny = true;
-        } else {
-          skipped.add(selection.name);
-        }
-        continue;
-      }
-      final parent = await _ensureUserParent(parentName, colorHex: result.colorHex);
-      if (parent == null) {
-        skipped.add("${parentName}·${selection.name}");
-        continue;
-      }
-      final created = await _service.createSubCategory(
-        parent: parent,
-        name: selection.name,
-        iconName: selection.iconName,
+      final parent = await _ensureUserParent(
+        selection.name,
         colorHex: result.colorHex,
-        isSystem: false,
+        iconName: selection.iconName,
       );
-      if (created == null) {
-        skipped.add("${parentName}·${selection.name}");
-      } else {
+      if (parent != null) {
         createdAny = true;
+        existingParentNames.add(selection.name);
+      } else {
+        skipped.add(selection.name);
       }
     }
 
     for (final name in result.names) {
+      if (existingParentNames.contains(name)) {
+        skipped.add(name);
+        continue;
+      }
       final iconName = result.autoMatchIcon
           ? _service.suggestIconName(name, fallback: result.iconName)
           : result.iconName;
@@ -1083,6 +1044,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         skipped.add(name);
       } else {
         createdAny = true;
+        existingParentNames.add(name);
       }
     }
 
@@ -1755,7 +1717,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _initData,
-              style: ElevatedButton.styleFrom(backgroundColor: JiveTheme.primaryGreen),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: JiveTheme.primaryGreen,
+                foregroundColor: Colors.white,
+              ),
               child: const Text("重试"),
             ),
           ],
@@ -1826,6 +1791,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
   Widget _buildCommonUserSection() {
     if (!widget.onlyUserCategories) return const SizedBox.shrink();
+    if (_parents.isNotEmpty) return const SizedBox.shrink();
     final seeds = _commonSeedsForCurrentType();
     if (seeds.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -2391,7 +2357,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _isAddingCommonSeeds ? null : _addAllCommonSeeds,
-              style: ElevatedButton.styleFrom(backgroundColor: JiveTheme.primaryGreen),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: JiveTheme.primaryGreen,
+                foregroundColor: Colors.white,
+              ),
               child: Text(_isAddingCommonSeeds ? "添加中..." : "一键添加常用分类"),
             ),
           ],
@@ -2412,7 +2381,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => _promptAddParentCategory(initialText: query),
-            style: ElevatedButton.styleFrom(backgroundColor: JiveTheme.primaryGreen),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: JiveTheme.primaryGreen,
+              foregroundColor: Colors.white,
+            ),
             child: const Text("创建一级分类"),
           ),
           const SizedBox(height: 8),

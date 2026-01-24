@@ -47,38 +47,43 @@ const JiveAutoDraftSchema = CollectionSchema(
       name: r'dedupKey',
       type: IsarType.string,
     ),
-    r'rawText': PropertySchema(
+    r'metadataJson': PropertySchema(
       id: 6,
+      name: r'metadataJson',
+      type: IsarType.string,
+    ),
+    r'rawText': PropertySchema(
+      id: 7,
       name: r'rawText',
       type: IsarType.string,
     ),
     r'source': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'source',
       type: IsarType.string,
     ),
     r'subCategory': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'subCategory',
       type: IsarType.string,
     ),
     r'subCategoryKey': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
     r'timestamp': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'toAccountId': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'toAccountId',
       type: IsarType.long,
     ),
     r'type': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'type',
       type: IsarType.string,
     )
@@ -175,6 +180,12 @@ int _jiveAutoDraftEstimateSize(
     }
   }
   {
+    final value = object.metadataJson;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
     final value = object.rawText;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
@@ -214,13 +225,14 @@ void _jiveAutoDraftSerialize(
   writer.writeString(offsets[3], object.categoryKey);
   writer.writeDateTime(offsets[4], object.createdAt);
   writer.writeString(offsets[5], object.dedupKey);
-  writer.writeString(offsets[6], object.rawText);
-  writer.writeString(offsets[7], object.source);
-  writer.writeString(offsets[8], object.subCategory);
-  writer.writeString(offsets[9], object.subCategoryKey);
-  writer.writeDateTime(offsets[10], object.timestamp);
-  writer.writeLong(offsets[11], object.toAccountId);
-  writer.writeString(offsets[12], object.type);
+  writer.writeString(offsets[6], object.metadataJson);
+  writer.writeString(offsets[7], object.rawText);
+  writer.writeString(offsets[8], object.source);
+  writer.writeString(offsets[9], object.subCategory);
+  writer.writeString(offsets[10], object.subCategoryKey);
+  writer.writeDateTime(offsets[11], object.timestamp);
+  writer.writeLong(offsets[12], object.toAccountId);
+  writer.writeString(offsets[13], object.type);
 }
 
 JiveAutoDraft _jiveAutoDraftDeserialize(
@@ -237,13 +249,14 @@ JiveAutoDraft _jiveAutoDraftDeserialize(
   object.createdAt = reader.readDateTime(offsets[4]);
   object.dedupKey = reader.readStringOrNull(offsets[5]);
   object.id = id;
-  object.rawText = reader.readStringOrNull(offsets[6]);
-  object.source = reader.readString(offsets[7]);
-  object.subCategory = reader.readStringOrNull(offsets[8]);
-  object.subCategoryKey = reader.readStringOrNull(offsets[9]);
-  object.timestamp = reader.readDateTime(offsets[10]);
-  object.toAccountId = reader.readLongOrNull(offsets[11]);
-  object.type = reader.readStringOrNull(offsets[12]);
+  object.metadataJson = reader.readStringOrNull(offsets[6]);
+  object.rawText = reader.readStringOrNull(offsets[7]);
+  object.source = reader.readString(offsets[8]);
+  object.subCategory = reader.readStringOrNull(offsets[9]);
+  object.subCategoryKey = reader.readStringOrNull(offsets[10]);
+  object.timestamp = reader.readDateTime(offsets[11]);
+  object.toAccountId = reader.readLongOrNull(offsets[12]);
+  object.type = reader.readStringOrNull(offsets[13]);
   return object;
 }
 
@@ -269,16 +282,18 @@ P _jiveAutoDraftDeserializeProp<P>(
     case 6:
       return (reader.readStringOrNull(offset)) as P;
     case 7:
-      return (reader.readString(offset)) as P;
-    case 8:
       return (reader.readStringOrNull(offset)) as P;
+    case 8:
+      return (reader.readString(offset)) as P;
     case 9:
       return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 11:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 12:
+      return (reader.readLongOrNull(offset)) as P;
+    case 13:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1396,6 +1411,160 @@ extension JiveAutoDraftQueryFilter
   }
 
   QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'metadataJson',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'metadataJson',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'metadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'metadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'metadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'metadataJson',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'metadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'metadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'metadataJson',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'metadataJson',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'metadataJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
+      metadataJsonIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'metadataJson',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterFilterCondition>
       rawTextIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -2362,6 +2531,20 @@ extension JiveAutoDraftQuerySortBy
     });
   }
 
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterSortBy>
+      sortByMetadataJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'metadataJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterSortBy>
+      sortByMetadataJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'metadataJson', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterSortBy> sortByRawText() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rawText', Sort.asc);
@@ -2543,6 +2726,20 @@ extension JiveAutoDraftQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterSortBy>
+      thenByMetadataJson() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'metadataJson', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterSortBy>
+      thenByMetadataJsonDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'metadataJson', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAutoDraft, JiveAutoDraft, QAfterSortBy> thenByRawText() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rawText', Sort.asc);
@@ -2674,6 +2871,13 @@ extension JiveAutoDraftQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveAutoDraft, JiveAutoDraft, QDistinct> distinctByMetadataJson(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'metadataJson', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<JiveAutoDraft, JiveAutoDraft, QDistinct> distinctByRawText(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2765,6 +2969,13 @@ extension JiveAutoDraftQueryProperty
   QueryBuilder<JiveAutoDraft, String?, QQueryOperations> dedupKeyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'dedupKey');
+    });
+  }
+
+  QueryBuilder<JiveAutoDraft, String?, QQueryOperations>
+      metadataJsonProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'metadataJson');
     });
   }
 

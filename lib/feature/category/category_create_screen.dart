@@ -3,6 +3,7 @@ import 'package:lpinyin/lpinyin.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_service.dart';
 import 'category_icon_library.dart';
+import 'category_icon_picker_screen.dart';
 import 'category_icon_source_picker.dart';
 import 'category_create_dialog.dart';
 
@@ -52,6 +53,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   final TextEditingController _systemSearchController = TextEditingController();
   late final VoidCallback _systemSearchListener;
   late String _selectedIcon;
+  String? _lastAutoFilledName;
   String? _selectedColorHex;
   String _iconQuery = "";
   String _systemQuery = "";
@@ -62,6 +64,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   final Set<String> _selectedSystemNames = {};
   final Set<String> _existingNames = {};
   bool _hasAutoChanges = false;
+  late final Map<String, String> _iconLabelByName;
   late final List<_SystemGroup> _systemGroups;
   late final Map<String, SystemCategorySuggestion> _systemItemByName;
   String _selectedGroupName = "";
@@ -73,9 +76,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialText ?? "");
+    _nameController.addListener(_handleNameChange);
     _selectedIcon = widget.initialIcon;
     _isBatch = widget.allowBatch && widget.initialBatch;
     _existingNames.addAll(widget.existingNames);
+    _iconLabelByName = _buildIconLabelMap();
     _initSystemGroups();
     _systemSearchListener = () {
       final value = _systemSearchController.text;
@@ -87,6 +92,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
 
   @override
   void dispose() {
+    _nameController.removeListener(_handleNameChange);
     _nameController.dispose();
     _iconSearchController.dispose();
     _systemSearchController.removeListener(_systemSearchListener);
@@ -270,7 +276,23 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   Future<void> _pickCustomIcon() async {
     final selected = await pickCategoryIcon(context, initialIcon: _selectedIcon);
     if (selected != null) {
-      setState(() => _selectedIcon = selected);
+      _applyIconSelection(selected);
+    }
+  }
+
+  Future<void> _pickEmojiIcon() async {
+    final selected = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryIconPickerScreen(
+          initialIcon: _selectedIcon,
+          initialMode: CategoryIconPickerMode.emoji,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+    if (selected != null) {
+      _applyIconSelection(selected);
     }
   }
 
@@ -373,7 +395,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 title: const Text("批量添加"),
               ),
             _buildInfoCard(),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             if (hasSystemLibrary) _buildSystemCategorySection(),
             if (!hasSystemLibrary) _buildIconSection(),
           ],
@@ -407,7 +429,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               ],
             ),
             if (typeName != null) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Row(
                 children: [
                   Text(
@@ -496,20 +518,20 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 style: TextStyle(fontSize: 11, color: Colors.red.shade400),
               ),
             ],
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             _buildColorPicker(),
-            const SizedBox(height: 4),
-            if (!showSystemBatch)
+            const SizedBox(height: 2),
+            if (!showSystemBatch && !isParentCreate)
               SwitchListTile(
                 dense: true,
-                visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+                visualDensity: const VisualDensity(horizontal: -2, vertical: -4),
                 contentPadding: EdgeInsets.zero,
                 value: _autoMatchIcon,
                 onChanged: (value) => setState(() => _autoMatchIcon = value),
-                title: const Text("自动匹配图标", style: TextStyle(fontSize: 12)),
+                title: const Text("自动匹配图标", style: TextStyle(fontSize: 11)),
                 subtitle: Text(
                   "根据名称自动选择更合适的图标",
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
                 ),
               ),
           ],
@@ -722,7 +744,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               final isSelected = entry.name == _selectedIcon;
               return InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => setState(() => _selectedIcon = entry.name),
+                onTap: () => _applyIconSelection(
+                  entry.name,
+                  label: _iconLabelByName[entry.name],
+                ),
                 child: Container(
                   decoration: BoxDecoration(
                     color: isSelected ? highlightColor.withOpacity(0.15) : Colors.grey.shade100,
@@ -774,10 +799,14 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               final countWidth = countText.isEmpty ? 0.0 : _measureTextWidth(countText, countStyle);
               const columnsButtonWidth = 32.0;
               const columnsButtonGap = 8.0;
+              const emojiButtonWidth = 32.0;
+              const emojiButtonGap = 8.0;
               final reserved = labelWidth +
                   (countText.isEmpty ? 0.0 : (8 + countWidth)) +
                   columnsButtonWidth +
                   columnsButtonGap +
+                  emojiButtonWidth +
+                  emojiButtonGap +
                   12;
               final maxSearchWidth = (constraints.maxWidth - reserved).clamp(120.0, constraints.maxWidth);
               final maxCompactWidth = maxSearchWidth < constraints.maxWidth * 0.65
@@ -796,6 +825,8 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                   ],
                   const Spacer(),
                   _buildColumnsMenu(),
+                  const SizedBox(width: 8),
+                  _buildEmojiPickerButton(),
                   const SizedBox(width: 8),
                   _buildInlineSearchField(searchWidth),
                 ],
@@ -931,8 +962,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                   final entry = items[index];
                                   final isExisting = _existingNames.contains(entry.name);
                                   final isParentCreate = _isParentCreateMode();
-                                  final isChildInParentCreate = isParentCreate && !entry.isParent;
-                                  final isDisabled = _isBatch && (isExisting || isChildInParentCreate);
+                                  final isDisabled = _isBatch && isExisting;
                                   final isSelected = _isBatch
                                       ? _selectedSystemNames.contains(entry.name)
                                       : (isParentCreate
@@ -1110,6 +1140,24 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     );
   }
 
+  Widget _buildEmojiPickerButton() {
+    return Tooltip(
+      message: "表情符号",
+      child: InkWell(
+        onTap: _pickEmojiIcon,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(Icons.emoji_emotions_outlined, size: 18, color: Colors.grey.shade600),
+        ),
+      ),
+    );
+  }
+
   List<SystemCategorySuggestion> _currentGroupItems() {
     if (_systemGroups.isEmpty) return [];
     final group = _systemGroups.firstWhere(
@@ -1137,13 +1185,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   Future<void> _applySuggestion(SystemCategorySuggestion suggestion) async {
     final isParentCreate = _isParentCreateMode();
     if (_isBatch && _existingNames.contains(suggestion.name)) return;
-    if (_isBatch && isParentCreate && !suggestion.isParent) {
-      ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("批量添加仅支持一级分类")),
-      );
-      return;
-    }
     if (_isBatch && widget.autoBatchAdd && widget.onBatchAdd != null) {
       await _applyBatchAdd(suggestion);
       return;
@@ -1159,9 +1200,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       return;
     }
     setState(() => _selectedIcon = suggestion.iconName);
-    if (isParentCreate && !suggestion.isParent) {
-      return;
-    }
     _nameController.text = suggestion.name;
     _nameController.selection = TextSelection.collapsed(offset: _nameController.text.length);
   }
@@ -1195,13 +1233,17 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   }
 
   bool _isParentCreateMode() {
-    final parentName = widget.parentName;
-    return widget.parentOnly || parentName == null || parentName == "支出" || parentName == "收入";
+    final parentName = widget.parentName?.trim();
+    return widget.parentOnly ||
+        parentName == null ||
+        parentName.isEmpty ||
+        parentName == "支出" ||
+        parentName == "收入";
   }
 
   String? _effectiveTypeName() {
     if (widget.typeName != null) return widget.typeName;
-    final parentName = widget.parentName;
+    final parentName = widget.parentName?.trim();
     if (parentName == "支出" || parentName == "收入") return parentName;
     return null;
   }
@@ -1322,11 +1364,87 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   }
 
   void _scrollToIcons() {
-    // Keeping this for future extension (jump to icon area).
+    _pickCustomIcon();
   }
 
   String _normalizeSearch(String input) {
     return input.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+  }
+
+  Map<String, String> _buildIconLabelMap() {
+    final map = <String, String>{};
+    for (final entry in categoryIconEntries) {
+      final label = _preferredIconLabel(entry);
+      if (label.isEmpty) continue;
+      map[entry.name] = label;
+    }
+    return map;
+  }
+
+  String _preferredIconLabel(CategoryIconEntry entry) {
+    if (entry.name == "category") return "";
+    for (final keyword in entry.keywords) {
+      if (_containsCjk(keyword)) return keyword;
+    }
+    return entry.keywords.isEmpty ? "" : entry.keywords.first;
+  }
+
+  bool _containsCjk(String value) {
+    return RegExp(r'[\\u4e00-\\u9fff]').hasMatch(value);
+  }
+
+  void _applyIconSelection(String iconName, {String? label}) {
+    setState(() => _selectedIcon = iconName);
+    _maybeFillName(label ?? _guessLabelFromIcon(iconName));
+  }
+
+  void _maybeFillName(String? label) {
+    if (_isBatch) return;
+    final trimmed = label?.trim();
+    if (trimmed == null || trimmed.isEmpty) return;
+    final current = _nameController.text.trim();
+    if (current.isNotEmpty && current != _lastAutoFilledName) return;
+    _nameController.text = trimmed;
+    _nameController.selection = TextSelection.collapsed(offset: _nameController.text.length);
+    _lastAutoFilledName = trimmed;
+  }
+
+  void _handleNameChange() {
+    final current = _nameController.text.trim();
+    if (_lastAutoFilledName != null && current != _lastAutoFilledName) {
+      _lastAutoFilledName = null;
+    }
+  }
+
+  String? _guessLabelFromIcon(String iconName) {
+    final trimmed = iconName.trim();
+    if (trimmed.isEmpty || trimmed == "category") return null;
+    if (trimmed.startsWith("emoji:") || trimmed.startsWith("file:")) return null;
+    if (trimmed.startsWith("text:")) {
+      final text = trimmed.substring("text:".length).trim();
+      return text.isEmpty ? null : text;
+    }
+    final mapped = _iconLabelByName[trimmed];
+    if (mapped != null && mapped.isNotEmpty) return mapped;
+    return _labelFromAssetName(trimmed);
+  }
+
+  String? _labelFromAssetName(String iconName) {
+    var name = iconName;
+    if (name.startsWith("assets/")) {
+      name = name.split("/").last;
+    } else if (name.startsWith("qj/")) {
+      name = name.substring(3);
+    }
+    name = name.replaceAll(RegExp(r'\\.(png|svg)$'), '');
+    if (name.contains('__')) {
+      final parts = name.split('__');
+      if (parts.length > 1) {
+        final label = parts[1].replaceAll('_', ' ').trim();
+        return label.isEmpty ? null : label;
+      }
+    }
+    return null;
   }
 
   String _canonicalGroupName(String name) {
@@ -1450,13 +1568,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     final scale = MediaQuery.textScaleFactorOf(context);
     double base;
     if (columns <= 3) {
-      base = 74;
+      base = 80;
     } else if (columns == 4) {
-      base = 66;
+      base = 72;
     } else if (columns == 5) {
-      base = 58;
+      base = 64;
     } else {
-      base = 52;
+      base = 58;
     }
     if (scale >= 1.2) return base + 6;
     if (scale >= 1.1) return base + 3;
