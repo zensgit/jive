@@ -6,6 +6,7 @@ import '../database/tag_conversion_log.dart';
 import '../database/transaction_model.dart';
 import '../database/category_model.dart';
 import 'category_service.dart';
+import 'tag_rule_service.dart';
 
 enum TagMigratePolicy {
   onlyNull,
@@ -285,6 +286,7 @@ class TagService {
       }
       await isar.collection<JiveTag>().delete(tag.id);
     });
+    await TagRuleService(isar).deleteRulesByTag(tagKey);
   }
 
   Future<int> mergeTags({
@@ -327,6 +329,10 @@ class TagService {
       target.updatedAt = now;
       await isar.collection<JiveTag>().put(target);
     });
+    await TagRuleService(isar).reassignRules(
+      sourceKeys: uniqueSources.toList(),
+      targetKey: targetKey,
+    );
     await refreshUsageCounts(tagKeys: [targetKey]);
     return uniqueSources.length;
   }

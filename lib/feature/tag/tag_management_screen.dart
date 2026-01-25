@@ -4,15 +4,19 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_service.dart';
 import 'tag_edit_dialog.dart';
 import 'tag_group_dialog.dart';
 import 'tag_transactions_screen.dart';
+import 'tag_statistics_screen.dart';
+import 'tag_rule_screen.dart';
 import 'tag_conversion_log_screen.dart';
 import 'tag_icon_catalog.dart';
 
@@ -46,6 +50,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
 
   @override
   void dispose() {
+    DataReloadBus.notifier.removeListener(_handleReload);
     _searchController.dispose();
     super.dispose();
   }
@@ -66,6 +71,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
             JiveAutoDraftSchema,
             JiveTagSchema,
             JiveTagGroupSchema,
+            JiveTagRuleSchema,
             JiveTagConversionLogSchema,
           ],
           directory: dir.path,
@@ -73,6 +79,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       }
       await TagService(_isar).initDefaultGroups();
       await _loadData();
+      DataReloadBus.notifier.addListener(_handleReload);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -80,6 +87,11 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _handleReload() {
+    if (!mounted || _isLoading) return;
+    _loadData();
   }
 
   Future<void> _loadData() async {
@@ -434,6 +446,14 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                 onTap: () => Navigator.pop(context, _TagAction.convert),
               ),
               ListTile(
+                title: const Text('智能标签'),
+                onTap: () => Navigator.pop(context, _TagAction.smart),
+              ),
+              ListTile(
+                title: const Text('标签统计'),
+                onTap: () => Navigator.pop(context, _TagAction.stats),
+              ),
+              ListTile(
                 title: const Text('删除标签', style: TextStyle(color: Colors.redAccent)),
                 onTap: () => Navigator.pop(context, _TagAction.delete),
               ),
@@ -454,6 +474,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       await _mergeTag(tag);
     } else if (action == _TagAction.convert) {
       await _convertTag(tag);
+    } else if (action == _TagAction.smart) {
+      await _openTagRules(tag);
+    } else if (action == _TagAction.stats) {
+      await _openTagStats(tag);
     }
   }
 
@@ -1034,6 +1058,24 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     );
   }
 
+  Future<void> _openTagStats(JiveTag tag) {
+    return Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TagStatisticsScreen(tag: tag, isar: _isar),
+      ),
+    );
+  }
+
+  Future<void> _openTagRules(JiveTag tag) {
+    return Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TagRuleScreen(tag: tag, isar: _isar),
+      ),
+    );
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
@@ -1145,7 +1187,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   }
 }
 
-enum _TagAction { edit, archive, delete, merge, convert }
+enum _TagAction { edit, archive, delete, merge, convert, smart, stats }
 
 class _TagConvertRequest {
   const _TagConvertRequest({

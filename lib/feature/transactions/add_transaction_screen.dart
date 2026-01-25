@@ -13,9 +13,12 @@ import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/tag_service.dart';
+import '../../core/service/data_reload_bus.dart';
+import '../../core/service/tag_rule_service.dart';
 import '../../core/database/category_model.dart';
 import '../../core/utils/logger_util.dart';
 import '../category/category_create_dialog.dart';
@@ -188,6 +191,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           JiveAutoDraftSchema,
           JiveTagSchema,
           JiveTagGroupSchema,
+          JiveTagRuleSchema,
           JiveTagConversionLogSchema,
         ], directory: dir.path);
       }
@@ -898,19 +902,35 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           ? _selectedToAccount?.id
           : null
       ..tagKeys = List<String>.from(_selectedTagKeys)
+      ..smartTagKeys = List<String>.from(tx.smartTagKeys)
       ..timestamp = _selectedTime;
+
+    if (!_isEditing) {
+      final matched = await TagRuleService(_isar).resolveMatchingTags(tx);
+      if (matched.isNotEmpty) {
+        final merged = <String>{...tx.tagKeys, ...matched}.toList();
+        tx.tagKeys = merged;
+        tx.smartTagKeys = matched;
+      } else {
+        tx.smartTagKeys = [];
+      }
+    } else {
+      // Keep smart tags only if the tag still exists on the transaction.
+      tx.smartTagKeys = tx.smartTagKeys.where(tx.tagKeys.contains).toList();
+    }
 
     await _isar.writeTxn(() async {
       await _isar.jiveTransactions.put(tx);
     });
-    if (_selectedTagKeys.isNotEmpty) {
-      await TagService(_isar).markTagsUsed(_selectedTagKeys, tx.timestamp);
+    if (tx.tagKeys.isNotEmpty) {
+      await TagService(_isar).markTagsUsed(tx.tagKeys, tx.timestamp);
     }
 
     JiveLogger.i("Manual Transaction Saved: $amount");
     _hasDataChanges = true;
 
     if (mounted) {
+      DataReloadBus.notify();
       Navigator.pop(context, true);
     }
   }

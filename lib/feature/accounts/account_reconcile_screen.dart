@@ -12,6 +12,7 @@ import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/reconcile_service.dart';
 import '../../core/widgets/date_range_picker_sheet.dart';
@@ -158,6 +159,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       JiveAutoDraftSchema,
       JiveTagSchema,
       JiveTagGroupSchema,
+      JiveTagRuleSchema,
       JiveTagConversionLogSchema,
     ], directory: dir.path);
     return _isar!;
