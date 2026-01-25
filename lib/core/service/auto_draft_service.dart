@@ -8,6 +8,8 @@ import '../service/auto_account_mapping.dart';
 import '../service/auto_rule_engine.dart';
 import '../service/auto_settings.dart';
 import '../service/tag_service.dart';
+import '../service/tag_rule_service.dart';
+import '../service/data_reload_bus.dart';
 
 class AutoCapture {
   final double amount;
@@ -344,15 +346,24 @@ class AutoDraftService {
       ..toAccountId = toAccountId
       ..tagKeys = tagKeys == null ? [] : List<String>.from(tagKeys);
 
+    final smartTags = await TagRuleService(isar).resolveMatchingTags(tx);
+    if (smartTags.isNotEmpty) {
+      tx.tagKeys = <String>{...tx.tagKeys, ...smartTags}.toList();
+      tx.smartTagKeys = List<String>.from(smartTags);
+    } else {
+      tx.smartTagKeys = [];
+    }
+
     await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
       if (draftId != null) {
         await isar.collection<JiveAutoDraft>().delete(draftId);
       }
     });
-    if (tagKeys != null && tagKeys.isNotEmpty) {
-      await TagService(isar).markTagsUsed(tagKeys, capture.timestamp);
+    if (tx.tagKeys.isNotEmpty) {
+      await TagService(isar).markTagsUsed(tx.tagKeys, capture.timestamp);
     }
+    DataReloadBus.notify();
   }
 
   String? _inferMealSubCategory({

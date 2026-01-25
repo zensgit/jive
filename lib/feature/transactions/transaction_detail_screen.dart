@@ -10,7 +10,10 @@ import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/account_service.dart';
+import '../tag/tag_icon_catalog.dart';
 import 'add_transaction_screen.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
@@ -38,6 +41,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   JiveTransaction? _transaction;
   final Map<String, JiveCategory> _categoryByKey = {};
   final Map<int, JiveAccount> _accountById = {};
+  final Map<String, JiveTag> _tagByKey = {};
   bool _hasDataChanges = false;
 
   @override
@@ -62,6 +66,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           .where()
           .findAll();
       final accounts = await isar.collection<JiveAccount>().where().findAll();
+      final tags = await isar.collection<JiveTag>().where().findAll();
 
       if (!mounted) return;
       setState(() {
@@ -72,6 +77,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         _accountById
           ..clear()
           ..addEntries(accounts.map((a) => MapEntry(a.id, a)));
+        _tagByKey
+          ..clear()
+          ..addEntries(tags.map((t) => MapEntry(t.key, t)));
         _isLoading = false;
       });
     } catch (e) {
@@ -98,6 +106,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       JiveAutoDraftSchema,
       JiveTagSchema,
       JiveTagGroupSchema,
+      JiveTagRuleSchema,
       JiveTagConversionLogSchema,
     ], directory: dir.path);
     return _isar!;
@@ -269,13 +278,26 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final amountPrefix = isTransfer ? '' : (type == 'income' ? '+ ' : '- ');
     final title = isTransfer ? _transferTitle(tx) : _categoryTitle(tx);
     final subtitle = isTransfer ? _transferSubtitle(tx) : _categorySubtitle(tx);
-    return Column(
+    final tags = _resolveTags(tx);
+    final smartTagKeys = tx.smartTagKeys.toSet();
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final amountFontSize = isLandscape ? 26.0 : 32.0;
+    final titleFontSize = isLandscape ? 12.0 : 14.0;
+    final subtitleFontSize = isLandscape ? 11.0 : 12.0;
+    final headerTopSpacing = isLandscape ? 8.0 : 16.0;
+    final headerBottomSpacing = isLandscape ? 12.0 : 20.0;
+    final listPhysics = scrollController == null
+        ? const ClampingScrollPhysics()
+        : const AlwaysScrollableScrollPhysics();
+
+    final header = Column(
       children: [
-        const SizedBox(height: 16),
+        SizedBox(height: headerTopSpacing),
         Text(
           '$amountPrefix${_currency.format(tx.amount)}',
           style: GoogleFonts.rubik(
-            fontSize: 32,
+            fontSize: amountFontSize,
             fontWeight: FontWeight.w700,
             color: amountColor,
           ),
@@ -284,7 +306,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         Text(
           title,
           style: GoogleFonts.lato(
-            fontSize: 14,
+            fontSize: titleFontSize,
             fontWeight: FontWeight.w600,
             color: Colors.grey.shade700,
           ),
@@ -292,72 +314,103 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         if (subtitle.isNotEmpty)
           Text(
             subtitle,
-            style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade500),
+            style: GoogleFonts.lato(
+              fontSize: subtitleFontSize,
+              color: Colors.grey.shade500,
+            ),
           ),
-        const SizedBox(height: 20),
+        SizedBox(height: headerBottomSpacing),
+      ],
+    );
+
+    final detailCards = [
+      _buildDetailCard([
+        _buildDetailRow('类型', _typeLabel(type)),
+        _buildDetailRow('时间', _dateTimeFormat.format(tx.timestamp)),
+        _buildDetailRow('来源', tx.source),
+      ]),
+      const SizedBox(height: 12),
+      _buildDetailCard([
+        if (!isTransfer) _buildDetailRow('分类', _categoryTitle(tx)),
+        if (!isTransfer) _buildDetailRow('子类', _categorySubtitle(tx)),
+        _buildDetailRow('账户', _resolveAccountName(tx.accountId)),
+        if (isTransfer)
+          _buildDetailRow('转入账户', _resolveAccountName(tx.toAccountId)),
+      ]),
+      const SizedBox(height: 12),
+      _buildDetailCard([
+        _buildTagRow(tags, smartTagKeys),
+      ]),
+      const SizedBox(height: 12),
+      _buildDetailCard([
+        _buildDetailRow(
+          '备注',
+          tx.note?.trim().isEmpty ?? true ? '无' : tx.note!.trim(),
+        ),
+        _buildDetailRow(
+          '原始信息',
+          tx.rawText?.trim().isEmpty ?? true ? '无' : tx.rawText!.trim(),
+        ),
+      ]),
+    ];
+
+    final actionRow = SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildActionIcon(
+            icon: Icons.delete_outline_rounded,
+            color: Colors.redAccent,
+            tooltip: '删除',
+            onPressed: _deleteTransaction,
+          ),
+          _buildActionIcon(
+            icon: Icons.copy_rounded,
+            color: Colors.blueGrey,
+            tooltip: '复制',
+            onPressed: _copyTransaction,
+          ),
+          _buildActionIcon(
+            icon: Icons.edit_rounded,
+            color: JiveTheme.primaryGreen,
+            tooltip: '编辑',
+            onPressed: _editTransaction,
+          ),
+        ],
+      ),
+    );
+
+    if (isLandscape) {
+      return ListView(
+        controller: scrollController,
+        physics: listPhysics,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: [
+          header,
+          ...detailCards,
+          const SizedBox(height: 12),
+          actionRow,
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        header,
         Expanded(
           child: ListView(
             controller: scrollController,
-            physics: scrollController == null
-                ? const ClampingScrollPhysics()
-                : const AlwaysScrollableScrollPhysics(),
+            physics: listPhysics,
             padding: const EdgeInsets.symmetric(horizontal: 20),
             children: [
-              _buildDetailCard([
-                _buildDetailRow('类型', _typeLabel(type)),
-                _buildDetailRow('时间', _dateTimeFormat.format(tx.timestamp)),
-                _buildDetailRow('来源', tx.source),
-              ]),
-              const SizedBox(height: 12),
-              _buildDetailCard([
-                if (!isTransfer) _buildDetailRow('分类', _categoryTitle(tx)),
-                if (!isTransfer) _buildDetailRow('子类', _categorySubtitle(tx)),
-                _buildDetailRow('账户', _resolveAccountName(tx.accountId)),
-                if (isTransfer)
-                  _buildDetailRow('转入账户', _resolveAccountName(tx.toAccountId)),
-              ]),
-              const SizedBox(height: 12),
-              _buildDetailCard([
-                _buildDetailRow(
-                  '备注',
-                  tx.note?.trim().isEmpty ?? true ? '无' : tx.note!.trim(),
-                ),
-                _buildDetailRow(
-                  '原始信息',
-                  tx.rawText?.trim().isEmpty ?? true ? '无' : tx.rawText!.trim(),
-                ),
-              ]),
+              ...detailCards,
               const SizedBox(height: 80),
             ],
           ),
         ),
-        SafeArea(
-          top: false,
-          minimum: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildActionIcon(
-                icon: Icons.delete_outline_rounded,
-                color: Colors.redAccent,
-                tooltip: '删除',
-                onPressed: _deleteTransaction,
-              ),
-              _buildActionIcon(
-                icon: Icons.copy_rounded,
-                color: Colors.blueGrey,
-                tooltip: '复制',
-                onPressed: _copyTransaction,
-              ),
-              _buildActionIcon(
-                icon: Icons.edit_rounded,
-                color: JiveTheme.primaryGreen,
-                tooltip: '编辑',
-                onPressed: _editTransaction,
-              ),
-            ],
-          ),
-        ),
+        actionRow,
       ],
     );
   }
@@ -421,10 +474,100 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 fontWeight: FontWeight.w600,
                 color: Colors.black87,
               ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  List<JiveTag> _resolveTags(JiveTransaction tx) {
+    if (tx.tagKeys.isEmpty) return [];
+    final seen = <String>{};
+    final items = <JiveTag>[];
+    for (final key in tx.tagKeys) {
+      if (!seen.add(key)) continue;
+      final tag = _tagByKey[key];
+      if (tag != null) {
+        items.add(tag);
+      }
+    }
+    return items;
+  }
+
+  Widget _buildTagRow(List<JiveTag> tags, Set<String> smartKeys) {
+    if (tags.isEmpty) {
+      return _buildDetailRow('标签', '无');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '标签',
+          style: GoogleFonts.lato(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: tags.map((tag) => _buildTagChip(tag, smartKeys.contains(tag.key))).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTagChip(JiveTag tag, bool isSmart) {
+    final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+    final icon = hasTagIcon(tag)
+        ? tagIconWidget(tag, size: 12, color: color)
+        : null;
+    return Chip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            tagDisplayName(tag),
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (isSmart) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: JiveTheme.primaryGreen.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: JiveTheme.primaryGreen.withOpacity(0.4)),
+              ),
+              child: Text(
+                '智能',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: JiveTheme.primaryGreen,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+      avatar: icon == null
+          ? null
+          : CircleAvatar(
+              radius: 10,
+              backgroundColor: color.withOpacity(0.15),
+              child: icon,
+            ),
+      backgroundColor: color.withOpacity(0.12),
+      side: BorderSide(color: color.withOpacity(0.4)),
     );
   }
 

@@ -9,6 +9,7 @@ import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../../core/service/category_service.dart';
 import '../transactions/transaction_detail_screen.dart';
@@ -95,6 +96,7 @@ class _CategoryTransactionsScreenState
           JiveAutoDraftSchema,
           JiveTagSchema,
           JiveTagGroupSchema,
+          JiveTagRuleSchema,
           JiveTagConversionLogSchema,
         ], directory: dir.path);
       }

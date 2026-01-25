@@ -13,6 +13,7 @@ import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/utils/logger_util.dart';
 import '../stats/stats_screen.dart';
@@ -111,6 +112,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             JiveAutoDraftSchema,
             JiveTagSchema,
             JiveTagGroupSchema,
+            JiveTagRuleSchema,
             JiveTagConversionLogSchema,
           ],
           directory: dir.path,

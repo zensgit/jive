@@ -5,11 +5,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/data_reload_bus.dart';
 import '../transactions/transaction_detail_screen.dart';
 
 class TagTransactionsScreen extends StatefulWidget {
@@ -38,12 +40,14 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
   final DateFormat _dayFormat = DateFormat('MM.dd');
   final NumberFormat _currency = NumberFormat.currency(symbol: '¥');
   bool _groupByDate = false;
+  bool _ready = false;
 
   @override
   void initState() {
     super.initState();
     _loadGroupingPreference();
     _load();
+    DataReloadBus.notifier.addListener(_handleReload);
   }
 
   Future<void> _load() async {
@@ -62,6 +66,7 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
             JiveAutoDraftSchema,
             JiveTagSchema,
             JiveTagGroupSchema,
+            JiveTagRuleSchema,
             JiveTagConversionLogSchema,
           ],
           directory: dir.path,
@@ -77,6 +82,7 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
         _categoryByKey = categoryMap;
         _transactions = txs;
         _isLoading = false;
+        _ready = true;
       });
     } catch (e) {
       if (!mounted) return;
@@ -85,6 +91,17 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _handleReload() {
+    if (!_ready || _isLoading) return;
+    _load();
+  }
+
+  @override
+  void dispose() {
+    DataReloadBus.notifier.removeListener(_handleReload);
+    super.dispose();
   }
 
   @override

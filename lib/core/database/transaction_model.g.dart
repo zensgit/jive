@@ -47,38 +47,43 @@ const JiveTransactionSchema = CollectionSchema(
       name: r'rawText',
       type: IsarType.string,
     ),
-    r'source': PropertySchema(
+    r'smartTagKeys': PropertySchema(
       id: 6,
+      name: r'smartTagKeys',
+      type: IsarType.stringList,
+    ),
+    r'source': PropertySchema(
+      id: 7,
       name: r'source',
       type: IsarType.string,
     ),
     r'subCategory': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'subCategory',
       type: IsarType.string,
     ),
     r'subCategoryKey': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
     r'tagKeys': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'tagKeys',
       type: IsarType.stringList,
     ),
     r'timestamp': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'toAccountId': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'toAccountId',
       type: IsarType.long,
     ),
     r'type': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'type',
       type: IsarType.string,
     )
@@ -193,6 +198,13 @@ int _jiveTransactionEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.smartTagKeys.length * 3;
+  {
+    for (var i = 0; i < object.smartTagKeys.length; i++) {
+      final value = object.smartTagKeys[i];
+      bytesCount += value.length * 3;
+    }
+  }
   bytesCount += 3 + object.source.length * 3;
   {
     final value = object.subCategory;
@@ -234,13 +246,14 @@ void _jiveTransactionSerialize(
   writer.writeString(offsets[3], object.categoryKey);
   writer.writeString(offsets[4], object.note);
   writer.writeString(offsets[5], object.rawText);
-  writer.writeString(offsets[6], object.source);
-  writer.writeString(offsets[7], object.subCategory);
-  writer.writeString(offsets[8], object.subCategoryKey);
-  writer.writeStringList(offsets[9], object.tagKeys);
-  writer.writeDateTime(offsets[10], object.timestamp);
-  writer.writeLong(offsets[11], object.toAccountId);
-  writer.writeString(offsets[12], object.type);
+  writer.writeStringList(offsets[6], object.smartTagKeys);
+  writer.writeString(offsets[7], object.source);
+  writer.writeString(offsets[8], object.subCategory);
+  writer.writeString(offsets[9], object.subCategoryKey);
+  writer.writeStringList(offsets[10], object.tagKeys);
+  writer.writeDateTime(offsets[11], object.timestamp);
+  writer.writeLong(offsets[12], object.toAccountId);
+  writer.writeString(offsets[13], object.type);
 }
 
 JiveTransaction _jiveTransactionDeserialize(
@@ -257,13 +270,14 @@ JiveTransaction _jiveTransactionDeserialize(
   object.id = id;
   object.note = reader.readStringOrNull(offsets[4]);
   object.rawText = reader.readStringOrNull(offsets[5]);
-  object.source = reader.readString(offsets[6]);
-  object.subCategory = reader.readStringOrNull(offsets[7]);
-  object.subCategoryKey = reader.readStringOrNull(offsets[8]);
-  object.tagKeys = reader.readStringList(offsets[9]) ?? [];
-  object.timestamp = reader.readDateTime(offsets[10]);
-  object.toAccountId = reader.readLongOrNull(offsets[11]);
-  object.type = reader.readStringOrNull(offsets[12]);
+  object.smartTagKeys = reader.readStringList(offsets[6]) ?? [];
+  object.source = reader.readString(offsets[7]);
+  object.subCategory = reader.readStringOrNull(offsets[8]);
+  object.subCategoryKey = reader.readStringOrNull(offsets[9]);
+  object.tagKeys = reader.readStringList(offsets[10]) ?? [];
+  object.timestamp = reader.readDateTime(offsets[11]);
+  object.toAccountId = reader.readLongOrNull(offsets[12]);
+  object.type = reader.readStringOrNull(offsets[13]);
   return object;
 }
 
@@ -287,18 +301,20 @@ P _jiveTransactionDeserializeProp<P>(
     case 5:
       return (reader.readStringOrNull(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 7:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 8:
       return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (reader.readStringList(offset) ?? []) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 11:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 12:
+      return (reader.readLongOrNull(offset)) as P;
+    case 13:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1694,6 +1710,231 @@ extension JiveTransactionQueryFilter
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'smartTagKeys',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'smartTagKeys',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smartTagKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'smartTagKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
       sourceEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -3040,6 +3281,13 @@ extension JiveTransactionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctBySmartTagKeys() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'smartTagKeys');
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QDistinct> distinctBySource(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -3133,6 +3381,13 @@ extension JiveTransactionQueryProperty
   QueryBuilder<JiveTransaction, String?, QQueryOperations> rawTextProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'rawText');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, List<String>, QQueryOperations>
+      smartTagKeysProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'smartTagKeys');
     });
   }
 

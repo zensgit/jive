@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -7,8 +8,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'core/design_system/theme.dart';
 import 'core/database/account_model.dart';
@@ -17,6 +20,7 @@ import 'core/database/category_model.dart';
 import 'core/database/auto_draft_model.dart';
 import 'core/database/tag_model.dart';
 import 'core/database/tag_conversion_log.dart';
+import 'core/database/tag_rule_model.dart';
 import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
 import 'core/service/transaction_service.dart';
@@ -26,6 +30,8 @@ import 'core/service/auto_app_settings.dart';
 import 'core/service/auto_permission_service.dart';
 import 'core/service/auto_settings.dart';
 import 'core/service/tag_service.dart';
+import 'core/service/data_reload_bus.dart';
+import 'core/service/data_backup_service.dart';
 import 'feature/accounts/accounts_screen.dart';
 import 'feature/auto/auto_drafts_screen.dart';
 import 'feature/auto/auto_rule_tester_screen.dart';
@@ -145,6 +151,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   void _notifyDataChanged() {
     _dataReloadSignal.value += 1;
+    DataReloadBus.notify();
   }
 
   @override
@@ -159,7 +166,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     if (Isar.getInstance() != null) {
       _isar = Isar.getInstance()!;
     } else {
-      _isar = await Isar.open([
+    _isar = await Isar.open([
         JiveTransactionSchema,
         JiveCategorySchema,
         JiveCategoryOverrideSchema,
@@ -167,6 +174,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         JiveAutoDraftSchema,
         JiveTagSchema,
         JiveTagGroupSchema,
+        JiveTagRuleSchema,
         JiveTagConversionLogSchema,
       ], directory: dir.path);
     }
@@ -665,6 +673,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       await _isar.collection<JiveAutoDraft>().clear();
       await _isar.collection<JiveTag>().clear();
       await _isar.collection<JiveTagGroup>().clear();
+      await _isar.collection<JiveTagRule>().clear();
     });
     await CategoryService(_isar).initDefaultCategories();
     await AccountService(_isar).initDefaultAccounts();
@@ -675,6 +684,65 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await _loadTransactions();
     await _loadAutoDraftCount();
     _notifyDataChanged();
+  }
+
+  Future<void> _exportBackup() async {
+    try {
+      final file = await JiveDataBackupService.exportToFile(_isar);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'Jive 数据备份',
+      );
+      _showMessage('已导出数据');
+    } catch (e) {
+      _showMessage('导出失败：$e');
+    }
+  }
+
+  Future<void> _importBackup() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (result == null || result.files.single.path == null) return;
+    final file = File(result.files.single.path!);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('导入数据'),
+        content: const Text('导入将覆盖当前全部数据，是否继续？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('导入'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final summary = await JiveDataBackupService.importFromFile(
+        _isar,
+        file,
+        clearBefore: true,
+      );
+      await TagService(_isar).refreshUsageCounts();
+      await TransactionService(_isar).migrateTransactionCategoryKeys();
+      await TransactionService(_isar).migrateTransactionAccountIds();
+      _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
+      await _loadTransactions();
+      await _loadAutoDraftCount();
+      _notifyDataChanged();
+      _showMessage(
+        '导入完成：交易${summary.transactions}条，标签${summary.tags}个',
+      );
+    } catch (e) {
+      _showMessage('导入失败：$e');
+    }
   }
 
   Future<void> _loadTransactions() async {
@@ -896,7 +964,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ),
           );
           if (result == true) {
-            _loadTransactions();
+            await _loadTransactions();
+            await _loadAutoDraftCount();
             _notifyDataChanged();
           }
         },
@@ -1227,6 +1296,24 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 if (confirmed != true) return;
                                 await _clearAllData();
                                 _showMessage("已清空数据");
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.file_download_outlined),
+                              title: const Text("导出数据"),
+                              subtitle: const Text("导出为备份文件"),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await _exportBackup();
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.file_upload_outlined),
+                              title: const Text("导入数据"),
+                              subtitle: const Text("导入将覆盖当前数据"),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await _importBackup();
                               },
                             ),
                             const Divider(height: 1),

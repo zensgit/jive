@@ -9,6 +9,7 @@ import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_model.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 
 class TagConversionLogScreen extends StatefulWidget {
@@ -51,6 +52,7 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
             JiveAutoDraftSchema,
             JiveTagSchema,
             JiveTagGroupSchema,
+            JiveTagRuleSchema,
             JiveTagConversionLogSchema,
           ],
           directory: dir.path,
