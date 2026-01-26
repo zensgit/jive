@@ -71,6 +71,7 @@ class _AutoRuleTesterScreenState extends State<AutoRuleTesterScreen> {
         type: type,
         matchedParent: match.parent,
         matchedSub: match.sub,
+        matchedTags: match.tags,
         resolvedParent: parentName,
         resolvedSub: subName,
         parentKey: resolved.parent?.key,
@@ -208,6 +209,11 @@ class _AutoRuleTesterScreenState extends State<AutoRuleTesterScreen> {
             '分类Key',
             '${result.parentKey ?? '-'} / ${result.childKey ?? '-'}',
           ),
+          const SizedBox(height: 8),
+          _buildRow(
+            '标签',
+            result.matchedTags.isEmpty ? '-' : result.matchedTags.join(', '),
+          ),
         ],
       ),
     );
@@ -245,6 +251,7 @@ class _RuleTestResult {
   final String type;
   final String? matchedParent;
   final String? matchedSub;
+  final List<String> matchedTags;
   final String resolvedParent;
   final String resolvedSub;
   final String? parentKey;
@@ -255,6 +262,7 @@ class _RuleTestResult {
     required this.type,
     required this.matchedParent,
     required this.matchedSub,
+    required this.matchedTags,
     required this.resolvedParent,
     required this.resolvedSub,
     required this.parentKey,

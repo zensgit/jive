@@ -51,6 +51,7 @@ class AutoRuleEngine {
       type: type,
       parent: matched?.parent,
       sub: matched?.sub,
+      tags: matched?.tags ?? const [],
       ruleName: matched?.name,
     );
   }
@@ -88,6 +89,7 @@ class AutoRule {
   final String? parent;
   final String? sub;
   final String? type;
+  final List<String> tags;
 
   AutoRule({
     required this.name,
@@ -96,6 +98,7 @@ class AutoRule {
     this.parent,
     this.sub,
     this.type,
+    required this.tags,
   });
 
   factory AutoRule.fromJson(Map<String, dynamic> json) {
@@ -110,6 +113,9 @@ class AutoRule {
       parent: json['parent']?.toString(),
       sub: json['sub']?.toString(),
       type: json['type']?.toString(),
+      tags: (json['tags'] as List<dynamic>? ?? const [])
+          .map((entry) => entry.toString())
+          .toList(),
     );
   }
 
@@ -132,12 +138,14 @@ class AutoMatch {
   final String type;
   final String? parent;
   final String? sub;
+  final List<String> tags;
   final String? ruleName;
 
   AutoMatch({
     required this.type,
     this.parent,
     this.sub,
+    required this.tags,
     this.ruleName,
   });
 }

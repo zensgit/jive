@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lunar/lunar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 class DateRangePickerSheet extends StatefulWidget {
@@ -10,6 +12,8 @@ class DateRangePickerSheet extends StatefulWidget {
   final String bottomLabel;
   final String clearLabel;
   final Set<int>? enabledYears;
+  final DateTime? minSelectableDay;
+  final DateTime? maxSelectableDay;
 
   DateRangePickerSheet({
     super.key,
@@ -20,8 +24,10 @@ class DateRangePickerSheet extends StatefulWidget {
     this.bottomLabel = '选择日历范围',
     this.clearLabel = '清除',
     this.enabledYears,
-  })  : firstDay = firstDay ?? DateTime(2010),
-        lastDay = lastDay ?? DateTime.now();
+    this.minSelectableDay,
+    this.maxSelectableDay,
+  }) : firstDay = firstDay ?? DateTime(2010),
+       lastDay = lastDay ?? DateTime.now();
 
   @override
   State<DateRangePickerSheet> createState() => _DateRangePickerSheetState();
@@ -31,8 +37,9 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
   DateTime? _rangeStart;
   DateTime? _rangeEnd;
   late DateTime _focusedDay;
-
-  static const double _bottomBarHeight = 72;
+  bool _showLunar = true;
+  bool _showJieQi = false;
+  bool _showFestival = false;
 
   @override
   void initState() {
@@ -47,6 +54,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
       widget.firstDay,
       widget.lastDay,
     );
+    _loadLunarPrefs();
   }
 
   void _handleDaySelected(DateTime selectedDay, DateTime focusedDay) {
@@ -81,6 +89,129 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
     widget.onChanged(null);
   }
 
+  Future<void> _loadLunarPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _showLunar = prefs.getBool('calendar_show_lunar') ?? true;
+      _showJieQi = prefs.getBool('calendar_show_jieqi') ?? false;
+      _showFestival = prefs.getBool('calendar_show_festival') ?? false;
+    });
+  }
+
+  Future<void> _saveLunarPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('calendar_show_lunar', _showLunar);
+    await prefs.setBool('calendar_show_jieqi', _showJieQi);
+    await prefs.setBool('calendar_show_festival', _showFestival);
+  }
+
+  bool _isChineseLocale(BuildContext context) {
+    final locale = Localizations.maybeLocaleOf(context);
+    if (locale != null && locale.languageCode.toLowerCase().startsWith('zh')) {
+      return true;
+    }
+    final systemLocale = WidgetsBinding.instance.platformDispatcher.locale;
+    return systemLocale.languageCode.toLowerCase().startsWith('zh');
+  }
+
+  bool _hasChineseText(String value) {
+    return RegExp(r'[\u4e00-\u9fff]').hasMatch(value);
+  }
+
+  String _calendarLocaleTag(BuildContext context) {
+    final locale =
+        Localizations.maybeLocaleOf(context) ??
+        WidgetsBinding.instance.platformDispatcher.locale;
+    if (locale.languageCode.toLowerCase().startsWith('zh')) {
+      final country = locale.countryCode;
+      if (country == null || country.isEmpty) return 'zh_CN';
+      return 'zh_${country.toUpperCase()}';
+    }
+    return locale.toLanguageTag();
+  }
+
+  String? _lunarLabelFor(DateTime day, bool isChinese) {
+    if (!isChinese) return null;
+    if (!_showLunar && !_showJieQi && !_showFestival) return null;
+    final lunar = Lunar.fromDate(DateTime(day.year, day.month, day.day));
+    if (_showFestival) {
+      final holiday = HolidayUtil.getHolidayByYmd(day.year, day.month, day.day);
+      if (holiday != null) {
+        final target = holiday.getTarget();
+        if (target == _formatDate(day)) {
+          return holiday.getName();
+        }
+      }
+      final month = lunar.getMonth().abs();
+      final key = '$month-${lunar.getDay()}';
+      final festival = LunarUtil.FESTIVAL[key];
+      if (festival != null && festival.isNotEmpty) return festival;
+      final others = LunarUtil.OTHER_FESTIVAL[key];
+      if (others != null && others.isNotEmpty) return others.first;
+    }
+    if (_showJieQi) {
+      final jie = lunar.getJie();
+      if (jie.isNotEmpty) return jie;
+      final qi = lunar.getQi();
+      if (qi.isNotEmpty) return qi;
+    }
+    if (_showLunar) return lunar.getDayInChinese();
+    return null;
+  }
+
+  TextStyle _lunarTextStyle(TextStyle base) {
+    final color = base.color?.withOpacity(0.7) ?? Colors.grey.shade600;
+    return base.copyWith(
+      fontSize: 9,
+      fontWeight: FontWeight.w500,
+      color: color,
+    );
+  }
+
+  Widget _buildLunarCell({
+    required DateTime day,
+    required CalendarStyle style,
+    required Decoration decoration,
+    required TextStyle textStyle,
+    required String? lunarLabel,
+    required bool showTodayLabel,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      margin: style.cellMargin,
+      padding: style.cellPadding,
+      decoration: decoration,
+      alignment: style.cellAlignment,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Align(
+            alignment: const Alignment(0, 0.1),
+            child: Text('${day.day}', style: textStyle),
+          ),
+          if (showTodayLabel)
+            Align(
+              alignment: const Alignment(0, -0.75),
+              child: Text(
+                '今日',
+                style: GoogleFonts.lato(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+          if (lunarLabel != null && lunarLabel.isNotEmpty)
+            Align(
+              alignment: const Alignment(0, 0.85),
+              child: Text(lunarLabel, style: _lunarTextStyle(textStyle)),
+            ),
+        ],
+      ),
+    );
+  }
+
   String _formatDate(DateTime date) {
     final year = date.year.toString();
     final month = _two(date.month);
@@ -89,6 +220,10 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
   }
 
   String _two(int value) => value.toString().padLeft(2, '0');
+
+  DateTime _selectableMin() => widget.minSelectableDay ?? widget.firstDay;
+
+  DateTime _selectableMax() => widget.maxSelectableDay ?? widget.lastDay;
 
   DateTime _clampDate(DateTime value, DateTime min, DateTime max) {
     if (value.isBefore(min)) return min;
@@ -102,55 +237,14 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
     return true;
   }
 
-  Widget _buildTodayCell({
-    required DateTime day,
-    required CalendarStyle style,
-    required Decoration decoration,
-    required TextStyle textStyle,
-  }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      margin: style.cellMargin,
-      padding: style.cellPadding,
-      decoration: decoration,
-      alignment: style.cellAlignment,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Align(
-            alignment: const Alignment(0, 0.3),
-            child: Text('${day.day}', style: textStyle),
-          ),
-          Align(
-            alignment: const Alignment(0, -0.75),
-            child: Text(
-              '今日',
-              style: GoogleFonts.lato(
-                fontSize: 9,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   DateTime? _normalizeRangeDate(DateTime? value) {
     if (value == null) return null;
-    if (value.isBefore(widget.firstDay) || value.isAfter(widget.lastDay)) {
+    final minSelectable = _selectableMin();
+    final maxSelectable = _selectableMax();
+    if (value.isBefore(minSelectable) || value.isAfter(maxSelectable)) {
       return null;
     }
     return value;
-  }
-
-  int _closestEnabledYear(int year, List<int> enabledYears) {
-    final sorted = [...enabledYears]..sort();
-    for (final candidate in sorted.reversed) {
-      if (candidate <= year) return candidate;
-    }
-    return sorted.first;
   }
 
   int _minMonthForYear(int year) {
@@ -180,11 +274,6 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
           endYear - startYear + 1,
           (index) => startYear + index,
         );
-        final enabledYears =
-            widget.enabledYears?.isNotEmpty == true ? widget.enabledYears : null;
-        if (enabledYears != null && !enabledYears.contains(selectedYear)) {
-          selectedYear = _closestEnabledYear(selectedYear, enabledYears.toList());
-        }
         final minMonth = _minMonthForYear(selectedYear);
         final maxMonth = _maxMonthForYear(selectedYear);
         if (selectedMonth < minMonth) selectedMonth = minMonth;
@@ -194,12 +283,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
             return SafeArea(
               top: false,
               child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  16,
-                  20,
-                  16,
-                ),
+                padding: EdgeInsets.fromLTRB(20, 16, 20, 16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,21 +310,10 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                       value: selectedYear,
                       items: years
                           .map(
-                            (year) {
-                              final isEnabled =
-                                  enabledYears == null || enabledYears.contains(year);
-                              final color = isEnabled
-                                  ? Colors.black87
-                                  : Colors.grey.shade500;
-                              return DropdownMenuItem<int>(
-                                value: year,
-                                enabled: isEnabled,
-                                child: Text(
-                                  year.toString(),
-                                  style: TextStyle(color: color),
-                                ),
-                              );
-                            },
+                            (year) => DropdownMenuItem<int>(
+                              value: year,
+                              child: Text(year.toString()),
+                            ),
                           )
                           .toList(),
                       onChanged: (value) {
@@ -249,8 +322,10 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                           selectedYear = value;
                           final minMonth = _minMonthForYear(selectedYear);
                           final maxMonth = _maxMonthForYear(selectedYear);
-                          if (selectedMonth < minMonth) selectedMonth = minMonth;
-                          if (selectedMonth > maxMonth) selectedMonth = maxMonth;
+                          if (selectedMonth < minMonth)
+                            selectedMonth = minMonth;
+                          if (selectedMonth > maxMonth)
+                            selectedMonth = maxMonth;
                         });
                       },
                       decoration: InputDecoration(
@@ -272,8 +347,11 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                         final month = index + 1;
                         final minMonth = _minMonthForYear(selectedYear);
                         final maxMonth = _maxMonthForYear(selectedYear);
-                        final isEnabled = month >= minMonth && month <= maxMonth;
-                        final color = isEnabled ? Colors.black87 : Colors.grey.shade500;
+                        final isEnabled =
+                            month >= minMonth && month <= maxMonth;
+                        final color = isEnabled
+                            ? Colors.black87
+                            : Colors.grey.shade500;
                         return ChoiceChip(
                           label: Text(
                             '${_two(month)}',
@@ -281,7 +359,8 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                           ),
                           selected: selectedMonth == month,
                           onSelected: isEnabled
-                              ? (_) => setSheetState(() => selectedMonth = month)
+                              ? (_) =>
+                                    setSheetState(() => selectedMonth = month)
                               : null,
                         );
                       }),
@@ -291,7 +370,11 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                       alignment: Alignment.centerRight,
                       child: ElevatedButton(
                         onPressed: () {
-                          final candidate = DateTime(selectedYear, selectedMonth, 1);
+                          final candidate = DateTime(
+                            selectedYear,
+                            selectedMonth,
+                            1,
+                          );
                           final clamped = _clampDate(
                             candidate,
                             widget.firstDay,
@@ -325,10 +408,15 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
   @override
   Widget build(BuildContext context) {
     final background = Colors.white;
+    final orientation = MediaQuery.of(context).orientation;
+    final isChinese =
+        _isChineseLocale(context) || _hasChineseText(widget.bottomLabel);
+    final calendarLocale = isChinese ? 'zh_CN' : _calendarLocaleTag(context);
+    final heightFactor = orientation == Orientation.landscape ? 0.94 : 0.62;
     return SafeArea(
       top: false,
       child: FractionallySizedBox(
-        heightFactor: 0.62,
+        heightFactor: heightFactor,
         child: Container(
           decoration: BoxDecoration(
             color: background,
@@ -353,21 +441,31 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      const headerHeight = 48.0;
+                      final headerHeight = orientation == Orientation.landscape
+                          ? 52.0
+                          : 48.0;
                       const dowHeight = 20.0;
+                      final extraPadding = orientation == Orientation.landscape
+                          ? 20.0
+                          : 12.0;
+                      final maxHeight = constraints.maxHeight;
                       final available =
-                          (constraints.maxHeight - headerHeight - dowHeight - 12)
-                              .clamp(180.0, constraints.maxHeight);
-                      final rowHeight =
-                          (available / 6).clamp(32.0, 46.0);
+                          maxHeight - headerHeight - dowHeight - extraPadding;
+                      var rowHeight = available / 6;
+                      final maxRowHeight = orientation == Orientation.landscape
+                          ? 42.0
+                          : 46.0;
+                      if (rowHeight > maxRowHeight) {
+                        rowHeight = maxRowHeight;
+                      }
                       const todayDecoration = BoxDecoration(
                         color: Colors.transparent,
                         shape: BoxShape.circle,
                       );
                       final enabledYears =
                           widget.enabledYears?.isNotEmpty == true
-                              ? widget.enabledYears
-                              : null;
+                          ? widget.enabledYears
+                          : null;
                       final calendarStyle = CalendarStyle(
                         rangeHighlightColor: Colors.green.withOpacity(0.12),
                         rangeStartDecoration: const BoxDecoration(
@@ -385,12 +483,14 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                         ),
                       );
                       return TableCalendar(
+                        locale: calendarLocale,
                         firstDay: widget.firstDay,
                         lastDay: widget.lastDay,
                         focusedDay: _focusedDay,
                         rangeStartDay: _rangeStart,
                         rangeEndDay: _rangeEnd,
                         rangeSelectionMode: RangeSelectionMode.toggledOn,
+                        shouldFillViewport: true,
                         availableGestures: AvailableGestures.horizontalSwipe,
                         rowHeight: rowHeight,
                         daysOfWeekHeight: dowHeight,
@@ -399,8 +499,15 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                           titleCentered: true,
                           leftChevronMargin: EdgeInsets.zero,
                           rightChevronMargin: EdgeInsets.zero,
+                          headerPadding: EdgeInsets.symmetric(vertical: 4),
                         ),
                         enabledDayPredicate: (day) {
+                          final minSelectable = _selectableMin();
+                          final maxSelectable = _selectableMax();
+                          if (day.isBefore(minSelectable) ||
+                              day.isAfter(maxSelectable)) {
+                            return false;
+                          }
                           if (enabledYears == null) return true;
                           return enabledYears.contains(day.year);
                         },
@@ -435,59 +542,116 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                               ),
                             );
                           },
+                          defaultBuilder: (context, day, focusedDay) {
+                            final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final showTodayLabel = _shouldShowTodayLabel(
+                              day,
+                              enabledYears,
+                            );
+                            return _buildLunarCell(
+                              day: day,
+                              style: calendarStyle,
+                              decoration: calendarStyle.defaultDecoration,
+                              textStyle: calendarStyle.defaultTextStyle,
+                              lunarLabel: lunarLabel,
+                              showTodayLabel: showTodayLabel,
+                            );
+                          },
+                          outsideBuilder: (context, day, focusedDay) {
+                            final lunarLabel = _lunarLabelFor(day, isChinese);
+                            return _buildLunarCell(
+                              day: day,
+                              style: calendarStyle,
+                              decoration: calendarStyle.outsideDecoration,
+                              textStyle: calendarStyle.outsideTextStyle,
+                              lunarLabel: lunarLabel,
+                              showTodayLabel: false,
+                            );
+                          },
+                          disabledBuilder: (context, day, focusedDay) {
+                            final lunarLabel = _lunarLabelFor(day, isChinese);
+                            return _buildLunarCell(
+                              day: day,
+                              style: calendarStyle,
+                              decoration: calendarStyle.disabledDecoration,
+                              textStyle: calendarStyle.disabledTextStyle,
+                              lunarLabel: lunarLabel,
+                              showTodayLabel: false,
+                            );
+                          },
                           todayBuilder: (context, day, focusedDay) {
-                            if (!_shouldShowTodayLabel(day, enabledYears)) {
-                              return null;
-                            }
-                            return _buildTodayCell(
+                            final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final showTodayLabel = _shouldShowTodayLabel(
+                              day,
+                              enabledYears,
+                            );
+                            return _buildLunarCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.todayDecoration,
                               textStyle: calendarStyle.todayTextStyle,
+                              lunarLabel: lunarLabel,
+                              showTodayLabel: showTodayLabel,
                             );
                           },
                           selectedBuilder: (context, day, focusedDay) {
-                            if (!_shouldShowTodayLabel(day, enabledYears)) {
-                              return null;
-                            }
-                            return _buildTodayCell(
+                            final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final showTodayLabel = _shouldShowTodayLabel(
+                              day,
+                              enabledYears,
+                            );
+                            return _buildLunarCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.selectedDecoration,
                               textStyle: calendarStyle.selectedTextStyle,
+                              lunarLabel: lunarLabel,
+                              showTodayLabel: showTodayLabel,
                             );
                           },
                           rangeStartBuilder: (context, day, focusedDay) {
-                            if (!_shouldShowTodayLabel(day, enabledYears)) {
-                              return null;
-                            }
-                            return _buildTodayCell(
+                            final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final showTodayLabel = _shouldShowTodayLabel(
+                              day,
+                              enabledYears,
+                            );
+                            return _buildLunarCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.rangeStartDecoration,
                               textStyle: calendarStyle.rangeStartTextStyle,
+                              lunarLabel: lunarLabel,
+                              showTodayLabel: showTodayLabel,
                             );
                           },
                           rangeEndBuilder: (context, day, focusedDay) {
-                            if (!_shouldShowTodayLabel(day, enabledYears)) {
-                              return null;
-                            }
-                            return _buildTodayCell(
+                            final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final showTodayLabel = _shouldShowTodayLabel(
+                              day,
+                              enabledYears,
+                            );
+                            return _buildLunarCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.rangeEndDecoration,
                               textStyle: calendarStyle.rangeEndTextStyle,
+                              lunarLabel: lunarLabel,
+                              showTodayLabel: showTodayLabel,
                             );
                           },
                           withinRangeBuilder: (context, day, focusedDay) {
-                            if (!_shouldShowTodayLabel(day, enabledYears)) {
-                              return null;
-                            }
-                            return _buildTodayCell(
+                            final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final showTodayLabel = _shouldShowTodayLabel(
+                              day,
+                              enabledYears,
+                            );
+                            return _buildLunarCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.withinRangeDecoration,
                               textStyle: calendarStyle.withinRangeTextStyle,
+                              lunarLabel: lunarLabel,
+                              showTodayLabel: showTodayLabel,
                             );
                           },
                         ),
@@ -500,43 +664,85 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                 ),
               ),
               Container(
-                height: _bottomBarHeight,
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                 decoration: BoxDecoration(
                   color: background,
-                  border: Border(
-                    top: BorderSide(color: Colors.grey.shade200),
-                  ),
+                  border: Border(top: BorderSide(color: Colors.grey.shade200)),
                 ),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            widget.bottomLabel,
-                            style: GoogleFonts.lato(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey.shade600,
+                    if (isChinese)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            FilterChip(
+                              label: const Text('农历'),
+                              selected: _showLunar,
+                              onSelected: (value) {
+                                setState(() => _showLunar = value);
+                                _saveLunarPrefs();
+                              },
+                              selectedColor: Colors.green.withOpacity(0.12),
+                              checkmarkColor: Colors.green.shade700,
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _rangeLabel(),
-                            style: GoogleFonts.lato(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                            FilterChip(
+                              label: const Text('节气'),
+                              selected: _showJieQi,
+                              onSelected: (value) {
+                                setState(() => _showJieQi = value);
+                                _saveLunarPrefs();
+                              },
+                              selectedColor: Colors.green.withOpacity(0.12),
+                              checkmarkColor: Colors.green.shade700,
                             ),
-                          ),
-                        ],
+                            FilterChip(
+                              label: const Text('节日'),
+                              selected: _showFestival,
+                              onSelected: (value) {
+                                setState(() => _showFestival = value);
+                                _saveLunarPrefs();
+                              },
+                              selectedColor: Colors.green.withOpacity(0.12),
+                              checkmarkColor: Colors.green.shade700,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: _handleClear,
-                      child: Text(widget.clearLabel),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                widget.bottomLabel,
+                                style: GoogleFonts.lato(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _rangeLabel(),
+                                style: GoogleFonts.lato(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _handleClear,
+                          child: Text(widget.clearLabel),
+                        ),
+                      ],
                     ),
                   ],
                 ),

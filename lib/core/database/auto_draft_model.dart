@@ -32,4 +32,6 @@ class JiveAutoDraft {
   String? dedupKey;
 
   late DateTime createdAt;
+
+  List<String> tagKeys = [];
 }

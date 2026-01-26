@@ -11,12 +11,16 @@ import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
+import '../../core/database/tag_model.dart';
+import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/utils/logger_util.dart';
 import '../stats/stats_screen.dart';
 import 'category_create_dialog.dart';
 import 'category_create_screen.dart';
 import 'category_edit_dialog.dart';
+import 'category_transactions_screen.dart';
 
 class _UserCategorySeed {
   final String parent;
@@ -106,6 +110,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             JiveTransactionSchema,
             JiveAccountSchema,
             JiveAutoDraftSchema,
+            JiveTagSchema,
+            JiveTagGroupSchema,
+            JiveTagRuleSchema,
+            JiveTagConversionLogSchema,
           ],
           directory: dir.path,
         );
@@ -263,7 +271,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     }
     if (picks.isEmpty) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 2, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -281,7 +289,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -1080,6 +1088,23 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     );
   }
 
+  Future<void> _openTransactions({
+    required JiveCategory parent,
+    JiveCategory? sub,
+  }) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryTransactionsScreen(
+          title: "账单 · ${sub?.name ?? parent.name}",
+          filterCategoryKey: parent.key,
+          filterSubCategoryKey: sub?.key,
+          includeSubCategories: false,
+        ),
+      ),
+    );
+  }
+
   Future<void> _moveSubCategory(JiveCategory sub) async {
     final parents = _parents.where((p) => p.key != sub.parentKey).toList();
     if (parents.isEmpty) return;
@@ -1617,6 +1642,14 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                 },
               ),
             ListTile(
+              leading: const Icon(Icons.receipt_long),
+              title: const Text("查看账单"),
+              onTap: () async {
+                Navigator.pop(context);
+                await _openTransactions(parent: parent);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.pie_chart),
               title: const Text("查看统计数据"),
               onTap: () async {
@@ -1893,7 +1926,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         return KeyedSubtree(
           key: ValueKey(parent.key),
           child: Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.only(bottom: 2),
             child: _buildParentCard(
               parent,
               index,
@@ -1947,17 +1980,17 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           ],
         ),
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: 0),
     ];
 
     if (!_isSearching && widget.onlyUserCategories) {
       items.add(_buildCommonUserSection());
-      items.add(const SizedBox(height: 12));
+      items.add(const SizedBox(height: 2));
     }
 
     if (!_isSearching && _recommendationGroups.isNotEmpty) {
       items.add(_buildRecommendationSection());
-      items.add(const SizedBox(height: 10));
+      items.add(const SizedBox(height: 2));
     }
 
     final emptyText = widget.onlyUserCategories ? "暂无用户分类，可从常用分类添加" : "暂无分类";

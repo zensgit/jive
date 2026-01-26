@@ -1,47 +1,47 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
-import '../../core/database/template_model.dart';
-import '../../core/service/template_service.dart';
+import '../../core/database/tag_model.dart';
+import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/account_service.dart';
+import '../tag/tag_icon_catalog.dart';
 import 'add_transaction_screen.dart';
-import 'widgets/transaction_action_bar.dart';
-import 'widgets/transaction_hero_section.dart';
-import 'widgets/transaction_info_card.dart';
-import 'widgets/transaction_note_card.dart';
-import 'widgets/transaction_raw_text_card.dart';
-import '../template/widgets/save_template_dialog.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final int transactionId;
+  final bool isSheet;
 
   const TransactionDetailScreen({
     super.key,
     required this.transactionId,
+    this.isSheet = false,
   });
 
   @override
-  State<TransactionDetailScreen> createState() => _TransactionDetailScreenState();
+  State<TransactionDetailScreen> createState() =>
+      _TransactionDetailScreenState();
 }
 
 class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
+  late final NumberFormat _currency = NumberFormat.currency(symbol: "¥");
+  late final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
+
   Isar? _isar;
   bool _isLoading = true;
   String? _errorMessage;
   JiveTransaction? _transaction;
-  JiveCategory? _category;
-  JiveCategory? _subCategory;
-  JiveAccount? _account;
-  JiveAccount? _toAccount;
+  final Map<String, JiveCategory> _categoryByKey = {};
+  final Map<int, JiveAccount> _accountById = {};
+  final Map<String, JiveTag> _tagByKey = {};
   bool _hasDataChanges = false;
 
   @override
@@ -55,48 +55,31 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       _isLoading = true;
       _errorMessage = null;
     });
-
     try {
       final isar = await _ensureIsar();
       final tx = await isar.jiveTransactions.get(widget.transactionId);
       if (tx == null) {
         throw StateError('transaction_missing');
       }
-
-      // 加载分类
-      JiveCategory? category;
-      JiveCategory? subCategory;
-      if (tx.categoryKey != null) {
-        category = await isar.jiveCategorys
-            .filter()
-            .keyEqualTo(tx.categoryKey!)
-            .findFirst();
-      }
-      if (tx.subCategoryKey != null) {
-        subCategory = await isar.jiveCategorys
-            .filter()
-            .keyEqualTo(tx.subCategoryKey!)
-            .findFirst();
-      }
-
-      // 加载账户
-      JiveAccount? account;
-      if (tx.accountId != null) {
-        account = await isar.jiveAccounts.get(tx.accountId!);
-      }
-
-      JiveAccount? toAccount;
-      if (tx.toAccountId != null) {
-        toAccount = await isar.jiveAccounts.get(tx.toAccountId!);
-      }
+      final categories = await isar
+          .collection<JiveCategory>()
+          .where()
+          .findAll();
+      final accounts = await isar.collection<JiveAccount>().where().findAll();
+      final tags = await isar.collection<JiveTag>().where().findAll();
 
       if (!mounted) return;
       setState(() {
         _transaction = tx;
-        _category = category;
-        _subCategory = subCategory;
-        _account = account;
-        _toAccount = toAccount;
+        _categoryByKey
+          ..clear()
+          ..addEntries(categories.map((c) => MapEntry(c.key, c)));
+        _accountById
+          ..clear()
+          ..addEntries(accounts.map((a) => MapEntry(a.id, a)));
+        _tagByKey
+          ..clear()
+          ..addEntries(tags.map((t) => MapEntry(t.key, t)));
         _isLoading = false;
       });
     } catch (e) {
@@ -115,16 +98,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       return _isar!;
     }
     final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open(
-      [
-        JiveTransactionSchema,
-        JiveCategorySchema,
-        JiveCategoryOverrideSchema,
-        JiveAccountSchema,
-        JiveAutoDraftSchema,
-      ],
-      directory: dir.path,
-    );
+    _isar = await Isar.open([
+      JiveTransactionSchema,
+      JiveCategorySchema,
+      JiveCategoryOverrideSchema,
+      JiveAccountSchema,
+      JiveAutoDraftSchema,
+      JiveTagSchema,
+      JiveTagGroupSchema,
+      JiveTagRuleSchema,
+      JiveTagConversionLogSchema,
+    ], directory: dir.path);
     return _isar!;
   }
 
@@ -146,6 +130,23 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     }
   }
 
+  Future<void> _copyTransaction() async {
+    final tx = _transaction;
+    if (tx == null) return;
+    final updated = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddTransactionScreen(prefillTransaction: tx),
+      ),
+    );
+    if (updated == true) {
+      _hasDataChanges = true;
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
   Future<void> _deleteTransaction() async {
     final tx = _transaction;
     if (tx == null) return;
@@ -161,7 +162,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('删除'),
           ),
         ],
@@ -175,150 +175,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     Navigator.pop(context, true);
   }
 
-  Future<void> _copyTransaction() async {
-    final tx = _transaction;
-    if (tx == null) return;
-
-    // 复制一条新交易（时间为当前时间），然后打开编辑页面
-    final newTx = JiveTransaction()
-      ..amount = tx.amount
-      ..type = tx.type
-      ..source = '复制'
-      ..timestamp = DateTime.now()
-      ..accountId = tx.accountId
-      ..toAccountId = tx.toAccountId
-      ..categoryKey = tx.categoryKey
-      ..subCategoryKey = tx.subCategoryKey
-      ..category = tx.category
-      ..subCategory = tx.subCategory
-      ..note = tx.note;
-
-    // 先保存交易
-    await _isar!.writeTxn(() async {
-      await _isar!.jiveTransactions.put(newTx);
-    });
-
-    _hasDataChanges = true;
-    if (!mounted) return;
-
-    // 打开编辑页面让用户修改
-    final updated = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AddTransactionScreen(editingTransaction: newTx),
-      ),
-    );
-
-    if (updated == true) {
-      // 用户保存了修改
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('交易已复制并保存')),
-      );
-    } else {
-      // 用户取消了编辑，删除刚创建的交易
-      await _isar!.writeTxn(() async {
-        await _isar!.jiveTransactions.delete(newTx.id);
-      });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已取消复制')),
-      );
-    }
-  }
-
-  Future<void> _createRefund() async {
-    final tx = _transaction;
-    if (tx == null) return;
-
-    // 底部弹窗让用户输入退款金额
-    final refundAmount = await showModalBottomSheet<double>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _RefundBottomSheet(originalAmount: tx.amount),
-    );
-
-    if (refundAmount == null) return;
-
-    // 创建退款交易（类型相反）
-    final refundType = tx.type == 'income' ? 'expense' : 'income';
-    final isPartial = refundAmount < tx.amount;
-    final refundTx = JiveTransaction()
-      ..amount = refundAmount
-      ..type = refundType
-      ..source = '退款'
-      ..timestamp = DateTime.now()
-      ..accountId = tx.accountId
-      ..categoryKey = tx.categoryKey
-      ..subCategoryKey = tx.subCategoryKey
-      ..category = tx.category
-      ..subCategory = tx.subCategory
-      ..note = isPartial
-          ? '部分退款 (原¥${tx.amount.toStringAsFixed(2)}): ${tx.note ?? ''}'
-          : '退款: ${tx.note ?? ''}';
-
-    await _isar!.writeTxn(() async {
-      await _isar!.jiveTransactions.put(refundTx);
-    });
-
-    _hasDataChanges = true;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isPartial
-            ? '已创建部分退款 ¥${refundAmount.toStringAsFixed(2)}'
-            : '已创建全额退款'),
-      ),
-    );
-  }
-
-  void _shareTransaction() {
-    final tx = _transaction;
-    if (tx == null) return;
-
-    final typeLabel = tx.type == 'income' ? '收入' : (tx.type == 'transfer' ? '转账' : '支出');
-    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(tx.timestamp);
-    final categoryName = _category?.name ?? tx.category ?? '未分类';
-    final accountName = _account?.name ?? '未知账户';
-
-    final text = '''
-【Jive记账】
-$typeLabel: ¥${tx.amount.toStringAsFixed(2)}
-分类: $categoryName
-账户: $accountName
-时间: $dateStr
-${tx.note != null && tx.note!.isNotEmpty ? '备注: ${tx.note}' : ''}
-'''.trim();
-
-    Share.share(text, subject: 'Jive记账 - $typeLabel');
-  }
-
-  Future<void> _saveAsTemplate() async {
-    final tx = _transaction;
-    if (tx == null) return;
-
-    final result = await showSaveTemplateDialog(
-      context: context,
-      transaction: tx,
-      categoryName: _category?.name ?? tx.category,
-    );
-
-    if (result == null) return;
-
-    final service = TemplateService(_isar!);
-    await service.createFromTransaction(
-      transaction: tx,
-      name: result['name'] as String,
-      saveAmount: result['saveAmount'] as bool,
-      groupName: result['groupName'] as String?,
-    );
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已保存模板"${result['name']}"')),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -326,24 +182,84 @@ ${tx.note != null && tx.note!.isNotEmpty ? '备注: ${tx.note}' : ''}
         Navigator.pop(context, _hasDataChanges);
         return false;
       },
-      child: Scaffold(
-        backgroundColor: JiveTheme.surfaceWhite,
-        body: _buildBody(),
-        bottomNavigationBar: _transaction != null
-            ? TransactionActionBar(
-                onDelete: _deleteTransaction,
-                onEdit: _editTransaction,
-                onCopy: _copyTransaction,
-                onSaveAsTemplate: _saveAsTemplate,
-                onMarkRefund: _createRefund,
-                onShare: _shareTransaction,
-              )
-            : null,
+      child: widget.isSheet ? _buildSheet() : _buildScreen(),
+    );
+  }
+
+  Widget _buildScreen() {
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context, _hasDataChanges),
+        ),
+        title: Text(
+          '交易详情',
+          style: GoogleFonts.lato(fontWeight: FontWeight.w600),
+        ),
+        centerTitle: true,
+      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildSheet() {
+    return SafeArea(
+      top: false,
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.67,
+        minChildSize: 0.5,
+        maxChildSize: 1.0,
+        expand: false,
+        builder: (context, scrollController) {
+          return Material(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '交易详情',
+                          style: GoogleFonts.lato(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () =>
+                            Navigator.pop(context, _hasDataChanges),
+                        icon: const Icon(Icons.close),
+                        tooltip: '关闭',
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(child: _buildBody(scrollController: scrollController)),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody({ScrollController? scrollController}) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -354,70 +270,304 @@ ${tx.note != null && tx.note!.isNotEmpty ? '备注: ${tx.note}' : ''}
     if (tx == null) {
       return _buildErrorState('暂无数据');
     }
+    final type = tx.type ?? 'expense';
+    final isTransfer = type == 'transfer';
+    final amountColor = isTransfer
+        ? Colors.blueGrey
+        : (type == 'income' ? Colors.green : Colors.redAccent);
+    final amountPrefix = isTransfer ? '' : (type == 'income' ? '+ ' : '- ');
+    final title = isTransfer ? _transferTitle(tx) : _categoryTitle(tx);
+    final subtitle = isTransfer ? _transferSubtitle(tx) : _categorySubtitle(tx);
+    final tags = _resolveTags(tx);
+    final smartTagKeys = tx.smartTagKeys.toSet();
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final amountFontSize = isLandscape ? 26.0 : 32.0;
+    final titleFontSize = isLandscape ? 12.0 : 14.0;
+    final subtitleFontSize = isLandscape ? 11.0 : 12.0;
+    final headerTopSpacing = isLandscape ? 8.0 : 16.0;
+    final headerBottomSpacing = isLandscape ? 12.0 : 20.0;
+    final listPhysics = scrollController == null
+        ? const ClampingScrollPhysics()
+        : const AlwaysScrollableScrollPhysics();
 
-    return CustomScrollView(
-      slivers: [
-        // 透明 AppBar
-        SliverAppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: _buildBackButton(),
-          pinned: true,
-        ),
-        // Hero 区域
-        SliverToBoxAdapter(
-          child: TransactionHeroSection(
-            transaction: tx,
-            category: _category,
-            subCategory: _subCategory,
-            account: _account,
-            toAccount: _toAccount,
+    final header = Column(
+      children: [
+        SizedBox(height: headerTopSpacing),
+        Text(
+          '$amountPrefix${_currency.format(tx.amount)}',
+          style: GoogleFonts.rubik(
+            fontSize: amountFontSize,
+            fontWeight: FontWeight.w700,
+            color: amountColor,
           ),
         ),
-        // 信息卡片
-        SliverToBoxAdapter(
-          child: TransactionInfoCard(
-            transaction: tx,
+        const SizedBox(height: 6),
+        Text(
+          title,
+          style: GoogleFonts.lato(
+            fontSize: titleFontSize,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade700,
           ),
         ),
-        // 备注卡片
-        if (tx.note != null && tx.note!.trim().isNotEmpty)
-          SliverToBoxAdapter(
-            child: TransactionNoteCard(note: tx.note!),
+        if (subtitle.isNotEmpty)
+          Text(
+            subtitle,
+            style: GoogleFonts.lato(
+              fontSize: subtitleFontSize,
+              color: Colors.grey.shade500,
+            ),
           ),
-        // 原始通知
-        if (tx.rawText != null && tx.rawText!.trim().isNotEmpty)
-          SliverToBoxAdapter(
-            child: TransactionRawTextCard(rawText: tx.rawText!),
+        SizedBox(height: headerBottomSpacing),
+      ],
+    );
+
+    final detailCards = [
+      _buildDetailCard([
+        _buildDetailRow('类型', _typeLabel(type)),
+        _buildDetailRow('时间', _dateTimeFormat.format(tx.timestamp)),
+        _buildDetailRow('来源', tx.source),
+      ]),
+      const SizedBox(height: 12),
+      _buildDetailCard([
+        if (!isTransfer) _buildDetailRow('分类', _categoryTitle(tx)),
+        if (!isTransfer) _buildDetailRow('子类', _categorySubtitle(tx)),
+        _buildDetailRow('账户', _resolveAccountName(tx.accountId)),
+        if (isTransfer)
+          _buildDetailRow('转入账户', _resolveAccountName(tx.toAccountId)),
+      ]),
+      const SizedBox(height: 12),
+      _buildDetailCard([
+        _buildTagRow(tags, smartTagKeys),
+      ]),
+      const SizedBox(height: 12),
+      _buildDetailCard([
+        _buildDetailRow(
+          '备注',
+          tx.note?.trim().isEmpty ?? true ? '无' : tx.note!.trim(),
+        ),
+        _buildDetailRow(
+          '原始信息',
+          tx.rawText?.trim().isEmpty ?? true ? '无' : tx.rawText!.trim(),
+        ),
+      ]),
+    ];
+
+    final actionRow = SafeArea(
+      top: false,
+      minimum: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _buildActionIcon(
+            icon: Icons.delete_outline_rounded,
+            color: Colors.redAccent,
+            tooltip: '删除',
+            onPressed: _deleteTransaction,
           ),
-        // 底部留白
-        const SliverToBoxAdapter(
-          child: SizedBox(height: 120),
+          _buildActionIcon(
+            icon: Icons.copy_rounded,
+            color: Colors.blueGrey,
+            tooltip: '复制',
+            onPressed: _copyTransaction,
+          ),
+          _buildActionIcon(
+            icon: Icons.edit_rounded,
+            color: JiveTheme.primaryGreen,
+            tooltip: '编辑',
+            onPressed: _editTransaction,
+          ),
+        ],
+      ),
+    );
+
+    if (isLandscape) {
+      return ListView(
+        controller: scrollController,
+        physics: listPhysics,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        children: [
+          header,
+          ...detailCards,
+          const SizedBox(height: 12),
+          actionRow,
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        header,
+        Expanded(
+          child: ListView(
+            controller: scrollController,
+            physics: listPhysics,
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            children: [
+              ...detailCards,
+              const SizedBox(height: 80),
+            ],
+          ),
+        ),
+        actionRow,
+      ],
+    );
+  }
+
+  Widget _buildActionIcon({
+    required IconData icon,
+    required Color color,
+    required String tooltip,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: color.withOpacity(0.12),
+      shape: const CircleBorder(),
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(icon, color: color),
+        tooltip: tooltip,
+      ),
+    );
+  }
+
+  Widget _buildDetailCard(List<Widget> children) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(
+              label,
+              style: GoogleFonts.lato(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.lato(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<JiveTag> _resolveTags(JiveTransaction tx) {
+    if (tx.tagKeys.isEmpty) return [];
+    final seen = <String>{};
+    final items = <JiveTag>[];
+    for (final key in tx.tagKeys) {
+      if (!seen.add(key)) continue;
+      final tag = _tagByKey[key];
+      if (tag != null) {
+        items.add(tag);
+      }
+    }
+    return items;
+  }
+
+  Widget _buildTagRow(List<JiveTag> tags, Set<String> smartKeys) {
+    if (tags.isEmpty) {
+      return _buildDetailRow('标签', '无');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '标签',
+          style: GoogleFonts.lato(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: tags.map((tag) => _buildTagChip(tag, smartKeys.contains(tag.key))).toList(),
         ),
       ],
     );
   }
 
-  Widget _buildBackButton() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: GestureDetector(
-        onTap: () => Navigator.pop(context, _hasDataChanges),
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 8,
-              ),
-            ],
+  Widget _buildTagChip(JiveTag tag, bool isSmart) {
+    final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+    final icon = hasTagIcon(tag)
+        ? tagIconWidget(tag, size: 12, color: color)
+        : null;
+    return Chip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            tagDisplayName(tag),
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          child: const Icon(Icons.arrow_back, size: 20),
-        ),
+          if (isSmart) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: JiveTheme.primaryGreen.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: JiveTheme.primaryGreen.withOpacity(0.4)),
+              ),
+              child: Text(
+                '智能',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: JiveTheme.primaryGreen,
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
+      avatar: icon == null
+          ? null
+          : CircleAvatar(
+              radius: 10,
+              backgroundColor: color.withOpacity(0.15),
+              child: icon,
+            ),
+      backgroundColor: color.withOpacity(0.12),
+      side: BorderSide(color: color.withOpacity(0.4)),
     );
   }
 
@@ -426,185 +576,70 @@ ${tx.note != null && tx.note!.isNotEmpty ? '备注: ${tx.note}' : ''}
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            message,
-            style: GoogleFonts.lato(
-              fontSize: 16,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton(
-            onPressed: _loadData,
-            child: const Text('重试'),
-          ),
+          Text(message, style: GoogleFonts.lato(color: Colors.grey.shade600)),
+          const SizedBox(height: 12),
+          OutlinedButton(onPressed: _loadData, child: const Text('重试')),
         ],
       ),
     );
   }
+
+  String _typeLabel(String type) {
+    switch (type) {
+      case 'income':
+        return '收入';
+      case 'transfer':
+        return '转账';
+      default:
+        return '支出';
+    }
+  }
+
+  String _categoryTitle(JiveTransaction tx) {
+    return _displayCategoryName(tx.categoryKey, tx.category);
+  }
+
+  String _categorySubtitle(JiveTransaction tx) {
+    final sub = _displayCategoryName(tx.subCategoryKey, tx.subCategory);
+    return sub == '未分类' ? '' : sub;
+  }
+
+  String _transferTitle(JiveTransaction tx) {
+    return '转账';
+  }
+
+  String _transferSubtitle(JiveTransaction tx) {
+    final fromName = _resolveAccountName(tx.accountId);
+    final toName = _resolveAccountName(tx.toAccountId);
+    if (fromName.isEmpty && toName.isEmpty) return '';
+    if (fromName.isEmpty) return '到 $toName';
+    if (toName.isEmpty) return '来自 $fromName';
+    return '$fromName → $toName';
+  }
+
+  String _displayCategoryName(String? key, String? fallback) {
+    if (key != null && _categoryByKey.containsKey(key)) {
+      return _categoryByKey[key]!.name;
+    }
+    if (fallback != null && fallback.isNotEmpty) return fallback;
+    return '未分类';
+  }
+
+  String _resolveAccountName(int? accountId) {
+    if (accountId == null) return '未指定';
+    return _accountById[accountId]?.name ?? '未指定';
+  }
 }
 
-/// 退款金额输入底部弹窗
-class _RefundBottomSheet extends StatefulWidget {
-  final double originalAmount;
-
-  const _RefundBottomSheet({required this.originalAmount});
-
-  @override
-  State<_RefundBottomSheet> createState() => _RefundBottomSheetState();
-}
-
-class _RefundBottomSheetState extends State<_RefundBottomSheet> {
-  late TextEditingController _amountController;
-  String? _errorText;
-
-  @override
-  void initState() {
-    super.initState();
-    _amountController = TextEditingController(text: widget.originalAmount.toString());
-  }
-
-  @override
-  void dispose() {
-    _amountController.dispose();
-    super.dispose();
-  }
-
-  void _validate() {
-    final amount = double.tryParse(_amountController.text.trim());
-    setState(() {
-      if (amount == null || amount <= 0) {
-        _errorText = '请输入有效的退款金额';
-      } else if (amount > widget.originalAmount) {
-        _errorText = '退款金额不能超过原交易金额';
-      } else {
-        _errorText = null;
-      }
-    });
-  }
-
-  void _submit() {
-    _validate();
-    if (_errorText != null) return;
-
-    final amount = double.tryParse(_amountController.text.trim());
-    Navigator.pop(context, amount);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 拖动指示条
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // 标题
-            Row(
-              children: [
-                const Icon(Icons.replay, color: Colors.orange),
-                const SizedBox(width: 8),
-                Text(
-                  '创建退款',
-                  style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            // 原交易金额提示
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, size: 20, color: Colors.grey.shade600),
-                  const SizedBox(width: 8),
-                  Text(
-                    '原交易金额: ¥${widget.originalAmount.toStringAsFixed(2)}',
-                    style: GoogleFonts.lato(fontSize: 14, color: Colors.grey.shade700),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // 退款金额输入
-            TextField(
-              controller: _amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: '退款金额',
-                prefixText: '¥ ',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                errorText: _errorText,
-                helperText: '可输入部分退款金额',
-              ),
-              autofocus: true,
-              onChanged: (_) => _validate(),
-            ),
-            const SizedBox(height: 24),
-            // 按钮
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('取消'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    onPressed: _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text('确认退款'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+Future<bool?> showTransactionDetailSheet(
+  BuildContext context,
+  int transactionId,
+) {
+  return showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) =>
+        TransactionDetailScreen(transactionId: transactionId, isSheet: true),
+  );
 }

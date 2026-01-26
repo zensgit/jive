@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -12,7 +10,12 @@ import '../../core/database/transaction_model.dart';
 import '../../core/service/auto_draft_service.dart';
 import '../../core/service/auto_account_mapping.dart';
 import '../../core/service/account_service.dart';
-import '../../core/service/auto_settings.dart';
+import '../../core/database/tag_model.dart';
+import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
+import '../../core/service/tag_service.dart';
+import '../tag/tag_icon_catalog.dart';
+import '../tag/tag_picker_sheet.dart';
 
 class AutoDraftsScreen extends StatefulWidget {
   const AutoDraftsScreen({super.key});
@@ -25,7 +28,6 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
   late Isar _isar;
   bool _isLoading = true;
   bool _hasChanges = false;
-  bool _showDraftMetadata = false;
   List<JiveAutoDraft> _drafts = [];
   List<JiveAccount> _accounts = [];
   final Map<int, JiveAccount> _accountById = {};
@@ -49,12 +51,15 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
           JiveCategoryOverrideSchema,
           JiveAccountSchema,
           JiveAutoDraftSchema,
+          JiveTagSchema,
+          JiveTagGroupSchema,
+          JiveTagRuleSchema,
+          JiveTagConversionLogSchema,
         ],
         directory: dir.path,
       );
     }
     await _loadDrafts();
-    await _loadDebugSettings();
   }
 
   Future<void> _loadDrafts() async {
@@ -71,19 +76,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     });
   }
 
-  Future<void> _loadDebugSettings() async {
-    final settings = await AutoSettingsStore.load();
-    if (!mounted) return;
-    setState(() {
-      _showDraftMetadata = settings.debugShowDraftMetadata;
-    });
-  }
-
   Future<void> _confirmDraft(JiveAutoDraft draft) async {
-    if (_isTransferDraft(draft)) {
-      final ready = await _ensureTransferAccounts(draft);
-      if (!ready) return;
-    }
     final result = await _reviewDraftBeforeConfirm(draft);
     if (result == null) return;
     draft.amount = result.amount;
@@ -94,6 +87,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     draft.subCategoryKey = result.subCategoryKey;
     draft.accountId = result.accountId;
     draft.toAccountId = result.toAccountId;
+    draft.tagKeys = result.tagKeys;
     await _isar.writeTxn(() async {
       await _isar.collection<JiveAutoDraft>().put(draft);
     });
@@ -126,6 +120,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       await _loadDrafts();
     }
     final options = await _loadCategoryOptions();
+    final tagService = TagService(_isar);
+    await tagService.initDefaultGroups();
+    final tags = await tagService.getTags(includeArchived: false);
+    var selectedTagKeys = List<String>.from(draft.tagKeys);
     var type = draft.type ?? (_isTransferDraft(draft) ? 'transfer' : 'expense');
     var amountText = draft.amount.toStringAsFixed(2);
     final amountController = TextEditingController(text: amountText);
@@ -136,22 +134,20 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     String? toAccountError;
     String? fromAccountError;
 
-    final hints = _extractTransferHints(draft);
-    final accountHint = hints?.from ?? hints?.to;
-    final accountHintLabel = _buildAccountNameFromHint(accountHint);
-    if (accountId != null && accountHint != null) {
-      final account = _accountById[accountId];
-      if (account == null || !_accountMatchesHint(account, accountHint)) {
-        accountId = null;
-      }
-    }
-    accountId ??= _suggestAccountId(accountHint);
-    if (type != 'transfer' && accountId == null && accountHint == null && _accounts.isNotEmpty) {
+    final hints = _extractTransferHints(draft.rawText);
+    accountId ??= _suggestAccountId(hints?.from ?? hints?.to);
+    if (type != 'transfer' && accountId == null && _accounts.isNotEmpty) {
       accountId = _accounts.first.id;
     }
     if (type == 'transfer') {
       accountId ??= _suggestAccountId(hints?.from);
       toAccountId ??= _suggestAccountId(hints?.to);
+      if (accountId == null && _accounts.isNotEmpty) {
+        accountId = _accounts.first.id;
+      }
+      if (toAccountId == null && _accounts.length > 1) {
+        toAccountId = _accounts.firstWhere((a) => a.id != accountId).id;
+      }
     }
 
     var parentOptions = _parentsForType(type, options);
@@ -171,6 +167,32 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final selectedTags = tags.where((tag) => selectedTagKeys.contains(tag.key)).toList();
+            Future<void> pickTags() async {
+              final picked = await showModalBottomSheet<List<String>>(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.white,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                builder: (context) {
+                  return TagPickerSheet(
+                    tags: tags,
+                    selectedKeys: selectedTagKeys,
+                    onCreateTag: (name) async {
+                      final created = await TagService(_isar).createTag(name: name);
+                      await _loadDrafts();
+                      return created;
+                    },
+                  );
+                },
+              );
+              if (picked == null) return;
+              setSheetState(() {
+                selectedTagKeys = picked;
+              });
+            }
             void refreshCategories() {
               parentOptions = _parentsForType(type, options);
               selectedParent = _pickCategory(parentOptions, draft.categoryKey, draft.category);
@@ -255,23 +277,12 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                               ),
                               const SizedBox(height: 12),
                               if (type != 'transfer') ...[
-                                if (accountHintLabel != null)
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text(
-                                      '识别账户：$accountHintLabel',
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
                                 DropdownButtonFormField<int>(
                                   value: accountId,
                                   decoration: InputDecoration(
                                     labelText: '账户',
                                     errorText: accountError,
                                   ),
-                                  hint:
-                                      accountHintLabel == null ? const Text('请选择') : Text(accountHintLabel),
                                   items: [
                                     for (final account in _accounts)
                                       DropdownMenuItem(value: account.id, child: Text(account.name)),
@@ -282,27 +293,6 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                         accountError = null;
                                       }),
                                 ),
-                                if (accountId == null && accountHintLabel != null)
-                                  const Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Text('未找到匹配账户，可新建'),
-                                  ),
-                                if (accountHintLabel != null)
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: TextButton(
-                                      onPressed: () async {
-                                        final created = await _quickCreateAccount(accountHintLabel);
-                                        if (created == null) return;
-                                        setSheetState(() {
-                                          _accounts = [..._accounts, created];
-                                          _accountById[created.id] = created;
-                                          accountId = created.id;
-                                        });
-                                      },
-                                      child: const Text('新建账户'),
-                                    ),
-                                  ),
                                 const SizedBox(height: 12),
                                 DropdownButtonFormField<String>(
                                   value: selectedParent?.key,
@@ -374,6 +364,28 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   }),
                                 ),
                               ],
+                              const SizedBox(height: 12),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    for (final tag in selectedTags)
+                                      _buildDraftTagChip(
+                                        tag,
+                                        () => setSheetState(() {
+                                          selectedTagKeys.remove(tag.key);
+                                        }),
+                                      ),
+                                    ActionChip(
+                                      label: Text(selectedTags.isEmpty ? '添加标签' : '编辑标签'),
+                                      avatar: const Icon(Icons.label_outline, size: 16, color: Colors.black54),
+                                      onPressed: pickTags,
+                                    ),
+                                  ],
+                                ),
+                              ),
                               const SizedBox(height: 12),
                               if ((draft.rawText ?? '').isNotEmpty)
                                 ExpansionTile(
@@ -448,6 +460,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                       subCategoryName: type == 'transfer'
                                           ? '转账'
                                           : (selectedSub?.name ?? draft.subCategory ?? '未分类'),
+                                      tagKeys: List<String>.from(selectedTagKeys),
                                     ),
                                   );
                                 },
@@ -574,6 +587,20 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     );
   }
 
+  Widget _buildDraftTagChip(JiveTag tag, VoidCallback onDeleted) {
+    final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+    return InputChip(
+      label: Text(
+        tagDisplayName(tag),
+        style: TextStyle(color: color, fontWeight: FontWeight.w600),
+      ),
+      backgroundColor: color.withOpacity(0.12),
+      side: BorderSide(color: color.withOpacity(0.4)),
+      onDeleted: onDeleted,
+    );
+  }
+
+
   Widget _buildDraftCard(JiveAutoDraft draft) {
     final type = draft.type ?? 'expense';
     final isTransfer = _isTransferDraft(draft);
@@ -583,7 +610,6 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     final sub = draft.subCategory ?? '未分类';
     final timeText = _timeFormat.format(draft.timestamp);
     final transferLine = _buildTransferLine(draft, timeText);
-    final metadataSummary = _showDraftMetadata ? _formatMetadataSummary(draft.metadataJson) : null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -630,13 +656,6 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
               style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
             ),
           ],
-          if (metadataSummary != null) ...[
-            const SizedBox(height: 6),
-            Text(
-              '元数据：$metadataSummary',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
-            ),
-          ],
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -675,14 +694,6 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     '转至',
   ];
 
-  static const _toAccountAnchorKeywords = [
-    '到账',
-    '收款',
-    '转入',
-    '还款到',
-    '退款至',
-  ];
-
   bool _isTransferDraft(JiveAutoDraft draft) {
     if (draft.type == 'transfer') return true;
     final text = draft.rawText ?? '';
@@ -702,7 +713,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     if (_accounts.isEmpty) {
       await _loadDrafts();
     }
-    final hints = _extractTransferHints(draft);
+    final hints = _extractTransferHints(draft.rawText);
     final fromHint = hints?.from;
     final toHint = hints?.to;
     var fromId = draft.accountId;
@@ -733,7 +744,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
   }
 
   Future<_TransferSelection?> _promptTransferAccounts(JiveAutoDraft draft) async {
-    final hints = _extractTransferHints(draft);
+    final hints = _extractTransferHints(draft.rawText);
     final fromHint = hints?.from;
     final toHint = hints?.to;
     int? fromId = draft.accountId;
@@ -744,7 +755,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       }
     }
     fromId ??= _suggestAccountId(fromHint);
-    if (fromId == null && fromHint == null && _accounts.length == 1) {
+    if (fromId == null && _accounts.length == 1) {
       fromId = _accounts.first.id;
     }
     int? toId = draft.toAccountId;
@@ -767,9 +778,6 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
         fromId = null;
       }
     }
-    if (toId == null && toHint == null && _accounts.length == 1) {
-      toId = _accounts.first.id;
-    }
     bool rememberMapping = false;
     final mappingPreview = AutoAccountMappingStore.sanitizePattern(toHint?.name ?? '');
     final fromHintLabel = _buildAccountNameFromHint(fromHint);
@@ -781,45 +789,39 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
-        final initialSize = isLandscape ? 0.9 : 0.7;
-        final minSize = isLandscape ? 0.75 : 0.5;
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            return DraggableScrollableSheet(
-              expand: false,
-              initialChildSize: initialSize,
-              minChildSize: minSize,
-              maxChildSize: 0.95,
-              builder: (context, scrollController) {
-                return Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: Column(
-                      children: [
-                        const SizedBox(height: 8),
-                        Container(
-                          width: 40,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(2),
-                          ),
+            return FractionallySizedBox(
+              heightFactor: 0.68,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
                         ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          '补全转账账户',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                        ),
-                        const Divider(height: 24),
-                        Expanded(
-                          child: ListView(
-                            controller: scrollController,
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        '补全转账账户',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                      ),
+                      const Divider(height: 24),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               if (fromHintLabel != null)
                                 Align(
@@ -940,47 +942,47 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                             ],
                           ),
                         ),
-                        const Divider(height: 1),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text('取消'),
-                                ),
+                      ),
+                      const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('取消'),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    if (fromId == null || toId == null) return;
-                                    if (rememberMapping && mappingPreview.isNotEmpty) {
-                                      await AutoAccountMappingStore.upsert(
-                                        AutoAccountMapping(
-                                          pattern: mappingPreview,
-                                          accountId: toId!,
-                                          regex: false,
-                                        ),
-                                      );
-                                    }
-                                    Navigator.pop(
-                                      context,
-                                      _TransferSelection(fromId: fromId!, toId: toId!),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  if (fromId == null || toId == null) return;
+                                  if (rememberMapping && mappingPreview.isNotEmpty) {
+                                    await AutoAccountMappingStore.upsert(
+                                      AutoAccountMapping(
+                                        pattern: mappingPreview,
+                                        accountId: toId!,
+                                        regex: false,
+                                      ),
                                     );
-                                  },
-                                  child: const Text('确认'),
-                                ),
+                                  }
+                                  Navigator.pop(
+                                    context,
+                                    _TransferSelection(fromId: fromId!, toId: toId!),
+                                  );
+                                },
+                                child: const Text('确认'),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                );
-              },
+                ),
+              ),
             );
           },
         );
@@ -1059,39 +1061,19 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     return const _AccountTypeHint(type: AccountService.typeAsset, subType: 'bank');
   }
 
-  _TransferAccountHints? _extractTransferHints(JiveAutoDraft draft) {
-    final metadata = _parseMetadata(draft.metadataJson);
-    final metaFrom = _metadataValue(metadata, const ['from_asset', 'asset', 'fromAsset']);
-    final metaTo = _metadataValue(metadata, const ['to_asset', 'toAccount', 'to_asset_name']);
-    final rawText = draft.rawText;
-    _AccountHint? fromHint = _hintFromMetadataValue(metaFrom);
-    _AccountHint? toHint = _hintFromMetadataValue(metaTo);
-
-    if (rawText != null) {
-      final text = rawText.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-      if (text.isNotEmpty) {
-        fromHint ??= _extractFromAccountHint(text);
-        if (toHint == null && _hasToAccountAnchors(text)) {
-          toHint = _extractToAccountHint(text);
-        }
-      }
-    }
-
-    if (fromHint != null && toHint != null) {
-      final sameName = fromHint.name == toHint.name;
-      final sameTail = fromHint.tail == toHint.tail;
-      if (sameName && sameTail && _walletHintKeywords.contains(fromHint.name)) {
-        toHint = null;
-      }
-    }
-
+  _TransferAccountHints? _extractTransferHints(String? rawText) {
+    if (rawText == null) return null;
+    final text = rawText.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (text.isEmpty) return null;
+    final fromHint = _extractFromAccountHint(text);
+    final toHint = _extractToAccountHint(text);
     if (fromHint == null && toHint == null) return null;
     return _TransferAccountHints(from: fromHint, to: toHint);
   }
 
   _AccountHint? _extractToAccountHint(String text) {
     final patterns = [
-      RegExp(r'(?:到账银行卡|到账卡|收款银行卡|收款卡|收款账号|收款账户|转入卡|转出卡|转入账户|到账账户|还款到|退款至)[:：]?\s*([^\s，,。;；]{2,30})'),
+      RegExp(r'(?:到账银行卡|到账卡|收款银行卡|收款卡|收款账号|收款账户|转入卡|转出卡|银行卡)[:：]?\s*([^\s，,。;；]{2,30})'),
       RegExp(r'(?:转账到|转到|转至|转入至|到账至)[:：]?\s*([^\s，,。;；]{2,30})'),
     ];
     final name = _matchFirstGroup(text, patterns);
@@ -1116,7 +1098,12 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
   }
 
   _AccountHint? _buildAccountHint(String? name, String text) {
-    if (name == null || name.trim().isEmpty) return null;
+    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
+        RegExp(r'[（(](\d{3,4})[）)]').firstMatch(text)?.group(1);
+    if (name == null || name.trim().isEmpty) {
+      if (tail == null) return null;
+      return _AccountHint(name: tail, tail: tail);
+    }
     var cleaned = name.replaceAll(RegExp(r'[，,。\s]+$'), '').trim();
     String? tailFromName;
     final parenMatch = RegExp(r'[（(]\s*(\d{3,4})\s*[）)]').firstMatch(cleaned);
@@ -1139,70 +1126,13 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       if (tailFromName == null) return null;
       return _AccountHint(name: tailFromName, tail: tailFromName);
     }
-    final tailNearName = tailFromName == null ? _extractTailNearName(text, name) : null;
-    final resolvedTail =
-        tailFromName ?? tailNearName ?? (RegExp(r'^\d{3,4}$').hasMatch(normalized) ? normalized : null);
+    final resolvedTail = tailFromName ??
+        (RegExp(r'^\d{3,4}$').hasMatch(normalized) ? normalized : null);
     return _AccountHint(name: normalized, tail: resolvedTail);
-  }
-
-  String? _extractTailNearName(String text, String name) {
-    if (text.isEmpty || name.isEmpty) return null;
-    final index = text.indexOf(name);
-    if (index < 0) return null;
-    var end = index + name.length + 12;
-    if (end > text.length) end = text.length;
-    final slice = text.substring(index, end);
-    return RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(slice)?.group(1) ??
-        RegExp(r'[（(]\s*(\d{3,4})\s*[）)]').firstMatch(slice)?.group(1);
-  }
-
-  Map<String, dynamic> _parseMetadata(String? jsonText) {
-    if (jsonText == null || jsonText.trim().isEmpty) return const {};
-    try {
-      final decoded = json.decode(jsonText);
-      if (decoded is Map<String, dynamic>) return decoded;
-    } catch (_) {}
-    return const {};
-  }
-
-  String? _formatMetadataSummary(String? jsonText) {
-    final metadata = _parseMetadata(jsonText);
-    if (metadata.isEmpty) return null;
-    final parts = <String>[];
-    for (final entry in metadata.entries) {
-      final value = entry.value?.toString().trim();
-      if (value == null || value.isEmpty) continue;
-      parts.add('${entry.key}=$value');
-    }
-    if (parts.isEmpty) return null;
-    return parts.join(' · ');
-  }
-
-  String? _metadataValue(Map<String, dynamic> metadata, List<String> keys) {
-    for (final key in keys) {
-      final raw = metadata[key];
-      if (raw == null) continue;
-      final value = raw.toString().trim();
-      if (value.isEmpty) continue;
-      return value;
-    }
-    return null;
-  }
-
-  _AccountHint? _hintFromMetadataValue(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(value)?.group(1) ??
-        RegExp(r'[（(]\s*(\d{3,4})\s*[）)]').firstMatch(value)?.group(1);
-    var cleaned = value.replaceAll(RegExp(r'[（(]\s*\d{3,4}\s*[）)]'), '').trim();
-    final normalized = _sanitizeHintName(cleaned) ?? _sanitizeHintName(value);
-    if (normalized == null || normalized.isEmpty) return null;
-    return _AccountHint(name: normalized, tail: tail);
   }
 
   _AccountHint? _inferAccountHintFromContext(String text, {required bool preferWallet}) {
     final bank = _extractBankName(text);
-    final bankTail = bank == null ? null : _extractTailNearName(text, bank);
-    final hasCardMarker = text.contains('银行卡') || text.contains('储蓄卡') || text.contains('信用卡');
     String? wallet;
     for (final keyword in _walletHintKeywords) {
       if (text.contains(keyword)) {
@@ -1210,11 +1140,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
         break;
       }
     }
-    final preferBank = bank != null && (bankTail != null || hasCardMarker);
-    final primary = preferBank ? bank : (preferWallet ? (wallet ?? bank) : (bank ?? wallet));
+    final primary = preferWallet ? (wallet ?? bank) : (bank ?? wallet);
     if (primary == null) return null;
-    final tail = _extractTailNearName(text, primary);
-    return _AccountHint(name: primary, tail: tail);
+    return _buildAccountHint(primary, text);
   }
 
   int? _suggestAccountId(_AccountHint? hint) {
@@ -1249,19 +1177,12 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       if (trimmed.contains(keyword)) return keyword;
     }
     if (RegExp(r'^\d{3,4}$').hasMatch(trimmed)) return trimmed;
-    if (RegExp(r'(?:元|今日|今天|昨天|交易|支付|消费|退款|收款|转入|转出|支出|收入|成功|失败|单次|定时|投资|理财|帮助|更多|查看|详情|疑问|问题|账单管理|往来流水|AA收款|联系商家|申请电子回单)')
+    if (RegExp(r'(?:元|今日|今天|昨天|交易|支付|消费|退款|收款|转入|转出|支出|收入|成功|失败|单次|定时|投资|理财)')
         .hasMatch(trimmed)) {
       return null;
     }
     if (trimmed.length > 12) return null;
     return trimmed;
-  }
-
-  bool _hasToAccountAnchors(String text) {
-    for (final keyword in _toAccountAnchorKeywords) {
-      if (text.contains(keyword)) return true;
-    }
-    return false;
   }
 
   static const _walletHintKeywords = [
@@ -1404,6 +1325,7 @@ class _DraftConfirmResult {
   final String? subCategoryKey;
   final String? categoryName;
   final String? subCategoryName;
+  final List<String> tagKeys;
 
   const _DraftConfirmResult({
     required this.amount,
@@ -1414,6 +1336,7 @@ class _DraftConfirmResult {
     required this.subCategoryKey,
     required this.categoryName,
     required this.subCategoryName,
+    required this.tagKeys,
   });
 }
 

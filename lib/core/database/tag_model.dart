@@ -6,22 +6,45 @@ part 'tag_model.g.dart';
 class JiveTag {
   Id id = Isar.autoIncrement;
 
-  /// 标签名称（不含 #）
   @Index(unique: true)
+  late String key; // stable UUID string
+
   late String name;
-
-  /// 标签颜色（十六进制）
   String? colorHex;
+  String? iconName;
+  String? iconText;
 
-  /// 使用次数
-  int usageCount = 0;
+  @Index()
+  String? groupKey;
 
-  /// 创建时间
-  late DateTime createdAt;
+  @Index()
+  String? redirectCategoryKey;
 
-  /// 最后使用时间
+  late int order;
+  late bool isArchived;
+  late int usageCount;
   DateTime? lastUsedAt;
 
-  /// 是否隐藏
-  bool isHidden = false;
+  late DateTime createdAt;
+  late DateTime updatedAt;
+}
+
+@collection
+class JiveTagGroup {
+  Id id = Isar.autoIncrement;
+
+  @Index(unique: true)
+  late String key; // stable UUID string
+
+  late String name;
+  String? colorHex;
+  String? iconName;
+  String? iconText;
+
+  late int order;
+  late bool isArchived;
+
+  late DateTime createdAt;
+  late DateTime updatedAt;
+}
 }

@@ -379,6 +379,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
           title: "账单 · ${widget.category.name}",
           filterCategoryKey: isSub ? null : widget.category.key,
           filterSubCategoryKey: isSub ? widget.category.key : null,
+          includeSubCategories: false,
         ),
       ),
     );

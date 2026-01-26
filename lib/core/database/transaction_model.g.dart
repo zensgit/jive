@@ -42,15 +42,15 @@ const JiveTransactionSchema = CollectionSchema(
       name: r'note',
       type: IsarType.string,
     ),
-    r'projectId': PropertySchema(
-      id: 5,
-      name: r'projectId',
-      type: IsarType.long,
-    ),
     r'rawText': PropertySchema(
-      id: 6,
+      id: 5,
       name: r'rawText',
       type: IsarType.string,
+    ),
+    r'smartTagKeys': PropertySchema(
+      id: 6,
+      name: r'smartTagKeys',
+      type: IsarType.stringList,
     ),
     r'source': PropertySchema(
       id: 7,
@@ -67,18 +67,23 @@ const JiveTransactionSchema = CollectionSchema(
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
-    r'timestamp': PropertySchema(
+    r'tagKeys': PropertySchema(
       id: 10,
+      name: r'tagKeys',
+      type: IsarType.stringList,
+    ),
+    r'timestamp': PropertySchema(
+      id: 11,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'toAccountId': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'toAccountId',
       type: IsarType.long,
     ),
     r'type': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'type',
       type: IsarType.string,
     )
@@ -153,19 +158,6 @@ const JiveTransactionSchema = CollectionSchema(
           caseSensitive: false,
         )
       ],
-    ),
-    r'projectId': IndexSchema(
-      id: 3305656282123791113,
-      name: r'projectId',
-      unique: false,
-      replace: false,
-      properties: [
-        IndexPropertySchema(
-          name: r'projectId',
-          type: IndexType.value,
-          caseSensitive: false,
-        )
-      ],
     )
   },
   links: {},
@@ -206,6 +198,13 @@ int _jiveTransactionEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.smartTagKeys.length * 3;
+  {
+    for (var i = 0; i < object.smartTagKeys.length; i++) {
+      final value = object.smartTagKeys[i];
+      bytesCount += value.length * 3;
+    }
+  }
   bytesCount += 3 + object.source.length * 3;
   {
     final value = object.subCategory;
@@ -217,6 +216,13 @@ int _jiveTransactionEstimateSize(
     final value = object.subCategoryKey;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
+    }
+  }
+  bytesCount += 3 + object.tagKeys.length * 3;
+  {
+    for (var i = 0; i < object.tagKeys.length; i++) {
+      final value = object.tagKeys[i];
+      bytesCount += value.length * 3;
     }
   }
   {
@@ -239,14 +245,15 @@ void _jiveTransactionSerialize(
   writer.writeString(offsets[2], object.category);
   writer.writeString(offsets[3], object.categoryKey);
   writer.writeString(offsets[4], object.note);
-  writer.writeLong(offsets[5], object.projectId);
-  writer.writeString(offsets[6], object.rawText);
+  writer.writeString(offsets[5], object.rawText);
+  writer.writeStringList(offsets[6], object.smartTagKeys);
   writer.writeString(offsets[7], object.source);
   writer.writeString(offsets[8], object.subCategory);
   writer.writeString(offsets[9], object.subCategoryKey);
-  writer.writeDateTime(offsets[10], object.timestamp);
-  writer.writeLong(offsets[11], object.toAccountId);
-  writer.writeString(offsets[12], object.type);
+  writer.writeStringList(offsets[10], object.tagKeys);
+  writer.writeDateTime(offsets[11], object.timestamp);
+  writer.writeLong(offsets[12], object.toAccountId);
+  writer.writeString(offsets[13], object.type);
 }
 
 JiveTransaction _jiveTransactionDeserialize(
@@ -262,14 +269,15 @@ JiveTransaction _jiveTransactionDeserialize(
   object.categoryKey = reader.readStringOrNull(offsets[3]);
   object.id = id;
   object.note = reader.readStringOrNull(offsets[4]);
-  object.projectId = reader.readLongOrNull(offsets[5]);
-  object.rawText = reader.readStringOrNull(offsets[6]);
+  object.rawText = reader.readStringOrNull(offsets[5]);
+  object.smartTagKeys = reader.readStringList(offsets[6]) ?? [];
   object.source = reader.readString(offsets[7]);
   object.subCategory = reader.readStringOrNull(offsets[8]);
   object.subCategoryKey = reader.readStringOrNull(offsets[9]);
-  object.timestamp = reader.readDateTime(offsets[10]);
-  object.toAccountId = reader.readLongOrNull(offsets[11]);
-  object.type = reader.readStringOrNull(offsets[12]);
+  object.tagKeys = reader.readStringList(offsets[10]) ?? [];
+  object.timestamp = reader.readDateTime(offsets[11]);
+  object.toAccountId = reader.readLongOrNull(offsets[12]);
+  object.type = reader.readStringOrNull(offsets[13]);
   return object;
 }
 
@@ -291,9 +299,9 @@ P _jiveTransactionDeserializeProp<P>(
     case 4:
       return (reader.readStringOrNull(offset)) as P;
     case 5:
-      return (reader.readLongOrNull(offset)) as P;
-    case 6:
       return (reader.readStringOrNull(offset)) as P;
+    case 6:
+      return (reader.readStringList(offset) ?? []) as P;
     case 7:
       return (reader.readString(offset)) as P;
     case 8:
@@ -301,10 +309,12 @@ P _jiveTransactionDeserializeProp<P>(
     case 9:
       return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 11:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 12:
+      return (reader.readLongOrNull(offset)) as P;
+    case 13:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -352,14 +362,6 @@ extension JiveTransactionQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'toAccountId'),
-      );
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhere> anyProjectId() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(
-        const IndexWhereClause.any(indexName: r'projectId'),
       );
     });
   }
@@ -887,121 +889,6 @@ extension JiveTransactionQueryWhere
         lower: [lowerToAccountId],
         includeLower: includeLower,
         upper: [upperToAccountId],
-        includeUpper: includeUpper,
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
-      projectIdIsNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.equalTo(
-        indexName: r'projectId',
-        value: [null],
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
-      projectIdIsNotNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.between(
-        indexName: r'projectId',
-        lower: [null],
-        includeLower: false,
-        upper: [],
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
-      projectIdEqualTo(int? projectId) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.equalTo(
-        indexName: r'projectId',
-        value: [projectId],
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
-      projectIdNotEqualTo(int? projectId) {
-    return QueryBuilder.apply(this, (query) {
-      if (query.whereSort == Sort.asc) {
-        return query
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'projectId',
-              lower: [],
-              upper: [projectId],
-              includeUpper: false,
-            ))
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'projectId',
-              lower: [projectId],
-              includeLower: false,
-              upper: [],
-            ));
-      } else {
-        return query
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'projectId',
-              lower: [projectId],
-              includeLower: false,
-              upper: [],
-            ))
-            .addWhereClause(IndexWhereClause.between(
-              indexName: r'projectId',
-              lower: [],
-              upper: [projectId],
-              includeUpper: false,
-            ));
-      }
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
-      projectIdGreaterThan(
-    int? projectId, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.between(
-        indexName: r'projectId',
-        lower: [projectId],
-        includeLower: include,
-        upper: [],
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
-      projectIdLessThan(
-    int? projectId, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.between(
-        indexName: r'projectId',
-        lower: [],
-        upper: [projectId],
-        includeUpper: include,
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
-      projectIdBetween(
-    int? lowerProjectId,
-    int? upperProjectId, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addWhereClause(IndexWhereClause.between(
-        indexName: r'projectId',
-        lower: [lowerProjectId],
-        includeLower: includeLower,
-        upper: [upperProjectId],
         includeUpper: includeUpper,
       ));
     });
@@ -1669,80 +1556,6 @@ extension JiveTransactionQueryFilter
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
-      projectIdIsNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNull(
-        property: r'projectId',
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
-      projectIdIsNotNull() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(const FilterCondition.isNotNull(
-        property: r'projectId',
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
-      projectIdEqualTo(int? value) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.equalTo(
-        property: r'projectId',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
-      projectIdGreaterThan(
-    int? value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.greaterThan(
-        include: include,
-        property: r'projectId',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
-      projectIdLessThan(
-    int? value, {
-    bool include = false,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.lessThan(
-        include: include,
-        property: r'projectId',
-        value: value,
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
-      projectIdBetween(
-    int? lower,
-    int? upper, {
-    bool includeLower = true,
-    bool includeUpper = true,
-  }) {
-    return QueryBuilder.apply(this, (query) {
-      return query.addFilterCondition(FilterCondition.between(
-        property: r'projectId',
-        lower: lower,
-        includeLower: includeLower,
-        upper: upper,
-        includeUpper: includeUpper,
-      ));
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
       rawTextIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -1893,6 +1706,231 @@ extension JiveTransactionQueryFilter
         property: r'rawText',
         value: '',
       ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'smartTagKeys',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'smartTagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'smartTagKeys',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smartTagKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'smartTagKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagKeysLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagKeys',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
     });
   }
 
@@ -2341,6 +2379,231 @@ extension JiveTransactionQueryFilter
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'tagKeys',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'tagKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'tagKeys',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'tagKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'tagKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      tagKeysLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'tagKeys',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
       timestampEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -2701,20 +2964,6 @@ extension JiveTransactionQuerySortBy
     });
   }
 
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
-      sortByProjectId() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'projectId', Sort.asc);
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
-      sortByProjectIdDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'projectId', Sort.desc);
-    });
-  }
-
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> sortByRawText() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rawText', Sort.asc);
@@ -2893,20 +3142,6 @@ extension JiveTransactionQuerySortThenBy
     });
   }
 
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
-      thenByProjectId() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'projectId', Sort.asc);
-    });
-  }
-
-  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
-      thenByProjectIdDesc() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addSortBy(r'projectId', Sort.desc);
-    });
-  }
-
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> thenByRawText() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rawText', Sort.asc);
@@ -3039,17 +3274,17 @@ extension JiveTransactionQueryWhereDistinct
     });
   }
 
-  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
-      distinctByProjectId() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addDistinctBy(r'projectId');
-    });
-  }
-
   QueryBuilder<JiveTransaction, JiveTransaction, QDistinct> distinctByRawText(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'rawText', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctBySmartTagKeys() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'smartTagKeys');
     });
   }
 
@@ -3072,6 +3307,13 @@ extension JiveTransactionQueryWhereDistinct
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'subCategoryKey',
           caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByTagKeys() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'tagKeys');
     });
   }
 
@@ -3136,15 +3378,16 @@ extension JiveTransactionQueryProperty
     });
   }
 
-  QueryBuilder<JiveTransaction, int?, QQueryOperations> projectIdProperty() {
-    return QueryBuilder.apply(this, (query) {
-      return query.addPropertyName(r'projectId');
-    });
-  }
-
   QueryBuilder<JiveTransaction, String?, QQueryOperations> rawTextProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'rawText');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, List<String>, QQueryOperations>
+      smartTagKeysProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'smartTagKeys');
     });
   }
 
@@ -3165,6 +3408,13 @@ extension JiveTransactionQueryProperty
       subCategoryKeyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'subCategoryKey');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, List<String>, QQueryOperations>
+      tagKeysProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'tagKeys');
     });
   }
 

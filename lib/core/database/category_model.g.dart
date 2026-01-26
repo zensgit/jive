@@ -62,8 +62,13 @@ const JiveCategorySchema = CollectionSchema(
       name: r'parentKey',
       type: IsarType.string,
     ),
-    r'updatedAt': PropertySchema(
+    r'sourceTagKey': PropertySchema(
       id: 9,
+      name: r'sourceTagKey',
+      type: IsarType.string,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 10,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -99,6 +104,19 @@ const JiveCategorySchema = CollectionSchema(
           caseSensitive: true,
         )
       ],
+    ),
+    r'sourceTagKey': IndexSchema(
+      id: 1396240213232614003,
+      name: r'sourceTagKey',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'sourceTagKey',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
     )
   },
   links: {},
@@ -130,6 +148,12 @@ int _jiveCategoryEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  {
+    final value = object.sourceTagKey;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -148,7 +172,8 @@ void _jiveCategorySerialize(
   writer.writeString(offsets[6], object.name);
   writer.writeLong(offsets[7], object.order);
   writer.writeString(offsets[8], object.parentKey);
-  writer.writeDateTime(offsets[9], object.updatedAt);
+  writer.writeString(offsets[9], object.sourceTagKey);
+  writer.writeDateTime(offsets[10], object.updatedAt);
 }
 
 JiveCategory _jiveCategoryDeserialize(
@@ -168,7 +193,8 @@ JiveCategory _jiveCategoryDeserialize(
   object.name = reader.readString(offsets[6]);
   object.order = reader.readLong(offsets[7]);
   object.parentKey = reader.readStringOrNull(offsets[8]);
-  object.updatedAt = reader.readDateTime(offsets[9]);
+  object.sourceTagKey = reader.readStringOrNull(offsets[9]);
+  object.updatedAt = reader.readDateTime(offsets[10]);
   return object;
 }
 
@@ -198,6 +224,8 @@ P _jiveCategoryDeserializeProp<P>(
     case 8:
       return (reader.readStringOrNull(offset)) as P;
     case 9:
+      return (reader.readStringOrNull(offset)) as P;
+    case 10:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -456,6 +484,73 @@ extension JiveCategoryQueryWhere
               indexName: r'parentKey',
               lower: [],
               upper: [parentKey],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterWhereClause>
+      sourceTagKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sourceTagKey',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterWhereClause>
+      sourceTagKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sourceTagKey',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterWhereClause>
+      sourceTagKeyEqualTo(String? sourceTagKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sourceTagKey',
+        value: [sourceTagKey],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterWhereClause>
+      sourceTagKeyNotEqualTo(String? sourceTagKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sourceTagKey',
+              lower: [],
+              upper: [sourceTagKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sourceTagKey',
+              lower: [sourceTagKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sourceTagKey',
+              lower: [sourceTagKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sourceTagKey',
+              lower: [],
+              upper: [sourceTagKey],
               includeUpper: false,
             ));
       }
@@ -1313,6 +1408,160 @@ extension JiveCategoryQueryFilter
   }
 
   QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'sourceTagKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'sourceTagKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sourceTagKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sourceTagKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sourceTagKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sourceTagKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'sourceTagKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'sourceTagKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'sourceTagKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'sourceTagKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sourceTagKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      sourceTagKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'sourceTagKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
       updatedAtEqualTo(DateTime value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -1485,6 +1734,19 @@ extension JiveCategoryQuerySortBy
     });
   }
 
+  QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy> sortBySourceTagKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sourceTagKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy>
+      sortBySourceTagKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sourceTagKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy> sortByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -1620,6 +1882,19 @@ extension JiveCategoryQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy> thenBySourceTagKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sourceTagKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy>
+      thenBySourceTagKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sourceTagKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy> thenByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -1694,6 +1969,13 @@ extension JiveCategoryQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveCategory, JiveCategory, QDistinct> distinctBySourceTagKey(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sourceTagKey', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<JiveCategory, JiveCategory, QDistinct> distinctByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'updatedAt');
@@ -1760,6 +2042,12 @@ extension JiveCategoryQueryProperty
   QueryBuilder<JiveCategory, String?, QQueryOperations> parentKeyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'parentKey');
+    });
+  }
+
+  QueryBuilder<JiveCategory, String?, QQueryOperations> sourceTagKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sourceTagKey');
     });
   }
 

@@ -9,6 +9,9 @@ import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
+import '../../core/database/tag_model.dart';
+import '../../core/database/tag_conversion_log.dart';
+import '../../core/database/tag_rule_model.dart';
 import '../../core/service/account_service.dart';
 
 class StatsScreen extends StatefulWidget {
@@ -79,6 +82,10 @@ class _StatsScreenState extends State<StatsScreen> {
           JiveCategoryOverrideSchema,
           JiveAccountSchema,
           JiveAutoDraftSchema,
+          JiveTagSchema,
+          JiveTagGroupSchema,
+          JiveTagRuleSchema,
+          JiveTagConversionLogSchema,
         ],
         directory: dir.path,
       );
