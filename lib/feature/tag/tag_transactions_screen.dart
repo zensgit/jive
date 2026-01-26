@@ -12,6 +12,7 @@ import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/data_reload_bus.dart';
+import '../../core/service/ui_pref_service.dart';
 import '../transactions/transaction_detail_screen.dart';
 
 class TagTransactionsScreen extends StatefulWidget {
@@ -40,6 +41,7 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
   final DateFormat _dayFormat = DateFormat('MM.dd');
   final NumberFormat _currency = NumberFormat.currency(symbol: '¥');
   bool _groupByDate = false;
+  bool _showSmartTagBadge = true;
   bool _ready = false;
 
   @override
@@ -73,6 +75,7 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
         );
       }
 
+      final showBadge = await UiPrefService.getShowSmartTagBadge();
       final categories = await _isar.collection<JiveCategory>().where().findAll();
       final categoryMap = {for (final c in categories) c.key: c};
       final allTxs = await _isar.jiveTransactions.where().sortByTimestampDesc().findAll();
@@ -81,6 +84,7 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
       setState(() {
         _categoryByKey = categoryMap;
         _transactions = txs;
+        _showSmartTagBadge = showBadge;
         _isLoading = false;
         _ready = true;
       });
@@ -357,6 +361,7 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
     final amountColor = isTransfer ? Colors.blueGrey : (isIncome ? Colors.green : Colors.redAccent);
     final parentName = _displayCategoryName(tx.categoryKey, tx.category);
     final subName = _displayCategoryName(tx.subCategoryKey, tx.subCategory);
+    final showSmartBadge = _showSmartTagBadge && tx.smartTagKeys.isNotEmpty;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () async {
@@ -402,9 +407,21 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
                     parentName,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  Text(
-                    '$subName • ${_dateFormat.format(tx.timestamp)}',
-                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '$subName • ${_dateFormat.format(tx.timestamp)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                        ),
+                      ),
+                      if (showSmartBadge) ...[
+                        const SizedBox(width: 6),
+                        _buildSmartTagBadge(),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -415,6 +432,38 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSmartTagBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: JiveTheme.primaryGreen.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: JiveTheme.primaryGreen,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Text(
+            '智能',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: JiveTheme.primaryGreen,
+            ),
+          ),
+        ],
       ),
     );
   }

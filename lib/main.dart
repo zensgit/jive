@@ -32,6 +32,7 @@ import 'core/service/auto_settings.dart';
 import 'core/service/tag_service.dart';
 import 'core/service/data_reload_bus.dart';
 import 'core/service/data_backup_service.dart';
+import 'core/service/ui_pref_service.dart';
 import 'feature/accounts/accounts_screen.dart';
 import 'feature/auto/auto_drafts_screen.dart';
 import 'feature/auto/auto_rule_tester_screen.dart';
@@ -123,6 +124,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int? _defaultAccountId;
   int _currentIndex = 0;
   bool _demoSeedEnabled = true;
+  bool _showSmartTagBadge = true;
   bool _dbReady = false;
   bool _isListening = false;
   final List<Map<String, dynamic>> _pendingAutoEvents = [];
@@ -197,6 +199,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Future<void> _loadDemoSeedPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     _demoSeedEnabled = prefs.getBool(_prefKeyDemoSeedEnabled) ?? true;
+    _showSmartTagBadge = await UiPrefService.getShowSmartTagBadge();
     if (mounted) {
       setState(() {});
     }
@@ -267,6 +270,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _demoSeedEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeyDemoSeedEnabled, enabled);
+  }
+
+  Future<void> _setSmartTagBadgeEnabled(bool enabled) async {
+    _showSmartTagBadge = enabled;
+    await UiPrefService.setShowSmartTagBadge(enabled);
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _showMessage(String message) {
@@ -1212,6 +1223,20 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 await _loadTransactions();
                               },
                             ),
+                            SwitchListTile(
+                              secondary:
+                                  const Icon(Icons.auto_awesome_outlined),
+                              title: const Text("交易列表显示智能标识"),
+                              subtitle: const Text("仅当交易含智能标签时显示"),
+                              value: _showSmartTagBadge,
+                              onChanged: (value) async {
+                                setSheetState(() {
+                                  _showSmartTagBadge = value;
+                                });
+                                await _setSmartTagBadgeEnabled(value);
+                                DataReloadBus.notify();
+                              },
+                            ),
                             if (kDebugMode)
                               ListTile(
                                 leading: const Icon(
@@ -1691,6 +1716,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final subName = _displayCategoryName(item.subCategoryKey, item.subCategory);
     final note = (item.note ?? '').trim();
     final hasNote = note.isNotEmpty;
+    final showSmartBadge =
+        _showSmartTagBadge && item.smartTagKeys.isNotEmpty;
     final tags = item.tagKeys
         .map((key) => _tagByKey[key])
         .whereType<JiveTag>()
@@ -1733,9 +1760,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                       fontSize: 16,
                     ),
                   ),
-                  Text(
-                    "$subName • ${DateFormat('MM-dd HH:mm').format(item.timestamp)}",
-                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "$subName • ${DateFormat('MM-dd HH:mm').format(item.timestamp)}",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                      ),
+                      if (showSmartBadge) ...[
+                        const SizedBox(width: 6),
+                        _buildSmartTagBadge(),
+                      ],
+                    ],
                   ),
                   if (hasNote) ...[
                     const SizedBox(height: 2),
@@ -1793,6 +1832,38 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSmartTagBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: JiveTheme.primaryGreen.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: JiveTheme.primaryGreen,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Text(
+            '智能',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: JiveTheme.primaryGreen,
+            ),
+          ),
+        ],
       ),
     );
   }

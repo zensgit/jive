@@ -10,8 +10,10 @@ import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
+import '../../core/design_system/theme.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../../core/service/category_service.dart';
+import '../../core/service/ui_pref_service.dart';
 import '../transactions/transaction_detail_screen.dart';
 
 class CategoryTransactionsScreen extends StatefulWidget {
@@ -58,6 +60,7 @@ class _CategoryTransactionsScreenState
   _TransactionSortDirection _sortDirection = _TransactionSortDirection.desc;
   bool _groupByDate = false;
   bool _showDateHeadersWhenNotDate = false;
+  bool _showSmartTagBadge = true;
   late bool _includeSubCategories;
 
   static const double _floatingBarHeight = 60;
@@ -101,6 +104,7 @@ class _CategoryTransactionsScreenState
         ], directory: dir.path);
       }
 
+      final showBadge = await UiPrefService.getShowSmartTagBadge();
       final categories = await _isar
           .collection<JiveCategory>()
           .where()
@@ -116,6 +120,7 @@ class _CategoryTransactionsScreenState
           _categoryByKey = categoryMap;
           _accountById = accountMap;
           _tagByKey = tagMap;
+          _showSmartTagBadge = showBadge;
         });
       }
 
@@ -1065,6 +1070,8 @@ class _CategoryTransactionsScreenState
     final parent = (tx.subCategory ?? '').isNotEmpty ? (tx.category ?? '') : '';
     final note = (tx.note ?? '').trim();
     final hasNote = note.isNotEmpty;
+    final showSmartBadge =
+        _showSmartTagBadge && tx.smartTagKeys.isNotEmpty;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -1108,12 +1115,24 @@ class _CategoryTransactionsScreenState
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    [
-                      if (parent.isNotEmpty) parent,
-                      _dateFormat.format(tx.timestamp),
-                    ].join(' · '),
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          [
+                            if (parent.isNotEmpty) parent,
+                            _dateFormat.format(tx.timestamp),
+                          ].join(' · '),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                        ),
+                      ),
+                      if (showSmartBadge) ...[
+                        const SizedBox(width: 6),
+                        _buildSmartTagBadge(),
+                      ],
+                    ],
                   ),
                   if (hasNote) ...[
                     const SizedBox(height: 2),
@@ -1136,6 +1155,38 @@ class _CategoryTransactionsScreenState
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSmartTagBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: JiveTheme.primaryGreen.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: const BoxDecoration(
+              color: JiveTheme.primaryGreen,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 4),
+          const Text(
+            '智能',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: JiveTheme.primaryGreen,
+            ),
+          ),
+        ],
       ),
     );
   }
