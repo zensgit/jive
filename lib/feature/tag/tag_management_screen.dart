@@ -12,6 +12,7 @@ import '../../core/database/auto_draft_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_service.dart';
+import '../../core/service/tag_rule_service.dart';
 import 'tag_edit_dialog.dart';
 import 'tag_group_dialog.dart';
 import 'tag_transactions_screen.dart';
@@ -39,7 +40,17 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   bool _showArchived = false;
   List<JiveTag> _tags = [];
   List<JiveTagGroup> _groups = [];
+  Map<String, List<JiveTagRule>> _rulesByTagKey = {};
+  Map<String, JiveCategory> _categoryByKey = {};
+  Map<int, JiveAccount> _accountById = {};
+  bool _backfilling = false;
+  bool _cancelBackfill = false;
+  int _backfillProcessed = 0;
+  int _backfillTotal = 0;
+  final ValueNotifier<int> _backfillTick = ValueNotifier<int>(0);
+  BuildContext? _backfillDialogContext;
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _smartTagSearchController = TextEditingController();
   String _query = '';
 
   @override
@@ -52,6 +63,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   void dispose() {
     DataReloadBus.notifier.removeListener(_handleReload);
     _searchController.dispose();
+    _smartTagSearchController.dispose();
+    _backfillTick.dispose();
     super.dispose();
   }
 
@@ -99,10 +112,22 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     await service.refreshUsageCounts();
     final tags = await service.getTags(includeArchived: true);
     final groups = await service.getGroups(includeArchived: true);
+    final categories = await _isar.collection<JiveCategory>().where().findAll();
+    final categoryMap = {for (final cat in categories) cat.key: cat};
+    final accounts = await _isar.collection<JiveAccount>().where().findAll();
+    final accountMap = {for (final account in accounts) account.id: account};
+    final rules = await _isar.collection<JiveTagRule>().where().findAll();
+    final rulesByTag = <String, List<JiveTagRule>>{};
+    for (final rule in rules) {
+      rulesByTag.putIfAbsent(rule.tagKey, () => []).add(rule);
+    }
     if (!mounted) return;
     setState(() {
       _tags = tags;
       _groups = groups;
+      _rulesByTagKey = rulesByTag;
+      _categoryByKey = categoryMap;
+      _accountById = accountMap;
       _isLoading = false;
       _error = null;
     });
@@ -141,7 +166,6 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         ));
       }
     }
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -149,6 +173,11 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            tooltip: '智能标签',
+            onPressed: _openSmartOverviewSheet,
+            icon: const Icon(Icons.auto_awesome),
+          ),
           IconButton(
             tooltip: '转换记录',
             onPressed: () {
@@ -346,6 +375,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   Widget _buildTagChip(JiveTag tag) {
     final baseColor = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
     final color = tag.isArchived ? Colors.grey.shade500 : baseColor;
+    final hasSmartRules = _hasEnabledRule(tag);
     final textStyle = TextStyle(
       color: color,
       fontWeight: FontWeight.w600,
@@ -388,11 +418,587 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                 ),
                 child: Text('${tag.usageCount}', style: countStyle),
               ),
+              if (hasSmartRules) ...[
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: _accentColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.auto_awesome, size: 10, color: _accentColor),
+                      SizedBox(width: 2),
+                      Text(
+                        '智能',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w600,
+                          color: _accentColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  bool _hasEnabledRule(JiveTag tag) {
+    final rules = _rulesByTagKey[tag.key];
+    if (rules == null) return false;
+    return rules.any((rule) => rule.isEnabled);
+  }
+
+  List<JiveTagRule> _enabledRules(JiveTag tag) {
+    final rules = _rulesByTagKey[tag.key] ?? const [];
+    return rules.where((rule) => rule.isEnabled).toList();
+  }
+
+  List<JiveTagRule> _allRules(JiveTag tag) {
+    return _rulesByTagKey[tag.key] ?? const [];
+  }
+
+  String _ruleSummaryLine(JiveTagRule rule) {
+    final parts = <String>[];
+    final type = _typeLabel(rule.applyType);
+    if (type != null) parts.add(type);
+    if (rule.keywords.isNotEmpty) {
+      parts.add('关键词:${rule.keywords.join('、')}');
+    }
+    if (rule.categoryKey != null) {
+      final parent = _categoryByKey[rule.categoryKey!];
+      if (parent != null) parts.add('分类:${parent.name}');
+    }
+    if (rule.subCategoryKey != null) {
+      final child = _categoryByKey[rule.subCategoryKey!];
+      if (child != null) parts.add('子类:${child.name}');
+    }
+    if (rule.accountIds.isNotEmpty) {
+      final names = rule.accountIds
+          .map((id) => _accountById[id]?.name)
+          .whereType<String>()
+          .toList();
+      if (names.isNotEmpty) {
+        parts.add('账户:${names.join('、')}');
+      }
+    }
+    if (rule.minAmount != null || rule.maxAmount != null) {
+      parts.add('金额:${_amountRange(rule.minAmount, rule.maxAmount)}');
+    }
+    return parts.join(' · ');
+  }
+
+  String? _typeLabel(String? value) {
+    switch (value) {
+      case 'expense':
+        return '支出';
+      case 'income':
+        return '收入';
+      case 'transfer':
+        return '转账';
+      case 'all':
+      case null:
+        return null;
+      default:
+        return value;
+    }
+  }
+
+  String _amountRange(double? min, double? max) {
+    if (min != null && max != null) return '¥${min.toStringAsFixed(0)}-¥${max.toStringAsFixed(0)}';
+    if (min != null) return '≥¥${min.toStringAsFixed(0)}';
+    if (max != null) return '≤¥${max.toStringAsFixed(0)}';
+    return '不限';
+  }
+
+  Future<void> _openSmartOverviewSheet() async {
+    final tags = _tags
+        .where((tag) => (_rulesByTagKey[tag.key]?.isNotEmpty ?? false))
+        .toList()
+      ..sort((a, b) {
+        final aEnabled = _hasEnabledRule(a);
+        final bEnabled = _hasEnabledRule(b);
+        if (aEnabled != bEnabled) return aEnabled ? -1 : 1;
+        return tagDisplayName(a).compareTo(tagDisplayName(b));
+      });
+    if (tags.isEmpty) {
+      _showToast('暂无智能标签规则');
+      return;
+    }
+    final service = TagRuleService(_isar);
+    _smartTagSearchController.clear();
+    var query = '';
+    String? sheetMessage;
+    bool sheetBackfilling = false;
+    int sheetProcessed = 0;
+    int sheetTotal = 0;
+    int sheetMessageToken = 0;
+    final enabledByTag = {
+      for (final tag in tags) tag.key: _hasEnabledRule(tag),
+    };
+    final ruleCountByTag = {
+      for (final tag in tags) tag.key: (_rulesByTagKey[tag.key]?.length ?? 0),
+    };
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.72,
+          minChildSize: 0.45,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return Material(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              child: StatefulBuilder(
+                builder: (context, setSheetState) {
+                  void showSheetMessage(String message) {
+                    final token = ++sheetMessageToken;
+                    setSheetState(() {
+                      sheetMessage = message;
+                      sheetBackfilling = false;
+                    });
+                    Future.delayed(const Duration(seconds: 3), () {
+                      if (!mounted) return;
+                      if (sheetMessageToken == token) {
+                        setSheetState(() {
+                          sheetMessage = null;
+                        });
+                      }
+                    });
+                  }
+
+                  void updateProgress(int processed, int total) {
+                    setSheetState(() {
+                      sheetBackfilling = true;
+                      sheetProcessed = processed;
+                      sheetTotal = total;
+                      sheetMessage = null;
+                    });
+                  }
+
+                  Future<void> setAll(bool enabled) async {
+                    for (final tag in tags) {
+                      await service.setEnabledForTag(tag.key, enabled);
+                      enabledByTag[tag.key] = enabled;
+                    }
+                    setSheetState(() {});
+                    await _loadData();
+                  }
+
+                  final queryLower = query.toLowerCase();
+                  final filteredTags = queryLower.isEmpty
+                      ? tags
+                      : tags.where((tag) {
+                          final name = tagDisplayName(tag).toLowerCase();
+                          if (name.contains(queryLower)) return true;
+                          final summaries = _allRules(tag)
+                              .map(_ruleSummaryLine)
+                              .join(' ')
+                              .toLowerCase();
+                          return summaries.contains(queryLower);
+                        }).toList();
+
+                  return SafeArea(
+                    top: false,
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 8),
+                        Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.auto_awesome, color: _accentColor),
+                              const SizedBox(width: 8),
+                              const Text(
+                                '智能标签管理',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              const Spacer(),
+                              TextButton(
+                                onPressed: () => setAll(true),
+                                child: const Text('全部启用'),
+                              ),
+                              TextButton(
+                                onPressed: () => setAll(false),
+                                child: const Text('全部停用'),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (sheetBackfilling)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _accentSoft,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    sheetTotal == 0 ? '补标准备中...' : '补标中：已处理 $sheetProcessed / $sheetTotal',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  LinearProgressIndicator(
+                                    value: sheetTotal == 0 ? null : sheetProcessed / sheetTotal,
+                                    color: _accentColor,
+                                    backgroundColor: Colors.white,
+                                    minHeight: 4,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else if (sheetMessage != null)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _accentSoft,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.info_outline, color: _accentColor, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      sheetMessage ?? '',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: _accentSoft,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.info_outline, color: _accentColor, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '仅启用的智能标签可补充历史交易；停用后不会自动打标。',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: TextField(
+                            controller: _smartTagSearchController,
+                            decoration: InputDecoration(
+                              hintText: '搜索智能标签/规则条件',
+                              prefixIcon: const Icon(Icons.search),
+                              suffixIcon: query.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      icon: const Icon(Icons.clear),
+                                      onPressed: () {
+                                        _smartTagSearchController.clear();
+                                        setSheetState(() => query = '');
+                                      },
+                                    ),
+                              isDense: true,
+                              filled: true,
+                              fillColor: Colors.grey.shade100,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                            onChanged: (value) {
+                              setSheetState(() => query = value.trim());
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: filteredTags.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    '没有匹配的智能标签',
+                                    style: TextStyle(color: Colors.grey.shade500),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  controller: scrollController,
+                                  itemCount: filteredTags.length,
+                                  separatorBuilder: (_, __) => const Divider(height: 1),
+                                  itemBuilder: (context, index) {
+                                    final tag = filteredTags[index];
+                                    final enabled = enabledByTag[tag.key] ?? false;
+                                    final ruleCount = ruleCountByTag[tag.key] ?? 0;
+                                    final rules = _allRules(tag);
+                                    final summaries = rules
+                                        .map(_ruleSummaryLine)
+                                        .where((line) => line.isNotEmpty)
+                                        .toList();
+                                    return ListTile(
+                                      title: Text(tagDisplayName(tag)),
+                                      subtitle: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('规则 $ruleCount 条'),
+                                          if (summaries.isNotEmpty)
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 2),
+                                              child: Text(
+                                                summaries.take(2).join(' / '),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                                              ),
+                                            ),
+                                          const SizedBox(height: 4),
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 4,
+                                            children: [
+                                              if (enabled)
+                                                TextButton.icon(
+                                                  onPressed: _backfilling
+                                                      ? null
+                                                      : () => _backfillTagHistory(
+                                                            tag,
+                                                            onMessage: showSheetMessage,
+                                                            onProgress: updateProgress,
+                                                            showProgressDialog: false,
+                                                          ),
+                                                  icon: const Icon(Icons.auto_fix_high, size: 16),
+                                                  label: const Text('补充历史'),
+                                                  style: TextButton.styleFrom(
+                                                    foregroundColor: _accentColor,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                    textStyle: const TextStyle(fontSize: 12),
+                                                  ),
+                                                ),
+                                              TextButton(
+                                                onPressed: () => _openTagRules(tag),
+                                                child: const Text('管理规则'),
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor: Colors.grey.shade700,
+                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                  textStyle: const TextStyle(fontSize: 12),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      trailing: Switch(
+                                        value: enabled,
+                                        onChanged: (value) async {
+                                          await service.setEnabledForTag(tag.key, value);
+                                          enabledByTag[tag.key] = value;
+                                          setSheetState(() {});
+                                          await _loadData();
+                                        },
+                                        activeColor: _accentColor,
+                                      ),
+                                      onTap: () => _openTagRules(tag),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _backfillTagHistory(
+    JiveTag tag, {
+    void Function(String message)? onMessage,
+    void Function(int processed, int total)? onProgress,
+    bool showProgressDialog = true,
+  }) async {
+    if (_backfilling) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('补充历史交易'),
+        content: Text('将为标签「${tagDisplayName(tag)}」补充历史交易，仅对未包含该标签的交易生效。是否继续？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('继续'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      _backfilling = true;
+      _cancelBackfill = false;
+      _backfillProcessed = 0;
+      _backfillTotal = 0;
+    });
+    if (showProgressDialog) {
+      _showBackfillProgress();
+    }
+    try {
+      final result = await TagRuleService(_isar).backfillForTag(
+        tag.key,
+        shouldCancel: () => _cancelBackfill,
+        onProgress: (processed, total) {
+          if (!mounted) return;
+          setState(() {
+            _backfillProcessed = processed;
+            _backfillTotal = total;
+          });
+          _backfillTick.value = _backfillTick.value + 1;
+          onProgress?.call(processed, total);
+        },
+      );
+      if (!mounted) return;
+      final message = result.cancelled
+          ? '已取消补标（已处理 ${result.scannedCount} 笔）'
+          : result.updatedCount == 0
+              ? '没有需要补标的交易'
+              : '已补标 ${result.updatedCount} 笔交易（匹配 ${result.matchedCount}/${result.scannedCount}）';
+      if (onMessage != null) {
+        onMessage(message);
+      } else {
+        _showTopMessage(message);
+      }
+      await _loadData();
+      DataReloadBus.notify();
+    } catch (e) {
+      if (!mounted) return;
+      if (onMessage != null) {
+        onMessage('补标失败：$e');
+      } else {
+        _showTopMessage('补标失败：$e');
+      }
+    } finally {
+      if (mounted) {
+        if (showProgressDialog && _backfillDialogContext != null) {
+          Navigator.pop(_backfillDialogContext!);
+        }
+        setState(() => _backfilling = false);
+      }
+    }
+  }
+
+  void _showBackfillProgress() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        _backfillDialogContext = dialogContext;
+        return ValueListenableBuilder<int>(
+          valueListenable: _backfillTick,
+          builder: (context, _, __) {
+            final total = _backfillTotal;
+            final processed = _backfillProcessed;
+            final progress = total == 0 ? null : processed / total;
+            return AlertDialog(
+              title: const Text('正在补标'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(value: progress),
+                  const SizedBox(height: 8),
+                  Text(total == 0 ? '准备中...' : '已处理 $processed / $total'),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    _cancelBackfill = true;
+                    _backfillDialogContext = null;
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('取消'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      _backfillDialogContext = null;
+      if (mounted) {
+        setState(() {
+          _backfillProcessed = 0;
+          _backfillTotal = 0;
+        });
+      }
+    });
+  }
+
+  void _showToast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  void _showTopMessage(String message) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearMaterialBanners();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        leading: const Icon(Icons.info_outline, color: _accentColor),
+        content: Text(message),
+        backgroundColor: Colors.white,
+        actions: [
+          TextButton(
+            onPressed: messenger.clearMaterialBanners,
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        messenger.clearMaterialBanners();
+      }
+    });
   }
 
   Widget _buildAddTagChip(String? groupKey) {

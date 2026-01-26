@@ -11,6 +11,7 @@ import '../../core/database/tag_model.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_rule_service.dart';
 
 class TagRuleScreen extends StatefulWidget {
@@ -31,6 +32,9 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   late Isar _isar;
   bool _loading = true;
   String? _error;
+  bool _showSearch = false;
+  String _query = '';
+  final TextEditingController _searchController = TextEditingController();
   bool _backfilling = false;
   bool _cancelBackfill = false;
   int _backfillProcessed = 0;
@@ -41,6 +45,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   Map<int, JiveAccount> _accountById = {};
   Map<String, JiveCategory> _categoryByKey = {};
   Map<String, List<JiveCategory>> _childrenByParent = {};
+  _RuleSort _sort = _RuleSort.updatedDesc;
 
   @override
   void initState() {
@@ -51,6 +56,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   @override
   void dispose() {
     _progressTick.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -89,7 +95,6 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   Future<void> _loadData() async {
     final service = TagRuleService(_isar);
     final rules = await service.getRules(widget.tag.key);
-    rules.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
     final accounts = await AccountService(_isar).getActiveAccounts();
     final accountMap = {for (final account in accounts) account.id: account};
@@ -121,6 +126,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     rule.isEnabled = enabled;
     await TagRuleService(_isar).updateRule(rule);
     await _loadData();
+    DataReloadBus.notify();
   }
 
   Future<void> _editRule({JiveTagRule? rule}) async {
@@ -141,6 +147,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     );
     if (result == true) {
       await _loadData();
+      DataReloadBus.notify();
     }
   }
 
@@ -165,10 +172,12 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     if (confirmed != true) return;
     await TagRuleService(_isar).deleteRule(rule);
     await _loadData();
+    DataReloadBus.notify();
   }
 
   @override
   Widget build(BuildContext context) {
+    final visibleRules = _applyFilterAndSort(_rules);
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -176,6 +185,38 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            tooltip: _showSearch ? '关闭搜索' : '搜索规则',
+            onPressed: () {
+              setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
+                  _query = '';
+                  _searchController.clear();
+                }
+              });
+            },
+            icon: Icon(_showSearch ? Icons.close : Icons.search),
+          ),
+          PopupMenuButton<_RuleSort>(
+            tooltip: '排序',
+            onSelected: (value) => setState(() => _sort = value),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: _RuleSort.updatedDesc,
+                child: Text('最近更新'),
+              ),
+              PopupMenuItem(
+                value: _RuleSort.createdDesc,
+                child: Text('最近创建'),
+              ),
+              PopupMenuItem(
+                value: _RuleSort.enabledFirst,
+                child: Text('启用优先'),
+              ),
+            ],
+            icon: const Icon(Icons.sort),
+          ),
           if (_backfilling)
             const Padding(
               padding: EdgeInsets.only(right: 16),
@@ -194,6 +235,31 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
               icon: const Icon(Icons.auto_fix_high),
             ),
         ],
+        bottom: _showSearch
+            ? PreferredSize(
+                preferredSize: const Size.fromHeight(56),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      setState(() => _query = value.trim());
+                    },
+                    decoration: InputDecoration(
+                      hintText: '搜索规则（关键词/分类/账户）',
+                      prefixIcon: const Icon(Icons.search),
+                      isDense: true,
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : null,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -201,12 +267,15 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
               ? Center(child: Text(_error!, style: const TextStyle(color: Colors.redAccent)))
               : _rules.isEmpty
                   ? _buildEmpty()
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      itemCount: _rules.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) => _buildRuleCard(_rules[index]),
-                    ),
+                  : visibleRules.isEmpty
+                      ? _buildEmptySearch()
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                          itemCount: visibleRules.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (context, index) =>
+                              _buildRuleCard(visibleRules[index]),
+                        ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -353,6 +422,19 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     );
   }
 
+  Widget _buildEmptySearch() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.search_off, size: 48, color: Colors.grey.shade300),
+          const SizedBox(height: 12),
+          Text('没有匹配的规则', style: TextStyle(color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRuleCard(JiveTagRule rule) {
     final lines = _buildRuleSummary(rule);
     return Container(
@@ -434,6 +516,49 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     return lines;
   }
 
+  List<JiveTagRule> _applyFilterAndSort(List<JiveTagRule> source) {
+    final filtered = _query.isEmpty
+        ? List<JiveTagRule>.from(source)
+        : source.where((rule) => _ruleSearchText(rule).contains(_query.toLowerCase())).toList();
+    filtered.sort((a, b) {
+      switch (_sort) {
+        case _RuleSort.createdDesc:
+          return b.createdAt.compareTo(a.createdAt);
+        case _RuleSort.enabledFirst:
+          if (a.isEnabled != b.isEnabled) {
+            return a.isEnabled ? -1 : 1;
+          }
+          return b.updatedAt.compareTo(a.updatedAt);
+        case _RuleSort.updatedDesc:
+        default:
+          return b.updatedAt.compareTo(a.updatedAt);
+      }
+    });
+    return filtered;
+  }
+
+  String _ruleSearchText(JiveTagRule rule) {
+    final parts = <String>[];
+    final typeLabel = _typeLabel(rule.applyType);
+    if (typeLabel != null) parts.add(typeLabel);
+    if (rule.keywords.isNotEmpty) parts.addAll(rule.keywords);
+    if (rule.accountIds.isNotEmpty) {
+      parts.addAll(rule.accountIds.map((id) => _accountById[id]?.name ?? ''));
+    }
+    if (rule.categoryKey != null) {
+      final parent = _categoryByKey[rule.categoryKey!];
+      if (parent != null) parts.add(parent.name);
+    }
+    if (rule.subCategoryKey != null) {
+      final child = _categoryByKey[rule.subCategoryKey!];
+      if (child != null) parts.add(child.name);
+    }
+    if (rule.minAmount != null || rule.maxAmount != null) {
+      parts.add(_amountRange(rule.minAmount, rule.maxAmount));
+    }
+    return parts.where((item) => item.trim().isNotEmpty).join(' ').toLowerCase();
+  }
+
   String? _typeLabel(String? value) {
     switch (value) {
       case 'expense':
@@ -457,6 +582,8 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     return '不限';
   }
 }
+
+enum _RuleSort { updatedDesc, createdDesc, enabledFirst }
 
 class TagRuleEditSheet extends StatefulWidget {
   final Isar isar;

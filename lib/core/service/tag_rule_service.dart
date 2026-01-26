@@ -86,6 +86,24 @@ class TagRuleService {
     });
   }
 
+  Future<int> setEnabledForTag(String tagKey, bool enabled) async {
+    final rules = await isar
+        .collection<JiveTagRule>()
+        .filter()
+        .tagKeyEqualTo(tagKey)
+        .findAll();
+    if (rules.isEmpty) return 0;
+    final now = DateTime.now();
+    for (final rule in rules) {
+      rule.isEnabled = enabled;
+      rule.updatedAt = now;
+    }
+    await isar.writeTxn(() async {
+      await isar.collection<JiveTagRule>().putAll(rules);
+    });
+    return rules.length;
+  }
+
   Future<void> reassignRules({
     required List<String> sourceKeys,
     required String targetKey,
