@@ -11,8 +11,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'core/design_system/theme.dart';
 import 'core/database/account_model.dart';
 import 'core/database/transaction_model.dart';
-import 'core/database/category_model.dart'; 
+import 'core/database/category_model.dart';
 import 'core/database/auto_draft_model.dart';
+import 'core/database/template_model.dart';
+import 'core/database/tag_model.dart';
+import 'core/database/project_model.dart';
 import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
 import 'core/service/transaction_service.dart';
@@ -30,6 +33,9 @@ import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/stats/stats_screen.dart';
 import 'feature/category/category_manager_screen.dart';
 import 'feature/category/category_transactions_screen.dart';
+import 'feature/template/template_list_screen.dart';
+import 'feature/tag/tag_manager_screen.dart';
+import 'feature/project/project_list_screen.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -122,6 +128,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           JiveCategoryOverrideSchema,
           JiveAccountSchema,
           JiveAutoDraftSchema,
+          JiveTemplateSchema,
+          JiveTagSchema,
+          JiveProjectSchema,
         ],
         directory: dir.path,
       );
@@ -856,6 +865,39 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           onTap: () async {
                             Navigator.pop(context);
                             await _openCategoryManager();
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.bookmark_outline),
+                          title: const Text("模板管理"),
+                          subtitle: const Text("管理常用交易模板"),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (context) => const TemplateListScreen(),
+                            ));
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.tag),
+                          title: const Text("标签管理"),
+                          subtitle: const Text("管理交易标签"),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (context) => const TagManagerScreen(),
+                            ));
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.folder_outlined),
+                          title: const Text("项目追踪"),
+                          subtitle: const Text("追踪旅行、装修等专项支出"),
+                          onTap: () async {
+                            Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (context) => const ProjectListScreen(),
+                            ));
                           },
                         ),
                         if (kDebugMode)

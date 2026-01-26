@@ -10,6 +10,8 @@ import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/database/template_model.dart';
+import '../../core/service/template_service.dart';
 import '../../core/design_system/theme.dart';
 import 'add_transaction_screen.dart';
 import 'widgets/transaction_action_bar.dart';
@@ -17,6 +19,7 @@ import 'widgets/transaction_hero_section.dart';
 import 'widgets/transaction_info_card.dart';
 import 'widgets/transaction_note_card.dart';
 import 'widgets/transaction_raw_text_card.dart';
+import '../template/widgets/save_template_dialog.dart';
 
 class TransactionDetailScreen extends StatefulWidget {
   final int transactionId;
@@ -227,64 +230,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final tx = _transaction;
     if (tx == null) return;
 
-    // 弹出对话框让用户输入退款金额
-    final amountController = TextEditingController(text: tx.amount.toString());
-    final confirmed = await showDialog<bool>(
+    // 底部弹窗让用户输入退款金额
+    final refundAmount = await showModalBottomSheet<double>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('创建退款'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '原交易金额: ¥${tx.amount.toStringAsFixed(2)}',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(
-                labelText: '退款金额',
-                prefixText: '¥ ',
-                border: OutlineInputBorder(),
-              ),
-              autofocus: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('确认退款'),
-          ),
-        ],
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _RefundBottomSheet(originalAmount: tx.amount),
     );
 
-    if (confirmed != true) return;
-
-    final refundAmount = double.tryParse(amountController.text.trim());
-    if (refundAmount == null || refundAmount <= 0) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入有效的退款金额')),
-      );
-      return;
-    }
-
-    if (refundAmount > tx.amount) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('退款金额不能超过原交易金额')),
-      );
-      return;
-    }
+    if (refundAmount == null) return;
 
     // 创建退款交易（类型相反）
     final refundType = tx.type == 'income' ? 'expense' : 'income';
@@ -339,6 +293,32 @@ ${tx.note != null && tx.note!.isNotEmpty ? '备注: ${tx.note}' : ''}
     Share.share(text, subject: 'Jive记账 - $typeLabel');
   }
 
+  Future<void> _saveAsTemplate() async {
+    final tx = _transaction;
+    if (tx == null) return;
+
+    final result = await showSaveTemplateDialog(
+      context: context,
+      transaction: tx,
+      categoryName: _category?.name ?? tx.category,
+    );
+
+    if (result == null) return;
+
+    final service = TemplateService(_isar!);
+    await service.createFromTransaction(
+      transaction: tx,
+      name: result['name'] as String,
+      saveAmount: result['saveAmount'] as bool,
+      groupName: result['groupName'] as String?,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已保存模板"${result['name']}"')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -354,7 +334,7 @@ ${tx.note != null && tx.note!.isNotEmpty ? '备注: ${tx.note}' : ''}
                 onDelete: _deleteTransaction,
                 onEdit: _editTransaction,
                 onCopy: _copyTransaction,
-                onSaveAsTemplate: null, // 模板功能后续实现
+                onSaveAsTemplate: _saveAsTemplate,
                 onMarkRefund: _createRefund,
                 onShare: _shareTransaction,
               )
@@ -465,6 +445,165 @@ ${tx.note != null && tx.note!.isNotEmpty ? '备注: ${tx.note}' : ''}
             child: const Text('重试'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 退款金额输入底部弹窗
+class _RefundBottomSheet extends StatefulWidget {
+  final double originalAmount;
+
+  const _RefundBottomSheet({required this.originalAmount});
+
+  @override
+  State<_RefundBottomSheet> createState() => _RefundBottomSheetState();
+}
+
+class _RefundBottomSheetState extends State<_RefundBottomSheet> {
+  late TextEditingController _amountController;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController = TextEditingController(text: widget.originalAmount.toString());
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  void _validate() {
+    final amount = double.tryParse(_amountController.text.trim());
+    setState(() {
+      if (amount == null || amount <= 0) {
+        _errorText = '请输入有效的退款金额';
+      } else if (amount > widget.originalAmount) {
+        _errorText = '退款金额不能超过原交易金额';
+      } else {
+        _errorText = null;
+      }
+    });
+  }
+
+  void _submit() {
+    _validate();
+    if (_errorText != null) return;
+
+    final amount = double.tryParse(_amountController.text.trim());
+    Navigator.pop(context, amount);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 拖动指示条
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 标题
+            Row(
+              children: [
+                const Icon(Icons.replay, color: Colors.orange),
+                const SizedBox(width: 8),
+                Text(
+                  '创建退款',
+                  style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            // 原交易金额提示
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 20, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Text(
+                    '原交易金额: ¥${widget.originalAmount.toStringAsFixed(2)}',
+                    style: GoogleFonts.lato(fontSize: 14, color: Colors.grey.shade700),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            // 退款金额输入
+            TextField(
+              controller: _amountController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: '退款金额',
+                prefixText: '¥ ',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                errorText: _errorText,
+                helperText: '可输入部分退款金额',
+              ),
+              autofocus: true,
+              onChanged: (_) => _validate(),
+            ),
+            const SizedBox(height: 24),
+            // 按钮
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('取消'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('确认退款'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

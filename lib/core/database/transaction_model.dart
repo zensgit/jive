@@ -25,4 +25,6 @@ class JiveTransaction {
   int? accountId;             // 账户 ID
   @Index()
   int? toAccountId;           // 转账目标账户 ID
+  @Index()
+  int? projectId;             // 关联项目 ID
 }
