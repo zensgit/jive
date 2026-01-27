@@ -16,6 +16,7 @@ class _SmartTagLogScreenState extends State<SmartTagLogScreen> {
   final _dateFormat = DateFormat('yyyy-MM-dd HH:mm');
   bool _loading = true;
   List<SmartTagLogEntry> _logs = [];
+  String? _filterTagKey;
 
   @override
   void initState() {
@@ -29,6 +30,9 @@ class _SmartTagLogScreenState extends State<SmartTagLogScreen> {
     setState(() {
       _logs = logs;
       _loading = false;
+      if (_filterTagKey != null && logs.every((item) => item.tagKey != _filterTagKey)) {
+        _filterTagKey = null;
+      }
     });
   }
 
@@ -78,12 +82,61 @@ class _SmartTagLogScreenState extends State<SmartTagLogScreen> {
                     style: TextStyle(color: Colors.grey.shade500),
                   ),
                 )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _logs.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) => _buildLogCard(_logs[index]),
+              : Column(
+                  children: [
+                    _buildFilterBar(),
+                    Expanded(
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _filteredLogs.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) => _buildLogCard(_filteredLogs[index]),
+                      ),
+                    ),
+                  ],
                 ),
+    );
+  }
+
+  List<SmartTagLogEntry> get _filteredLogs {
+    if (_filterTagKey == null) return _logs;
+    return _logs.where((entry) => entry.tagKey == _filterTagKey).toList();
+  }
+
+  Widget _buildFilterBar() {
+    final tagNames = <String, String>{};
+    for (final log in _logs) {
+      tagNames.putIfAbsent(log.tagKey, () => log.tagName);
+    }
+    final chips = <Widget>[
+      ChoiceChip(
+        label: const Text('全部'),
+        selected: _filterTagKey == null,
+        onSelected: (_) => setState(() => _filterTagKey = null),
+      ),
+      ...tagNames.entries.map(
+        (entry) => ChoiceChip(
+          label: Text(entry.value),
+          selected: _filterTagKey == entry.key,
+          onSelected: (_) => setState(() => _filterTagKey = entry.key),
+        ),
+      ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: chips
+              .map(
+                (chip) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: chip,
+                ),
+              )
+              .toList(),
+        ),
+      ),
     );
   }
 

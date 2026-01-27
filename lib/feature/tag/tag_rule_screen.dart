@@ -472,13 +472,22 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
               onTap: () => Navigator.pop(context, const _BackfillRange()),
             ),
             ListTile(
+              title: const Text('近 7 天'),
+              onTap: () => Navigator.pop(context, _lastDaysRange(7)),
+            ),
+            ListTile(
+              title: const Text('近 30 天'),
+              onTap: () => Navigator.pop(context, _lastDaysRange(30)),
+            ),
+            ListTile(
               title: const Text('选择日期范围'),
               onTap: () async {
                 final now = DateTime.now();
+                final lastDate = DateTime(now.year, now.month, now.day);
                 final range = await showDateRangePicker(
                   context: context,
                   firstDate: DateTime(now.year - 5),
-                  lastDate: DateTime(now.year + 1),
+                  lastDate: lastDate,
                   helpText: '选择补标时间范围',
                 );
                 if (range == null) return;
@@ -492,6 +501,14 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         ),
       ),
     );
+  }
+
+  _BackfillRange _lastDaysRange(int days) {
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final start = todayStart.subtract(Duration(days: days - 1));
+    final end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+    return _BackfillRange(start: start, end: end);
   }
 
   String _rangeLabel(_BackfillRange range) {
