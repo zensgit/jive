@@ -1160,7 +1160,7 @@ class _CategoryTransactionsScreenState
   }
 
   Widget _buildSmartTagBadge() {
-    return Container(
+    final badge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: JiveTheme.primaryGreen.withOpacity(0.12),
@@ -1188,6 +1188,11 @@ class _CategoryTransactionsScreenState
           ),
         ],
       ),
+    );
+    return Tooltip(
+      message: '该交易由智能标签自动打标',
+      triggerMode: TooltipTriggerMode.longPress,
+      child: badge,
     );
   }
 }

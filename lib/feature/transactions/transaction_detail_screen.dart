@@ -13,6 +13,7 @@ import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/account_service.dart';
+import '../tag/tag_rule_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import 'add_transaction_screen.dart';
 
@@ -526,7 +527,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final icon = hasTagIcon(tag)
         ? tagIconWidget(tag, size: 12, color: color)
         : null;
-    return Chip(
+    return InputChip(
+      onPressed: () => _openTagRules(tag),
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -568,6 +570,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ),
       backgroundColor: color.withOpacity(0.12),
       side: BorderSide(color: color.withOpacity(0.4)),
+    );
+  }
+
+  Future<void> _openTagRules(JiveTag tag) {
+    if (_isar == null) return Future.value();
+    return Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TagRuleScreen(tag: tag, isar: _isar),
+      ),
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -12,6 +13,7 @@ import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
+import '../../core/service/smart_tag_log_service.dart';
 import '../../core/service/tag_rule_service.dart';
 
 class TagRuleScreen extends StatefulWidget {
@@ -41,11 +43,13 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   int _backfillTotal = 0;
   final ValueNotifier<int> _progressTick = ValueNotifier<int>(0);
   BuildContext? _progressDialogContext;
+  final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
   List<JiveTagRule> _rules = [];
   Map<int, JiveAccount> _accountById = {};
   Map<String, JiveCategory> _categoryByKey = {};
   Map<String, List<JiveCategory>> _childrenByParent = {};
   _RuleSort _sort = _RuleSort.updatedDesc;
+  _RuleFilter _filter = _RuleFilter.all;
 
   @override
   void initState() {
@@ -267,15 +271,22 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
               ? Center(child: Text(_error!, style: const TextStyle(color: Colors.redAccent)))
               : _rules.isEmpty
                   ? _buildEmpty()
-                  : visibleRules.isEmpty
-                      ? _buildEmptySearch()
-                      : ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                          itemCount: visibleRules.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
-                          itemBuilder: (context, index) =>
-                              _buildRuleCard(visibleRules[index]),
+                  : Column(
+                      children: [
+                        _buildFilterBar(),
+                        Expanded(
+                          child: visibleRules.isEmpty
+                              ? _buildEmptySearch()
+                              : ListView.separated(
+                                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                                  itemCount: visibleRules.length,
+                                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                  itemBuilder: (context, index) =>
+                                      _buildRuleCard(visibleRules[index]),
+                                ),
                         ),
+                      ],
+                    ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -297,11 +308,14 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
 
   Future<void> _backfillHistory() async {
     if (_backfilling || _rules.isEmpty) return;
+    final range = await _pickBackfillRange();
+    if (range == null) return;
+    final rangeLabel = _rangeLabel(range);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('补标历史交易'),
-        content: const Text('将根据当前规则为历史交易补充标签，仅对尚未包含该标签的交易生效。是否继续？'),
+        content: Text('将根据当前规则为历史交易补充标签（$rangeLabel），仅对尚未包含该标签的交易生效。是否继续？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -325,6 +339,8 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     try {
       final result = await TagRuleService(_isar).backfillForTag(
         widget.tag.key,
+        rangeStart: range.start,
+        rangeEnd: range.end,
         shouldCancel: () => _cancelBackfill,
         onProgress: (processed, total) {
           if (!mounted) return;
@@ -342,11 +358,44 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
               ? '没有需要补标的交易'
               : '已补标 ${result.updatedCount} 笔交易（匹配 ${result.matchedCount}/${result.scannedCount}）';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      await SmartTagLogService().addLog(
+        SmartTagLogEntry(
+          tagKey: widget.tag.key,
+          tagName: widget.tag.name,
+          scannedCount: result.scannedCount,
+          matchedCount: result.matchedCount,
+          updatedCount: result.updatedCount,
+          skippedCount: result.skippedCount,
+          cancelled: result.cancelled,
+          success: true,
+          message: message,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+          createdAt: DateTime.now(),
+        ),
+      );
       await _loadData();
     } catch (e) {
       if (!mounted) return;
+      final errorMessage = '补标失败：$e';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('补标失败：$e')),
+        SnackBar(content: Text(errorMessage)),
+      );
+      await SmartTagLogService().addLog(
+        SmartTagLogEntry(
+          tagKey: widget.tag.key,
+          tagName: widget.tag.name,
+          scannedCount: 0,
+          matchedCount: 0,
+          updatedCount: 0,
+          skippedCount: 0,
+          cancelled: false,
+          success: false,
+          message: errorMessage,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+          createdAt: DateTime.now(),
+        ),
       );
     } finally {
       if (mounted) {
@@ -405,6 +454,86 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         });
       }
     });
+  }
+
+  Future<_BackfillRange?> _pickBackfillRange() async {
+    return showModalBottomSheet<_BackfillRange>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('全部时间'),
+              onTap: () => Navigator.pop(context, const _BackfillRange()),
+            ),
+            ListTile(
+              title: const Text('选择日期范围'),
+              onTap: () async {
+                final now = DateTime.now();
+                final range = await showDateRangePicker(
+                  context: context,
+                  firstDate: DateTime(now.year - 5),
+                  lastDate: DateTime(now.year + 1),
+                  helpText: '选择补标时间范围',
+                );
+                if (range == null) return;
+                final start = DateTime(range.start.year, range.start.month, range.start.day);
+                final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+                if (!mounted) return;
+                Navigator.pop(context, _BackfillRange(start: start, end: end));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _rangeLabel(_BackfillRange range) {
+    if (range.start == null && range.end == null) return '全部时间';
+    final start = range.start == null ? '不限' : _dateFormat.format(range.start!);
+    final end = range.end == null ? '不限' : _dateFormat.format(range.end!);
+    return '$start ~ $end';
+  }
+
+  Widget _buildFilterBar() {
+    final total = _rules.length;
+    final enabled = _rules.where((rule) => rule.isEnabled).length;
+    final disabled = total - enabled;
+    final selectedColor = const Color(0xFF2E7D32);
+    final textStyle = const TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      child: Row(
+        children: [
+          ChoiceChip(
+            label: Text('全部 $total', style: textStyle),
+            selected: _filter == _RuleFilter.all,
+            selectedColor: selectedColor.withOpacity(0.15),
+            onSelected: (_) => setState(() => _filter = _RuleFilter.all),
+          ),
+          const SizedBox(width: 8),
+          ChoiceChip(
+            label: Text('启用 $enabled', style: textStyle),
+            selected: _filter == _RuleFilter.enabled,
+            selectedColor: selectedColor.withOpacity(0.15),
+            onSelected: (_) => setState(() => _filter = _RuleFilter.enabled),
+          ),
+          const SizedBox(width: 8),
+          ChoiceChip(
+            label: Text('停用 $disabled', style: textStyle),
+            selected: _filter == _RuleFilter.disabled,
+            selectedColor: selectedColor.withOpacity(0.15),
+            onSelected: (_) => setState(() => _filter = _RuleFilter.disabled),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmpty() {
@@ -517,9 +646,14 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   }
 
   List<JiveTagRule> _applyFilterAndSort(List<JiveTagRule> source) {
-    final filtered = _query.isEmpty
+    var filtered = _query.isEmpty
         ? List<JiveTagRule>.from(source)
         : source.where((rule) => _ruleSearchText(rule).contains(_query.toLowerCase())).toList();
+    if (_filter == _RuleFilter.enabled) {
+      filtered = filtered.where((rule) => rule.isEnabled).toList();
+    } else if (_filter == _RuleFilter.disabled) {
+      filtered = filtered.where((rule) => !rule.isEnabled).toList();
+    }
     filtered.sort((a, b) {
       switch (_sort) {
         case _RuleSort.createdDesc:
@@ -584,6 +718,15 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
 }
 
 enum _RuleSort { updatedDesc, createdDesc, enabledFirst }
+
+enum _RuleFilter { all, enabled, disabled }
+
+class _BackfillRange {
+  final DateTime? start;
+  final DateTime? end;
+
+  const _BackfillRange({this.start, this.end});
+}
 
 class TagRuleEditSheet extends StatefulWidget {
   final Isar isar;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
@@ -13,6 +14,7 @@ import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_service.dart';
 import '../../core/service/tag_rule_service.dart';
+import '../../core/service/smart_tag_log_service.dart';
 import 'tag_edit_dialog.dart';
 import 'tag_group_dialog.dart';
 import 'tag_transactions_screen.dart';
@@ -20,6 +22,7 @@ import 'tag_statistics_screen.dart';
 import 'tag_rule_screen.dart';
 import 'tag_conversion_log_screen.dart';
 import 'tag_icon_catalog.dart';
+import 'smart_tag_log_screen.dart';
 
 class TagManagementScreen extends StatefulWidget {
   final Isar? isar;
@@ -52,6 +55,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _smartTagSearchController = TextEditingController();
   String _query = '';
+  final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 
   @override
   void initState() {
@@ -546,6 +550,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     final ruleCountByTag = {
       for (final tag in tags) tag.key: (_rulesByTagKey[tag.key]?.length ?? 0),
     };
+    final enabledCountByTag = {
+      for (final tag in tags) tag.key: _enabledRules(tag).length,
+    };
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -633,6 +640,17 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                 style: TextStyle(fontWeight: FontWeight.w600),
                               ),
                               const Spacer(),
+                              IconButton(
+                                tooltip: '补标记录',
+                                onPressed: () {
+                                  Navigator.of(context, rootNavigator: true).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const SmartTagLogScreen(),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.history),
+                              ),
                               TextButton(
                                 onPressed: () => setAll(true),
                                 child: const Text('全部启用'),
@@ -761,6 +779,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                     final tag = filteredTags[index];
                                     final enabled = enabledByTag[tag.key] ?? false;
                                     final ruleCount = ruleCountByTag[tag.key] ?? 0;
+                                    final enabledCount = enabledCountByTag[tag.key] ?? 0;
                                     final rules = _allRules(tag);
                                     final summaries = rules
                                         .map(_ruleSummaryLine)
@@ -771,7 +790,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                       subtitle: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text('规则 $ruleCount 条'),
+                                          Text('规则 $ruleCount 条 · 启用 $enabledCount 条'),
                                           if (summaries.isNotEmpty)
                                             Padding(
                                               padding: const EdgeInsets.only(top: 2),
@@ -852,11 +871,16 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     bool showProgressDialog = true,
   }) async {
     if (_backfilling) return;
+    final range = await _pickBackfillRange();
+    if (range == null) return;
+    final rangeLabel = _rangeLabel(range);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('补充历史交易'),
-        content: Text('将为标签「${tagDisplayName(tag)}」补充历史交易，仅对未包含该标签的交易生效。是否继续？'),
+        content: Text(
+          '将为标签「${tagDisplayName(tag)}」补充历史交易（$rangeLabel），仅对未包含该标签的交易生效。是否继续？',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
@@ -882,6 +906,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     try {
       final result = await TagRuleService(_isar).backfillForTag(
         tag.key,
+        rangeStart: range.start,
+        rangeEnd: range.end,
         shouldCancel: () => _cancelBackfill,
         onProgress: (processed, total) {
           if (!mounted) return;
@@ -904,15 +930,48 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       } else {
         _showTopMessage(message);
       }
+      await SmartTagLogService().addLog(
+        SmartTagLogEntry(
+          tagKey: tag.key,
+          tagName: tagDisplayName(tag),
+          scannedCount: result.scannedCount,
+          matchedCount: result.matchedCount,
+          updatedCount: result.updatedCount,
+          skippedCount: result.skippedCount,
+          cancelled: result.cancelled,
+          success: true,
+          message: message,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+          createdAt: DateTime.now(),
+        ),
+      );
       await _loadData();
       DataReloadBus.notify();
     } catch (e) {
       if (!mounted) return;
+      final errorMessage = '补标失败：$e';
       if (onMessage != null) {
-        onMessage('补标失败：$e');
+        onMessage(errorMessage);
       } else {
-        _showTopMessage('补标失败：$e');
+        _showTopMessage(errorMessage);
       }
+      await SmartTagLogService().addLog(
+        SmartTagLogEntry(
+          tagKey: tag.key,
+          tagName: tagDisplayName(tag),
+          scannedCount: 0,
+          matchedCount: 0,
+          updatedCount: 0,
+          skippedCount: 0,
+          cancelled: false,
+          success: false,
+          message: errorMessage,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+          createdAt: DateTime.now(),
+        ),
+      );
     } finally {
       if (mounted) {
         if (showProgressDialog && _backfillDialogContext != null) {
@@ -921,6 +980,51 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         setState(() => _backfilling = false);
       }
     }
+  }
+
+  Future<_BackfillRange?> _pickBackfillRange() async {
+    return showModalBottomSheet<_BackfillRange>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: const Text('全部时间'),
+              onTap: () => Navigator.pop(context, const _BackfillRange()),
+            ),
+            ListTile(
+              title: const Text('选择日期范围'),
+              onTap: () async {
+                final now = DateTime.now();
+                final range = await showDateRangePicker(
+                  context: context,
+                  firstDate: DateTime(now.year - 5),
+                  lastDate: DateTime(now.year + 1),
+                  helpText: '选择补标时间范围',
+                );
+                if (range == null) return;
+                final start = DateTime(range.start.year, range.start.month, range.start.day);
+                final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+                if (!mounted) return;
+                Navigator.pop(context, _BackfillRange(start: start, end: end));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _rangeLabel(_BackfillRange range) {
+    if (range.start == null && range.end == null) return '全部时间';
+    final start = range.start == null ? '不限' : _dateFormat.format(range.start!);
+    final end = range.end == null ? '不限' : _dateFormat.format(range.end!);
+    return '$start ~ $end';
   }
 
   void _showBackfillProgress() {
@@ -1794,6 +1898,13 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
 }
 
 enum _TagAction { edit, archive, delete, merge, convert, smart, stats }
+
+class _BackfillRange {
+  final DateTime? start;
+  final DateTime? end;
+
+  const _BackfillRange({this.start, this.end});
+}
 
 class _TagConvertRequest {
   const _TagConvertRequest({

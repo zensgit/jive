@@ -150,6 +150,8 @@ class TagRuleService {
 
   Future<TagRuleBackfillResult> backfillForTag(
     String tagKey, {
+    DateTime? rangeStart,
+    DateTime? rangeEnd,
     bool Function()? shouldCancel,
     void Function(int processed, int total)? onProgress,
   }) async {
@@ -169,7 +171,22 @@ class TagRuleService {
       );
     }
 
-    final txs = await isar.jiveTransactions.where().findAll();
+    final txQuery = isar.jiveTransactions.where();
+    List<JiveTransaction> txs;
+    if (rangeStart != null && rangeEnd != null) {
+      txs = await txQuery.timestampBetween(
+        rangeStart,
+        rangeEnd,
+        includeLower: true,
+        includeUpper: true,
+      ).findAll();
+    } else if (rangeStart != null) {
+      txs = await txQuery.timestampGreaterThan(rangeStart, include: true).findAll();
+    } else if (rangeEnd != null) {
+      txs = await txQuery.timestampLessThan(rangeEnd, include: true).findAll();
+    } else {
+      txs = await txQuery.findAll();
+    }
     if (txs.isEmpty) {
       return const TagRuleBackfillResult(
         scannedCount: 0,
