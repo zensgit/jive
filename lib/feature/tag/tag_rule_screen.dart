@@ -745,6 +745,18 @@ class _BackfillRange {
   const _BackfillRange({this.start, this.end});
 }
 
+class _RuleInput {
+  final double? minAmount;
+  final double? maxAmount;
+  final List<String> keywords;
+
+  const _RuleInput({
+    required this.minAmount,
+    required this.maxAmount,
+    required this.keywords,
+  });
+}
+
 class TagRuleEditSheet extends StatefulWidget {
   final Isar isar;
   final JiveTag tag;
@@ -777,6 +789,8 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
   String? _subCategoryKey;
   final Set<int> _selectedAccountIds = {};
   String? _error;
+  bool _previewing = false;
+  TagRuleEstimate? _previewResult;
 
   @override
   void initState() {
@@ -809,20 +823,83 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
   }
 
   Future<void> _save() async {
+    final input = _collectInput();
+    if (input == null) return;
+
+    final service = TagRuleService(widget.isar);
+    if (widget.rule == null) {
+      await service.createRule(
+        tagKey: widget.tag.key,
+        isEnabled: _enabled,
+        applyType: _type == 'all' ? null : _type,
+        minAmount: input.minAmount,
+        maxAmount: input.maxAmount,
+        accountIds: _selectedAccountIds.toList(),
+        categoryKey: _categoryKey,
+        subCategoryKey: _subCategoryKey,
+        keywords: input.keywords,
+      );
+    } else {
+      final rule = widget.rule!
+        ..isEnabled = _enabled
+        ..applyType = _type == 'all' ? null : _type
+        ..minAmount = input.minAmount
+        ..maxAmount = input.maxAmount
+        ..accountIds = _selectedAccountIds.toList()
+        ..categoryKey = _categoryKey
+        ..subCategoryKey = _subCategoryKey
+        ..keywords = input.keywords;
+      await service.updateRule(rule);
+    }
+
+    if (!mounted) return;
+    Navigator.pop(context, true);
+  }
+
+  Future<void> _previewRule() async {
+    if (_previewing) return;
+    final input = _collectInput();
+    if (input == null) return;
+    setState(() {
+      _previewing = true;
+      _previewResult = null;
+    });
+    try {
+      final estimate = await TagRuleService(widget.isar).estimateRule(
+        tagKey: widget.tag.key,
+        applyType: _type == 'all' ? null : _type,
+        minAmount: input.minAmount,
+        maxAmount: input.maxAmount,
+        accountIds: _selectedAccountIds.toList(),
+        categoryKey: _categoryKey,
+        subCategoryKey: _subCategoryKey,
+        keywords: input.keywords,
+      );
+      if (!mounted) return;
+      setState(() => _previewResult = estimate);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = '预览失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() => _previewing = false);
+      }
+    }
+  }
+
+  _RuleInput? _collectInput() {
     final minValue = double.tryParse(_minAmount.text.trim());
     final maxValue = double.tryParse(_maxAmount.text.trim());
     if (minValue != null && maxValue != null && minValue > maxValue) {
       setState(() => _error = '金额区间不合法');
-      return;
+      return null;
     }
-
     final keywords = _keywords.text
         .split(RegExp(r'\s+'))
         .map((item) => item.trim().toLowerCase())
         .where((item) => item.isNotEmpty)
         .toSet()
         .toList();
-
     final hasCondition = (minValue != null ||
         maxValue != null ||
         _selectedAccountIds.isNotEmpty ||
@@ -831,37 +908,10 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
         keywords.isNotEmpty);
     if (!hasCondition) {
       setState(() => _error = '请至少设置一个条件');
-      return;
+      return null;
     }
-
-    final service = TagRuleService(widget.isar);
-    if (widget.rule == null) {
-      await service.createRule(
-        tagKey: widget.tag.key,
-        isEnabled: _enabled,
-        applyType: _type == 'all' ? null : _type,
-        minAmount: minValue,
-        maxAmount: maxValue,
-        accountIds: _selectedAccountIds.toList(),
-        categoryKey: _categoryKey,
-        subCategoryKey: _subCategoryKey,
-        keywords: keywords,
-      );
-    } else {
-      final rule = widget.rule!
-        ..isEnabled = _enabled
-        ..applyType = _type == 'all' ? null : _type
-        ..minAmount = minValue
-        ..maxAmount = maxValue
-        ..accountIds = _selectedAccountIds.toList()
-        ..categoryKey = _categoryKey
-        ..subCategoryKey = _subCategoryKey
-        ..keywords = keywords;
-      await service.updateRule(rule);
-    }
-
-    if (!mounted) return;
-    Navigator.pop(context, true);
+    setState(() => _error = null);
+    return _RuleInput(minAmount: minValue, maxAmount: maxValue, keywords: keywords);
   }
 
   List<JiveCategory> _parentOptions() {
@@ -1064,11 +1114,30 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                   '匹配任意关键词即可触发，仅对新增交易生效',
                   style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
                 ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _previewing ? null : _previewRule,
+                    icon: _previewing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.visibility_outlined, size: 18),
+                    label: Text(_previewing ? '预览中...' : '预览命中'),
+                  ),
+                ),
+                if (_previewing || _previewResult != null) ...[
+                  const SizedBox(height: 8),
+                  _buildPreviewPanel(),
+                ],
                 if (_error != null) ...[
                   const SizedBox(height: 8),
                   Text(_error!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
                 ],
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -1094,6 +1163,52 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPreviewPanel() {
+    if (_previewing && _previewResult == null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: const Text('正在计算命中交易数...'),
+      );
+    }
+    final result = _previewResult;
+    if (result == null) return const SizedBox.shrink();
+    final willTag = result.willTagCount;
+    final summary =
+        '扫描 ${result.scannedCount} 笔，命中 ${result.matchedCount} 笔；已含标签 ${result.alreadyTaggedCount} 笔，预计新增 $willTag 笔。';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2E7D32).withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.insights_outlined, size: 16, color: Color(0xFF2E7D32)),
+              const SizedBox(width: 6),
+              const Text(
+                '命中预览',
+                style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2E7D32)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(summary, style: TextStyle(fontSize: 12, color: Colors.grey.shade800)),
+        ],
       ),
     );
   }

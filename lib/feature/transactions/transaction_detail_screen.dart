@@ -281,6 +281,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final subtitle = isTransfer ? _transferSubtitle(tx) : _categorySubtitle(tx);
     final tags = _resolveTags(tx);
     final smartTagKeys = tx.smartTagKeys.toSet();
+    final smartTags = tags.where((tag) => smartTagKeys.contains(tag.key)).toList();
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
     final amountFontSize = isLandscape ? 26.0 : 32.0;
@@ -341,6 +342,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       const SizedBox(height: 12),
       _buildDetailCard([
         _buildTagRow(tags, smartTagKeys),
+        if (smartTags.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          _buildSmartTagHint(smartTags),
+        ],
       ]),
       const SizedBox(height: 12),
       _buildDetailCard([
@@ -570,6 +575,31 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ),
       backgroundColor: color.withOpacity(0.12),
       side: BorderSide(color: color.withOpacity(0.4)),
+    );
+  }
+
+  Widget _buildSmartTagHint(List<JiveTag> smartTags) {
+    final names = smartTags.map(tagDisplayName).join('、');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: JiveTheme.primaryGreen.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: JiveTheme.primaryGreen.withOpacity(0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.auto_awesome, size: 16, color: JiveTheme.primaryGreen),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '智能标签：$names（可点标签管理规则）',
+              style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade700),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

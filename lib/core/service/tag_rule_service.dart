@@ -21,6 +21,20 @@ class TagRuleBackfillResult {
   });
 }
 
+class TagRuleEstimate {
+  final int scannedCount;
+  final int matchedCount;
+  final int alreadyTaggedCount;
+  final int willTagCount;
+
+  const TagRuleEstimate({
+    required this.scannedCount,
+    required this.matchedCount,
+    required this.alreadyTaggedCount,
+    required this.willTagCount,
+  });
+}
+
 class TagRuleService {
   final Isar isar;
 
@@ -171,22 +185,7 @@ class TagRuleService {
       );
     }
 
-    final txQuery = isar.jiveTransactions.where();
-    List<JiveTransaction> txs;
-    if (rangeStart != null && rangeEnd != null) {
-      txs = await txQuery.timestampBetween(
-        rangeStart,
-        rangeEnd,
-        includeLower: true,
-        includeUpper: true,
-      ).findAll();
-    } else if (rangeStart != null) {
-      txs = await txQuery.timestampGreaterThan(rangeStart, include: true).findAll();
-    } else if (rangeEnd != null) {
-      txs = await txQuery.timestampLessThan(rangeEnd, include: true).findAll();
-    } else {
-      txs = await txQuery.findAll();
-    }
+    final txs = await _loadTransactionsInRange(rangeStart, rangeEnd);
     if (txs.isEmpty) {
       return const TagRuleBackfillResult(
         scannedCount: 0,
@@ -238,6 +237,82 @@ class TagRuleService {
       skippedCount: matchedCount - updatedCount,
       cancelled: cancelled,
     );
+  }
+
+  Future<TagRuleEstimate> estimateRule({
+    required String tagKey,
+    String? applyType,
+    double? minAmount,
+    double? maxAmount,
+    List<int>? accountIds,
+    String? categoryKey,
+    String? subCategoryKey,
+    List<String>? keywords,
+    DateTime? rangeStart,
+    DateTime? rangeEnd,
+  }) async {
+    final txs = await _loadTransactionsInRange(rangeStart, rangeEnd);
+    if (txs.isEmpty) {
+      return const TagRuleEstimate(
+        scannedCount: 0,
+        matchedCount: 0,
+        alreadyTaggedCount: 0,
+        willTagCount: 0,
+      );
+    }
+    final now = DateTime.now();
+    final rule = JiveTagRule()
+      ..tagKey = tagKey
+      ..isEnabled = true
+      ..applyType = applyType
+      ..minAmount = minAmount
+      ..maxAmount = maxAmount
+      ..accountIds = accountIds ?? []
+      ..categoryKey = categoryKey
+      ..subCategoryKey = subCategoryKey
+      ..keywords = keywords ?? []
+      ..createdAt = now
+      ..updatedAt = now;
+    var matchedCount = 0;
+    var alreadyTaggedCount = 0;
+    var willTagCount = 0;
+    for (final tx in txs) {
+      if (!_matches(rule, tx)) continue;
+      matchedCount += 1;
+      if (tx.tagKeys.contains(tagKey)) {
+        alreadyTaggedCount += 1;
+      } else {
+        willTagCount += 1;
+      }
+    }
+    return TagRuleEstimate(
+      scannedCount: txs.length,
+      matchedCount: matchedCount,
+      alreadyTaggedCount: alreadyTaggedCount,
+      willTagCount: willTagCount,
+    );
+  }
+
+  Future<List<JiveTransaction>> _loadTransactionsInRange(
+    DateTime? rangeStart,
+    DateTime? rangeEnd,
+  ) async {
+    final txQuery = isar.jiveTransactions.where();
+    if (rangeStart != null && rangeEnd != null) {
+      return txQuery.timestampBetween(
+        rangeStart,
+        rangeEnd,
+        includeLower: true,
+        includeUpper: true,
+      ).findAll();
+    }
+    if (rangeStart != null) {
+      return txQuery.timestampGreaterThan(rangeStart, include: true).findAll();
+    }
+    if (rangeEnd != null) {
+      return txQuery.timestampLessThan(rangeEnd, include: true).findAll();
+    }
+    return txQuery.findAll();
   }
 
   bool _matches(JiveTagRule rule, JiveTransaction tx) {
