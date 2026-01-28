@@ -7,7 +7,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:intl/date_symbol_data_local.dart';
 import 'package:isar/isar.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -19,15 +18,11 @@ import 'core/database/account_model.dart';
 import 'core/database/transaction_model.dart';
 import 'core/database/category_model.dart';
 import 'core/database/auto_draft_model.dart';
-<<<<<<< HEAD
 import 'core/database/template_model.dart';
-import 'core/database/tag_model.dart';
-import 'core/database/project_model.dart';
-=======
 import 'core/database/tag_model.dart';
 import 'core/database/tag_conversion_log.dart';
 import 'core/database/tag_rule_model.dart';
->>>>>>> origin/main
+import 'core/database/project_model.dart';
 import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
 import 'core/service/transaction_service.dart';
@@ -40,6 +35,8 @@ import 'core/service/tag_service.dart';
 import 'core/service/data_reload_bus.dart';
 import 'core/service/data_backup_service.dart';
 import 'core/service/ui_pref_service.dart';
+import 'core/service/database_service.dart';
+import 'core/service/project_service.dart';
 import 'feature/accounts/accounts_screen.dart';
 import 'feature/auto/auto_drafts_screen.dart';
 import 'feature/auto/auto_rule_tester_screen.dart';
@@ -49,22 +46,16 @@ import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/transactions/transaction_detail_screen.dart';
 import 'feature/stats/stats_screen.dart';
 import 'feature/category/category_manager_screen.dart';
-<<<<<<< HEAD
 import 'feature/category/category_transactions_screen.dart';
 import 'feature/template/template_list_screen.dart';
-import 'feature/tag/tag_manager_screen.dart';
-import 'feature/project/project_list_screen.dart';
-=======
 import 'feature/tag/tag_management_screen.dart';
 import 'feature/tag/tag_icon_catalog.dart';
-import 'feature/category/category_transactions_screen.dart';
->>>>>>> origin/main
+import 'feature/project/project_list_screen.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
-  await initializeDateFormatting('zh_CN', null);
   await JiveLogger.init();
   runApp(const JiveApp());
 }
@@ -179,30 +170,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initDatabase() async {
-    final dir = await getApplicationDocumentsDirectory();
-    if (Isar.getInstance() != null) {
-      _isar = Isar.getInstance()!;
-    } else {
-      _isar = await Isar.open([
-        JiveTransactionSchema,
-        JiveCategorySchema,
-        JiveCategoryOverrideSchema,
-        JiveAccountSchema,
-        JiveAutoDraftSchema,
-        JiveTemplateSchema,
-        JiveTagSchema,
-        JiveTagGroupSchema,
-        JiveTagRuleSchema,
-        JiveTagConversionLogSchema,
-        JiveProjectSchema,
-      ], directory: dir.path);
-    }
+    _isar = await DatabaseService.getInstance();
     await _loadDemoSeedPrefs();
     await _loadAutoSettings();
     await _loadAutoAppSettings();
     await CategoryService(_isar).initDefaultCategories();
     await AccountService(_isar).initDefaultAccounts();
     await TagService(_isar).initDefaultGroups();
+    await ProjectService(_isar).initTestProjectIfNeeded();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
     await TransactionService(_isar).migrateTransactionAccountIds();
     _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
@@ -712,8 +687,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await _loadTransactions();
     await _loadAutoDraftCount();
     _notifyDataChanged();
-<<<<<<< HEAD
-=======
   }
 
   Future<void> _exportBackup() async {
@@ -773,7 +746,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     } catch (e) {
       _showMessage('导入失败：$e');
     }
->>>>>>> origin/main
   }
 
   Future<void> _loadTransactions() async {
@@ -902,33 +874,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void _startListening() {
     if (_isListening) return;
     _isListening = true;
-<<<<<<< HEAD
-    if (!_supportsAutoEventChannel()) {
-      return;
-    }
-    try {
-      eventChannel.receiveBroadcastStream().listen(
-        (dynamic event) async {
-          if (event is! Map) return;
-          final payload = Map<String, dynamic>.from(event);
-          if (!_dbReady) {
-            _pendingAutoEvents.add(payload);
-            return;
-          }
-          await _handleAutoEvent(payload);
-        },
-        onError: (_) {},
-      );
-    } on MissingPluginException {
-      // Unsupported platform; ignore.
-    }
-  }
-
-  bool _supportsAutoEventChannel() {
-    if (kIsWeb) return false;
-    return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS;
-=======
     eventChannel.receiveBroadcastStream().listen((dynamic event) async {
       if (event is! Map) return;
       final payload = Map<String, dynamic>.from(event);
@@ -938,7 +883,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       }
       await _handleAutoEvent(payload);
     });
->>>>>>> origin/main
   }
 
   Future<void> _openAutoSettings() async {
@@ -1023,12 +967,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ),
           );
           if (result == true) {
-<<<<<<< HEAD
-            _loadTransactions();
-=======
             await _loadTransactions();
             await _loadAutoDraftCount();
->>>>>>> origin/main
             _notifyDataChanged();
           }
         },
@@ -1180,165 +1120,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           controller: scrollController,
                           padding: const EdgeInsets.only(bottom: 12),
                           children: [
-<<<<<<< HEAD
-                        SwitchListTile(
-                          secondary: const Icon(Icons.science_outlined),
-                          title: const Text("测试数据开关"),
-                          subtitle: const Text("仅用于调试展示"),
-                          value: _demoSeedEnabled,
-                          onChanged: (value) async {
-                            setSheetState(() {
-                              _demoSeedEnabled = value;
-                            });
-                            await _setDemoSeedEnabled(value);
-                            _showMessage(value ? "已开启测试数据" : "已关闭测试数据");
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.auto_awesome),
-                          title: const Text("注入测试数据"),
-                          subtitle: Text(_demoSeedEnabled ? "写入一批示例数据" : "请先开启测试数据开关"),
-                          onTap: () async {
-                            if (!_demoSeedEnabled) {
-                              _showMessage("请先开启测试数据开关");
-                              return;
-                            }
-                            Navigator.pop(context);
-                            final inserted = await _seedDemoDataIfNeeded();
-                            await _loadTransactions();
-                            if (inserted) {
-                              _notifyDataChanged();
-                            }
-                            _showMessage(inserted ? "已注入测试数据" : "已有数据，未注入测试数据");
-                          },
-                        ),
-                        if (kDebugMode)
-                          ListTile(
-                            leading: const Icon(Icons.bolt_outlined),
-                            title: const Text("模拟自动记账"),
-                            subtitle: const Text("写入一条自动记账事件"),
-                            onTap: () async {
-                              Navigator.pop(context);
-                              final now = DateTime.now();
-                              await _handleAutoEvent({
-                                "source": "WeChat",
-                                "amount": "12.34",
-                                "raw_text": "微信 支付成功 测试 12.34",
-                                "type": "expense",
-                                "timestamp": now.millisecondsSinceEpoch,
-                                "package_name": "com.tencent.mm",
-                              });
-                            },
-                          ),
-                        if (kDebugMode)
-                          SwitchListTile(
-                            secondary: const Icon(Icons.data_object),
-                            title: const Text("调试：显示自动记账元数据"),
-                            subtitle: const Text("待确认列表显示解析信息"),
-                            value: _autoSettings.debugShowDraftMetadata,
-                            onChanged: (value) async {
-                              final updated =
-                                  _autoSettings.copyWith(debugShowDraftMetadata: value);
-                              setSheetState(() {
-                                _autoSettings = updated;
-                              });
-                              await _setAutoSettings(updated);
-                            },
-                          ),
-                        ListTile(
-                          leading: const Icon(Icons.category_outlined),
-                          title: const Text("分类管理"),
-                          subtitle: const Text("管理自定义分类"),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            await _openCategoryManager();
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.bookmark_outline),
-                          title: const Text("模板管理"),
-                          subtitle: const Text("管理常用交易模板"),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            Navigator.push(context, MaterialPageRoute(
-                              builder: (context) => const TemplateListScreen(),
-                            ));
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.tag),
-                          title: const Text("标签管理"),
-                          subtitle: const Text("管理交易标签"),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            Navigator.push(context, MaterialPageRoute(
-                              builder: (context) => const TagManagerScreen(),
-                            ));
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.folder_outlined),
-                          title: const Text("项目追踪"),
-                          subtitle: const Text("追踪旅行、装修等专项支出"),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            Navigator.push(context, MaterialPageRoute(
-                              builder: (context) => const ProjectListScreen(),
-                            ));
-                          },
-                        ),
-                        if (kDebugMode)
-                          ListTile(
-                            leading: const Icon(Icons.restart_alt, color: Colors.orangeAccent),
-                            title: const Text("重置系统分类", style: TextStyle(color: Colors.orangeAccent)),
-                            subtitle: const Text("清空分类并重新载入系统分类"),
-                            onTap: () async {
-                              Navigator.pop(context);
-                              final confirmed = await showDialog<bool>(
-                                context: context,
-                                builder: (dialogContext) => AlertDialog(
-                                  title: const Text("重置系统分类"),
-                                  content: const Text("将清空所有分类并重新载入系统分类，是否继续？"),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(dialogContext, false),
-                                      child: const Text("取消"),
-                                    ),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(dialogContext, true),
-                                      child: const Text("重置"),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirmed != true) return;
-                              await CategoryService(_isar).resetCategories();
-                              await TransactionService(_isar).migrateTransactionCategoryKeys();
-                              await _loadTransactions();
-                              _showMessage("已重置系统分类");
-                            },
-                          ),
-                        ListTile(
-                          leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
-                          title: const Text("清空数据", style: TextStyle(color: Colors.redAccent)),
-                          onTap: () async {
-                            Navigator.pop(context);
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (dialogContext) => AlertDialog(
-                                title: const Text("清空数据"),
-                                content: const Text("将删除全部交易、账户和分类数据，是否继续？"),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(dialogContext, false),
-                                    child: const Text("取消"),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(dialogContext, true),
-                                    child: const Text("清空"),
-                                  ),
-                                ],
-=======
                             SwitchListTile(
                               secondary: const Icon(Icons.science_outlined),
                               title: const Text("测试数据开关"),
@@ -1357,7 +1138,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               title: const Text("注入测试数据"),
                               subtitle: Text(
                                 _demoSeedEnabled ? "写入一批示例数据" : "请先开启测试数据开关",
->>>>>>> origin/main
                               ),
                               onTap: () async {
                                 if (!_demoSeedEnabled) {
@@ -1430,6 +1210,22 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   MaterialPageRoute(
                                     builder: (context) =>
                                         TagManagementScreen(isar: _isar),
+                                  ),
+                                );
+                                await _loadTransactions();
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.folder_outlined),
+                              title: const Text("项目追踪"),
+                              subtitle: const Text("追踪旅行、装修等专项支出"),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const ProjectListScreen(),
                                   ),
                                 );
                                 await _loadTransactions();
@@ -1743,9 +1539,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-<<<<<<< HEAD
-          Text("Recent Transactions", style: GoogleFonts.lato(fontSize: titleSize, fontWeight: FontWeight.bold, color: Colors.black87)),
-=======
           Text(
             "Recent Transactions",
             style: GoogleFonts.lato(
@@ -1754,20 +1547,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
               color: Colors.black87,
             ),
           ),
->>>>>>> origin/main
           GestureDetector(
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-<<<<<<< HEAD
-                  builder: (context) => const CategoryTransactionsScreen(
-                    title: "全部账单",
-                  ),
-=======
                   builder: (context) =>
                       const CategoryTransactionsScreen(title: "全部账单"),
->>>>>>> origin/main
                 ),
               );
             },

@@ -14,6 +14,8 @@ import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
+import '../../core/database/template_model.dart';
+import '../../core/database/project_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_service.dart';
@@ -120,10 +122,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
             JiveCategoryOverrideSchema,
             JiveAccountSchema,
             JiveAutoDraftSchema,
+            JiveTemplateSchema,
             JiveTagSchema,
             JiveTagGroupSchema,
             JiveTagRuleSchema,
             JiveTagConversionLogSchema,
+            JiveProjectSchema,
           ],
           directory: dir.path,
         );

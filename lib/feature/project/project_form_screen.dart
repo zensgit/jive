@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/project_model.dart';
-import '../../core/database/transaction_model.dart';
-import '../../core/database/category_model.dart';
-import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
-import '../../core/database/template_model.dart';
-import '../../core/database/tag_model.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/project_service.dart';
+import '../../core/service/tag_service.dart';
 import '../../core/design_system/theme.dart';
+import '../category/category_icon_source_picker.dart';
+import '../tag/tag_icon_catalog.dart';
+import '../tag/tag_color_picker_sheet.dart';
 
 class ProjectFormScreen extends StatefulWidget {
   final JiveProject? project;
@@ -27,20 +25,9 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
   late TextEditingController _nameController;
   late TextEditingController _descController;
   late TextEditingController _budgetController;
-  String _selectedIcon = 'folder';
+  String? _selectedIcon;
   String _selectedColor = '#2E7D32';
   Isar? _isar;
-
-  final _icons = [
-    {'name': 'folder', 'icon': Icons.folder, 'label': '默认'},
-    {'name': 'travel', 'icon': Icons.flight, 'label': '旅行'},
-    {'name': 'home', 'icon': Icons.home, 'label': '住房'},
-    {'name': 'car', 'icon': Icons.directions_car, 'label': '汽车'},
-    {'name': 'wedding', 'icon': Icons.favorite, 'label': '婚礼'},
-    {'name': 'education', 'icon': Icons.school, 'label': '教育'},
-  ];
-
-  final _colors = ['#2E7D32', '#1976D2', '#E53935', '#FF9800', '#9C27B0', '#00BCD4'];
 
   @override
   void initState() {
@@ -51,7 +38,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
         text: widget.project?.budget != null && widget.project!.budget > 0
             ? widget.project!.budget.toString()
             : '');
-    _selectedIcon = widget.project?.iconName ?? 'folder';
+    _selectedIcon = widget.project?.iconName;
     _selectedColor = widget.project?.colorHex ?? '#2E7D32';
   }
 
@@ -65,22 +52,25 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
 
   Future<Isar> _ensureIsar() async {
     if (_isar != null) return _isar!;
-    if (Isar.getInstance() != null) {
-      _isar = Isar.getInstance()!;
-      return _isar!;
-    }
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open([
-      JiveTransactionSchema, JiveCategorySchema, JiveCategoryOverrideSchema,
-      JiveAccountSchema, JiveAutoDraftSchema, JiveTemplateSchema,
-      JiveTagSchema, JiveProjectSchema,
-    ], directory: dir.path);
+    _isar = await DatabaseService.getInstance();
     return _isar!;
+  }
+
+  Color _colorFromHex(String hex) {
+    final cleaned = hex.replaceFirst('#', '');
+    final value = int.tryParse(cleaned, radix: 16);
+    if (value == null) return JiveTheme.primaryGreen;
+    if (cleaned.length == 6) {
+      return Color(0xFF000000 | value);
+    }
+    return Color(value);
   }
 
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.project != null;
+    final currentColor = _colorFromHex(_selectedColor);
+
     return Scaffold(
       appBar: AppBar(
         title: Text(isEditing ? '编辑项目' : '新建项目'),
@@ -124,54 +114,9 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
             ),
             const SizedBox(height: 24),
-            Text('图标', style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              children: _icons.map((item) {
-                final isSelected = _selectedIcon == item['name'];
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedIcon = item['name'] as String),
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isSelected ? JiveTheme.primaryGreen.withOpacity(0.1) : Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                          border: isSelected ? Border.all(color: JiveTheme.primaryGreen, width: 2) : null,
-                        ),
-                        child: Icon(item['icon'] as IconData,
-                            color: isSelected ? JiveTheme.primaryGreen : Colors.grey),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(item['label'] as String, style: GoogleFonts.lato(fontSize: 11)),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
+            _buildIconPicker(currentColor),
             const SizedBox(height: 24),
-            Text('颜色', style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              children: _colors.map((hex) {
-                final color = Color(int.parse(hex.replaceFirst('#', '0xFF')));
-                final isSelected = _selectedColor == hex;
-                return GestureDetector(
-                  onTap: () => setState(() => _selectedColor = hex),
-                  child: Container(
-                    width: 44, height: 44,
-                    decoration: BoxDecoration(
-                      color: color, shape: BoxShape.circle,
-                      border: isSelected ? Border.all(color: Colors.black, width: 3) : null,
-                    ),
-                    child: isSelected ? const Icon(Icons.check, color: Colors.white) : null,
-                  ),
-                );
-              }).toList(),
-            ),
+            _buildColorPicker(currentColor),
             const SizedBox(height: 32),
             ElevatedButton(
               onPressed: _save,
@@ -187,6 +132,118 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildIconPicker(Color currentColor) {
+    return Row(
+      children: [
+        Text('图标', style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.bold)),
+        const Spacer(),
+        OutlinedButton.icon(
+          onPressed: _pickIcon,
+          icon: iconWidgetForName(_selectedIcon, size: 20, color: currentColor),
+          label: const Text('选择图标'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildColorPicker(Color currentColor) {
+    final colors = TagService.defaultColors;
+    final isCustomSelected = !colors.contains(_selectedColor);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('颜色', style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: _openCustomColorPicker,
+              icon: const Icon(Icons.palette, size: 18),
+              label: const Text('更多颜色'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        GridView.count(
+          crossAxisCount: 7,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          children: [
+            for (final colorHex in colors) _buildColorDot(colorHex),
+            _buildCustomColorDot(isCustomSelected, customHex: _selectedColor),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildColorDot(String colorHex) {
+    final isSelected = _selectedColor == colorHex;
+    final color = _colorFromHex(colorHex);
+    return GestureDetector(
+      onTap: () => setState(() => _selectedColor = colorHex),
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: isSelected ? Border.all(color: Colors.black87, width: 2) : null,
+        ),
+        child: isSelected
+            ? const Icon(Icons.check, color: Colors.white, size: 16)
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildCustomColorDot(bool selected, {String? customHex}) {
+    final showCustom = selected && customHex != null;
+    return GestureDetector(
+      onTap: _openCustomColorPicker,
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: showCustom ? _colorFromHex(customHex!) : null,
+          gradient: showCustom
+              ? null
+              : const LinearGradient(
+                  colors: [
+                    Color(0xFFF44336),
+                    Color(0xFFFFC107),
+                    Color(0xFF4CAF50),
+                    Color(0xFF2196F3),
+                  ],
+                ),
+          border: selected ? Border.all(color: Colors.black87, width: 2) : null,
+        ),
+        child: showCustom
+            ? const Icon(Icons.check, color: Colors.white, size: 16)
+            : const Icon(Icons.palette, color: Colors.white, size: 16),
+      ),
+    );
+  }
+
+  Future<void> _pickIcon() async {
+    final selected = await pickCategoryIcon(
+      context,
+      initialIcon: _selectedIcon ?? 'folder',
+    );
+    if (selected == null) return;
+    setState(() => _selectedIcon = selected);
+  }
+
+  Future<void> _openCustomColorPicker() async {
+    final result = await TagColorPickerSheet.show(
+      context,
+      initialColorHex: _selectedColor,
+      swatchHexes: TagService.defaultColors,
+    );
+    if (result == null) return;
+    setState(() => _selectedColor = result);
   }
 
   Future<void> _save() async {

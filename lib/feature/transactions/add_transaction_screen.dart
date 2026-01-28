@@ -14,6 +14,8 @@ import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
+import '../../core/database/project_model.dart';
+import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/tag_service.dart';
@@ -97,6 +99,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   JiveAccount? _selectedToAccount;
   List<JiveTag> _tags = [];
   List<String> _selectedTagKeys = [];
+  List<JiveProject> _projects = [];
+  int? _selectedProjectId;
   List<CategorySearchResult> _searchItems = [];
   final Map<String, String> _searchKeyCache = {};
   final TextEditingController _inlineSearchController = TextEditingController();
@@ -157,6 +161,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _editingSubName = editing.subCategory;
       _noteController.text = editing.note ?? '';
       _selectedTagKeys = List<String>.from(editing.tagKeys);
+      _selectedProjectId = editing.projectId;
       return;
     }
 
@@ -173,6 +178,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _editingSubName = prefill.subCategory;
     _noteController.text = prefill.note ?? '';
     _selectedTagKeys = List<String>.from(prefill.tagKeys);
+    _selectedProjectId = prefill.projectId;
   }
 
   Future<void> _initData() async {
@@ -193,6 +199,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           JiveTagGroupSchema,
           JiveTagRuleSchema,
           JiveTagConversionLogSchema,
+          JiveProjectSchema,
         ], directory: dir.path);
       }
 
@@ -201,7 +208,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       await TagService(_isar).initDefaultGroups();
       await _loadAccounts();
       await _loadTags();
-      await _loadTags();
+      await _loadProjects();
       await _loadParentsForType(
         selectParentKey: _editingParentKey,
         selectParentName: _editingParentName,
@@ -363,6 +370,19 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _selectedTagKeys = _selectedTagKeys
           .where((key) => tags.any((t) => t.key == key))
           .toList();
+    });
+  }
+
+  Future<void> _loadProjects() async {
+    final projects = await ProjectService(_isar).getActiveProjects();
+    if (!mounted) return;
+    setState(() {
+      _projects = projects;
+      // 验证选中的项目是否仍然存在
+      if (_selectedProjectId != null &&
+          !projects.any((p) => p.id == _selectedProjectId)) {
+        _selectedProjectId = null;
+      }
     });
   }
 
@@ -901,6 +921,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ..toAccountId = _txType == TransactionType.transfer
           ? _selectedToAccount?.id
           : null
+      ..projectId = _selectedProjectId
       ..tagKeys = List<String>.from(_selectedTagKeys)
       ..smartTagKeys = List<String>.from(tx.smartTagKeys)
       ..timestamp = _selectedTime;
@@ -1030,6 +1051,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           _buildNoteField(isLandscape: isLandscape),
           SizedBox(height: isLandscape ? 6 : 8),
           _buildTagSelector(isLandscape: isLandscape),
+          SizedBox(height: isLandscape ? 6 : 8),
+          _buildProjectSelector(isLandscape: isLandscape),
         ],
       ),
     );
@@ -1393,6 +1416,139 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (picked == null) return;
     setState(() {
       _selectedTagKeys = picked;
+    });
+  }
+
+  Widget _buildProjectSelector({required bool isLandscape}) {
+    final textSize = isLandscape ? 10.0 : 12.0;
+    final selectedProject = _selectedProjectId != null
+        ? _projects.where((p) => p.id == _selectedProjectId).firstOrNull
+        : null;
+
+    if (selectedProject != null) {
+      final color = selectedProject.colorHex != null
+          ? Color(int.parse(selectedProject.colorHex!.replaceFirst('#', '0xFF')))
+          : JiveTheme.primaryGreen;
+      return Align(
+        alignment: Alignment.center,
+        child: InputChip(
+          label: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              iconWidgetForName(selectedProject.iconName, size: 14, color: color),
+              const SizedBox(width: 4),
+              Text(
+                selectedProject.name,
+                style: TextStyle(
+                  fontSize: textSize,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: color.withOpacity(0.12),
+          side: BorderSide(color: color.withOpacity(0.4)),
+          onDeleted: () => setState(() => _selectedProjectId = null),
+          onPressed: _showProjectPicker,
+        ),
+      );
+    }
+
+    return Align(
+      alignment: Alignment.center,
+      child: ActionChip(
+        label: Text(
+          '关联项目',
+          style: TextStyle(fontSize: textSize),
+        ),
+        avatar: const Icon(
+          Icons.folder_outlined,
+          size: 14,
+          color: Colors.black54,
+        ),
+        onPressed: _showProjectPicker,
+      ),
+    );
+  }
+
+  Future<void> _showProjectPicker() async {
+    if (_projects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('暂无可用项目，请先创建项目')),
+      );
+      return;
+    }
+
+    final selected = await showModalBottomSheet<int?>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Text(
+                      '选择项目',
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (_selectedProjectId != null)
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, -1),
+                        child: const Text('取消关联'),
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: _projects.length,
+                  itemBuilder: (context, index) {
+                    final project = _projects[index];
+                    final color = project.colorHex != null
+                        ? Color(int.parse(project.colorHex!.replaceFirst('#', '0xFF')))
+                        : JiveTheme.primaryGreen;
+                    final isSelected = project.id == _selectedProjectId;
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: color.withOpacity(0.15),
+                        child: iconWidgetForName(project.iconName, size: 18, color: color),
+                      ),
+                      title: Text(project.name),
+                      subtitle: project.budget > 0
+                          ? Text('预算 ¥${project.budget.toStringAsFixed(0)}')
+                          : null,
+                      trailing: isSelected
+                          ? Icon(Icons.check, color: color)
+                          : null,
+                      onTap: () => Navigator.pop(context, project.id),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected == null) return;
+    setState(() {
+      _selectedProjectId = selected == -1 ? null : selected;
     });
   }
 
