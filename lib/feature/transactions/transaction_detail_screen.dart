@@ -2,15 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
+import '../../core/database/project_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
+import '../../core/service/database_service.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/account_service.dart';
 import '../tag/tag_icon_catalog.dart';
@@ -42,6 +40,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   final Map<String, JiveCategory> _categoryByKey = {};
   final Map<int, JiveAccount> _accountById = {};
   final Map<String, JiveTag> _tagByKey = {};
+  final Map<int, JiveProject> _projectById = {};
   bool _hasDataChanges = false;
 
   @override
@@ -67,6 +66,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           .findAll();
       final accounts = await isar.collection<JiveAccount>().where().findAll();
       final tags = await isar.collection<JiveTag>().where().findAll();
+      final projects = await isar.collection<JiveProject>().where().findAll();
 
       if (!mounted) return;
       setState(() {
@@ -80,12 +80,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         _tagByKey
           ..clear()
           ..addEntries(tags.map((t) => MapEntry(t.key, t)));
+        _projectById
+          ..clear()
+          ..addEntries(projects.map((p) => MapEntry(p.id, p)));
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('TransactionDetailScreen error: $e\n$stack');
       if (!mounted) return;
       setState(() {
-        _errorMessage = e is StateError ? '记录不存在' : '加载失败，请重试';
+        _errorMessage = e is StateError ? '记录不存在' : '加载失败: $e';
         _isLoading = false;
       });
     }
@@ -93,22 +97,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   Future<Isar> _ensureIsar() async {
     if (_isar != null) return _isar!;
-    if (Isar.getInstance() != null) {
-      _isar = Isar.getInstance()!;
-      return _isar!;
-    }
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open([
-      JiveTransactionSchema,
-      JiveCategorySchema,
-      JiveCategoryOverrideSchema,
-      JiveAccountSchema,
-      JiveAutoDraftSchema,
-      JiveTagSchema,
-      JiveTagGroupSchema,
-      JiveTagRuleSchema,
-      JiveTagConversionLogSchema,
-    ], directory: dir.path);
+    _isar = await DatabaseService.getInstance();
     return _isar!;
   }
 
@@ -336,6 +325,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         _buildDetailRow('账户', _resolveAccountName(tx.accountId)),
         if (isTransfer)
           _buildDetailRow('转入账户', _resolveAccountName(tx.toAccountId)),
+        _buildProjectRow(tx.projectId),
       ]),
       const SizedBox(height: 12),
       _buildDetailCard([
@@ -628,6 +618,60 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   String _resolveAccountName(int? accountId) {
     if (accountId == null) return '未指定';
     return _accountById[accountId]?.name ?? '未指定';
+  }
+
+  Widget _buildProjectRow(int? projectId) {
+    if (projectId == null) {
+      return _buildDetailRow('项目', '无');
+    }
+    final project = _projectById[projectId];
+    if (project == null) {
+      return _buildDetailRow('项目', '无');
+    }
+    final color = project.colorHex != null
+        ? Color(int.parse(project.colorHex!.replaceFirst('#', '0xFF')))
+        : JiveTheme.primaryGreen;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(
+              '项目',
+              style: GoogleFonts.lato(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                iconWidgetForName(project.iconName, size: 14, color: color),
+                const SizedBox(width: 6),
+                Text(
+                  project.name,
+                  style: GoogleFonts.lato(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
