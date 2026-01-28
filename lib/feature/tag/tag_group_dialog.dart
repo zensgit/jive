@@ -58,6 +58,10 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
       setState(() => _error = '请输入分组名称');
       return;
     }
+    if (name.length > TagService.maxGroupNameLength) {
+      setState(() => _error = '最多12字');
+      return;
+    }
     setState(() {
       _error = null;
       _loading = true;
@@ -82,8 +86,16 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
       Navigator.pop(context, true);
     } on ArgumentError catch (e) {
       if (!mounted) return;
+      final message = e.message?.toString() ?? '保存失败';
+      if (message.contains('最多12字')) {
+        setState(() {
+          _error = '最多12字';
+          _loading = false;
+        });
+        return;
+      }
       setState(() {
-        _error = e.message?.toString() ?? '保存失败';
+        _error = message;
         _loading = false;
       });
     } catch (_) {
@@ -130,7 +142,7 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
               Expanded(
                 child: SingleChildScrollView(
                   controller: widget.scrollController,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  padding: EdgeInsets.fromLTRB(20, 0, 20, 12 + bottomInset),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -151,14 +163,21 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
                       TextField(
                         controller: _nameController,
                         maxLength: 12,
-                        maxLengthEnforcement: MaxLengthEnforcement.enforced,
+                        maxLengthEnforcement: MaxLengthEnforcement.none,
+                        scrollPadding: EdgeInsets.only(bottom: bottomInset + 120),
                         decoration: InputDecoration(
                           labelText: '分组名称',
                           hintText: '最多12字',
                           errorText: _error,
                           counterText: '',
+                          suffixText: _nameController.text.trim().length > 12 ? '超过12字' : null,
+                          suffixStyle: TextStyle(color: Colors.red.shade400, fontSize: 12),
                           border: const OutlineInputBorder(),
                         ),
+                        onChanged: (_) {
+                          if (!mounted) return;
+                          setState(() => _error = null);
+                        },
                       ),
                       const SizedBox(height: 12),
                       const Text('颜色', style: TextStyle(fontWeight: FontWeight.w500)),

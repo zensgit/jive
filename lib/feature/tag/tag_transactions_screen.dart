@@ -438,32 +438,17 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
 
   Widget _buildSmartTagBadge() {
     final badge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      width: 18,
+      height: 18,
       decoration: BoxDecoration(
         color: JiveTheme.primaryGreen.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(10),
+        shape: BoxShape.circle,
+        border: Border.all(color: JiveTheme.primaryGreen.withOpacity(0.4)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(
-              color: JiveTheme.primaryGreen,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 4),
-          const Text(
-            '智能',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: JiveTheme.primaryGreen,
-            ),
-          ),
-        ],
+      child: const Icon(
+        Icons.auto_awesome,
+        size: 12,
+        color: JiveTheme.primaryGreen,
       ),
     );
     return Tooltip(

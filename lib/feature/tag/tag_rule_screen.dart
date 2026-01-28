@@ -15,6 +15,9 @@ import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/smart_tag_log_service.dart';
 import '../../core/service/tag_rule_service.dart';
+import '../../core/service/ui_pref_service.dart';
+import 'smart_tag_recent_matches_screen.dart';
+import 'tag_icon_catalog.dart';
 
 class TagRuleScreen extends StatefulWidget {
   final JiveTag tag;
@@ -34,7 +37,6 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   late Isar _isar;
   bool _loading = true;
   String? _error;
-  bool _showSearch = false;
   String _query = '';
   final TextEditingController _searchController = TextEditingController();
   bool _backfilling = false;
@@ -43,7 +45,17 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   int _backfillTotal = 0;
   final ValueNotifier<int> _progressTick = ValueNotifier<int>(0);
   BuildContext? _progressDialogContext;
+  bool _cleaning = false;
+  bool _cancelCleanup = false;
+  int _cleanupProcessed = 0;
+  int _cleanupTotal = 0;
+  final ValueNotifier<int> _cleanupTick = ValueNotifier<int>(0);
+  BuildContext? _cleanupDialogContext;
+  bool _cleanupRemoveTagTooDefault = false;
   final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
+  final ScrollController _titleScrollController = ScrollController();
+  bool _titleScrollScheduled = false;
+  int _titleScrollGeneration = 0;
   List<JiveTagRule> _rules = [];
   Map<int, JiveAccount> _accountById = {};
   Map<String, JiveCategory> _categoryByKey = {};
@@ -54,14 +66,61 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   @override
   void initState() {
     super.initState();
+    _loadCleanupPref();
     _init();
   }
 
   @override
   void dispose() {
+    _titleScrollGeneration++;
+    _titleScrollController.dispose();
     _progressTick.dispose();
+    _cleanupTick.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _scheduleTitleScroll() {
+    if (_titleScrollScheduled) return;
+    _titleScrollScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _titleScrollScheduled = false;
+      _startTitleScroll();
+    });
+  }
+
+  Future<void> _startTitleScroll() async {
+    if (!mounted || !_titleScrollController.hasClients) return;
+    final maxExtent = _titleScrollController.position.maxScrollExtent;
+    if (maxExtent <= 8) return;
+    final generation = ++_titleScrollGeneration;
+    await Future.delayed(const Duration(milliseconds: 600));
+    const pixelsPerSecond = 40.0;
+    while (mounted && generation == _titleScrollGeneration) {
+      if (!_titleScrollController.hasClients) return;
+      final max = _titleScrollController.position.maxScrollExtent;
+      if (max <= 8) return;
+      final durationMs = (max / pixelsPerSecond * 1000).clamp(1200, 8000).round();
+      final duration = Duration(milliseconds: durationMs);
+      try {
+        await _titleScrollController.animateTo(
+          max,
+          duration: duration,
+          curve: Curves.easeInOut,
+        );
+        if (!mounted || generation != _titleScrollGeneration) return;
+        await Future.delayed(const Duration(milliseconds: 700));
+        await _titleScrollController.animateTo(
+          0,
+          duration: duration,
+          curve: Curves.easeInOut,
+        );
+        if (!mounted || generation != _titleScrollGeneration) return;
+        await Future.delayed(const Duration(milliseconds: 700));
+      } catch (_) {
+        return;
+      }
+    }
   }
 
   Future<void> _init() async {
@@ -96,6 +155,12 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     }
   }
 
+  Future<void> _loadCleanupPref() async {
+    final value = await UiPrefService.getSmartCleanupRemoveTagToo();
+    if (!mounted) return;
+    setState(() => _cleanupRemoveTagTooDefault = value);
+  }
+
   Future<void> _loadData() async {
     final service = TagRuleService(_isar);
     final rules = await service.getRules(widget.tag.key);
@@ -127,6 +192,18 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   }
 
   Future<void> _toggleRule(JiveTagRule rule, bool enabled) async {
+    if (!enabled && _isLastEnabledRule(rule)) {
+      final action = await _confirmDisableLastRule();
+      if (action == _DisableAllAction.cancel) return;
+      rule.isEnabled = false;
+      await TagRuleService(_isar).updateRule(rule);
+      await _loadData();
+      DataReloadBus.notify();
+      if (action == _DisableAllAction.disableAndCleanup) {
+        await _cleanupHistory();
+      }
+      return;
+    }
     rule.isEnabled = enabled;
     await TagRuleService(_isar).updateRule(rule);
     await _loadData();
@@ -156,114 +233,140 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   }
 
   Future<void> _deleteRule(JiveTagRule rule) async {
-    final confirmed = await showDialog<bool>(
+    final willDisableAll = _isLastEnabledRule(rule);
+    final action = await showDialog<_DeleteAction>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('删除规则'),
+          content: Text(
+            willDisableAll
+                ? '删除后将没有启用中的规则，该标签不会再自动打标。是否同时清理历史智能标签？'
+                : '确认删除该标签规则？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, _DeleteAction.cancel),
+              child: const Text('取消'),
+            ),
+            if (willDisableAll)
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, _DeleteAction.deleteOnly),
+                child: const Text('仅删除'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                willDisableAll ? _DeleteAction.deleteAndCleanup : _DeleteAction.deleteOnly,
+              ),
+              child: Text(willDisableAll ? '删除并清理' : '删除'),
+            ),
+          ],
+        );
+      },
+    );
+    if (action == null || action == _DeleteAction.cancel) return;
+    await TagRuleService(_isar).deleteRule(rule);
+    await _loadData();
+    DataReloadBus.notify();
+    if (willDisableAll && action == _DeleteAction.deleteAndCleanup) {
+      await _cleanupHistory();
+    }
+  }
+
+  bool _isLastEnabledRule(JiveTagRule rule) {
+    if (!rule.isEnabled) return false;
+    return !_rules.any((r) => r.id != rule.id && r.isEnabled);
+  }
+
+  Future<_DisableAllAction> _confirmDisableLastRule() async {
+    final action = await showDialog<_DisableAllAction>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('删除规则'),
-        content: const Text('确认删除该标签规则？'),
+        title: const Text('停用规则'),
+        content: const Text('停用后将没有启用中的规则，该标签不会再自动打标。是否同时清理历史智能标签？'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
+            onPressed: () => Navigator.pop(dialogContext, _DisableAllAction.cancel),
             child: const Text('取消'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('删除'),
+            onPressed: () => Navigator.pop(dialogContext, _DisableAllAction.disableOnly),
+            child: const Text('仅停用'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, _DisableAllAction.disableAndCleanup),
+            child: const Text('停用并清理'),
           ),
         ],
       ),
     );
-    if (confirmed != true) return;
-    await TagRuleService(_isar).deleteRule(rule);
-    await _loadData();
-    DataReloadBus.notify();
+    return action ?? _DisableAllAction.cancel;
   }
 
   @override
   Widget build(BuildContext context) {
     final visibleRules = _applyFilterAndSort(_rules);
+    final busy = _backfilling || _cleaning;
+    final tagName = tagDisplayName(widget.tag);
+    _scheduleTitleScroll();
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text('智能标签', style: GoogleFonts.lato(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            tooltip: _showSearch ? '关闭搜索' : '搜索规则',
-            onPressed: () {
-              setState(() {
-                _showSearch = !_showSearch;
-                if (!_showSearch) {
-                  _query = '';
-                  _searchController.clear();
-                }
-              });
-            },
-            icon: Icon(_showSearch ? Icons.close : Icons.search),
-          ),
-          PopupMenuButton<_RuleSort>(
-            tooltip: '排序',
-            onSelected: (value) => setState(() => _sort = value),
-            itemBuilder: (context) => const [
-              PopupMenuItem(
-                value: _RuleSort.updatedDesc,
-                child: Text('最近更新'),
-              ),
-              PopupMenuItem(
-                value: _RuleSort.createdDesc,
-                child: Text('最近创建'),
-              ),
-              PopupMenuItem(
-                value: _RuleSort.enabledFirst,
-                child: Text('启用优先'),
-              ),
-            ],
-            icon: const Icon(Icons.sort),
-          ),
-          if (_backfilling)
-            const Padding(
-              padding: EdgeInsets.only(right: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+        title: LayoutBuilder(
+          builder: (context, constraints) {
+            return SizedBox(
+              height: 24,
+              child: SingleChildScrollView(
+                controller: _titleScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const NeverScrollableScrollPhysics(),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '智能标签 · $tagName',
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
+                    style: GoogleFonts.lato(fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-            )
-          else
-            IconButton(
-              tooltip: '补标历史交易',
-              onPressed: _rules.isEmpty ? null : _backfillHistory,
-              icon: const Icon(Icons.auto_fix_high),
-            ),
-        ],
-        bottom: _showSearch
-            ? PreferredSize(
-                preferredSize: const Size.fromHeight(56),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (value) {
-                      setState(() => _query = value.trim());
-                    },
-                    decoration: InputDecoration(
-                      hintText: '搜索规则（关键词/分类/账户）',
-                      prefixIcon: const Icon(Icons.search),
-                      isDense: true,
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
-                      ),
+            );
+          },
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(118),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                child: _buildActionRow(busy),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() => _query = value.trim());
+                  },
+                  decoration: InputDecoration(
+                    hintText: '搜索规则（关键词/分类/账户）',
+                    prefixIcon: const Icon(Icons.search),
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
                     ),
                   ),
                 ),
-              )
-            : null,
+              ),
+            ],
+          ),
+        ),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -301,6 +404,150 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
               shape: const StadiumBorder(),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionRow(bool busy) {
+    const accent = Color(0xFF2E7D32);
+
+    Widget toolButton({
+      required IconData icon,
+      required String label,
+      required VoidCallback? onPressed,
+    }) {
+      final enabled = onPressed != null;
+      final fg = enabled ? accent : Colors.grey.shade500;
+      return Tooltip(
+        message: label,
+        child: TextButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 16),
+          label: Text(label),
+          style: TextButton.styleFrom(
+            foregroundColor: fg,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            visualDensity: VisualDensity.compact,
+            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+          ),
+        ),
+      );
+    }
+
+    Widget sortPill() {
+      return PopupMenuButton<_RuleSort>(
+        tooltip: '排序',
+        enabled: !busy,
+        onSelected: (value) => setState(() => _sort = value),
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: _RuleSort.updatedDesc,
+            child: Text('最近更新'),
+          ),
+          PopupMenuItem(
+            value: _RuleSort.createdDesc,
+            child: Text('最近创建'),
+          ),
+        ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.sort, size: 16, color: busy ? Colors.grey.shade500 : accent),
+              const SizedBox(width: 4),
+              Text(
+                '排序',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: busy ? Colors.grey.shade500 : accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final refreshPressed = busy
+        ? null
+        : () async {
+            await _loadData();
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('已更新规则')),
+            );
+          };
+
+    final recentPressed = busy
+        ? null
+        : () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SmartTagRecentMatchesScreen(
+                  tag: widget.tag,
+                  isar: _isar,
+                ),
+              ),
+            );
+            if (!mounted) return;
+            await _loadData();
+          };
+
+    Widget divider() {
+      return Container(
+        width: 1,
+        height: 18,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        color: Colors.grey.shade300,
+      );
+    }
+
+    return Align(
+      alignment: Alignment.centerRight,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            toolButton(
+              icon: Icons.refresh,
+              label: '更新',
+              onPressed: refreshPressed,
+            ),
+            divider(),
+            toolButton(
+              icon: Icons.history_toggle_off,
+              label: '命中',
+              onPressed: recentPressed,
+            ),
+            divider(),
+            toolButton(
+              icon: Icons.auto_fix_high,
+              label: '补标',
+              onPressed: busy || _rules.isEmpty ? null : _backfillHistory,
+            ),
+            divider(),
+            toolButton(
+              icon: Icons.cleaning_services_outlined,
+              label: '清理',
+              onPressed: busy ? null : _cleanupHistory,
+            ),
+            divider(),
+            sortPill(),
+            if (busy)
+              const Padding(
+                padding: EdgeInsets.only(left: 4, right: 6),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -407,6 +654,177 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     }
   }
 
+  Future<void> _cleanupHistory() async {
+    if (_cleaning || _backfilling) return;
+    final range = await _pickBackfillRange();
+    if (range == null) return;
+    final rangeLabel = _rangeLabel(range);
+    final service = TagRuleService(_isar);
+    var removeTagToo = _cleanupRemoveTagTooDefault;
+    var estimate = await service.estimateCleanupForTag(
+      widget.tag.key,
+      rangeStart: range.start,
+      rangeEnd: range.end,
+      removeTagToo: removeTagToo,
+    );
+    var estimating = false;
+
+    Future<void> refreshEstimate(void Function(void Function()) setDialogState) async {
+      setDialogState(() => estimating = true);
+      final next = await service.estimateCleanupForTag(
+        widget.tag.key,
+        rangeStart: range.start,
+        rangeEnd: range.end,
+        removeTagToo: removeTagToo,
+      );
+      if (!mounted) return;
+      setDialogState(() {
+        estimate = next;
+        estimating = false;
+      });
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('清理历史智能标签'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('范围：$rangeLabel'),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('同时移除标签'),
+                    subtitle: const Text('仅对智能打标的交易生效'),
+                    value: removeTagToo,
+                    onChanged: (value) async {
+                      removeTagToo = value;
+                      _cleanupRemoveTagTooDefault = value;
+                      await UiPrefService.setSmartCleanupRemoveTagToo(value);
+                      await refreshEstimate(setDialogState);
+                    },
+                    activeColor: const Color(0xFF2E7D32),
+                  ),
+                  const SizedBox(height: 6),
+                  if (estimating)
+                    const LinearProgressIndicator()
+                  else
+                    Text(
+                      estimate.smartTaggedCount == 0
+                          ? '该范围内没有需要清理的智能标签'
+                          : '扫描 ${estimate.scannedCount} 笔，智能标签 ${estimate.smartTaggedCount} 笔；'
+                              '预计清理智能标记 ${estimate.willRemoveSmartCount} 笔，'
+                              '${removeTagToo ? '移除标签 ${estimate.willRemoveTagCount} 笔' : '保留原标签'}。',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: estimating || estimate.smartTaggedCount == 0
+                      ? null
+                      : () => Navigator.pop(dialogContext, true),
+                  child: const Text('执行清理'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _cleaning = true;
+      _cancelCleanup = false;
+      _cleanupProcessed = 0;
+      _cleanupTotal = 0;
+    });
+    _showCleanupProgress();
+    try {
+      final result = await service.cleanupForTag(
+        widget.tag.key,
+        rangeStart: range.start,
+        rangeEnd: range.end,
+        removeTagToo: removeTagToo,
+        shouldCancel: () => _cancelCleanup,
+        onProgress: (processed, total) {
+          if (!mounted) return;
+          setState(() {
+            _cleanupProcessed = processed;
+            _cleanupTotal = total;
+          });
+          _cleanupTick.value = _cleanupTick.value + 1;
+        },
+      );
+      if (!mounted) return;
+      final message = result.cancelled
+          ? '已取消清理（已处理 ${result.scannedCount} 笔）'
+          : result.updatedCount == 0
+              ? '没有需要清理的智能标签'
+              : removeTagToo
+                  ? '已清理智能标签 ${result.updatedCount} 笔，移除标签 ${result.removedTagCount} 笔'
+                  : '已清理智能标签 ${result.updatedCount} 笔';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      await SmartTagLogService().addLog(
+        SmartTagLogEntry(
+          tagKey: widget.tag.key,
+          tagName: widget.tag.name,
+          scannedCount: result.scannedCount,
+          matchedCount: result.smartTaggedCount,
+          updatedCount: result.updatedCount,
+          skippedCount: result.smartTaggedCount > result.updatedCount
+              ? result.smartTaggedCount - result.updatedCount
+              : 0,
+          cancelled: result.cancelled,
+          success: true,
+          message: '清理：$message',
+          rangeStart: range.start,
+          rangeEnd: range.end,
+          createdAt: DateTime.now(),
+        ),
+      );
+      await _loadData();
+      DataReloadBus.notify();
+    } catch (e) {
+      if (!mounted) return;
+      final errorMessage = '清理失败：$e';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+      await SmartTagLogService().addLog(
+        SmartTagLogEntry(
+          tagKey: widget.tag.key,
+          tagName: widget.tag.name,
+          scannedCount: 0,
+          matchedCount: 0,
+          updatedCount: 0,
+          skippedCount: 0,
+          cancelled: false,
+          success: false,
+          message: errorMessage,
+          rangeStart: range.start,
+          rangeEnd: range.end,
+          createdAt: DateTime.now(),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        if (_cleanupDialogContext != null) {
+          Navigator.pop(_cleanupDialogContext!);
+        }
+        setState(() => _cleaning = false);
+      }
+    }
+  }
+
   void _showBackfillProgress() {
     showDialog<void>(
       context: context,
@@ -451,6 +869,53 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         setState(() {
           _backfillProcessed = 0;
           _backfillTotal = 0;
+        });
+      }
+    });
+  }
+
+  void _showCleanupProgress() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        _cleanupDialogContext = dialogContext;
+        return ValueListenableBuilder<int>(
+          valueListenable: _cleanupTick,
+          builder: (context, _, __) {
+            final total = _cleanupTotal;
+            final processed = _cleanupProcessed;
+            final progress = total == 0 ? null : processed / total;
+            return AlertDialog(
+              title: const Text('正在清理'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(value: progress),
+                  const SizedBox(height: 8),
+                  Text(total == 0 ? '准备中...' : '已处理 $processed / $total'),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    _cancelCleanup = true;
+                    _cleanupDialogContext = null;
+                    Navigator.pop(dialogContext);
+                  },
+                  child: const Text('取消'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      _cleanupDialogContext = null;
+      if (mounted) {
+        setState(() {
+          _cleanupProcessed = 0;
+          _cleanupTotal = 0;
         });
       }
     });
@@ -675,11 +1140,6 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
       switch (_sort) {
         case _RuleSort.createdDesc:
           return b.createdAt.compareTo(a.createdAt);
-        case _RuleSort.enabledFirst:
-          if (a.isEnabled != b.isEnabled) {
-            return a.isEnabled ? -1 : 1;
-          }
-          return b.updatedAt.compareTo(a.updatedAt);
         case _RuleSort.updatedDesc:
         default:
           return b.updatedAt.compareTo(a.updatedAt);
@@ -734,7 +1194,11 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   }
 }
 
-enum _RuleSort { updatedDesc, createdDesc, enabledFirst }
+enum _RuleSort { updatedDesc, createdDesc }
+
+enum _DisableAllAction { cancel, disableOnly, disableAndCleanup }
+
+enum _DeleteAction { cancel, deleteOnly, deleteAndCleanup }
 
 enum _RuleFilter { all, enabled, disabled }
 
