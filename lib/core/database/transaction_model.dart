@@ -25,6 +25,8 @@ class JiveTransaction {
   int? accountId;             // 账户 ID
   @Index()
   int? toAccountId;           // 转账目标账户 ID
+  @Index()
+  int? projectId;             // 关联项目 ID
   List<String> tagKeys = [];  // 标签 Key 列表 (UUID)
   List<String> smartTagKeys = []; // 智能规则自动添加的标签 Key
   List<String> smartTagOptOutKeys = []; // 对应标签不再自动打标

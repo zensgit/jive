@@ -22,6 +22,12 @@ subprojects {
     // Apply namespace to libraries that are missing it
     project.plugins.withId("com.android.library") {
         val android = project.extensions.getByType(com.android.build.gradle.LibraryExtension::class.java)
+        val desiredCompileSdk = 36
+        val compileSdk = android.compileSdk ?: 0
+        if (compileSdk < desiredCompileSdk) {
+            // Keep library modules in sync with the app compileSdk.
+            android.compileSdk = desiredCompileSdk
+        }
         if (android.namespace == null) {
             android.namespace = project.group.toString()
         }

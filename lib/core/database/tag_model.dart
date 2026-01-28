@@ -47,3 +47,4 @@ class JiveTagGroup {
   late DateTime createdAt;
   late DateTime updatedAt;
 }
+}
