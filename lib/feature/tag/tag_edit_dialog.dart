@@ -26,6 +26,7 @@ class TagEditDialog extends StatefulWidget {
 }
 
 class _TagEditDialogState extends State<TagEditDialog> {
+  static const int _maxTagNameLength = 9;
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _groupSearchController = TextEditingController();
   List<JiveTagGroup> _groups = [];
@@ -144,6 +145,10 @@ class _TagEditDialogState extends State<TagEditDialog> {
       setState(() => _error = '请输入标签名称');
       return;
     }
+    if (name.length > _maxTagNameLength) {
+      setState(() => _error = '最多9字');
+      return;
+    }
     var colorHex = _selectedColor;
     if (_followGroupColor) {
       final groupColor = _resolveSelectedGroupColor();
@@ -183,8 +188,16 @@ class _TagEditDialogState extends State<TagEditDialog> {
       Navigator.pop(context, true);
     } on ArgumentError catch (e) {
       if (!mounted) return;
+      final message = e.message?.toString() ?? '保存失败';
+      if (message.contains('最多9字')) {
+        setState(() {
+          _error = '最多9字';
+          _loading = false;
+        });
+        return;
+      }
       setState(() {
-        _error = e.message?.toString() ?? '保存失败';
+        _error = message;
         _loading = false;
       });
     } catch (_) {
@@ -260,9 +273,18 @@ class _TagEditDialogState extends State<TagEditDialog> {
                         controller: _nameController,
                         decoration: InputDecoration(
                           labelText: '标签名称',
+                          hintText: '最多9字',
                           errorText: _error,
+                          suffixText: _nameController.text.trim().length > _maxTagNameLength
+                              ? '超过9字'
+                              : null,
+                          suffixStyle: TextStyle(color: Colors.red.shade400, fontSize: 12),
                           border: const OutlineInputBorder(),
                         ),
+                        onChanged: (_) {
+                          if (!mounted) return;
+                          setState(() => _error = null);
+                        },
                       ),
                       const SizedBox(height: 12),
                       _buildIconPicker(),

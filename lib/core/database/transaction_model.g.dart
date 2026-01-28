@@ -52,38 +52,48 @@ const JiveTransactionSchema = CollectionSchema(
       name: r'smartTagKeys',
       type: IsarType.stringList,
     ),
-    r'source': PropertySchema(
+    r'smartTagOptOutAll': PropertySchema(
       id: 7,
+      name: r'smartTagOptOutAll',
+      type: IsarType.bool,
+    ),
+    r'smartTagOptOutKeys': PropertySchema(
+      id: 8,
+      name: r'smartTagOptOutKeys',
+      type: IsarType.stringList,
+    ),
+    r'source': PropertySchema(
+      id: 9,
       name: r'source',
       type: IsarType.string,
     ),
     r'subCategory': PropertySchema(
-      id: 8,
+      id: 10,
       name: r'subCategory',
       type: IsarType.string,
     ),
     r'subCategoryKey': PropertySchema(
-      id: 9,
+      id: 11,
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
     r'tagKeys': PropertySchema(
-      id: 10,
+      id: 12,
       name: r'tagKeys',
       type: IsarType.stringList,
     ),
     r'timestamp': PropertySchema(
-      id: 11,
+      id: 13,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'toAccountId': PropertySchema(
-      id: 12,
+      id: 14,
       name: r'toAccountId',
       type: IsarType.long,
     ),
     r'type': PropertySchema(
-      id: 13,
+      id: 15,
       name: r'type',
       type: IsarType.string,
     )
@@ -205,6 +215,13 @@ int _jiveTransactionEstimateSize(
       bytesCount += value.length * 3;
     }
   }
+  bytesCount += 3 + object.smartTagOptOutKeys.length * 3;
+  {
+    for (var i = 0; i < object.smartTagOptOutKeys.length; i++) {
+      final value = object.smartTagOptOutKeys[i];
+      bytesCount += value.length * 3;
+    }
+  }
   bytesCount += 3 + object.source.length * 3;
   {
     final value = object.subCategory;
@@ -247,13 +264,15 @@ void _jiveTransactionSerialize(
   writer.writeString(offsets[4], object.note);
   writer.writeString(offsets[5], object.rawText);
   writer.writeStringList(offsets[6], object.smartTagKeys);
-  writer.writeString(offsets[7], object.source);
-  writer.writeString(offsets[8], object.subCategory);
-  writer.writeString(offsets[9], object.subCategoryKey);
-  writer.writeStringList(offsets[10], object.tagKeys);
-  writer.writeDateTime(offsets[11], object.timestamp);
-  writer.writeLong(offsets[12], object.toAccountId);
-  writer.writeString(offsets[13], object.type);
+  writer.writeBool(offsets[7], object.smartTagOptOutAll);
+  writer.writeStringList(offsets[8], object.smartTagOptOutKeys);
+  writer.writeString(offsets[9], object.source);
+  writer.writeString(offsets[10], object.subCategory);
+  writer.writeString(offsets[11], object.subCategoryKey);
+  writer.writeStringList(offsets[12], object.tagKeys);
+  writer.writeDateTime(offsets[13], object.timestamp);
+  writer.writeLong(offsets[14], object.toAccountId);
+  writer.writeString(offsets[15], object.type);
 }
 
 JiveTransaction _jiveTransactionDeserialize(
@@ -271,13 +290,15 @@ JiveTransaction _jiveTransactionDeserialize(
   object.note = reader.readStringOrNull(offsets[4]);
   object.rawText = reader.readStringOrNull(offsets[5]);
   object.smartTagKeys = reader.readStringList(offsets[6]) ?? [];
-  object.source = reader.readString(offsets[7]);
-  object.subCategory = reader.readStringOrNull(offsets[8]);
-  object.subCategoryKey = reader.readStringOrNull(offsets[9]);
-  object.tagKeys = reader.readStringList(offsets[10]) ?? [];
-  object.timestamp = reader.readDateTime(offsets[11]);
-  object.toAccountId = reader.readLongOrNull(offsets[12]);
-  object.type = reader.readStringOrNull(offsets[13]);
+  object.smartTagOptOutAll = reader.readBool(offsets[7]);
+  object.smartTagOptOutKeys = reader.readStringList(offsets[8]) ?? [];
+  object.source = reader.readString(offsets[9]);
+  object.subCategory = reader.readStringOrNull(offsets[10]);
+  object.subCategoryKey = reader.readStringOrNull(offsets[11]);
+  object.tagKeys = reader.readStringList(offsets[12]) ?? [];
+  object.timestamp = reader.readDateTime(offsets[13]);
+  object.toAccountId = reader.readLongOrNull(offsets[14]);
+  object.type = reader.readStringOrNull(offsets[15]);
   return object;
 }
 
@@ -303,18 +324,22 @@ P _jiveTransactionDeserializeProp<P>(
     case 6:
       return (reader.readStringList(offset) ?? []) as P;
     case 7:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 8:
-      return (reader.readStringOrNull(offset)) as P;
-    case 9:
-      return (reader.readStringOrNull(offset)) as P;
-    case 10:
       return (reader.readStringList(offset) ?? []) as P;
+    case 9:
+      return (reader.readString(offset)) as P;
+    case 10:
+      return (reader.readStringOrNull(offset)) as P;
     case 11:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 12:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 13:
+      return (reader.readDateTime(offset)) as P;
+    case 14:
+      return (reader.readLongOrNull(offset)) as P;
+    case 15:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1935,6 +1960,243 @@ extension JiveTransactionQueryFilter
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutAllEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smartTagOptOutAll',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smartTagOptOutKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'smartTagOptOutKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'smartTagOptOutKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'smartTagOptOutKeys',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'smartTagOptOutKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'smartTagOptOutKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementContains(String value,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'smartTagOptOutKeys',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementMatches(String pattern,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'smartTagOptOutKeys',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'smartTagOptOutKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'smartTagOptOutKeys',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagOptOutKeys',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagOptOutKeys',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagOptOutKeys',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagOptOutKeys',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagOptOutKeys',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      smartTagOptOutKeysLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'smartTagOptOutKeys',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
       sourceEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -2977,6 +3239,20 @@ extension JiveTransactionQuerySortBy
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortBySmartTagOptOutAll() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smartTagOptOutAll', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortBySmartTagOptOutAllDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smartTagOptOutAll', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> sortBySource() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'source', Sort.asc);
@@ -3155,6 +3431,20 @@ extension JiveTransactionQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenBySmartTagOptOutAll() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smartTagOptOutAll', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenBySmartTagOptOutAllDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'smartTagOptOutAll', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> thenBySource() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'source', Sort.asc);
@@ -3288,6 +3578,20 @@ extension JiveTransactionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctBySmartTagOptOutAll() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'smartTagOptOutAll');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctBySmartTagOptOutKeys() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'smartTagOptOutKeys');
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QDistinct> distinctBySource(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -3388,6 +3692,20 @@ extension JiveTransactionQueryProperty
       smartTagKeysProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'smartTagKeys');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, bool, QQueryOperations>
+      smartTagOptOutAllProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'smartTagOptOutAll');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, List<String>, QQueryOperations>
+      smartTagOptOutKeysProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'smartTagOptOutKeys');
     });
   }
 

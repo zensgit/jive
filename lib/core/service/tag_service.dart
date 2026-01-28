@@ -18,6 +18,8 @@ class TagService {
   TagService(this.isar);
 
   final Isar isar;
+  static const int maxTagNameLength = 9;
+  static const int maxGroupNameLength = 12;
 
   static const List<String> defaultColors = [
     '#1d4ed8',
@@ -105,6 +107,9 @@ class TagService {
     if (trimmed.isEmpty) {
       throw ArgumentError('group name is required');
     }
+    if (trimmed.length > maxGroupNameLength) {
+      throw ArgumentError('最多12字');
+    }
     final normalized = _normalizeName(trimmed);
     final exists = await isar.collection<JiveTagGroup>()
         .filter()
@@ -138,6 +143,9 @@ class TagService {
     final trimmed = group.name.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError('group name is required');
+    }
+    if (trimmed.length > maxGroupNameLength) {
+      throw ArgumentError('最多12字');
     }
     final existing = await isar.collection<JiveTagGroup>()
         .filter()
@@ -201,6 +209,9 @@ class TagService {
     if (trimmed.isEmpty) {
       throw ArgumentError('tag name is required');
     }
+    if (trimmed.length > maxTagNameLength) {
+      throw ArgumentError('最多9字');
+    }
     final exists = await isar.collection<JiveTag>()
         .filter()
         .nameEqualTo(trimmed, caseSensitive: false)
@@ -237,6 +248,9 @@ class TagService {
     final trimmed = tag.name.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError('tag name is required');
+    }
+    if (trimmed.length > maxTagNameLength) {
+      throw ArgumentError('最多9字');
     }
     final existing = await isar.collection<JiveTag>()
         .filter()

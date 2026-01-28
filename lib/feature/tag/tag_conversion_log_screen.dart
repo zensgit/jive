@@ -1,8 +1,12 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
@@ -29,11 +33,23 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
   bool _selectionMode = false;
   final Set<int> _selectedIds = {};
   final DateFormat _timeFormat = DateFormat('MM-dd HH:mm');
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
+  String _query = '';
+  String _typeFilter = 'all';
+  String _policyFilter = 'all';
 
   @override
   void initState() {
     super.initState();
     _init();
+  }
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _init() async {
@@ -83,6 +99,7 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final visibleLogs = _filteredLogs;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -92,7 +109,7 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
         ),
         backgroundColor: Colors.white,
         elevation: 0,
-        actions: _buildActions(),
+        actions: _buildActions(visibleLogs),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -100,22 +117,43 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
               ? Center(child: Text(_error!, style: const TextStyle(color: Colors.redAccent)))
               : _logs.isEmpty
                   ? _buildEmpty()
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                      itemCount: _logs.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 10),
-                      itemBuilder: (context, index) => _buildLogCard(_logs[index]),
+                  : Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                          child: _buildFilterBar(visibleLogs.length),
+                        ),
+                        Expanded(
+                          child: visibleLogs.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    '没有匹配的转换记录',
+                                    style: TextStyle(color: Colors.grey.shade500),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                                  itemCount: visibleLogs.length,
+                                  separatorBuilder: (context, index) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, index) =>
+                                      _buildLogCard(visibleLogs[index]),
+                                ),
+                        ),
+                      ],
                     ),
     );
   }
 
-  List<Widget> _buildActions() {
+  List<Widget> _buildActions(List<JiveTagConversionLog> visibleLogs) {
     if (_selectionMode) {
-      final allSelected = _selectedIds.length == _logs.length && _logs.isNotEmpty;
+      final allSelected =
+          _selectedIds.length == visibleLogs.length && visibleLogs.isNotEmpty;
       return [
         IconButton(
           tooltip: allSelected ? '取消全选' : '全选',
-          onPressed: _toggleSelectAll,
+          onPressed: () => _toggleSelectAll(visibleLogs),
           icon: Icon(allSelected ? Icons.remove_done : Icons.done_all),
         ),
         IconButton(
@@ -130,11 +168,17 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
         onSelected: (value) async {
           if (value == _LogMenuAction.select) {
             setState(() => _selectionMode = true);
+          } else if (value == _LogMenuAction.export) {
+            await _exportLogs(visibleLogs);
           } else if (value == _LogMenuAction.clearAll) {
             await _clearAll();
           }
         },
         itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: _LogMenuAction.export,
+            child: Text('导出 CSV'),
+          ),
           PopupMenuItem(
             value: _LogMenuAction.select,
             child: Text('批量删除'),
@@ -151,6 +195,110 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
   Widget _buildEmpty() {
     return Center(
       child: Text('暂无转换记录', style: TextStyle(color: Colors.grey.shade500)),
+    );
+  }
+
+  List<JiveTagConversionLog> get _filteredLogs {
+    final query = _query.toLowerCase();
+    return _logs.where((log) {
+      if (_typeFilter == 'income' && !log.categoryIsIncome) return false;
+      if (_typeFilter == 'expense' && log.categoryIsIncome) return false;
+      if (_policyFilter != 'all' && log.migratePolicy != _policyFilter) {
+        return false;
+      }
+      if (query.isNotEmpty) {
+        final haystack = [
+          log.tagName,
+          log.categoryName,
+          log.parentCategoryName ?? '',
+        ].join(' ').toLowerCase();
+        if (!haystack.contains(query)) return false;
+      }
+      return true;
+    }).toList();
+  }
+
+  Widget _buildFilterBar(int total) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: '搜索标签/分类',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _query.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {
+                        _query = '';
+                        _selectionMode = false;
+                        _selectedIds.clear();
+                      });
+                    },
+                  ),
+            isDense: true,
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          onChanged: _onSearchChanged,
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [
+            ChoiceChip(
+              label: const Text('全部'),
+              selected: _typeFilter == 'all',
+              onSelected: (_) => _setTypeFilter('all'),
+            ),
+            ChoiceChip(
+              label: const Text('支出'),
+              selected: _typeFilter == 'expense',
+              onSelected: (_) => _setTypeFilter('expense'),
+            ),
+            ChoiceChip(
+              label: const Text('收入'),
+              selected: _typeFilter == 'income',
+              onSelected: (_) => _setTypeFilter('income'),
+            ),
+            const SizedBox(width: 6),
+            ChoiceChip(
+              label: const Text('全部策略'),
+              selected: _policyFilter == 'all',
+              onSelected: (_) => _setPolicyFilter('all'),
+            ),
+            ChoiceChip(
+              label: const Text('仅补全空分类'),
+              selected: _policyFilter == 'onlyNull',
+              onSelected: (_) => _setPolicyFilter('onlyNull'),
+            ),
+            ChoiceChip(
+              label: const Text('覆盖同类型'),
+              selected: _policyFilter == 'overwrite',
+              onSelected: (_) => _setPolicyFilter('overwrite'),
+            ),
+            ChoiceChip(
+              label: const Text('不迁移'),
+              selected: _policyFilter == 'none',
+              onSelected: (_) => _setPolicyFilter('none'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '共 $total 条',
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        ),
+      ],
     );
   }
 
@@ -273,17 +421,92 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
     });
   }
 
-  void _toggleSelectAll() {
+  void _toggleSelectAll(List<JiveTagConversionLog> visibleLogs) {
     setState(() {
-      if (_selectedIds.length == _logs.length) {
+      if (_selectedIds.length == visibleLogs.length) {
         _selectedIds.clear();
         _selectionMode = false;
       } else {
         _selectedIds
           ..clear()
-          ..addAll(_logs.map((log) => log.id));
+          ..addAll(visibleLogs.map((log) => log.id));
       }
     });
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() {
+        _query = value.trim();
+        _selectionMode = false;
+        _selectedIds.clear();
+      });
+    });
+  }
+
+  void _setTypeFilter(String value) {
+    setState(() {
+      _typeFilter = value;
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _setPolicyFilter(String value) {
+    setState(() {
+      _policyFilter = value;
+      _selectionMode = false;
+      _selectedIds.clear();
+    });
+  }
+
+  Future<void> _exportLogs(List<JiveTagConversionLog> logs) async {
+    if (logs.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有可导出的记录')),
+      );
+      return;
+    }
+    final dir = await getTemporaryDirectory();
+    final file = File(
+      '${dir.path}/tag_conversion_logs_${DateTime.now().millisecondsSinceEpoch}.csv',
+    );
+    final buffer = StringBuffer();
+    buffer.writeln(
+      '时间,标签,分类,父级分类,类型,策略,更新数,关联数,跳过(策略),跳过(已有分类),跳过(类型不一致),跳过(分类缺失),保留标签',
+    );
+    for (final log in logs) {
+      final typeLabel = log.categoryIsIncome ? '收入' : '支出';
+      final policyLabel = _policyLabel(log.migratePolicy);
+      buffer.writeln([
+        _timeFormat.format(log.createdAt),
+        _csvSafe(log.tagName),
+        _csvSafe(log.categoryName),
+        _csvSafe(log.parentCategoryName ?? ''),
+        typeLabel,
+        policyLabel,
+        log.updatedTransactionCount,
+        log.taggedTransactionCount,
+        log.skippedByPolicyCount,
+        log.skippedExistingCategoryCount,
+        log.skippedTypeMismatchCount,
+        log.skippedUnknownCategoryCount,
+        log.keepTagActive ? '是' : '否',
+      ].join(','));
+    }
+    await file.writeAsString(buffer.toString(), flush: true);
+    await Share.shareXFiles(
+      [XFile(file.path)],
+      text: '转换记录导出（CSV）',
+    );
+  }
+
+  String _csvSafe(String value) {
+    final escaped = value.replaceAll('"', '""');
+    return '"$escaped"';
   }
 
   String _policyLabel(String raw) {
@@ -318,4 +541,4 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
   }
 }
 
-enum _LogMenuAction { select, clearAll }
+enum _LogMenuAction { select, export, clearAll }

@@ -25,6 +25,7 @@ class _TagPickerSheetState extends State<TagPickerSheet> {
   final TextEditingController _searchController = TextEditingController();
   late List<String> _selectedKeys;
   String _query = '';
+  static const int _maxTagNameLength = 9;
 
   @override
   void initState() {
@@ -42,6 +43,7 @@ class _TagPickerSheetState extends State<TagPickerSheet> {
   Widget build(BuildContext context) {
     final filtered = _filterTags(widget.tags, _query);
     final canCreate = _canCreateTag(_query, widget.tags);
+    final tooLong = _query.trim().length > _maxTagNameLength;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
@@ -66,8 +68,10 @@ class _TagPickerSheetState extends State<TagPickerSheet> {
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: '搜索或新建标签',
+                hintText: '搜索或新建标签（最多9字）',
                 prefixIcon: const Icon(Icons.search),
+                suffixText: tooLong ? '超过9字' : null,
+                suffixStyle: TextStyle(color: Colors.red.shade400, fontSize: 12),
                 suffixIcon: _query.isEmpty
                     ? null
                     : IconButton(
@@ -129,6 +133,7 @@ class _TagPickerSheetState extends State<TagPickerSheet> {
   bool _canCreateTag(String query, List<JiveTag> tags) {
     final trimmed = query.trim();
     if (trimmed.isEmpty) return false;
+    if (trimmed.length > _maxTagNameLength) return false;
     return !tags.any((tag) => tag.name.toLowerCase() == trimmed.toLowerCase());
   }
 
