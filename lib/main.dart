@@ -1200,22 +1200,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               },
                             ),
                             ListTile(
-                              leading: const Icon(Icons.label_outline),
-                              title: const Text("标签管理"),
-                              subtitle: const Text("管理交易标签"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        TagManagementScreen(isar: _isar),
-                                  ),
-                                );
-                                await _loadTransactions();
-                              },
-                            ),
-                            ListTile(
                               leading: const Icon(Icons.folder_outlined),
                               title: const Text("项目追踪"),
                               subtitle: const Text("追踪旅行、装修等专项支出"),
@@ -1226,6 +1210,22 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   MaterialPageRoute(
                                     builder: (context) =>
                                         const ProjectListScreen(),
+                                  ),
+                                );
+                                await _loadTransactions();
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.label_outline),
+                              title: const Text("标签管理"),
+                              subtitle: const Text("管理交易标签"),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        TagManagementScreen(isar: _isar),
                                   ),
                                 );
                                 await _loadTransactions();
