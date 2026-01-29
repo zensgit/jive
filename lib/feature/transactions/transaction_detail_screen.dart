@@ -5,6 +5,7 @@ import 'package:isar/isar.dart';
 
 import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
+import '../../core/database/currency_model.dart';
 import '../../core/database/project_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/tag_model.dart';
@@ -12,6 +13,7 @@ import '../../core/database/tag_rule_model.dart';
 import '../../core/service/database_service.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/currency_service.dart';
 import '../../core/service/tag_rule_service.dart';
 import '../tag/tag_rule_screen.dart';
 import '../tag/tag_icon_catalog.dart';
@@ -33,7 +35,6 @@ class TransactionDetailScreen extends StatefulWidget {
 }
 
 class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
-  late final NumberFormat _currency = NumberFormat.currency(symbol: "¥");
   late final DateFormat _dateTimeFormat = DateFormat('yyyy-MM-dd HH:mm');
 
   Isar? _isar;
@@ -46,6 +47,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   final Map<int, JiveProject> _projectById = {};
   Map<String, SmartTagMatchExplanation> _smartExplainByTag = {};
   bool _hasDataChanges = false;
+
+  // 多币种支持
+  String _baseCurrency = 'CNY';
+  CurrencyService? _currencyService;
+  double? _convertedAmount;
 
   @override
   void initState() {
@@ -81,6 +87,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         explainByTag.addEntries(explanations.map((item) => MapEntry(item.tagKey, item)));
       }
 
+      // 加载多币种转换数据
+      _currencyService ??= CurrencyService(isar);
+      final baseCurrency = await _currencyService!.getBaseCurrency();
+      final accountById = {for (final a in accounts) a.id: a};
+      final account = tx.accountId != null ? accountById[tx.accountId] : null;
+      final txCurrency = account?.currency ?? 'CNY';
+      double? convertedAmount;
+      if (txCurrency != baseCurrency) {
+        convertedAmount = await _currencyService!.convert(tx.amount, txCurrency, baseCurrency);
+      }
+
       if (!mounted) return;
       setState(() {
         _transaction = tx;
@@ -97,6 +114,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         _projectById
           ..clear()
           ..addEntries(projects.map((p) => MapEntry(p.id, p)));
+        _baseCurrency = baseCurrency;
+        _convertedAmount = convertedAmount;
         _isLoading = false;
       });
     } catch (e, stack) {
@@ -297,17 +316,37 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         ? const ClampingScrollPhysics()
         : const AlwaysScrollableScrollPhysics();
 
+    // 获取交易账户的货币符号
+    final account = tx.accountId != null ? _accountById[tx.accountId] : null;
+    final txCurrency = account?.currency ?? 'CNY';
+    final txCurrencySymbol = CurrencyDefaults.getSymbol(txCurrency);
+    final baseCurrencySymbol = CurrencyDefaults.getSymbol(_baseCurrency);
+    final txDecimals = CurrencyDefaults.getDecimalPlaces(txCurrency);
+    final baseDecimals = CurrencyDefaults.getDecimalPlaces(_baseCurrency);
+    final amountText = '$amountPrefix$txCurrencySymbol${tx.amount.toStringAsFixed(txDecimals)}';
+
     final header = Column(
       children: [
         SizedBox(height: headerTopSpacing),
         Text(
-          '$amountPrefix${_currency.format(tx.amount)}',
+          amountText,
           style: GoogleFonts.rubik(
             fontSize: amountFontSize,
             fontWeight: FontWeight.w700,
             color: amountColor,
           ),
         ),
+        // 如果货币不同，显示转换后金额
+        if (_convertedAmount != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            '≈ $baseCurrencySymbol${_convertedAmount!.toStringAsFixed(baseDecimals)}',
+            style: GoogleFonts.rubik(
+              fontSize: 14,
+              color: Colors.grey.shade500,
+            ),
+          ),
+        ],
         const SizedBox(height: 6),
         Text(
           title,

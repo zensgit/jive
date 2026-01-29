@@ -7,12 +7,14 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
+import '../../core/database/currency_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/currency_service.dart';
 
 class StatsScreen extends StatefulWidget {
   final String? filterCategoryKey;
@@ -34,7 +36,7 @@ class _StatsScreenState extends State<StatsScreen> {
   late Isar _isar;
   bool _isLoading = true;
   Map<String, JiveCategory> _categoryByKey = {};
-  
+
   // 统计数据
   double _totalExpense = 0;
   List<CategoryStat> _categoryStats = [];
@@ -43,6 +45,10 @@ class _StatsScreenState extends State<StatsScreen> {
   double _creditLimit = 0;
   double _creditUsed = 0;
   double _creditAvailable = 0;
+
+  // 多币种支持
+  String _baseCurrency = 'CNY';
+  CurrencyService? _currencyService;
 
   @override
   void initState() {
@@ -91,14 +97,19 @@ class _StatsScreenState extends State<StatsScreen> {
       );
     }
 
+    // 初始化货币服务
+    _currencyService ??= CurrencyService(_isar);
+    final baseCurrency = await _currencyService!.getBaseCurrency();
+
     final categories = await _isar.collection<JiveCategory>().where().findAll();
     final categoryMap = {for (final c in categories) c.key: c};
 
     final showIncome = _shouldShowIncomeStats(categoryMap);
     final accountService = AccountService(_isar);
     final accounts = await accountService.getActiveAccounts();
+    final accountById = {for (final a in accounts) a.id: a};
     final balances = await accountService.computeBalances(accounts: accounts);
-    final creditSummary = _computeCreditSummary(accounts, balances);
+    final creditSummary = await _computeCreditSummary(accounts, balances, baseCurrency);
 
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
@@ -117,16 +128,28 @@ class _StatsScreenState extends State<StatsScreen> {
 
     final txs = await query.findAll();
 
-    // 聚合计算
+    // 聚合计算（支持多币种转换）
     final Map<String, double> grouped = {};
     double total = 0;
 
     for (var tx in txs) {
       if (!_includeInStats(tx, showIncome)) continue;
       if (tx.amount <= 0) continue;
+
+      // 获取交易对应账户的币种
+      final account = tx.accountId != null ? accountById[tx.accountId] : null;
+      final txCurrency = account?.currency ?? 'CNY';
+
+      // 转换为基础货币
+      double convertedAmount = tx.amount;
+      if (txCurrency != baseCurrency) {
+        convertedAmount =
+            await _currencyService!.convert(tx.amount, txCurrency, baseCurrency) ?? tx.amount;
+      }
+
       final key = _groupKeyFor(tx);
-      grouped[key] = (grouped[key] ?? 0) + tx.amount;
-      total += tx.amount;
+      grouped[key] = (grouped[key] ?? 0) + convertedAmount;
+      total += convertedAmount;
     }
 
     // 转换为列表并排序
@@ -138,7 +161,7 @@ class _StatsScreenState extends State<StatsScreen> {
         color: _getColor(key),
       ));
     });
-    
+
     // 按金额降序
     stats.sort((a, b) => b.amount.compareTo(a.amount));
 
@@ -152,6 +175,7 @@ class _StatsScreenState extends State<StatsScreen> {
         _creditLimit = creditSummary.limit;
         _creditUsed = creditSummary.used;
         _creditAvailable = creditSummary.available;
+        _baseCurrency = baseCurrency;
       });
     }
   }
@@ -319,6 +343,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildPieChart() {
+    final currencySymbol = CurrencyDefaults.getSymbol(_baseCurrency);
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -347,14 +372,16 @@ class _StatsScreenState extends State<StatsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              _touchedIndex == -1 ? "总支出" : _categoryStats[_touchedIndex].name,
+              _touchedIndex == -1
+                  ? (_showIncomeStats ? "总收入" : "总支出")
+                  : _categoryStats[_touchedIndex].name,
               style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
             ),
             const SizedBox(height: 4),
             Text(
-              NumberFormat.compact().format(
+              "$currencySymbol${NumberFormat.compact().format(
                 _touchedIndex == -1 ? _totalExpense : _categoryStats[_touchedIndex].amount,
-              ),
+              )}",
               style: GoogleFonts.rubik(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -368,6 +395,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildStatsList(EdgeInsets padding) {
+    final currencySymbol = CurrencyDefaults.getSymbol(_baseCurrency);
     return ListView.builder(
       padding: padding,
       itemCount: _categoryStats.length,
@@ -389,7 +417,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   Text(stat.name, style: const TextStyle(fontWeight: FontWeight.bold)),
                   const Spacer(),
                   Text(
-                    "¥${stat.amount.toStringAsFixed(1)}",
+                    "$currencySymbol${stat.amount.toStringAsFixed(1)}",
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(width: 8),
@@ -417,6 +445,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildCreditSummary({EdgeInsets? margin, bool dense = false}) {
+    final currencySymbol = CurrencyDefaults.getSymbol(_baseCurrency);
     return Container(
       margin: margin ?? const EdgeInsets.fromLTRB(20, 12, 20, 0),
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: dense ? 8 : 10),
@@ -437,9 +466,9 @@ class _StatsScreenState extends State<StatsScreen> {
             spacing: 16,
             runSpacing: 6,
             children: [
-              _buildCreditMeta("额度", _creditLimit),
-              _buildCreditMeta("已用", _creditUsed),
-              _buildCreditMeta("可用", _creditAvailable),
+              _buildCreditMeta("额度", _creditLimit, currencySymbol),
+              _buildCreditMeta("已用", _creditUsed, currencySymbol),
+              _buildCreditMeta("可用", _creditAvailable, currencySymbol),
             ],
           ),
         ],
@@ -447,21 +476,25 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _buildCreditMeta(String label, double value) {
+  Widget _buildCreditMeta(String label, double value, String symbol) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(label, style: GoogleFonts.lato(color: Colors.grey.shade600, fontSize: 11)),
         const SizedBox(width: 4),
         Text(
-          NumberFormat.compactCurrency(symbol: "¥", decimalDigits: 0).format(value),
+          NumberFormat.compactCurrency(symbol: symbol, decimalDigits: 0).format(value),
           style: GoogleFonts.lato(color: Colors.black87, fontSize: 12, fontWeight: FontWeight.w600),
         ),
       ],
     );
   }
 
-  _CreditSummary _computeCreditSummary(List<JiveAccount> accounts, Map<int, double> balances) {
+  Future<_CreditSummary> _computeCreditSummary(
+    List<JiveAccount> accounts,
+    Map<int, double> balances,
+    String baseCurrency,
+  ) async {
     double limit = 0;
     double used = 0;
     double available = 0;
@@ -472,9 +505,24 @@ class _StatsScreenState extends State<StatsScreen> {
       if (accountLimit == null || accountLimit <= 0) continue;
       final balance = balances[account.id] ?? account.openingBalance;
       final usedForAccount = balance < 0 ? -balance : 0.0;
-      limit += accountLimit;
-      used += usedForAccount;
-      final availableForAccount = accountLimit - usedForAccount;
+
+      // 转换为基础货币
+      final accountCurrency = account.currency;
+      double convertedLimit = accountLimit;
+      double convertedUsed = usedForAccount;
+
+      if (accountCurrency != baseCurrency && _currencyService != null) {
+        convertedLimit =
+            await _currencyService!.convert(accountLimit, accountCurrency, baseCurrency) ??
+                accountLimit;
+        convertedUsed =
+            await _currencyService!.convert(usedForAccount, accountCurrency, baseCurrency) ??
+                usedForAccount;
+      }
+
+      limit += convertedLimit;
+      used += convertedUsed;
+      final availableForAccount = convertedLimit - convertedUsed;
       if (availableForAccount > 0) {
         available += availableForAccount;
       }

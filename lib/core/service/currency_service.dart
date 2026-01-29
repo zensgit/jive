@@ -137,6 +137,12 @@ class CurrencyService {
     return await _isar.jiveCurrencyPreferences.where().findFirst();
   }
 
+  /// 获取基础货币代码
+  Future<String> getBaseCurrency() async {
+    final pref = await getPreference();
+    return pref?.baseCurrency ?? 'CNY';
+  }
+
   /// 更新用户偏好
   Future<void> updatePreference(JiveCurrencyPreference pref) async {
     await _isar.writeTxn(() async {
