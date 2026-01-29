@@ -96,6 +96,16 @@ class ProjectService {
     });
   }
 
+  /// 重新启用项目
+  Future<void> reactivateProject(JiveProject project) async {
+    project.status = 'active';
+    project.completedDate = null;
+    project.updatedAt = DateTime.now();
+    await _isar.writeTxn(() async {
+      await _isar.jiveProjects.put(project);
+    });
+  }
+
   /// 计算项目已花费金额
   Future<double> calculateProjectSpending(int projectId) async {
     final transactions = await _isar.jiveTransactions

@@ -9,6 +9,7 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../core/data/account_type_catalog.dart';
 import '../../core/data/bank_catalog.dart';
+import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
@@ -161,6 +162,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
         iconName: draft.iconName,
         colorHex: draft.colorHex,
         groupName: draft.groupName,
+        currency: draft.currency,
         billingDay: draft.billingDay,
         repaymentDay: draft.repaymentDay,
         creditLimit: draft.creditLimit,
@@ -176,6 +178,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
         iconName: draft.iconName,
         colorHex: draft.colorHex,
         groupName: draft.groupName,
+        currency: draft.currency,
         billingDay: draft.billingDay,
         repaymentDay: draft.repaymentDay,
         creditLimit: draft.creditLimit,
@@ -237,6 +240,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     );
     var includeInBalance = editing?.includeInBalance ?? true;
     var colorHex = editing?.colorHex ?? defaultColor;
+    var currency = editing?.currency ?? 'CNY';
     var nameCustomized = editing != null;
     var iconCustomized = false;
     var colorCustomized = false;
@@ -540,6 +544,66 @@ class _AccountsScreenState extends State<AccountsScreen> {
                       onChanged: (_) => nameCustomized = true,
                     ),
                     const SizedBox(height: 12),
+                    // 货币选择
+                    InkWell(
+                      onTap: () async {
+                        final result = await showModalBottomSheet<String>(
+                          context: sheetContext,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.white,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                          ),
+                          builder: (ctx) => _CurrencyPickerSheet(
+                            selectedCode: currency,
+                          ),
+                        );
+                        if (result != null) {
+                          setSheetState(() => currency = result);
+                        }
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: '账户币种',
+                          border: OutlineInputBorder(),
+                          suffixIcon: Icon(Icons.chevron_right),
+                        ),
+                        child: Row(
+                          children: [
+                            Builder(
+                              builder: (context) {
+                                final currencyData = CurrencyDefaults.getAllCurrencies()
+                                    .firstWhere(
+                                      (c) => c['code'] == currency,
+                                      orElse: () => {'code': currency, 'nameZh': currency, 'symbol': currency, 'flag': null},
+                                    );
+                                final flag = currencyData['flag'] as String?;
+                                final symbol = currencyData['symbol'] as String;
+                                return Text(
+                                  flag ?? symbol,
+                                  style: const TextStyle(fontSize: 18),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            Builder(
+                              builder: (context) {
+                                final currencyData = CurrencyDefaults.getAllCurrencies()
+                                    .firstWhere(
+                                      (c) => c['code'] == currency,
+                                      orElse: () => {'code': currency, 'nameZh': currency},
+                                    );
+                                return Text(
+                                  '$currency - ${currencyData['nameZh']}',
+                                  style: valueStyle,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     TextField(
                       controller: balanceController,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -655,6 +719,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                                   iconName: resolvedIcon,
                                   colorHex: resolvedColor,
                                   groupName: selectedType!.group,
+                                  currency: currency,
                                   openingBalance: amount,
                                   billingDay: billingDay,
                                   repaymentDay: repaymentDay,
@@ -1289,6 +1354,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     final detailText = AccountService.isCreditAccount(account)
         ? _creditMeta(account, balance)
         : (option?.label ?? AccountService.displayGroupName(account));
+    final currencySymbol = CurrencyDefaults.getSymbol(account.currency);
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () async {
@@ -1350,7 +1416,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  NumberFormat.currency(symbol: "¥").format(displayBalance),
+                  NumberFormat.currency(symbol: currencySymbol).format(displayBalance),
                   style: GoogleFonts.rubik(
                     color: amountColor,
                     fontSize: 14,
@@ -1450,6 +1516,7 @@ class _AccountDraft {
   final String iconName;
   final String? colorHex;
   final String? groupName;
+  final String currency;
   final double openingBalance;
   final int? billingDay;
   final int? repaymentDay;
@@ -1464,6 +1531,7 @@ class _AccountDraft {
     required this.iconName,
     this.colorHex,
     this.groupName,
+    required this.currency,
     required this.openingBalance,
     this.billingDay,
     this.repaymentDay,
@@ -1492,4 +1560,182 @@ class _IconSelection {
   final String? label;
 
   const _IconSelection({required this.iconName, this.colorHex, this.label});
+}
+
+/// 货币选择底部弹窗
+class _CurrencyPickerSheet extends StatefulWidget {
+  final String? selectedCode;
+
+  const _CurrencyPickerSheet({this.selectedCode});
+
+  @override
+  State<_CurrencyPickerSheet> createState() => _CurrencyPickerSheetState();
+}
+
+class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
+
+  List<Map<String, dynamic>> get _filteredCurrencies {
+    final all = CurrencyDefaults.fiatCurrencies;
+    if (_searchQuery.isEmpty) return all;
+    final query = _searchQuery.toLowerCase();
+    return all.where((c) {
+      final code = (c['code'] as String).toLowerCase();
+      final name = (c['name'] as String).toLowerCase();
+      final nameZh = (c['nameZh'] as String).toLowerCase();
+      return code.contains(query) ||
+          name.contains(query) ||
+          nameZh.contains(query);
+    }).toList();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    '选择货币',
+                    style: GoogleFonts.lato(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: '搜索货币代码或名称',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (value) => setState(() => _searchQuery = value),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                padding: const EdgeInsets.only(bottom: 20),
+                itemCount: _filteredCurrencies.length,
+                itemBuilder: (context, index) {
+                  final currency = _filteredCurrencies[index];
+                  final code = currency['code'] as String;
+                  final name = currency['name'] as String;
+                  final nameZh = currency['nameZh'] as String;
+                  final symbol = currency['symbol'] as String;
+                  final flag = currency['flag'] as String?;
+                  final isSelected = code == widget.selectedCode;
+
+                  return ListTile(
+                    leading: Container(
+                      width: 40,
+                      height: 40,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? JiveTheme.primaryGreen.withOpacity(0.1)
+                            : Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        flag ?? symbol,
+                        style: const TextStyle(fontSize: 20),
+                      ),
+                    ),
+                    title: Row(
+                      children: [
+                        Text(
+                          code,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: isSelected
+                                ? JiveTheme.primaryGreen
+                                : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          symbol,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    subtitle: Text(
+                      '$nameZh / $name',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                    trailing: isSelected
+                        ? const Icon(
+                            Icons.check_circle,
+                            color: JiveTheme.primaryGreen,
+                          )
+                        : null,
+                    onTap: () => Navigator.pop(context, code),
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

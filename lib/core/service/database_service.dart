@@ -4,6 +4,7 @@ import 'package:path_provider/path_provider.dart';
 import '../database/account_model.dart';
 import '../database/auto_draft_model.dart';
 import '../database/category_model.dart';
+import '../database/currency_model.dart';
 import '../database/project_model.dart';
 import '../database/tag_conversion_log.dart';
 import '../database/tag_model.dart';
@@ -28,6 +29,9 @@ class DatabaseService {
     JiveTagRuleSchema,
     JiveTagConversionLogSchema,
     JiveProjectSchema,
+    JiveCurrencySchema,
+    JiveExchangeRateSchema,
+    JiveCurrencyPreferenceSchema,
   ];
 
   /// 获取或创建 Isar 实例

@@ -54,6 +54,7 @@ dependencies:
   flutter_colorpicker: ^1.1.0
   table_calendar: ^3.0.9
   lunar: ^1.7.8
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:

@@ -86,7 +86,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: JiveTheme.surfaceWhite,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _activeProjects.isEmpty && _otherProjects.isEmpty
@@ -201,114 +201,166 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
   Widget _buildHeader() {
     final progress = _totalBudget > 0 ? (_totalSpent / _totalBudget).clamp(0.0, 1.0) : 0.0;
+    final hasActive = _activeProjects.isNotEmpty;
+    final hasBudget = _totalBudget > 0;
+    final remaining = _totalBudget - _totalSpent;
 
     return Container(
-      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 16, 20, 24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            JiveTheme.primaryGreen,
-            JiveTheme.primaryGreen.withOpacity(0.85),
-          ],
-        ),
-      ),
+      color: JiveTheme.surfaceWhite,
+      padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 10, 20, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 顶部栏
           Row(
             children: [
-              GestureDetector(
+              _buildHeaderIconButton(
+                icon: Icons.arrow_back,
                 onTap: () => Navigator.pop(context),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               Text(
                 '项目追踪',
-                style: GoogleFonts.lato(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+                style: GoogleFonts.lato(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
               ),
               const Spacer(),
-              GestureDetector(
+              _buildHeaderIconButton(
+                icon: Icons.add,
                 onTap: _createProject,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.add, color: Colors.white, size: 20),
-                ),
               ),
             ],
           ),
-          const SizedBox(height: 28),
-          // 总览数据
-          if (_activeProjects.isNotEmpty) ...[
-            Text(
-              '进行中项目总支出',
-              style: GoogleFonts.lato(fontSize: 13, color: Colors.white.withOpacity(0.8)),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '¥${_formatLargeAmount(_totalSpent)}',
-              style: GoogleFonts.rubik(fontSize: 36, fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-            if (_totalBudget > 0) ...[
-              const SizedBox(height: 20),
-              // 进度条
-              Container(
-                height: 6,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                child: FractionallySizedBox(
-                  alignment: Alignment.centerLeft,
-                  widthFactor: progress,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '总预算 ¥${_formatLargeAmount(_totalBudget)}',
-                    style: GoogleFonts.lato(fontSize: 13, color: Colors.white.withOpacity(0.8)),
-                  ),
-                  Text(
-                    '${(progress * 100).toStringAsFixed(0)}%',
-                    style: GoogleFonts.rubik(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+          const SizedBox(height: 16),
+          if (hasActive)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: JiveTheme.primaryGreen,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: JiveTheme.primaryGreen.withOpacity(0.25),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
-            ],
-          ] else ...[
-            Text(
-              '暂无进行中的项目',
-              style: GoogleFonts.lato(fontSize: 15, color: Colors.white.withOpacity(0.8)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.track_changes, color: Colors.white, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '进行中项目总支出',
+                        style: GoogleFonts.lato(fontSize: 13, color: Colors.white.withOpacity(0.85)),
+                      ),
+                      const Spacer(),
+                      if (hasBudget)
+                        _buildHeaderChip('${(progress * 100).toStringAsFixed(0)}%'),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '¥${_formatLargeAmount(_totalSpent)}',
+                    style: GoogleFonts.rubik(
+                      fontSize: 34,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    hasBudget
+                        ? '总预算 ¥${_formatLargeAmount(_totalBudget)} · ${remaining < 0 ? "超支" : "剩余"} ¥${_formatLargeAmount(remaining.abs())}'
+                        : '暂无预算限制',
+                    style: GoogleFonts.lato(fontSize: 12, color: Colors.white.withOpacity(0.8)),
+                  ),
+                  if (hasBudget) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: progress,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: JiveTheme.primaryGreen.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: JiveTheme.primaryGreen),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '暂无进行中的项目，点击右上角 + 创建',
+                      style: GoogleFonts.lato(fontSize: 13, color: Colors.grey.shade700),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              '点击右上角 + 创建新项目',
-              style: GoogleFonts.lato(fontSize: 13, color: Colors.white.withOpacity(0.6)),
-            ),
-          ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderIconButton({required IconData icon, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: Colors.black87, size: 20),
+      ),
+    );
+  }
+
+  Widget _buildHeaderChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.18),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.lato(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -326,15 +378,15 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     final progressColor = isOverBudget ? Colors.red : color;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -342,9 +394,9 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
         color: Colors.transparent,
         child: InkWell(
           onTap: () => _openProject(project),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(18),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -353,23 +405,12 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                   children: [
                     // 图标
                     Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [color, color.withOpacity(0.7)],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: color.withOpacity(0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
+                        color: color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: iconWidgetForName(project.iconName, size: 24, color: Colors.white),
+                      child: iconWidgetForName(project.iconName, size: 22, color: color),
                     ),
                     const SizedBox(width: 16),
                     // 名称
@@ -379,7 +420,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                         children: [
                           Text(
                             project.name,
-                            style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                            style: GoogleFonts.lato(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.black87),
                           ),
                           if (project.description != null && project.description!.isNotEmpty) ...[
                             const SizedBox(height: 4),
@@ -407,10 +448,10 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                         ),
                       )
                     else
-                      Icon(Icons.chevron_right, color: Colors.grey.shade300, size: 24),
+                      Icon(Icons.chevron_right, color: Colors.grey.shade300, size: 22),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 // 金额区域
                 if (project.budget > 0) ...[
                   // 金额数字
@@ -425,7 +466,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                             Text(
                               '¥${_formatLargeAmount(spent)}',
                               style: GoogleFonts.rubik(
-                                fontSize: 24,
+                                fontSize: 22,
                                 fontWeight: FontWeight.w600,
                                 color: isOverBudget ? Colors.red : Colors.black87,
                               ),
@@ -449,7 +490,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                             Text(
                               '¥${_formatLargeAmount(remaining.abs())}',
                               style: GoogleFonts.rubik(
-                                fontSize: 16,
+                                fontSize: 15,
                                 fontWeight: FontWeight.w600,
                                 color: isOverBudget ? Colors.red : color,
                               ),
@@ -459,7 +500,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
                   // 进度条
                   Stack(
                     children: [
@@ -531,38 +572,40 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                   ),
                 ],
                 // 底部信息
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.receipt_outlined, size: 16, color: Colors.grey.shade500),
-                      const SizedBox(width: 6),
-                      Text(
-                        '$txCount 笔交易',
-                        style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600),
-                      ),
-                      const SizedBox(width: 20),
-                      Icon(Icons.calendar_today_outlined, size: 14, color: Colors.grey.shade500),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          _formatDateRange(project),
-                          style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _buildMetaChip(Icons.receipt_outlined, '$txCount 笔交易'),
+                    _buildMetaChip(Icons.calendar_today_outlined, _formatDateRange(project)),
+                  ],
                 ),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMetaChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.grey.shade600),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600),
+          ),
+        ],
       ),
     );
   }

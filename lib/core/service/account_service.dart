@@ -306,6 +306,7 @@ class AccountService {
     String? iconName,
     String? colorHex,
     String? groupName,
+    String currency = 'CNY',
     int? billingDay,
     int? repaymentDay,
     double? creditLimit,
@@ -326,7 +327,7 @@ class AccountService {
       ..type = type
       ..subType = subType
       ..groupName = resolveGroupName(type, subType, groupName ?? option?.group)
-      ..currency = 'CNY'
+      ..currency = currency
       ..iconName =
           iconName ??
           option?.icon ??
@@ -359,6 +360,7 @@ class AccountService {
     required String iconName,
     String? colorHex,
     String? groupName,
+    String? currency,
     int? billingDay,
     int? repaymentDay,
     double? creditLimit,
@@ -377,6 +379,9 @@ class AccountService {
       ..openingBalance = openingBalance
       ..includeInBalance = includeInBalance
       ..updatedAt = DateTime.now();
+    if (currency != null) {
+      account.currency = currency;
+    }
 
     await isar.writeTxn(() async {
       await isar.collection<JiveAccount>().put(account);

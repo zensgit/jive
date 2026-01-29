@@ -25,6 +25,7 @@ import 'core/database/tag_rule_model.dart';
 import 'core/database/project_model.dart';
 import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
+import 'core/service/currency_service.dart';
 import 'core/service/transaction_service.dart';
 import 'core/service/auto_draft_service.dart';
 import 'core/service/auto_app_registry.dart';
@@ -51,6 +52,7 @@ import 'feature/template/template_list_screen.dart';
 import 'feature/tag/tag_management_screen.dart';
 import 'feature/tag/tag_icon_catalog.dart';
 import 'feature/project/project_list_screen.dart';
+import 'feature/currency/currency_settings_screen.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -97,6 +99,16 @@ class _RandomSeedResult {
   const _RandomSeedResult({
     required this.accounts,
     required this.tags,
+    required this.transactions,
+  });
+}
+
+class _ProjectSeedResult {
+  final String projectName;
+  final int transactions;
+
+  const _ProjectSeedResult({
+    required this.projectName,
     required this.transactions,
   });
 }
@@ -177,6 +189,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await CategoryService(_isar).initDefaultCategories();
     await AccountService(_isar).initDefaultAccounts();
     await TagService(_isar).initDefaultGroups();
+    await CurrencyService(_isar).initCurrencies();
     await ProjectService(_isar).initTestProjectIfNeeded();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
     await TransactionService(_isar).migrateTransactionAccountIds();
@@ -501,6 +514,37 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _handleProjectSeedLarge() async {
+    const transactionCount = 1200;
+    const daysSpan = 420;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('生成项目测试数据'),
+        content: const Text('将创建一个测试项目，并生成 1200 笔交易（覆盖近 14 个月），全部关联到该项目。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('继续'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final result = await _seedProjectTestData(
+      transactionCount: transactionCount,
+      daysSpan: daysSpan,
+    );
+    await _loadTransactions();
+    await _loadAutoDraftCount();
+    _notifyDataChanged();
+    _showMessage('已生成项目测试数据：${result.projectName}，交易${result.transactions} 笔');
+  }
+
   Future<_RandomSeedResult> _seedRandomTestData({
     required int accountCount,
     required int tagCount,
@@ -660,6 +704,102 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     return _RandomSeedResult(
       accounts: createdAccounts.length,
       tags: createdTags.length,
+      transactions: transactions.length,
+    );
+  }
+
+  Future<_ProjectSeedResult> _seedProjectTestData({
+    required int transactionCount,
+    required int daysSpan,
+  }) async {
+    final accountService = AccountService(_isar);
+    final tagService = TagService(_isar);
+    await accountService.initDefaultAccounts();
+    await tagService.initDefaultGroups();
+    await CategoryService(_isar).initDefaultCategories();
+
+    final projectService = ProjectService(_isar);
+    final projectName = '项目测试${_randomSuffix()}';
+    final startDate = DateTime.now().subtract(Duration(days: daysSpan));
+    final project = await projectService.createProject(
+      name: projectName,
+      description: '自动生成的项目测试数据',
+      budget: 50000,
+      iconName: 'folder',
+      colorHex: '#2E7D32',
+      startDate: startDate,
+      endDate: DateTime.now().add(const Duration(days: 30)),
+    );
+
+    final accounts = await accountService.getActiveAccounts();
+    final tags = await tagService.getTags(includeArchived: false);
+    final categories = await _isar.collection<JiveCategory>().where().findAll();
+    final expenseParents = categories
+        .where((cat) => cat.parentKey == null && !cat.isIncome && !cat.isHidden)
+        .toList();
+
+    JiveCategory? pickParent() {
+      if (expenseParents.isEmpty) return null;
+      return expenseParents[_random.nextInt(expenseParents.length)];
+    }
+
+    JiveCategory? pickChild(String parentKey) {
+      final children = categories
+          .where((cat) => cat.parentKey == parentKey && !cat.isHidden)
+          .toList();
+      if (children.isEmpty) return null;
+      return children[_random.nextInt(children.length)];
+    }
+
+    List<String> pickTags() {
+      if (tags.isEmpty) return [];
+      final count = _random.nextInt(3);
+      if (count == 0) return [];
+      final pool = List<JiveTag>.from(tags)..shuffle(_random);
+      return pool.take(count).map((tag) => tag.key).toList();
+    }
+
+    final now = DateTime.now();
+    final transactions = <JiveTransaction>[];
+    for (var i = 0; i < transactionCount; i++) {
+      if (accounts.isEmpty) break;
+      final timestamp = now.subtract(
+        Duration(
+          days: _random.nextInt(daysSpan),
+          minutes: _random.nextInt(1440),
+        ),
+      );
+      final account = accounts[_random.nextInt(accounts.length)];
+      final parent = pickParent();
+      final child = parent == null ? null : pickChild(parent.key);
+      final amount = 10 + _random.nextInt(5000);
+      transactions.add(
+        JiveTransaction()
+          ..amount = amount.toDouble()
+          ..source = 'SeedProject'
+          ..type = 'expense'
+          ..timestamp = timestamp
+          ..accountId = account.id
+          ..projectId = project.id
+          ..categoryKey = parent?.key
+          ..subCategoryKey = child?.key
+          ..category = parent?.name ?? ''
+          ..subCategory = child?.name ?? ''
+          ..rawText = '项目测试数据'
+          ..note = '项目测试数据'
+          ..tagKeys = pickTags(),
+      );
+    }
+
+    await _isar.writeTxn(() async {
+      if (transactions.isNotEmpty) {
+        await _isar.jiveTransactions.putAll(transactions);
+      }
+    });
+    await tagService.refreshUsageCounts();
+
+    return _ProjectSeedResult(
+      projectName: project.name,
       transactions: transactions.length,
     );
   }
@@ -1172,6 +1312,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 await _handleRandomSeed();
                               },
                             ),
+                            ListTile(
+                              leading: const Icon(Icons.folder_special_outlined),
+                              title: const Text("生成项目测试数据（大量）"),
+                              subtitle: Text(
+                                _demoSeedEnabled
+                                    ? "生成一年以上交易并关联到项目"
+                                    : "请先开启测试数据开关",
+                              ),
+                              onTap: () async {
+                                if (!_demoSeedEnabled) {
+                                  _showMessage("请先开启测试数据开关");
+                                  return;
+                                }
+                                Navigator.pop(context);
+                                await _handleProjectSeedLarge();
+                              },
+                            ),
                             if (kDebugMode)
                               ListTile(
                                 leading: const Icon(Icons.bolt_outlined),
@@ -1213,6 +1370,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   ),
                                 );
                                 await _loadTransactions();
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.currency_exchange),
+                              title: const Text("货币与汇率"),
+                              subtitle: const Text("管理多币种和汇率"),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const CurrencySettingsScreen(),
+                                  ),
+                                );
                               },
                             ),
                             ListTile(

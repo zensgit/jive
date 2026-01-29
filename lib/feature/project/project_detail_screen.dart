@@ -38,23 +38,35 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   final Map<int, JiveAccount> _accountById = {};
   final DateFormat _timeFormat = DateFormat('MM-dd HH:mm');
   final TextEditingController _linkSearchController = TextEditingController();
+  final TextEditingController _unlinkSearchController = TextEditingController();
+  final ScrollController _contentScrollController = ScrollController();
   bool _showCumulative = true;
   bool _hasChanges = false;
+  bool _categoryExpanded = true;
+  double? _pendingScrollOffset;
+  double _lastScrollOffset = 0;
 
   @override
   void initState() {
     super.initState();
+    _contentScrollController.addListener(() {
+      _lastScrollOffset = _contentScrollController.offset;
+    });
     _loadData();
   }
 
   @override
   void dispose() {
     _linkSearchController.dispose();
+    _unlinkSearchController.dispose();
+    _contentScrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadData({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
 
     final isar = await _ensureIsar();
     final project = await isar.jiveProjects.get(widget.projectId);
@@ -91,6 +103,32 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     });
   }
 
+  Future<void> _reloadPreservingScroll() async {
+    if (_contentScrollController.hasClients) {
+      _pendingScrollOffset = _contentScrollController.offset;
+    } else {
+      _pendingScrollOffset = _lastScrollOffset;
+    }
+    await _loadData(showLoading: false);
+    if (!mounted || _pendingScrollOffset == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_contentScrollController.hasClients) return;
+      final maxOffset = _contentScrollController.position.maxScrollExtent;
+      final target = _pendingScrollOffset!.clamp(0.0, maxOffset).toDouble();
+      _contentScrollController.jumpTo(target);
+    });
+    _pendingScrollOffset = null;
+  }
+
+  Future<void> _reloadAndScrollTop() async {
+    await _loadData(showLoading: false);
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_contentScrollController.hasClients) return;
+      _contentScrollController.jumpTo(0);
+    });
+  }
+
   Future<Isar> _ensureIsar() async {
     if (_isar != null) return _isar!;
     _isar = await DatabaseService.getInstance();
@@ -112,17 +150,29 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           elevation: 0,
           actions: [
             if (_project != null) ...[
-              IconButton(icon: const Icon(Icons.edit), onPressed: _editProject),
+              if (_project!.status == 'active')
+                IconButton(icon: const Icon(Icons.edit), onPressed: _editProject),
               PopupMenuButton<String>(
                 onSelected: _handleAction,
-                itemBuilder: (context) => [
-                  const PopupMenuItem(value: 'link', child: Text('关联交易')),
-                  if (_project!.status == 'active')
-                    const PopupMenuItem(value: 'complete', child: Text('标记完成')),
-                  const PopupMenuItem(value: 'archive', child: Text('归档')),
-                  const PopupMenuItem(value: 'delete',
-                      child: Text('删除', style: TextStyle(color: Colors.red))),
-                ],
+                itemBuilder: (context) {
+                  final items = <PopupMenuEntry<String>>[];
+
+                  if (_project!.status == 'active') {
+                    items.add(const PopupMenuItem(value: 'complete', child: Text('标记完成')));
+                    items.add(const PopupMenuItem(value: 'archive', child: Text('归档')));
+                  } else if (_project!.status == 'completed') {
+                    items.add(const PopupMenuItem(value: 'reopen', child: Text('恢复进行中')));
+                    items.add(const PopupMenuItem(value: 'archive', child: Text('归档')));
+                  } else if (_project!.status == 'archived') {
+                    items.add(const PopupMenuItem(value: 'reopen', child: Text('恢复进行中')));
+                  }
+
+                  items.add(const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('删除', style: TextStyle(color: Colors.red)),
+                  ));
+                  return items;
+                },
               ),
             ],
           ],
@@ -165,6 +215,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 : color;
 
     return ListView(
+      controller: _contentScrollController,
       padding: const EdgeInsets.all(16),
       children: [
         // 预警提示横幅
@@ -174,11 +225,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         ],
 
         // 概览卡片 - 重新设计
-        Card(
-          elevation: 0,
-          shape: RoundedRectangleBorder(
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: color.withOpacity(0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Column(
             children: [
@@ -357,9 +414,30 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         // 分类统计
         if (_categoryStats.isNotEmpty) ...[
           const SizedBox(height: 24),
-          _buildSectionHeader('按分类', Icons.pie_chart_outline),
+          InkWell(
+            onTap: () {
+              setState(() => _categoryExpanded = !_categoryExpanded);
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.pie_chart_outline, size: 18, color: Colors.grey.shade700),
+                  const SizedBox(width: 8),
+                  Text('按分类',
+                      style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  Icon(
+                    _categoryExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: Colors.grey.shade500,
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
-          _buildCategoryStatsCard(color),
+          if (_categoryExpanded) _buildCategoryStatsCard(color),
         ],
 
         // 支出趋势图表
@@ -371,31 +449,27 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         // 交易记录
         const SizedBox(height: 24),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _buildSectionHeader('交易记录', Icons.receipt_long_outlined),
-            Row(
-              children: [
-                if (_transactions.isNotEmpty)
-                  TextButton.icon(
-                    onPressed: _showUnlinkTransactionsSheet,
-                    icon: const Icon(Icons.link_off, size: 16),
-                    label: const Text('批量取消'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey.shade600,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                  ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text('${_transactions.length} 笔', style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade700)),
-                ),
-              ],
-            ),
+            Icon(Icons.receipt_long_outlined, size: 18, color: Colors.grey.shade700),
+            const SizedBox(width: 8),
+            Text('交易记录', style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 6),
+            Text('· ${_transactions.length} 笔',
+                style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade500)),
+            const Spacer(),
+            if (_transactions.isNotEmpty && _project?.status == 'active') ...[
+              _buildHeaderActionChip(
+                label: '关联交易',
+                color: JiveTheme.primaryGreen,
+                onTap: _showLinkTransactionsSheet,
+              ),
+              const SizedBox(width: 6),
+              _buildHeaderActionChip(
+                label: '批量取消',
+                color: Colors.grey.shade700,
+                onTap: _showUnlinkTransactionsSheet,
+              ),
+            ],
           ],
         ),
         const SizedBox(height: 12),
@@ -418,6 +492,49 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Widget _buildProjectTransactionRow(JiveTransaction tx) {
+    return _buildTransactionCard(
+      tx,
+      compact: true,
+      onTap: () => _showTransactionActions(tx),
+      onAmountTap: () async {
+        final result = await showTransactionDetailSheet(context, tx.id);
+        if (result == true) {
+          _hasChanges = true;
+          await _reloadPreservingScroll();
+        }
+      },
+    );
+  }
+
+  Widget _buildSelectableTransactionRow(
+    JiveTransaction tx, {
+    required bool selected,
+    required VoidCallback onToggle,
+  }) {
+    return _buildTransactionCard(
+      tx,
+      compact: true,
+      selected: selected,
+      leading: Checkbox(
+        value: selected,
+        onChanged: (_) => onToggle(),
+        activeColor: JiveTheme.primaryGreen,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      ),
+      onTap: onToggle,
+    );
+  }
+
+  Widget _buildTransactionCard(
+    JiveTransaction tx, {
+    bool selected = false,
+    bool compact = false,
+    Widget? leading,
+    VoidCallback? onAmountTap,
+    VoidCallback? onTap,
+  }) {
     final type = tx.type ?? 'expense';
     final isTransfer = type == 'transfer';
     final isIncome = type == 'income';
@@ -432,15 +549,33 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final fromAccount = _resolveAccountName(tx.accountId);
     final toAccount = _resolveAccountName(tx.toAccountId);
     final accountLabel = fromAccount.isNotEmpty ? fromAccount : toAccount;
+    final subtitleText = subtitle.isEmpty ? timeLabel : '$subtitle • $timeLabel';
+
+    final padding = compact
+        ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
+        : const EdgeInsets.all(14);
+    final margin = compact
+        ? const EdgeInsets.fromLTRB(4, 4, 4, 6)
+        : const EdgeInsets.fromLTRB(4, 4, 4, 8);
+    final titleSize = compact ? 13.0 : 14.0;
+    final subtitleSize = compact ? 11.0 : 12.0;
+    final amountSize = compact ? 13.0 : 14.0;
+    final accountSize = compact ? 10.0 : 11.0;
+    final iconPadding = compact ? 6.0 : 8.0;
+    final iconSize = compact ? 16.0 : 18.0;
+    final rowGap = compact ? 8.0 : 12.0;
 
     return InkWell(
-      onTap: () => _showTransactionActions(tx),
+      onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-        padding: const EdgeInsets.all(14),
+        margin: margin,
+        padding: padding,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
+          border: selected
+              ? Border.all(color: JiveTheme.primaryGreen.withOpacity(0.35))
+              : null,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.03),
@@ -451,15 +586,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         ),
         child: Row(
           children: [
+            if (leading != null) ...[
+              leading,
+              const SizedBox(width: 4),
+            ],
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: EdgeInsets.all(iconPadding),
               decoration: BoxDecoration(
                 color: iconMeta.background,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(iconMeta.icon, color: iconMeta.color, size: 18),
+              child: Icon(iconMeta.icon, color: iconMeta.color, size: iconSize),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: rowGap),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,15 +606,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   Text(
                     title,
                     style: GoogleFonts.lato(
-                      fontSize: 14,
+                      fontSize: titleSize,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    subtitle.isEmpty ? timeLabel : '$subtitle • $timeLabel',
+                    subtitleText,
                     style: GoogleFonts.lato(
-                      fontSize: 12,
+                      fontSize: subtitleSize,
                       color: Colors.grey.shade600,
                     ),
                   ),
@@ -485,12 +624,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  '$amountPrefix¥${tx.amount.toStringAsFixed(2)}',
-                  style: GoogleFonts.rubik(
-                    color: amountColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                InkWell(
+                  onTap: onAmountTap,
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                    child: Text(
+                      '$amountPrefix¥${tx.amount.toStringAsFixed(2)}',
+                      style: GoogleFonts.rubik(
+                        color: amountColor,
+                        fontSize: amountSize,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 if (accountLabel.isNotEmpty) ...[
@@ -498,7 +644,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   Text(
                     accountLabel,
                     style: GoogleFonts.lato(
-                      fontSize: 11,
+                      fontSize: accountSize,
                       color: Colors.grey.shade500,
                     ),
                   ),
@@ -530,11 +676,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   Widget _buildInfoCard(JiveProject project, Color color) {
     final dateFormat = DateFormat('yyyy/MM/dd');
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -636,16 +788,48 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
+  Widget _buildHeaderActionChip({
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.lato(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildCategoryStatsCard(Color color) {
     // 排序后的分类统计
     final sortedStats = _categoryStats.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -711,11 +895,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   void _editProject() async {
+    if (_project == null || _project!.status != 'active') return;
     final result = await Navigator.push(
         context, MaterialPageRoute(builder: (context) => ProjectFormScreen(project: _project)));
     if (result == true) {
       _hasChanges = true;
-      _loadData();
+      _reloadPreservingScroll();
     }
   }
 
@@ -728,13 +913,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       case 'complete':
         await service.completeProject(_project!);
         _hasChanges = true;
-        _loadData();
+        _reloadPreservingScroll();
         break;
       case 'archive':
         await service.archiveProject(_project!);
         _hasChanges = true;
         if (!mounted) return;
         Navigator.pop(context, true);
+        break;
+      case 'reopen':
+        await service.reactivateProject(_project!);
+        _hasChanges = true;
+        _reloadPreservingScroll();
         break;
       case 'delete':
         final confirmed = await showDialog<bool>(
@@ -762,6 +952,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Future<void> _showLinkTransactionsSheet() async {
+    if (_project?.status != 'active') {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('仅进行中项目可关联交易')),
+      );
+      return;
+    }
     // 获取所有未关联项目的交易
     final unlinkedTransactions = await _isar!.jiveTransactions
         .filter()
@@ -975,71 +1172,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               itemBuilder: (context, index) {
                                 final tx = filteredTransactions[index];
                                 final isSelected = selected.contains(tx.id);
-                                final categoryName = tx.categoryKey != null
-                                    ? categoryByKey[tx.categoryKey]?.name ?? tx.category
-                                    : tx.category ?? '未分类';
-                                final accountName = tx.accountId != null
-                                    ? accountById[tx.accountId]?.name
-                                    : null;
-                                return CheckboxListTile(
-                                  value: isSelected,
-                                  onChanged: (value) {
+                                return _buildSelectableTransactionRow(
+                                  tx,
+                                  selected: isSelected,
+                                  onToggle: () {
                                     setSheetState(() {
-                                      if (value == true) {
-                                        selected.add(tx.id);
-                                      } else {
+                                      if (isSelected) {
                                         selected.remove(tx.id);
+                                      } else {
+                                        selected.add(tx.id);
                                       }
                                     });
                                   },
-                                  title: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          categoryName ?? '未分类',
-                                          style: const TextStyle(fontWeight: FontWeight.w500),
-                                        ),
-                                      ),
-                                      Text(
-                                        '¥${tx.amount.toStringAsFixed(2)}',
-                                        style: GoogleFonts.rubik(
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Text(
-                                            tx.timestamp.toString().substring(0, 16),
-                                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                                          ),
-                                          if (accountName != null) ...[
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              accountName,
-                                              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                      if (tx.note?.isNotEmpty == true)
-                                        Text(
-                                          tx.note!,
-                                          style: GoogleFonts.lato(
-                                            fontSize: 12,
-                                            color: Colors.grey.shade500,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                    ],
-                                  ),
-                                  dense: true,
                                 );
                               },
                             ),
@@ -1192,7 +1336,29 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               child: ElevatedButton(
                                 onPressed: selected.isEmpty
                                     ? null
-                                    : () => Navigator.pop(sheetContext, true),
+                                    : () async {
+                                        if (selected.length >= 500) {
+                                          final confirmed = await showDialog<bool>(
+                                            context: sheetContext,
+                                            builder: (ctx) => AlertDialog(
+                                              title: const Text('已选交易较多'),
+                                              content: const Text('已选交易超过 500 笔，可能较慢，是否继续关联？'),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(ctx, false),
+                                                  child: const Text('取消'),
+                                                ),
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(ctx, true),
+                                                  child: const Text('继续'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                          if (confirmed != true) return;
+                                        }
+                                        Navigator.pop(sheetContext, true);
+                                      },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: JiveTheme.primaryGreen,
                                   foregroundColor: Colors.white,
@@ -1202,7 +1368,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                   ),
                                 ),
                                 child: Text(
-                                  selected.isEmpty ? '请选择要关联的交易' : '关联 ${selected.length} 笔交易',
+                                  selected.isEmpty
+                                      ? '请选择要关联的交易'
+                                      : selected.length >= 200
+                                          ? '关联 ${selected.length} 笔 · 较多可能较慢'
+                                          : '关联 ${selected.length} 笔交易',
                                   style: GoogleFonts.lato(fontSize: 15, fontWeight: FontWeight.w600),
                                 ),
                               ),
@@ -1235,7 +1405,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     });
 
     _hasChanges = true;
-    await _loadData();
+    await _reloadPreservingScroll();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1322,6 +1492,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Future<void> _showTransactionActions(JiveTransaction tx) async {
+    final canUnlink = _project?.status == 'active';
     final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.white,
@@ -1363,12 +1534,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 ),
               ),
               const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.link_off, color: Colors.orange),
-                title: const Text('取消关联'),
-                subtitle: const Text('将此交易从项目中移除'),
-                onTap: () => Navigator.pop(context, 'unlink'),
-              ),
+              if (canUnlink)
+                ListTile(
+                  leading: const Icon(Icons.link_off, color: Colors.orange),
+                  title: const Text('取消关联'),
+                  subtitle: const Text('将此交易从项目中移除'),
+                  onTap: () => Navigator.pop(context, 'unlink'),
+                ),
               ListTile(
                 leading: Icon(Icons.info_outline, color: JiveTheme.primaryGreen),
                 title: const Text('查看详情'),
@@ -1395,7 +1567,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       );
       if (result == true) {
         _hasChanges = true;
-        await _loadData();
+        await _reloadPreservingScroll();
       }
     }
   }
@@ -1407,7 +1579,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     });
 
     _hasChanges = true;
-    await _loadData();
+    await _reloadPreservingScroll();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1416,9 +1588,37 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   }
 
   Future<void> _showUnlinkTransactionsSheet() async {
+    if (_project?.status != 'active') {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('仅进行中项目可取消关联')),
+      );
+      return;
+    }
     if (_transactions.isEmpty) return;
 
     final selected = <int>{};
+    final categories = await _isar!.collection<JiveCategory>().where().findAll();
+    final accounts = await _isar!.collection<JiveAccount>().where().findAll();
+    final categoryByKey = {for (final c in categories) c.key: c};
+    final accountById = {for (final a in accounts) a.id: a};
+
+    String? filterCategoryKey;
+    int? filterAccountId;
+    String? filterTag;
+    DateTimeRange? filterDateRange;
+    String sortBy = 'time_desc';
+    String searchQuery = '';
+    final searchController = _unlinkSearchController;
+    searchController.text = '';
+
+    DateTime? minDate;
+    DateTime? maxDate;
+    if (_transactions.isNotEmpty) {
+      final sortedByTime = [..._transactions]..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      minDate = sortedByTime.first.timestamp;
+      maxDate = sortedByTime.last.timestamp;
+    }
 
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -1427,12 +1627,75 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) {
+      builder: (sheetContext) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
+            final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
+            List<JiveTransaction> filteredTransactions = _transactions.where((tx) {
+              if (searchQuery.isNotEmpty) {
+                final query = searchQuery.toLowerCase();
+                final categoryName = (tx.categoryKey != null
+                    ? categoryByKey[tx.categoryKey]?.name ?? tx.category
+                    : tx.category) ?? '';
+                final accountName = tx.accountId != null
+                    ? accountById[tx.accountId]?.name ?? ''
+                    : '';
+                final note = tx.note ?? '';
+                final amount = tx.amount.toStringAsFixed(2);
+                final date = tx.timestamp.toString().substring(0, 10);
+                final searchText = '$categoryName $accountName $note $amount $date'.toLowerCase();
+                if (!searchText.contains(query)) {
+                  return false;
+                }
+              }
+              if (filterCategoryKey != null) {
+                if (tx.categoryKey != filterCategoryKey && tx.subCategoryKey != filterCategoryKey) {
+                  return false;
+                }
+              }
+              if (filterAccountId != null && tx.accountId != filterAccountId) {
+                return false;
+              }
+              if (filterTag != null && filterTag!.isNotEmpty) {
+                final note = tx.note?.toLowerCase() ?? '';
+                if (!note.contains(filterTag!.toLowerCase())) {
+                  return false;
+                }
+              }
+              if (filterDateRange != null) {
+                final txDate = DateTime(tx.timestamp.year, tx.timestamp.month, tx.timestamp.day);
+                final startDate = DateTime(filterDateRange!.start.year, filterDateRange!.start.month, filterDateRange!.start.day);
+                final endDate = DateTime(filterDateRange!.end.year, filterDateRange!.end.month, filterDateRange!.end.day);
+                if (txDate.isBefore(startDate) || txDate.isAfter(endDate)) {
+                  return false;
+                }
+              }
+              return true;
+            }).toList();
+
+            filteredTransactions.sort((a, b) {
+              switch (sortBy) {
+                case 'time_asc':
+                  return a.timestamp.compareTo(b.timestamp);
+                case 'amount_desc':
+                  return b.amount.compareTo(a.amount);
+                case 'amount_asc':
+                  return a.amount.compareTo(b.amount);
+                case 'time_desc':
+                default:
+                  return b.timestamp.compareTo(a.timestamp);
+              }
+            });
+
+            final hasFilter = filterCategoryKey != null ||
+                filterAccountId != null ||
+                (filterTag != null && filterTag!.isNotEmpty) ||
+                filterDateRange != null;
+            final hasSearch = searchQuery.isNotEmpty || hasFilter;
+
             return DraggableScrollableSheet(
               expand: false,
-              initialChildSize: 0.75,
+              initialChildSize: 0.82,
               minChildSize: 0.5,
               maxChildSize: 0.95,
               builder: (context, scrollController) {
@@ -1470,77 +1733,255 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        '已选 ${selected.length} 笔',
-                        style: GoogleFonts.lato(
-                          fontSize: 14,
-                          color: Colors.orange,
-                        ),
+                      child: Row(
+                        children: [
+                          Text(
+                            '已选 ${selected.length} 笔',
+                            style: GoogleFonts.lato(fontSize: 13, color: Colors.orange),
+                          ),
+                          const Spacer(),
+                          Text(
+                            '共 ${filteredTransactions.length} 笔',
+                            style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade500),
+                          ),
+                        ],
                       ),
                     ),
-                    const Divider(height: 1),
-                    Expanded(
-                      child: ListView.builder(
-                        controller: scrollController,
-                        itemCount: _transactions.length,
-                        itemBuilder: (context, index) {
-                          final tx = _transactions[index];
-                          final isSelected = selected.contains(tx.id);
-                          return CheckboxListTile(
-                            value: isSelected,
-                            onChanged: (value) {
-                              setSheetState(() {
-                                if (value == true) {
-                                  selected.add(tx.id);
-                                } else {
-                                  selected.remove(tx.id);
-                                }
-                              });
-                            },
-                            title: Text(tx.category ?? '未分类'),
-                            subtitle: Text(
-                              '${tx.timestamp.toString().substring(0, 10)}  ¥${tx.amount.toStringAsFixed(2)}',
-                            ),
-                            secondary: tx.note?.isNotEmpty == true
-                                ? Text(
-                                    tx.note!,
-                                    style: GoogleFonts.lato(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  )
-                                : null,
-                          );
-                        },
-                      ),
-                    ),
-                    SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
+                    if (hasFilter)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                         child: Row(
                           children: [
+                            Icon(Icons.filter_alt, size: 14, color: JiveTheme.primaryGreen),
+                            const SizedBox(width: 4),
                             Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('取消'),
+                              child: Text(
+                                _buildFilterSummary(filterCategoryKey, filterAccountId, filterTag, filterDateRange, categoryByKey, accountById),
+                                style: GoogleFonts.lato(fontSize: 11, color: JiveTheme.primaryGreen),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: selected.isEmpty
-                                    ? null
-                                    : () => Navigator.pop(context, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
-                                  foregroundColor: Colors.white,
-                                ),
-                                child: Text('取消关联 ${selected.length} 笔'),
+                            TextButton(
+                              onPressed: () {
+                                setSheetState(() {
+                                  filterCategoryKey = null;
+                                  filterAccountId = null;
+                                  filterTag = null;
+                                  filterDateRange = null;
+                                });
+                              },
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
+                              child: Text('清除', style: GoogleFonts.lato(fontSize: 11)),
                             ),
                           ],
+                        ),
+                      ),
+                    const Divider(height: 1),
+                    Expanded(
+                      child: filteredTransactions.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.search_off, size: 48, color: Colors.grey.shade300),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '没有匹配的交易',
+                                    style: GoogleFonts.lato(color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              controller: scrollController,
+                              padding: const EdgeInsets.only(bottom: 150),
+                              itemCount: filteredTransactions.length,
+                              itemBuilder: (context, index) {
+                                final tx = filteredTransactions[index];
+                                final isSelected = selected.contains(tx.id);
+                                return _buildSelectableTransactionRow(
+                                  tx,
+                                  selected: isSelected,
+                                  onToggle: () {
+                                    setSheetState(() {
+                                      if (isSelected) {
+                                        selected.remove(tx.id);
+                                      } else {
+                                        selected.add(tx.id);
+                                      }
+                                    });
+                                  },
+                                );
+                              },
+                            ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.only(bottom: bottomInset),
+                      child: SafeArea(
+                        top: false,
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.08),
+                                blurRadius: 8,
+                                offset: const Offset(0, -2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextField(
+                                        controller: searchController,
+                                        onChanged: (value) {
+                                          setSheetState(() => searchQuery = value.trim());
+                                        },
+                                        textInputAction: TextInputAction.search,
+                                        decoration: InputDecoration(
+                                          hintText: '查找账单',
+                                          hintStyle: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                                          prefixIcon: Icon(Icons.search, size: 20, color: Colors.grey.shade600),
+                                          filled: true,
+                                          isDense: true,
+                                          fillColor: Colors.transparent,
+                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                          border: InputBorder.none,
+                                          suffixIcon: hasSearch
+                                              ? IconButton(
+                                                  onPressed: () {
+                                                    setSheetState(() {
+                                                      searchQuery = '';
+                                                      searchController.clear();
+                                                      filterCategoryKey = null;
+                                                      filterAccountId = null;
+                                                      filterTag = null;
+                                                      filterDateRange = null;
+                                                    });
+                                                  },
+                                                  icon: Icon(Icons.close, size: 18, color: Colors.grey.shade600),
+                                                  splashRadius: 18,
+                                                )
+                                              : null,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () async {
+                                        await showModalBottomSheet<void>(
+                                          context: sheetContext,
+                                          isScrollControlled: true,
+                                          backgroundColor: Colors.white,
+                                          shape: const RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                                          ),
+                                          builder: (ctx) {
+                                            return TransactionFilterSheet(
+                                              categories: categories,
+                                              accounts: accounts,
+                                              initialCategoryKey: filterCategoryKey,
+                                              initialAccountId: filterAccountId,
+                                              initialTag: filterTag,
+                                              initialDateRange: filterDateRange,
+                                              minDate: minDate,
+                                              maxDate: maxDate,
+                                              title: '查找账单（按条件）',
+                                              hint: '选择即生效',
+                                              onChanged: (categoryKey, accountId, tag, dateRange) {
+                                                setSheetState(() {
+                                                  filterCategoryKey = categoryKey;
+                                                  filterAccountId = accountId;
+                                                  filterTag = tag;
+                                                  filterDateRange = dateRange;
+                                                });
+                                              },
+                                              onClear: () {
+                                                setSheetState(() {
+                                                  filterCategoryKey = null;
+                                                  filterAccountId = null;
+                                                  filterTag = null;
+                                                  filterDateRange = null;
+                                                });
+                                              },
+                                            );
+                                          },
+                                        );
+                                      },
+                                      icon: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Icon(Icons.tune, size: 20, color: Colors.grey.shade700),
+                                          if (hasFilter)
+                                            Positioned(
+                                              right: -2,
+                                              top: -2,
+                                              child: Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.redAccent,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      splashRadius: 20,
+                                    ),
+                                    IconButton(
+                                      onPressed: () async {
+                                        await _showSortOptions(sheetContext, sortBy, (newSort) {
+                                          setSheetState(() => sortBy = newSort);
+                                        });
+                                      },
+                                      icon: Icon(Icons.sort, size: 20, color: Colors.grey.shade700),
+                                      splashRadius: 20,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      onPressed: () => Navigator.pop(sheetContext, false),
+                                      child: const Text('取消'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: ElevatedButton(
+                                      onPressed: selected.isEmpty
+                                          ? null
+                                          : () => Navigator.pop(sheetContext, true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.orange,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      child: Text('取消关联 ${selected.length} 笔'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1567,7 +2008,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     });
 
     _hasChanges = true;
-    await _loadData();
+    await _reloadPreservingScroll();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1667,8 +2108,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
     final dateFormat = DateFormat('M/d');
 
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
