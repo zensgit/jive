@@ -34,6 +34,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Map<String, double> _categoryStats = {};
   List<DailySpending> _dailySpending = [];
   List<DailySpending> _cumulativeSpending = [];
+  final Map<String, JiveCategory> _categoryByKey = {};
+  final Map<int, JiveAccount> _accountById = {};
+  final DateFormat _timeFormat = DateFormat('MM-dd HH:mm');
   bool _showCumulative = true;
   bool _hasChanges = false;
 
@@ -60,6 +63,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final stats = await service.getProjectCategoryStats(widget.projectId);
     final daily = await service.getProjectDailySpending(widget.projectId, days: 14);
     final cumulative = await service.getProjectCumulativeSpending(widget.projectId, days: 14);
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    final accounts = await isar.collection<JiveAccount>().where().findAll();
 
     if (!mounted) return;
     setState(() {
@@ -69,6 +74,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       _categoryStats = stats;
       _dailySpending = daily;
       _cumulativeSpending = cumulative;
+      _categoryByKey
+        ..clear()
+        ..addEntries(categories.map((c) => MapEntry(c.key, c)));
+      _accountById
+        ..clear()
+        ..addEntries(accounts.map((a) => MapEntry(a.id, a)));
       _isLoading = false;
     });
   }
@@ -393,30 +404,103 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         else
           ...List.generate(_transactions.length.clamp(0, 10), (i) {
             final tx = _transactions[i];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                onTap: () => _showTransactionActions(tx),
-                title: Text(tx.category ?? '未分类'),
-                subtitle: Text(tx.timestamp.toString().substring(0, 16)),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${tx.type == 'income' ? '+' : '-'}¥${tx.amount.toStringAsFixed(2)}',
-                      style: GoogleFonts.rubik(
-                        fontWeight: FontWeight.w600,
-                        color: tx.type == 'income' ? Colors.green : Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(Icons.chevron_right, size: 20, color: Colors.grey.shade400),
-                  ],
-                ),
-              ),
-            );
+            return _buildProjectTransactionRow(tx);
           }),
       ],
+    );
+  }
+
+  Widget _buildProjectTransactionRow(JiveTransaction tx) {
+    final type = tx.type ?? 'expense';
+    final isTransfer = type == 'transfer';
+    final isIncome = type == 'income';
+    final amountPrefix = isTransfer ? '' : (isIncome ? '+ ' : '- ');
+    final amountColor = isTransfer
+        ? Colors.blueGrey
+        : (isIncome ? Colors.green : Colors.redAccent);
+    final title = isTransfer ? _transferTitle(tx) : _categoryTitle(tx);
+    final subtitle = isTransfer ? _transferSubtitle(tx) : _categorySubtitle(tx);
+    final timeLabel = _formatTime(tx.timestamp);
+    final iconMeta = _buildIconMeta(isTransfer, isIncome);
+    final fromAccount = _resolveAccountName(tx.accountId);
+    final toAccount = _resolveAccountName(tx.toAccountId);
+    final accountLabel = fromAccount.isNotEmpty ? fromAccount : toAccount;
+
+    return InkWell(
+      onTap: () => _showTransactionActions(tx),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: iconMeta.background,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(iconMeta.icon, color: iconMeta.color, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.lato(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle.isEmpty ? timeLabel : '$subtitle • $timeLabel',
+                    style: GoogleFonts.lato(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '$amountPrefix¥${tx.amount.toStringAsFixed(2)}',
+                  style: GoogleFonts.rubik(
+                    color: amountColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (accountLabel.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    accountLabel,
+                    style: GoogleFonts.lato(
+                      fontSize: 11,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -466,6 +550,70 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  String _categoryTitle(JiveTransaction tx) {
+    return _displayCategoryName(tx.categoryKey, tx.category);
+  }
+
+  String _categorySubtitle(JiveTransaction tx) {
+    final sub = _displayCategoryName(tx.subCategoryKey, tx.subCategory);
+    if (sub == '未分类') {
+      return tx.note?.trim() ?? '';
+    }
+    return sub;
+  }
+
+  String _transferTitle(JiveTransaction tx) {
+    return '转账';
+  }
+
+  String _transferSubtitle(JiveTransaction tx) {
+    final fromName = _resolveAccountName(tx.accountId);
+    final toName = _resolveAccountName(tx.toAccountId);
+    if (fromName.isEmpty && toName.isEmpty) return '';
+    if (fromName.isEmpty) return '到 $toName';
+    if (toName.isEmpty) return '来自 $fromName';
+    return '$fromName → $toName';
+  }
+
+  String _displayCategoryName(String? key, String? fallback) {
+    if (key != null && _categoryByKey.containsKey(key)) {
+      return _categoryByKey[key]!.name;
+    }
+    if (fallback != null && fallback.isNotEmpty) return fallback;
+    return '未分类';
+  }
+
+  String _resolveAccountName(int? accountId) {
+    if (accountId == null) return '';
+    return _accountById[accountId]?.name ?? '';
+  }
+
+  String _formatTime(DateTime time) {
+    return _timeFormat.format(time);
+  }
+
+  _IconMeta _buildIconMeta(bool isTransfer, bool isIncome) {
+    if (isTransfer) {
+      return _IconMeta(
+        icon: Icons.swap_horiz,
+        color: Colors.blueGrey,
+        background: Colors.blueGrey.shade50,
+      );
+    }
+    if (isIncome) {
+      return _IconMeta(
+        icon: Icons.arrow_downward,
+        color: Colors.green,
+        background: Colors.green.shade50,
+      );
+    }
+    return _IconMeta(
+      icon: Icons.arrow_upward,
+      color: Colors.redAccent,
+      background: Colors.red.shade50,
     );
   }
 
@@ -1677,4 +1825,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
+}
+
+class _IconMeta {
+  final IconData icon;
+  final Color color;
+  final Color background;
+
+  const _IconMeta({
+    required this.icon,
+    required this.color,
+    required this.background,
+  });
 }
