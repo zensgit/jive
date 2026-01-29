@@ -37,6 +37,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   final Map<String, JiveCategory> _categoryByKey = {};
   final Map<int, JiveAccount> _accountById = {};
   final DateFormat _timeFormat = DateFormat('MM-dd HH:mm');
+  final TextEditingController _linkSearchController = TextEditingController();
   bool _showCumulative = true;
   bool _hasChanges = false;
 
@@ -44,6 +45,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _linkSearchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -786,7 +793,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     DateTimeRange? filterDateRange;
     String sortBy = 'time_desc';
     String searchQuery = '';
-    final searchController = TextEditingController();
+    final searchController = _linkSearchController;
+    searchController.text = '';
 
     // 计算日期范围
     DateTime? minDate;
@@ -1212,8 +1220,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         );
       },
     );
-
-    searchController.dispose();
 
     if (result != true || selected.isEmpty) return;
 
