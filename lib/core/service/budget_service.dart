@@ -1,0 +1,190 @@
+import 'package:isar/isar.dart';
+import '../database/budget_model.dart';
+import '../database/transaction_model.dart';
+import 'currency_service.dart';
+
+/// 预算服务
+class BudgetService {
+  final Isar _isar;
+  final CurrencyService _currencyService;
+
+  BudgetService(this._isar, this._currencyService);
+
+  /// 创建预算
+  Future<JiveBudget> createBudget({
+    required String name,
+    required double amount,
+    required String currency,
+    String? categoryKey,
+    required DateTime startDate,
+    required DateTime endDate,
+    String period = 'monthly',
+    double? alertThreshold,
+    bool alertEnabled = false,
+    bool rollover = false,
+  }) async {
+    final budget = JiveBudget()
+      ..name = name
+      ..amount = amount
+      ..currency = currency
+      ..categoryKey = categoryKey
+      ..startDate = startDate
+      ..endDate = endDate
+      ..period = period
+      ..alertThreshold = alertThreshold
+      ..alertEnabled = alertEnabled
+      ..rollover = rollover
+      ..createdAt = DateTime.now()
+      ..updatedAt = DateTime.now();
+
+    await _isar.writeTxn(() async {
+      await _isar.jiveBudgets.put(budget);
+    });
+
+    return budget;
+  }
+
+  /// 获取所有活跃预算
+  Future<List<JiveBudget>> getActiveBudgets() async {
+    return await _isar.jiveBudgets
+        .filter()
+        .isActiveEqualTo(true)
+        .sortByStartDateDesc()
+        .findAll();
+  }
+
+  /// 获取预算详情
+  Future<JiveBudget?> getBudget(int id) async {
+    return await _isar.jiveBudgets.get(id);
+  }
+
+  /// 更新预算
+  Future<void> updateBudget(JiveBudget budget) async {
+    budget.updatedAt = DateTime.now();
+    await _isar.writeTxn(() async {
+      await _isar.jiveBudgets.put(budget);
+    });
+  }
+
+  /// 删除预算
+  Future<void> deleteBudget(int id) async {
+    await _isar.writeTxn(() async {
+      await _isar.jiveBudgets.delete(id);
+      // 同时删除相关使用记录
+      await _isar.jiveBudgetUsages.filter().budgetIdEqualTo(id).deleteAll();
+    });
+  }
+
+  /// 计算预算使用情况
+  Future<BudgetSummary> calculateBudgetUsage(JiveBudget budget) async {
+    final now = DateTime.now();
+
+    // 获取周期内的交易
+    var query = _isar.jiveTransactions
+        .filter()
+        .timestampBetween(budget.startDate, budget.endDate)
+        .typeEqualTo('expense');
+
+    if (budget.categoryKey != null) {
+      query = query.categoryKeyEqualTo(budget.categoryKey!);
+    }
+
+    final transactions = await query.findAll();
+
+    // 计算总使用金额（转换为预算货币）
+    double usedAmount = 0;
+    for (final tx in transactions) {
+      // 假设交易有币种字段，这里简化处理
+      final txCurrency = 'CNY'; // TODO: 从交易中获取实际币种
+      double amount = tx.amount;
+
+      if (txCurrency != budget.currency) {
+        final rate = await _currencyService.getRate(txCurrency, budget.currency);
+        if (rate != null) {
+          amount = tx.amount * rate;
+        }
+      }
+
+      usedAmount += amount;
+    }
+
+    final remainingAmount = budget.amount - usedAmount;
+    final usedPercent = budget.amount > 0 ? (usedAmount / budget.amount * 100) : 0;
+
+    // 确定状态
+    BudgetStatus status;
+    if (usedAmount > budget.amount) {
+      status = BudgetStatus.exceeded;
+    } else if (budget.alertEnabled &&
+        budget.alertThreshold != null &&
+        usedPercent >= budget.alertThreshold!) {
+      status = BudgetStatus.warning;
+    } else {
+      status = BudgetStatus.normal;
+    }
+
+    // 计算剩余天数
+    final daysRemaining = budget.endDate.difference(now).inDays;
+
+    return BudgetSummary(
+      budget: budget,
+      usedAmount: usedAmount,
+      remainingAmount: remainingAmount,
+      usedPercent: usedPercent.toDouble(),
+      status: status,
+      daysRemaining: daysRemaining > 0 ? daysRemaining : 0,
+    );
+  }
+
+  /// 获取所有预算摘要
+  Future<List<BudgetSummary>> getAllBudgetSummaries() async {
+    final budgets = await getActiveBudgets();
+    final summaries = <BudgetSummary>[];
+
+    for (final budget in budgets) {
+      final summary = await calculateBudgetUsage(budget);
+      summaries.add(summary);
+    }
+
+    return summaries;
+  }
+
+  /// 根据周期获取预算日期范围
+  static (DateTime, DateTime) getPeriodDateRange(BudgetPeriod period, {DateTime? referenceDate}) {
+    final ref = referenceDate ?? DateTime.now();
+
+    switch (period) {
+      case BudgetPeriod.daily:
+        final start = DateTime(ref.year, ref.month, ref.day);
+        final end = start.add(const Duration(days: 1)).subtract(const Duration(seconds: 1));
+        return (start, end);
+
+      case BudgetPeriod.weekly:
+        final weekday = ref.weekday;
+        final start = DateTime(ref.year, ref.month, ref.day).subtract(Duration(days: weekday - 1));
+        final end = start.add(const Duration(days: 7)).subtract(const Duration(seconds: 1));
+        return (start, end);
+
+      case BudgetPeriod.monthly:
+        final start = DateTime(ref.year, ref.month, 1);
+        final end = DateTime(ref.year, ref.month + 1, 0, 23, 59, 59);
+        return (start, end);
+
+      case BudgetPeriod.yearly:
+        final start = DateTime(ref.year, 1, 1);
+        final end = DateTime(ref.year, 12, 31, 23, 59, 59);
+        return (start, end);
+
+      case BudgetPeriod.custom:
+        return (ref, ref);
+    }
+  }
+
+  /// 检查需要预警的预算
+  Future<List<BudgetSummary>> checkBudgetAlerts() async {
+    final summaries = await getAllBudgetSummaries();
+    return summaries
+        .where((s) => s.status == BudgetStatus.warning || s.status == BudgetStatus.exceeded)
+        .toList();
+  }
+}

@@ -49,6 +49,8 @@ class JiveCurrencyPreference {
   DateTime? lastRateUpdate; // 最后更新时间
   bool rateChangeAlert = false; // 是否启用汇率变动提醒
   double rateChangeThreshold = 1.0; // 汇率变动提醒阈值（百分比）
+  String preferredRateSource = 'frankfurter'; // 首选汇率数据源
+  String preferredCryptoSource = 'coingecko'; // 首选加密货币数据源
 }
 
 /// 汇率历史记录
@@ -121,7 +123,10 @@ class CurrencyDefaults {
     {'code': 'LTC', 'name': 'Litecoin', 'nameZh': '莱特币', 'symbol': 'Ł', 'decimalPlaces': 8, 'flag': 'Ł', 'isCrypto': true, 'sortOrder': 110},
   ];
 
-  /// 预置汇率（以 USD 为基准）
+  /// 预置汇率（以 USD 为基准）- 离线汇率包 v1.0 (2024-01)
+  static const String offlineRateVersion = '1.0';
+  static const String offlineRateDate = '2024-01-15';
+
   static const Map<String, double> ratesAgainstUSD = {
     'USD': 1.0,
     'CNY': 7.25,
@@ -166,9 +171,63 @@ class CurrencyDefaults {
     'LTC': 0.012,       // LTC ≈ 83 USD
   };
 
+  /// 扩展汇率数据 - 历史参考汇率
+  static const Map<String, Map<String, double>> historicalRates = {
+    // 常用货币对的典型范围，用于离线参考
+    'CNY/USD': {'min': 6.3, 'max': 7.5, 'avg': 7.0},
+    'EUR/USD': {'min': 0.85, 'max': 1.15, 'avg': 1.0},
+    'GBP/USD': {'min': 1.15, 'max': 1.45, 'avg': 1.28},
+    'JPY/USD': {'min': 100.0, 'max': 160.0, 'avg': 130.0},
+  };
+
   /// 获取所有货币数据
   static List<Map<String, dynamic>> getAllCurrencies() {
     return [...fiatCurrencies, ...cryptoCurrencies];
+  }
+
+  /// 货币分组定义
+  static const Map<String, List<String>> currencyGroups = {
+    '常用': ['CNY', 'USD', 'EUR', 'GBP', 'JPY', 'HKD'],
+    '亚太': ['CNY', 'JPY', 'HKD', 'TWD', 'SGD', 'KRW', 'AUD', 'NZD', 'THB', 'MYR', 'INR', 'PHP', 'VND', 'IDR'],
+    '欧洲': ['EUR', 'GBP', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'RUB', 'TRY'],
+    '美洲': ['USD', 'CAD', 'BRL', 'MXN'],
+    '中东非洲': ['AED', 'SAR', 'ZAR'],
+    '加密货币': ['BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'LTC'],
+  };
+
+  /// 获取货币所属分组
+  static List<String> getGroupsForCurrency(String code) {
+    final groups = <String>[];
+    for (final entry in currencyGroups.entries) {
+      if (entry.value.contains(code)) {
+        groups.add(entry.key);
+      }
+    }
+    return groups;
+  }
+
+  /// 按分组获取货币
+  static Map<String, List<Map<String, dynamic>>> getCurrenciesByGroup() {
+    final result = <String, List<Map<String, dynamic>>>{};
+    final allCurrencies = getAllCurrencies();
+
+    for (final groupEntry in currencyGroups.entries) {
+      final groupCurrencies = <Map<String, dynamic>>[];
+      for (final code in groupEntry.value) {
+        final currency = allCurrencies.firstWhere(
+          (c) => c['code'] == code,
+          orElse: () => <String, dynamic>{},
+        );
+        if (currency.isNotEmpty) {
+          groupCurrencies.add(currency);
+        }
+      }
+      if (groupCurrencies.isNotEmpty) {
+        result[groupEntry.key] = groupCurrencies;
+      }
+    }
+
+    return result;
   }
 
   /// 根据代码获取货币符号

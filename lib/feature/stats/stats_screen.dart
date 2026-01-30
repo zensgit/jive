@@ -15,6 +15,7 @@ import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
+import '../settings/report_export_screen.dart';
 
 class StatsScreen extends StatefulWidget {
   final String? filterCategoryKey;
@@ -300,6 +301,16 @@ class _StatsScreenState extends State<StatsScreen> {
         elevation: 0,
         centerTitle: false,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.file_download_outlined),
+            tooltip: '导出报表',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ReportExportScreen()),
+              );
+            },
+          ),
           if (_availableCurrencies.length > 1)
             _buildCurrencySelector(),
         ],

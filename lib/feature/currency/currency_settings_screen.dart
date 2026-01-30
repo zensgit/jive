@@ -6,6 +6,8 @@ import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/notification_service.dart';
+import 'currency_converter_screen.dart';
 
 /// 货币与汇率管理页面
 class CurrencySettingsScreen extends StatefulWidget {
@@ -63,6 +65,21 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
 
       // 如果有显著变动且启用了提醒，显示变动详情
       if (_preference!.rateChangeAlert && result.hasSignificantChanges) {
+        // 使用新的通知服务显示横幅通知
+        final changes = result.significantChanges;
+        if (changes.isNotEmpty) {
+          final notifications = changes.map((c) => RateChangeNotification(
+            fromCurrency: c.from,
+            toCurrency: c.to,
+            oldRate: c.oldRate,
+            newRate: c.newRate,
+            threshold: _preference!.rateChangeThreshold,
+          )).toList();
+
+          RateChangeNotificationManager.checkAndShowNotifications(context, notifications);
+        }
+
+        // 同时显示详细对话框
         _showRateChangeAlert(result.significantChanges);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -391,6 +408,304 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
     }
   }
 
+  String _getSourceDisplayName(String source) {
+    switch (source) {
+      case 'frankfurter':
+        return 'Frankfurter API (免费，无限制)';
+      case 'exchangerate.host':
+        return 'ExchangeRate.host (免费，每日更新)';
+      case 'openexchangerates':
+        return 'Open Exchange Rates (需要API Key)';
+      case 'coingecko':
+        return 'CoinGecko (免费，实时价格)';
+      case 'binance':
+        return 'Binance API (实时交易价格)';
+      default:
+        return source;
+    }
+  }
+
+  Future<void> _showSourceSelector(bool isCrypto) async {
+    final sources = isCrypto
+        ? [
+            {'id': 'coingecko', 'name': 'CoinGecko', 'desc': '免费API，支持大多数加密货币，实时价格', 'icon': Icons.currency_bitcoin},
+            {'id': 'binance', 'name': 'Binance', 'desc': '实时交易价格，需要网络良好', 'icon': Icons.trending_up},
+          ]
+        : [
+            {'id': 'frankfurter', 'name': 'Frankfurter', 'desc': '欧洲央行数据，免费无限制，每日更新', 'icon': Icons.euro},
+            {'id': 'exchangerate.host', 'name': 'ExchangeRate.host', 'desc': '备用数据源，免费，每日更新', 'icon': Icons.sync_alt},
+          ];
+
+    final currentSource = isCrypto
+        ? (_preference?.preferredCryptoSource ?? 'coingecko')
+        : (_preference?.preferredRateSource ?? 'frankfurter');
+
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    isCrypto ? '加密货币数据源' : '汇率数据源',
+                    style: GoogleFonts.lato(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            ListView.builder(
+              shrinkWrap: true,
+              itemCount: sources.length,
+              itemBuilder: (ctx, index) {
+                final source = sources[index];
+                final isSelected = source['id'] == currentSource;
+                return ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? JiveTheme.primaryGreen.withValues(alpha: 0.1)
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      source['icon'] as IconData,
+                      color: isSelected ? JiveTheme.primaryGreen : Colors.grey.shade600,
+                    ),
+                  ),
+                  title: Text(
+                    source['name'] as String,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      color: isSelected ? JiveTheme.primaryGreen : null,
+                    ),
+                  ),
+                  subtitle: Text(
+                    source['desc'] as String,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle, color: JiveTheme.primaryGreen)
+                      : null,
+                  onTap: () => Navigator.pop(ctx, source['id'] as String),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+
+    if (selected != null && _preference != null) {
+      if (isCrypto) {
+        _preference!.preferredCryptoSource = selected;
+      } else {
+        _preference!.preferredRateSource = selected;
+      }
+      await _currencyService.updatePreference(_preference!);
+      setState(() {});
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('数据源已切换为 ${_getSourceDisplayName(selected).split(' (').first}'),
+            backgroundColor: JiveTheme.primaryGreen,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showOfflinePackageOptions() async {
+    final info = CurrencyService.getOfflinePackageInfo();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    '离线汇率包',
+                    style: GoogleFonts.lato(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.offline_bolt, color: Colors.green.shade700, size: 32),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '内置离线汇率包',
+                              style: GoogleFonts.lato(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green.shade700,
+                              ),
+                            ),
+                            Text(
+                              '在无网络时仍可进行货币换算',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.green.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildInfoItem('版本', 'v${info['version']}'),
+                      _buildInfoItem('日期', info['date'] ?? '-'),
+                      _buildInfoItem('货币数', info['currencies'] ?? '-'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.restore, color: Colors.orange),
+              title: const Text('重置为离线汇率'),
+              subtitle: const Text(
+                '清除所有在线更新和手动设置的汇率，恢复为内置离线数据',
+                style: TextStyle(fontSize: 12),
+              ),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (c) => AlertDialog(
+                    title: const Text('确认重置'),
+                    content: const Text('这将清除所有在线更新和手动设置的汇率，恢复为内置离线数据。确定要继续吗？'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(c, false),
+                        child: const Text('取消'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(c, true),
+                        child: const Text('确定'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true) {
+                  await _currencyService.resetToOfflineRates();
+                  await _loadData();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('汇率已重置为离线数据'),
+                        backgroundColor: Colors.orange,
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.rubik(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.green.shade700,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Colors.green.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildCurrencyDisplay(String code) {
     final currency = CurrencyDefaults.getAllCurrencies().firstWhere(
       (c) => c['code'] == code,
@@ -431,6 +746,16 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
       appBar: AppBar(
         title: const Text('货币与汇率'),
         actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CurrencyConverterScreen()),
+              );
+            },
+            icon: const Icon(Icons.calculate_outlined),
+            tooltip: '货币换算',
+          ),
           IconButton(
             onPressed: _isUpdatingRates ? null : _updateRatesOnline,
             icon: _isUpdatingRates
@@ -557,6 +882,52 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                     ),
                   ),
                 ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 汇率数据源设置
+          Card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.api, color: Colors.blue),
+                  title: const Text('汇率数据源'),
+                  subtitle: Text(
+                    _getSourceDisplayName(_preference?.preferredRateSource ?? 'frankfurter'),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showSourceSelector(false),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.currency_bitcoin, color: Colors.orange),
+                  title: const Text('加密货币数据源'),
+                  subtitle: Text(
+                    _getSourceDisplayName(_preference?.preferredCryptoSource ?? 'coingecko'),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showSourceSelector(true),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.offline_bolt, color: Colors.green),
+                  title: const Text('离线汇率包'),
+                  subtitle: Builder(
+                    builder: (context) {
+                      final info = CurrencyService.getOfflinePackageInfo();
+                      return Text(
+                        '版本 ${info['version']} (${info['date']}) · ${info['currencies']} 种货币',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      );
+                    },
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _showOfflinePackageOptions,
+                ),
               ],
             ),
           ),
@@ -1083,12 +1454,27 @@ class _CurrencySelectSheet extends StatefulWidget {
 class _CurrencySelectSheetState extends State<_CurrencySelectSheet> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
+  String _selectedGroup = '全部';
+
+  List<String> get _groupNames => ['全部', ...CurrencyDefaults.currencyGroups.keys];
 
   List<Map<String, dynamic>> get _filteredCurrencies {
-    final all = CurrencyDefaults.fiatCurrencies;
-    if (_searchQuery.isEmpty) return all;
+    List<Map<String, dynamic>> currencies;
+
+    // 按分组筛选
+    if (_selectedGroup == '全部') {
+      currencies = CurrencyDefaults.getAllCurrencies();
+    } else {
+      final groupCodes = CurrencyDefaults.currencyGroups[_selectedGroup] ?? [];
+      currencies = CurrencyDefaults.getAllCurrencies()
+          .where((c) => groupCodes.contains(c['code']))
+          .toList();
+    }
+
+    // 搜索筛选
+    if (_searchQuery.isEmpty) return currencies;
     final query = _searchQuery.toLowerCase();
-    return all.where((c) {
+    return currencies.where((c) {
       final code = (c['code'] as String).toLowerCase();
       final name = (c['name'] as String).toLowerCase();
       final nameZh = (c['nameZh'] as String).toLowerCase();
@@ -1170,6 +1556,38 @@ class _CurrencySelectSheetState extends State<_CurrencySelectSheet> {
                   ),
                 ),
                 onChanged: (value) => setState(() => _searchQuery = value),
+              ),
+            ),
+            // 分组选择器
+            Container(
+              height: 40,
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: _groupNames.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final group = _groupNames[index];
+                  final isSelected = group == _selectedGroup;
+                  return ChoiceChip(
+                    label: Text(group),
+                    selected: isSelected,
+                    selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.2),
+                    labelStyle: TextStyle(
+                      color: isSelected ? JiveTheme.primaryGreen : Colors.grey.shade700,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() => _selectedGroup = group);
+                      }
+                    },
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                  );
+                },
               ),
             ),
             Expanded(

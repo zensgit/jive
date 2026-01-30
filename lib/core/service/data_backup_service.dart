@@ -13,6 +13,7 @@ import '../database/tag_conversion_log.dart';
 import '../database/tag_model.dart';
 import '../database/tag_rule_model.dart';
 import '../database/transaction_model.dart';
+import 'currency_service.dart';
 
 class BackupImportSummary {
   final int accounts;
@@ -557,6 +558,10 @@ class JiveDataBackupService {
         'enabledCurrencies': pref.enabledCurrencies,
         'autoUpdateRates': pref.autoUpdateRates,
         'lastRateUpdate': pref.lastRateUpdate?.toIso8601String(),
+        'rateChangeAlert': pref.rateChangeAlert,
+        'rateChangeThreshold': pref.rateChangeThreshold,
+        'preferredRateSource': pref.preferredRateSource,
+        'preferredCryptoSource': pref.preferredCryptoSource,
       };
 
   static JiveCurrencyPreference _currencyPreferenceFromMap(Map<String, dynamic> map) {
@@ -565,7 +570,183 @@ class JiveDataBackupService {
       ..baseCurrency = map['baseCurrency']?.toString() ?? 'CNY'
       ..enabledCurrencies = List<String>.from(map['enabledCurrencies'] ?? [])
       ..autoUpdateRates = map['autoUpdateRates'] == true
-      ..lastRateUpdate = _parseDate(map['lastRateUpdate']);
+      ..lastRateUpdate = _parseDate(map['lastRateUpdate'])
+      ..rateChangeAlert = map['rateChangeAlert'] == true
+      ..rateChangeThreshold = _parseDouble(map['rateChangeThreshold']) ?? 1.0
+      ..preferredRateSource = map['preferredRateSource']?.toString() ?? 'frankfurter'
+      ..preferredCryptoSource = map['preferredCryptoSource']?.toString() ?? 'coingecko';
     return pref;
+  }
+
+  /// 导出交易报表（支持多币种转换）
+  static Future<File> exportReport(
+    Isar isar, {
+    required String targetCurrency,
+    DateTime? startDate,
+    DateTime? endDate,
+    String format = 'csv', // csv 或 json
+    List<String>? accountIds,
+    List<String>? categoryKeys,
+  }) async {
+    final currencyService = CurrencyService(isar);
+    final accounts = await isar.collection<JiveAccount>().where().findAll();
+    final accountById = {for (final a in accounts) a.id: a};
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    final categoryByKey = {for (final c in categories) c.key: c};
+
+    // 构建查询
+    var query = isar.collection<JiveTransaction>().where();
+    final txs = await query.findAll();
+
+    // 过滤
+    var filteredTxs = txs.where((tx) {
+      if (startDate != null && tx.timestamp.isBefore(startDate)) return false;
+      if (endDate != null && tx.timestamp.isAfter(endDate)) return false;
+      if (accountIds != null && accountIds.isNotEmpty) {
+        if (tx.accountId == null || !accountIds.contains(tx.accountId.toString())) {
+          return false;
+        }
+      }
+      if (categoryKeys != null && categoryKeys.isNotEmpty) {
+        if (tx.categoryKey == null || !categoryKeys.contains(tx.categoryKey)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+
+    // 转换并生成报表数据
+    final reportRows = <Map<String, dynamic>>[];
+    double totalIncome = 0;
+    double totalExpense = 0;
+    double totalTransfer = 0;
+
+    for (final tx in filteredTxs) {
+      final account = tx.accountId != null ? accountById[tx.accountId] : null;
+      final txCurrency = account?.currency ?? 'CNY';
+      final category = tx.categoryKey != null ? categoryByKey[tx.categoryKey] : null;
+      final subCategory = tx.subCategoryKey != null ? categoryByKey[tx.subCategoryKey] : null;
+
+      // 转换金额到目标货币
+      double convertedAmount = tx.amount;
+      double? exchangeRate;
+      if (txCurrency != targetCurrency) {
+        final rate = await currencyService.getRate(txCurrency, targetCurrency);
+        if (rate != null) {
+          convertedAmount = tx.amount * rate;
+          exchangeRate = rate;
+        }
+      }
+
+      // 统计
+      final type = tx.type ?? 'expense';
+      if (type == 'income') {
+        totalIncome += convertedAmount;
+      } else if (type == 'expense') {
+        totalExpense += convertedAmount;
+      } else if (type == 'transfer') {
+        totalTransfer += convertedAmount;
+      }
+
+      reportRows.add({
+        'date': DateFormat('yyyy-MM-dd').format(tx.timestamp),
+        'time': DateFormat('HH:mm:ss').format(tx.timestamp),
+        'type': _translateType(type),
+        'category': category?.name ?? tx.category ?? '',
+        'subCategory': subCategory?.name ?? tx.subCategory ?? '',
+        'account': account?.name ?? '',
+        'originalAmount': tx.amount,
+        'originalCurrency': txCurrency,
+        'convertedAmount': double.parse(convertedAmount.toStringAsFixed(2)),
+        'targetCurrency': targetCurrency,
+        'exchangeRate': exchangeRate,
+        'note': tx.note ?? '',
+        'tags': tx.tagKeys.join(', '),
+      });
+    }
+
+    // 生成文件
+    final dir = await getApplicationDocumentsDirectory();
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    final currencySymbol = CurrencyDefaults.getSymbol(targetCurrency);
+
+    if (format == 'csv') {
+      final buffer = StringBuffer();
+      // CSV 头部
+      buffer.writeln('日期,时间,类型,分类,子分类,账户,原始金额,原始货币,转换金额($currencySymbol),汇率,备注,标签');
+
+      // 数据行
+      for (final row in reportRows) {
+        buffer.writeln([
+          row['date'],
+          row['time'],
+          row['type'],
+          _escapeCsv(row['category']),
+          _escapeCsv(row['subCategory']),
+          _escapeCsv(row['account']),
+          row['originalAmount'],
+          row['originalCurrency'],
+          row['convertedAmount'],
+          row['exchangeRate'] ?? '',
+          _escapeCsv(row['note']),
+          _escapeCsv(row['tags']),
+        ].join(','));
+      }
+
+      // 汇总行
+      buffer.writeln('');
+      buffer.writeln('汇总统计,$targetCurrency');
+      buffer.writeln('总收入,$currencySymbol${totalIncome.toStringAsFixed(2)}');
+      buffer.writeln('总支出,$currencySymbol${totalExpense.toStringAsFixed(2)}');
+      buffer.writeln('净收入,$currencySymbol${(totalIncome - totalExpense).toStringAsFixed(2)}');
+      buffer.writeln('转账合计,$currencySymbol${totalTransfer.toStringAsFixed(2)}');
+
+      final file = File('${dir.path}/jive_report_${targetCurrency}_$timestamp.csv');
+      await file.writeAsString(buffer.toString());
+      return file;
+    } else {
+      // JSON 格式
+      final payload = {
+        'exportedAt': DateTime.now().toIso8601String(),
+        'targetCurrency': targetCurrency,
+        'dateRange': {
+          'start': startDate?.toIso8601String(),
+          'end': endDate?.toIso8601String(),
+        },
+        'summary': {
+          'totalIncome': totalIncome,
+          'totalExpense': totalExpense,
+          'netIncome': totalIncome - totalExpense,
+          'totalTransfer': totalTransfer,
+          'transactionCount': reportRows.length,
+        },
+        'transactions': reportRows,
+      };
+
+      final file = File('${dir.path}/jive_report_${targetCurrency}_$timestamp.json');
+      await file.writeAsString(jsonEncode(payload));
+      return file;
+    }
+  }
+
+  static String _translateType(String type) {
+    switch (type) {
+      case 'income':
+        return '收入';
+      case 'expense':
+        return '支出';
+      case 'transfer':
+        return '转账';
+      default:
+        return type;
+    }
+  }
+
+  static String _escapeCsv(String? value) {
+    if (value == null || value.isEmpty) return '';
+    if (value.contains(',') || value.contains('"') || value.contains('\n')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
   }
 }

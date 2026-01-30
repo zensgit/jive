@@ -2925,13 +2925,23 @@ const JiveCurrencyPreferenceSchema = CollectionSchema(
       name: r'lastRateUpdate',
       type: IsarType.dateTime,
     ),
-    r'rateChangeAlert': PropertySchema(
+    r'preferredCryptoSource': PropertySchema(
       id: 4,
+      name: r'preferredCryptoSource',
+      type: IsarType.string,
+    ),
+    r'preferredRateSource': PropertySchema(
+      id: 5,
+      name: r'preferredRateSource',
+      type: IsarType.string,
+    ),
+    r'rateChangeAlert': PropertySchema(
+      id: 6,
       name: r'rateChangeAlert',
       type: IsarType.bool,
     ),
     r'rateChangeThreshold': PropertySchema(
-      id: 5,
+      id: 7,
       name: r'rateChangeThreshold',
       type: IsarType.double,
     )
@@ -2964,6 +2974,8 @@ int _jiveCurrencyPreferenceEstimateSize(
       bytesCount += value.length * 3;
     }
   }
+  bytesCount += 3 + object.preferredCryptoSource.length * 3;
+  bytesCount += 3 + object.preferredRateSource.length * 3;
   return bytesCount;
 }
 
@@ -2977,8 +2989,10 @@ void _jiveCurrencyPreferenceSerialize(
   writer.writeString(offsets[1], object.baseCurrency);
   writer.writeStringList(offsets[2], object.enabledCurrencies);
   writer.writeDateTime(offsets[3], object.lastRateUpdate);
-  writer.writeBool(offsets[4], object.rateChangeAlert);
-  writer.writeDouble(offsets[5], object.rateChangeThreshold);
+  writer.writeString(offsets[4], object.preferredCryptoSource);
+  writer.writeString(offsets[5], object.preferredRateSource);
+  writer.writeBool(offsets[6], object.rateChangeAlert);
+  writer.writeDouble(offsets[7], object.rateChangeThreshold);
 }
 
 JiveCurrencyPreference _jiveCurrencyPreferenceDeserialize(
@@ -2993,8 +3007,10 @@ JiveCurrencyPreference _jiveCurrencyPreferenceDeserialize(
   object.enabledCurrencies = reader.readStringList(offsets[2]) ?? [];
   object.id = id;
   object.lastRateUpdate = reader.readDateTimeOrNull(offsets[3]);
-  object.rateChangeAlert = reader.readBool(offsets[4]);
-  object.rateChangeThreshold = reader.readDouble(offsets[5]);
+  object.preferredCryptoSource = reader.readString(offsets[4]);
+  object.preferredRateSource = reader.readString(offsets[5]);
+  object.rateChangeAlert = reader.readBool(offsets[6]);
+  object.rateChangeThreshold = reader.readDouble(offsets[7]);
   return object;
 }
 
@@ -3014,8 +3030,12 @@ P _jiveCurrencyPreferenceDeserializeProp<P>(
     case 3:
       return (reader.readDateTimeOrNull(offset)) as P;
     case 4:
-      return (reader.readBool(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 5:
+      return (reader.readString(offset)) as P;
+    case 6:
+      return (reader.readBool(offset)) as P;
+    case 7:
       return (reader.readDouble(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3627,6 +3647,283 @@ extension JiveCurrencyPreferenceQueryFilter on QueryBuilder<
   }
 
   QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredCryptoSourceEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'preferredCryptoSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredCryptoSourceGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'preferredCryptoSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredCryptoSourceLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'preferredCryptoSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredCryptoSourceBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'preferredCryptoSource',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredCryptoSourceStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'preferredCryptoSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredCryptoSourceEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'preferredCryptoSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+          QAfterFilterCondition>
+      preferredCryptoSourceContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'preferredCryptoSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+          QAfterFilterCondition>
+      preferredCryptoSourceMatches(String pattern,
+          {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'preferredCryptoSource',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredCryptoSourceIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'preferredCryptoSource',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredCryptoSourceIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'preferredCryptoSource',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredRateSourceEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'preferredRateSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredRateSourceGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'preferredRateSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredRateSourceLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'preferredRateSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredRateSourceBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'preferredRateSource',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredRateSourceStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'preferredRateSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredRateSourceEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'preferredRateSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+          QAfterFilterCondition>
+      preferredRateSourceContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'preferredRateSource',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+          QAfterFilterCondition>
+      preferredRateSourceMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'preferredRateSource',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredRateSourceIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'preferredRateSource',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> preferredRateSourceIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'preferredRateSource',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
       QAfterFilterCondition> rateChangeAlertEqualTo(bool value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -3754,6 +4051,34 @@ extension JiveCurrencyPreferenceQuerySortBy
   }
 
   QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      sortByPreferredCryptoSource() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'preferredCryptoSource', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      sortByPreferredCryptoSourceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'preferredCryptoSource', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      sortByPreferredRateSource() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'preferredRateSource', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      sortByPreferredRateSourceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'preferredRateSource', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
       sortByRateChangeAlert() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rateChangeAlert', Sort.asc);
@@ -3841,6 +4166,34 @@ extension JiveCurrencyPreferenceQuerySortThenBy on QueryBuilder<
   }
 
   QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      thenByPreferredCryptoSource() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'preferredCryptoSource', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      thenByPreferredCryptoSourceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'preferredCryptoSource', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      thenByPreferredRateSource() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'preferredRateSource', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      thenByPreferredRateSourceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'preferredRateSource', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
       thenByRateChangeAlert() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rateChangeAlert', Sort.asc);
@@ -3900,6 +4253,22 @@ extension JiveCurrencyPreferenceQueryWhereDistinct
   }
 
   QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QDistinct>
+      distinctByPreferredCryptoSource({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'preferredCryptoSource',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QDistinct>
+      distinctByPreferredRateSource({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'preferredRateSource',
+          caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QDistinct>
       distinctByRateChangeAlert() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'rateChangeAlert');
@@ -3947,6 +4316,20 @@ extension JiveCurrencyPreferenceQueryProperty on QueryBuilder<
       lastRateUpdateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'lastRateUpdate');
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, String, QQueryOperations>
+      preferredCryptoSourceProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'preferredCryptoSource');
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, String, QQueryOperations>
+      preferredRateSourceProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'preferredRateSource');
     });
   }
 

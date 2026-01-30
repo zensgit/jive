@@ -29,6 +29,10 @@ class CurrencyService {
   static const String _primaryApiUrl = 'https://api.frankfurter.app';
   static const String _fallbackApiUrl = 'https://api.exchangerate.host';
 
+  // 内存缓存
+  static final Map<String, _CachedRate> _rateCache = {};
+  static const Duration _cacheDuration = Duration(minutes: 30);
+
   CurrencyService(this._isar);
 
   /// 初始化货币数据（首次启动时调用）
@@ -104,6 +108,49 @@ class CurrencyService {
     });
   }
 
+  /// 重置为离线汇率包（清除手动和API汇率，恢复预置数据）
+  Future<void> resetToOfflineRates() async {
+    final now = DateTime.now();
+    final rates = <JiveExchangeRate>[];
+
+    // 生成所有货币对的汇率（以 USD 为中转）
+    final codes = CurrencyDefaults.ratesAgainstUSD.keys.toList();
+    for (final from in codes) {
+      for (final to in codes) {
+        if (from == to) continue;
+        final rate = CurrencyDefaults.getRate(from, to);
+        if (rate != null) {
+          rates.add(JiveExchangeRate()
+            ..fromCurrency = from
+            ..toCurrency = to
+            ..rate = rate
+            ..effectiveDate = now
+            ..source = 'offline'
+            ..updatedAt = now);
+        }
+      }
+    }
+
+    await _isar.writeTxn(() async {
+      // 清除所有现有汇率
+      await _isar.jiveExchangeRates.clear();
+      // 写入离线汇率包
+      await _isar.jiveExchangeRates.putAll(rates);
+    });
+
+    // 清除内存缓存
+    clearCache();
+  }
+
+  /// 获取离线汇率包信息
+  static Map<String, String> getOfflinePackageInfo() {
+    return {
+      'version': CurrencyDefaults.offlineRateVersion,
+      'date': CurrencyDefaults.offlineRateDate,
+      'currencies': CurrencyDefaults.ratesAgainstUSD.length.toString(),
+    };
+  }
+
   /// 获取所有货币
   Future<List<JiveCurrency>> getAllCurrencies() async {
     return await _isar.jiveCurrencys.where().sortBySortOrder().findAll();
@@ -161,11 +208,18 @@ class CurrencyService {
     await updatePreference(pref);
   }
 
-  /// 获取汇率
+  /// 获取汇率（带内存缓存）
   Future<double?> getRate(String from, String to) async {
     if (from == to) return 1.0;
 
-    // 先查本地数据库
+    // 检查内存缓存
+    final cacheKey = '$from/$to';
+    final cached = _rateCache[cacheKey];
+    if (cached != null && !cached.isExpired) {
+      return cached.rate;
+    }
+
+    // 查本地数据库
     final rate = await _isar.jiveExchangeRates
         .filter()
         .fromCurrencyEqualTo(from)
@@ -174,11 +228,37 @@ class CurrencyService {
         .findFirst();
 
     if (rate != null) {
+      // 更新内存缓存
+      _rateCache[cacheKey] = _CachedRate(
+        rate: rate.rate,
+        cachedAt: DateTime.now(),
+        source: rate.source,
+      );
       return rate.rate;
     }
 
     // 本地没有则使用默认汇率
-    return CurrencyDefaults.getRate(from, to);
+    final defaultRate = CurrencyDefaults.getRate(from, to);
+    if (defaultRate != null) {
+      _rateCache[cacheKey] = _CachedRate(
+        rate: defaultRate,
+        cachedAt: DateTime.now(),
+        source: 'default',
+      );
+    }
+    return defaultRate;
+  }
+
+  /// 清除汇率缓存
+  static void clearCache() {
+    _rateCache.clear();
+  }
+
+  /// 检查汇率是否需要更新（超过指定时间）
+  Future<bool> shouldUpdateRates({Duration maxAge = const Duration(hours: 6)}) async {
+    final pref = await getPreference();
+    if (pref?.lastRateUpdate == null) return true;
+    return DateTime.now().difference(pref!.lastRateUpdate!) > maxAge;
   }
 
   /// 获取完整汇率记录（包含来源信息）
@@ -191,6 +271,93 @@ class CurrencyService {
         .toCurrencyEqualTo(to)
         .sortByEffectiveDateDesc()
         .findFirst();
+  }
+
+  /// 获取汇率历史记录
+  Future<List<JiveExchangeRateHistory>> getRateHistory(
+    String from,
+    String to, {
+    DateTime? startDate,
+    DateTime? endDate,
+    int limit = 30,
+  }) async {
+    var query = _isar.jiveExchangeRateHistorys
+        .filter()
+        .fromCurrencyEqualTo(from)
+        .toCurrencyEqualTo(to);
+
+    if (startDate != null) {
+      query = query.recordedAtGreaterThan(startDate);
+    }
+    if (endDate != null) {
+      query = query.recordedAtLessThan(endDate);
+    }
+
+    return await query.sortByRecordedAtDesc().limit(limit).findAll();
+  }
+
+  /// 保存汇率历史记录
+  Future<void> saveRateHistory(String from, String to, double rate, String source) async {
+    final history = JiveExchangeRateHistory()
+      ..fromCurrency = from
+      ..toCurrency = to
+      ..rate = rate
+      ..recordedAt = DateTime.now()
+      ..source = source;
+
+    await _isar.writeTxn(() async {
+      await _isar.jiveExchangeRateHistorys.put(history);
+    });
+  }
+
+  /// 查询指定日期的历史汇率
+  Future<double?> getHistoricalRate(String from, String to, DateTime date) async {
+    // 查找最接近指定日期的记录
+    final history = await _isar.jiveExchangeRateHistorys
+        .filter()
+        .fromCurrencyEqualTo(from)
+        .toCurrencyEqualTo(to)
+        .recordedAtLessThan(date.add(const Duration(days: 1)))
+        .sortByRecordedAtDesc()
+        .findFirst();
+
+    return history?.rate;
+  }
+
+  /// 获取汇率趋势统计
+  Future<RateTrendStats?> getRateTrendStats(
+    String from,
+    String to, {
+    int days = 30,
+  }) async {
+    final startDate = DateTime.now().subtract(Duration(days: days));
+    final history = await getRateHistory(from, to, startDate: startDate, limit: 100);
+
+    if (history.isEmpty) return null;
+
+    final rates = history.map((h) => h.rate).toList();
+    final min = rates.reduce((a, b) => a < b ? a : b);
+    final max = rates.reduce((a, b) => a > b ? a : b);
+    final sum = rates.reduce((a, b) => a + b);
+    final avg = sum / rates.length;
+
+    final current = await getRate(from, to) ?? rates.first;
+    final first = rates.last;
+    final change = current - first;
+    final changePercent = first > 0 ? (change / first) * 100 : 0;
+
+    return RateTrendStats(
+      from: from,
+      to: to,
+      current: current,
+      min: min,
+      max: max,
+      avg: avg,
+      change: change,
+      changePercent: changePercent.toDouble(),
+      dataPoints: history.length,
+      period: days,
+    );
   }
 
   /// 货币转换
@@ -604,21 +771,6 @@ class CurrencyService {
     }
   }
 
-  /// 获取汇率历史记录
-  Future<List<JiveExchangeRateHistory>> getRateHistory(
-    String from,
-    String to, {
-    int limit = 30,
-  }) async {
-    return await _isar.jiveExchangeRateHistorys
-        .filter()
-        .fromCurrencyEqualTo(from)
-        .toCurrencyEqualTo(to)
-        .sortByRecordedAtDesc()
-        .limit(limit)
-        .findAll();
-  }
-
   /// 获取所有汇率历史记录（用于清理）
   Future<List<JiveExchangeRateHistory>> getAllRateHistory() async {
     return await _isar.jiveExchangeRateHistorys.where().findAll();
@@ -753,4 +905,60 @@ class RateUpdateResult {
   });
 
   bool get hasSignificantChanges => significantChanges.isNotEmpty;
+}
+
+/// 缓存的汇率
+class _CachedRate {
+  final double rate;
+  final DateTime cachedAt;
+  final String source;
+
+  _CachedRate({
+    required this.rate,
+    required this.cachedAt,
+    required this.source,
+  });
+
+  bool get isExpired =>
+      DateTime.now().difference(cachedAt) > CurrencyService._cacheDuration;
+}
+
+/// 汇率趋势统计
+class RateTrendStats {
+  final String from;
+  final String to;
+  final double current;
+  final double min;
+  final double max;
+  final double avg;
+  final double change;
+  final double changePercent;
+  final int dataPoints;
+  final int period; // 统计周期（天）
+
+  RateTrendStats({
+    required this.from,
+    required this.to,
+    required this.current,
+    required this.min,
+    required this.max,
+    required this.avg,
+    required this.change,
+    required this.changePercent,
+    required this.dataPoints,
+    required this.period,
+  });
+
+  bool get isUp => changePercent > 0;
+  bool get isDown => changePercent < 0;
+
+  String get changeText {
+    final sign = isUp ? '+' : '';
+    return '$sign${changePercent.toStringAsFixed(2)}%';
+  }
+
+  String get trendIcon {
+    if (changePercent.abs() < 0.1) return '→';
+    return isUp ? '↑' : '↓';
+  }
 }
