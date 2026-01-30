@@ -151,6 +151,13 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
         SliverToBoxAdapter(
           child: _buildHeader(),
         ),
+        if (_activeProjects.length + _otherProjects.length >= 2)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: _buildProjectComparisonCard(),
+            ),
+          ),
         // 进行中的项目
         if (_activeProjects.isNotEmpty) ...[
           SliverPadding(
@@ -334,6 +341,130 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildProjectComparisonCard() {
+    final projects = [..._activeProjects, ..._otherProjects];
+    final items = projects
+        .map((p) {
+          final spent = _projectSpending[p.id] ?? 0;
+          final budget = p.budget;
+          final progress = budget > 0 ? (spent / budget).clamp(0.0, 1.0) : 0.0;
+          return (p, spent, budget, progress);
+        })
+        .toList()
+      ..sort((a, b) => b.$2.compareTo(a.$2));
+
+    final display = items.take(5).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.compare_arrows, size: 18, color: JiveTheme.primaryGreen),
+              const SizedBox(width: 8),
+              Text('项目间对比', style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.w700)),
+              const Spacer(),
+              Text('按支出排序', style: GoogleFonts.lato(fontSize: 11, color: Colors.grey.shade500)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...display.map((entry) {
+            final project = entry.$1;
+            final spent = entry.$2;
+            final budget = entry.$3;
+            final progress = entry.$4;
+            final color = project.colorHex != null
+                ? Color(int.parse(project.colorHex!.replaceFirst('#', '0xFF')))
+                : JiveTheme.primaryGreen;
+
+            return InkWell(
+              onTap: () => _openProject(project),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        iconWidgetForName(project.iconName, size: 18, color: color),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            project.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.lato(fontSize: 13, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        Text(
+                          '¥${spent.toStringAsFixed(0)}',
+                          style: GoogleFonts.rubik(fontSize: 12, color: Colors.grey.shade700),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: progress.clamp(0.0, 1.0),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          budget > 0
+                              ? '${(progress * 100).toStringAsFixed(0)}%'
+                              : '无预算',
+                          style: GoogleFonts.lato(fontSize: 11, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  void _openProject(JiveProject project) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ProjectDetailScreen(projectId: project.id)),
+    );
+    if (result == true) {
+      _loadProjects();
+    }
   }
 
   Widget _buildHeaderIconButton({required IconData icon, required VoidCallback onTap}) {
@@ -636,9 +767,4 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     if (result == true) _loadProjects();
   }
 
-  void _openProject(JiveProject project) async {
-    final result = await Navigator.push(context,
-        MaterialPageRoute(builder: (context) => ProjectDetailScreen(projectId: project.id)));
-    if (result == true) _loadProjects();
-  }
 }

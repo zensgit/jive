@@ -40,11 +40,13 @@ enum TransactionType { expense, income, transfer }
 class AddTransactionScreen extends StatefulWidget {
   final JiveTransaction? editingTransaction;
   final JiveTransaction? prefillTransaction;
+  final TransactionType? initialType;
 
   const AddTransactionScreen({
     super.key,
     this.editingTransaction,
     this.prefillTransaction,
+    this.initialType,
   });
 
   @override
@@ -182,26 +184,33 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     final prefill = widget.prefillTransaction;
-    if (prefill == null) return;
-    _amountStr = _formatAmountInput(prefill.amount);
-    _selectedTime = prefill.timestamp;
-    _txType = _parseTxType(prefill.type);
-    _editingAccountId = prefill.accountId;
-    _editingToAccountId = prefill.toAccountId;
-    _editingParentKey = prefill.categoryKey;
-    _editingParentName = prefill.category;
-    _editingSubKey = prefill.subCategoryKey;
-    _editingSubName = prefill.subCategory;
-    _noteController.text = prefill.note ?? '';
-    _selectedTagKeys = List<String>.from(prefill.tagKeys);
-    _selectedProjectId = prefill.projectId;
-    // 跨币种转账数据
-    if (prefill.toAmount != null) {
-      _toAmountStr = _formatAmountInput(prefill.toAmount!);
-      _toAmountController.text = _toAmountStr;
-      _isEditingToAmount = true;
+    if (prefill != null) {
+      _amountStr = _formatAmountInput(prefill.amount);
+      _selectedTime = prefill.timestamp;
+      _txType = _parseTxType(prefill.type);
+      _editingAccountId = prefill.accountId;
+      _editingToAccountId = prefill.toAccountId;
+      _editingParentKey = prefill.categoryKey;
+      _editingParentName = prefill.category;
+      _editingSubKey = prefill.subCategoryKey;
+      _editingSubName = prefill.subCategory;
+      _noteController.text = prefill.note ?? '';
+      _selectedTagKeys = List<String>.from(prefill.tagKeys);
+      _selectedProjectId = prefill.projectId;
+      // 跨币种转账数据
+      if (prefill.toAmount != null) {
+        _toAmountStr = _formatAmountInput(prefill.toAmount!);
+        _toAmountController.text = _toAmountStr;
+        _isEditingToAmount = true;
+      }
+      _crossCurrencyRate = prefill.exchangeRate;
+      return;
     }
-    _crossCurrencyRate = prefill.exchangeRate;
+
+    // 使用初始类型（如果提供）
+    if (widget.initialType != null) {
+      _txType = widget.initialType!;
+    }
   }
 
   Future<void> _initData() async {
@@ -993,6 +1002,34 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final rawText = _txType == TransactionType.transfer
         ? "转账"
         : "${_selectedParent!.name} - ${_selectedSub?.name ?? ''}";
+
+    if (_selectedProjectId != null) {
+      final project = _projects.where((p) => p.id == _selectedProjectId).firstOrNull;
+      if (project != null && project.budget > 0) {
+        final service = ProjectService(_isar);
+        final currentSpent = await service.calculateProjectSpending(project.id);
+        final editingAmount = _isEditing && widget.editingTransaction?.projectId == project.id
+            ? widget.editingTransaction?.amount ?? 0
+            : 0;
+        final projected = currentSpent - editingAmount + amount;
+        if (projected > project.budget) {
+          final over = projected - project.budget;
+          if (!mounted) return;
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('预算将超支'),
+              content: Text('关联该交易后将超支 ¥${over.toStringAsFixed(0)}，是否继续？'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('继续')),
+              ],
+            ),
+          );
+          if (proceed != true) return;
+        }
+      }
+    }
 
     final tx = widget.editingTransaction ?? JiveTransaction();
     final source = _isEditing ? tx.source : "Manual";

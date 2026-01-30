@@ -54,6 +54,8 @@ import 'feature/tag/tag_management_screen.dart';
 import 'feature/tag/tag_icon_catalog.dart';
 import 'feature/project/project_list_screen.dart';
 import 'feature/currency/currency_settings_screen.dart';
+import 'feature/currency/currency_converter_screen.dart';
+import 'feature/budget/budget_list_screen.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -72,6 +74,8 @@ class JiveApp extends StatelessWidget {
       title: 'Jive 积叶',
       debugShowCheckedModeBanner: false,
       theme: JiveTheme.lightTheme,
+      darkTheme: JiveTheme.darkTheme,
+      themeMode: ThemeMode.system, // 跟随系统主题
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -1428,6 +1432,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               },
                             ),
                             ListTile(
+                              leading: const Icon(Icons.account_balance_wallet_outlined),
+                              title: const Text("预算管理"),
+                              subtitle: const Text("设置和追踪预算"),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const BudgetListScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                            ListTile(
                               leading: const Icon(Icons.label_outline),
                               title: const Text("标签管理"),
                               subtitle: const Text("管理交易标签"),
@@ -1717,24 +1736,40 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             children: [
               _buildActionBtn(
                 Icons.arrow_downward,
-                "Income",
+                "收入",
                 compact: compact,
                 tight: tight,
                 showLabel: showActionLabels,
+                onTap: () => _showAddTransaction('income'),
               ),
               _buildActionBtn(
                 Icons.arrow_upward,
-                "Expense",
+                "支出",
                 compact: compact,
                 tight: tight,
                 showLabel: showActionLabels,
+                onTap: () => _showAddTransaction('expense'),
               ),
               _buildActionBtn(
                 Icons.swap_horiz,
-                "Transfer",
+                "转账",
                 compact: compact,
                 tight: tight,
                 showLabel: showActionLabels,
+                onTap: () => _showAddTransaction('transfer'),
+              ),
+              _buildActionBtn(
+                Icons.currency_exchange,
+                "汇率",
+                compact: compact,
+                tight: tight,
+                showLabel: showActionLabels,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const CurrencyConverterScreen(),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1812,36 +1847,67 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// 显示添加交易页面
+  Future<void> _showAddTransaction(String type) async {
+    TransactionType txType;
+    switch (type) {
+      case 'income':
+        txType = TransactionType.income;
+        break;
+      case 'transfer':
+        txType = TransactionType.transfer;
+        break;
+      default:
+        txType = TransactionType.expense;
+    }
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddTransactionScreen(initialType: txType),
+      ),
+    );
+    if (result == true) {
+      await _loadTransactions();
+      await _loadAutoDraftCount();
+      _notifyDataChanged();
+    }
+  }
+
   Widget _buildActionBtn(
     IconData icon,
     String label, {
     bool compact = false,
     bool tight = false,
     bool showLabel = true,
+    VoidCallback? onTap,
   }) {
     final padding = tight ? 8.0 : (compact ? 10.0 : 12.0);
     final iconSize = tight ? 18.0 : (compact ? 20.0 : 24.0);
     final labelSize = tight ? 10.0 : (compact ? 11.0 : 12.0);
     final gap = tight ? 4.0 : (compact ? 6.0 : 8.0);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: EdgeInsets.all(padding),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(16),
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: EdgeInsets.all(padding),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: Colors.white, size: iconSize),
           ),
-          child: Icon(icon, color: Colors.white, size: iconSize),
-        ),
-        if (showLabel) ...[
-          SizedBox(height: gap),
-          Text(
-            label,
-            style: TextStyle(color: Colors.white70, fontSize: labelSize),
-          ),
+          if (showLabel) ...[
+            SizedBox(height: gap),
+            Text(
+              label,
+              style: TextStyle(color: Colors.white70, fontSize: labelSize),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 

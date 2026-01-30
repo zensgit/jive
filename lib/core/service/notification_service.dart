@@ -317,3 +317,176 @@ class RateChangeNotification {
     return '$sign${changePercent.toStringAsFixed(2)}%';
   }
 }
+
+/// 预算通知管理器
+class BudgetNotificationManager {
+  /// 显示预算预警通知
+  static void showBudgetWarningNotifications(
+    BuildContext context,
+    List<BudgetAlertInfo> alerts,
+  ) {
+    if (alerts.isEmpty || !context.mounted) return;
+
+    // 显示第一个预警
+    final alert = alerts.first;
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+
+    entry = OverlayEntry(
+      builder: (context) => _BudgetAlertWidget(
+        alert: alert,
+        onDismiss: () => entry.remove(),
+      ),
+    );
+
+    overlay.insert(entry);
+
+    // 6秒后自动移除
+    Future.delayed(const Duration(seconds: 6), () {
+      if (entry.mounted) {
+        entry.remove();
+      }
+    });
+
+    // 如果有多个预警，显示汇总
+    if (alerts.length > 1) {
+      Future.delayed(const Duration(seconds: 7), () {
+        if (context.mounted) {
+          InAppNotificationService.showSnackBarNotification(
+            context,
+            message: '共有 ${alerts.length} 个预算需要关注',
+            backgroundColor: Colors.orange,
+          );
+        }
+      });
+    }
+  }
+}
+
+/// 预算预警信息
+class BudgetAlertInfo {
+  final String budgetName;
+  final double usedPercent;
+  final double usedAmount;
+  final double budgetAmount;
+  final String currency;
+  final bool isExceeded;
+
+  BudgetAlertInfo({
+    required this.budgetName,
+    required this.usedPercent,
+    required this.usedAmount,
+    required this.budgetAmount,
+    required this.currency,
+    required this.isExceeded,
+  });
+}
+
+/// 预算预警通知组件
+class _BudgetAlertWidget extends StatefulWidget {
+  final BudgetAlertInfo alert;
+  final VoidCallback onDismiss;
+
+  const _BudgetAlertWidget({
+    required this.alert,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_BudgetAlertWidget> createState() => _BudgetAlertWidgetState();
+}
+
+class _BudgetAlertWidgetState extends State<_BudgetAlertWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    ));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isExceeded = widget.alert.isExceeded;
+    final color = isExceeded ? Colors.red : Colors.orange;
+
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 10,
+      left: 16,
+      right: 16,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(12),
+          color: color,
+          child: InkWell(
+            onTap: widget.onDismiss,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(
+                    isExceeded ? Icons.warning : Icons.error_outline,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          isExceeded ? '预算超支' : '预算预警',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${widget.alert.budgetName} 已使用 ${widget.alert.usedPercent.toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.close,
+                    color: Colors.white.withValues(alpha: 0.7),
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

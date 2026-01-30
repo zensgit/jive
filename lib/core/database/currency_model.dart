@@ -45,6 +45,7 @@ class JiveCurrencyPreference {
 
   late String baseCurrency; // 主币种代码
   List<String> enabledCurrencies = []; // 启用的货币列表
+  List<String> favoritePairs = []; // 收藏的货币对，如 ['CNY/USD', 'EUR/JPY']
   bool autoUpdateRates = false; // 是否自动更新汇率
   DateTime? lastRateUpdate; // 最后更新时间
   bool rateChangeAlert = false; // 是否启用汇率变动提醒

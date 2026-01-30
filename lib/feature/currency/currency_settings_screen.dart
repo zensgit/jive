@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,7 +9,13 @@ import '../../core/design_system/theme.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/notification_service.dart';
+import '../../core/service/rate_cloud_backup_service.dart';
+import '../../core/service/scheduled_rate_update_service.dart';
 import 'currency_converter_screen.dart';
+import 'exchange_fee_tracking_screen.dart';
+import 'exchange_rate_profit_screen.dart';
+import 'foreign_currency_spending_screen.dart';
+import 'multi_currency_overview_screen.dart';
 
 /// 货币与汇率管理页面
 class CurrencySettingsScreen extends StatefulWidget {
@@ -20,10 +28,13 @@ class CurrencySettingsScreen extends StatefulWidget {
 class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
   late Isar _isar;
   late CurrencyService _currencyService;
+  late RateCloudBackupService _backupService;
+  ScheduledRateUpdateService? _scheduledUpdateService;
   bool _isLoading = true;
   JiveCurrencyPreference? _preference;
   List<JiveExchangeRate> _rates = [];
   bool _isUpdatingRates = false;
+  RateUpdateConfig? _updateConfig;
 
   @override
   void initState() {
@@ -34,17 +45,21 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
   Future<void> _initData() async {
     _isar = await DatabaseService.getInstance();
     _currencyService = CurrencyService(_isar);
+    _backupService = RateCloudBackupService(_isar);
+    _scheduledUpdateService = ScheduledRateUpdateService(_currencyService);
     await _loadData();
   }
 
   Future<void> _loadData() async {
     final pref = await _currencyService.getPreference();
     final rates = await _currencyService.getRatesFrom(pref?.baseCurrency ?? 'CNY');
+    final updateConfig = await RateUpdateConfig.load();
 
     if (!mounted) return;
     setState(() {
       _preference = pref;
       _rates = rates;
+      _updateConfig = updateConfig;
       _isLoading = false;
     });
   }
@@ -684,6 +699,208 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
     );
   }
 
+  Future<void> _exportRateData() async {
+    try {
+      final file = await _backupService.exportToLocalFile();
+      await RateCloudBackupService.cleanupOldBackups();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已导出到: ${file.path.split('/').last}'),
+          backgroundColor: JiveTheme.primaryGreen,
+          action: SnackBarAction(
+            label: '查看',
+            textColor: Colors.white,
+            onPressed: () => _showBackupFiles(),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('导出失败: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _importRateData() async {
+    final files = await RateCloudBackupService.getLocalBackupFiles();
+    if (files.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有找到备份文件')),
+      );
+      return;
+    }
+
+    final selectedFile = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    '选择备份文件',
+                    style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: files.length,
+                itemBuilder: (ctx, index) {
+                  final file = files[index];
+                  final stat = file.statSync();
+                  final name = file.path.split('/').last;
+                  return ListTile(
+                    leading: const Icon(Icons.description, color: Colors.blue),
+                    title: Text(name, style: const TextStyle(fontSize: 13)),
+                    subtitle: Text(
+                      '${_formatDateTime(stat.modified)} · ${(stat.size / 1024).toStringAsFixed(1)} KB',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                    onTap: () => Navigator.pop(ctx, index),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+
+    if (selectedFile == null) return;
+
+    try {
+      final result = await _backupService.importFromLocalFile(files[selectedFile]);
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已导入 ${result.totalImported} 条记录'),
+          backgroundColor: JiveTheme.primaryGreen,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('导入失败: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _showBackupFiles() async {
+    final files = await RateCloudBackupService.getLocalBackupFiles();
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    '备份文件 (${files.length})',
+                    style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            if (files.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  children: [
+                    Icon(Icons.folder_off, size: 48, color: Colors.grey.shade300),
+                    const SizedBox(height: 8),
+                    Text('暂无备份文件', style: TextStyle(color: Colors.grey.shade500)),
+                  ],
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: files.length,
+                  itemBuilder: (ctx, index) {
+                    final file = files[index];
+                    final stat = file.statSync();
+                    final name = file.path.split('/').last;
+                    return ListTile(
+                      leading: const Icon(Icons.description, color: Colors.blue),
+                      title: Text(name, style: const TextStyle(fontSize: 13)),
+                      subtitle: Text(
+                        '${_formatDateTime(stat.modified)} · ${(stat.size / 1024).toStringAsFixed(1)} KB',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        onPressed: () async {
+                          await file.delete();
+                          Navigator.pop(ctx);
+                          _showBackupFiles();
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildInfoItem(String label, String value) {
     return Column(
       children: [
@@ -927,6 +1144,201 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _showOfflinePackageOptions,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // 多币种功能
+          Text(
+            '多币种分析',
+            style: GoogleFonts.lato(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.account_balance_wallet, color: Colors.blue.shade600),
+                  ),
+                  title: const Text('多币种资产总览'),
+                  subtitle: const Text('查看所有币种资产统一换算', style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const MultiCurrencyOverviewScreen()),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.trending_up, color: Colors.green.shade600),
+                  ),
+                  title: const Text('汇率损益分析'),
+                  subtitle: const Text('追踪汇率变动带来的盈亏', style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ExchangeRateProfitScreen()),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.purple.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.pie_chart, color: Colors.purple.shade600),
+                  ),
+                  title: const Text('外币消费趋势'),
+                  subtitle: const Text('按币种统计消费分布', style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ForeignCurrencySpendingScreen()),
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(Icons.receipt_long, color: Colors.orange.shade600),
+                  ),
+                  title: const Text('换汇手续费'),
+                  subtitle: const Text('查看跨币种转账费用记录', style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ExchangeFeeTrackingScreen()),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // 数据同步
+          Text(
+            '数据同步',
+            style: GoogleFonts.lato(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('定时汇率更新'),
+                  subtitle: Text(
+                    _updateConfig?.enabled == true
+                        ? '每 ${RateUpdateConfig.getIntervalText(_updateConfig!.intervalMinutes)} 自动更新'
+                        : '已关闭',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  value: _updateConfig?.enabled ?? false,
+                  onChanged: (value) async {
+                    await ScheduledRateUpdateService.setEnabled(value);
+                    if (value && _scheduledUpdateService != null) {
+                      await _scheduledUpdateService!.startScheduledUpdates();
+                    } else {
+                      _scheduledUpdateService?.stopScheduledUpdates();
+                    }
+                    await _loadData();
+                  },
+                  secondary: Icon(
+                    Icons.schedule,
+                    color: _updateConfig?.enabled == true ? JiveTheme.primaryGreen : Colors.grey,
+                  ),
+                ),
+                if (_updateConfig?.enabled == true) ...[
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        const Text('更新间隔'),
+                        const Spacer(),
+                        DropdownButton<int>(
+                          value: _updateConfig?.intervalMinutes ?? 60,
+                          underline: const SizedBox(),
+                          items: RateUpdateConfig.intervalOptions.map((minutes) {
+                            return DropdownMenuItem(
+                              value: minutes,
+                              child: Text(RateUpdateConfig.getIntervalText(minutes)),
+                            );
+                          }).toList(),
+                          onChanged: (value) async {
+                            if (value != null) {
+                              await ScheduledRateUpdateService.setUpdateInterval(value);
+                              if (_scheduledUpdateService != null) {
+                                await _scheduledUpdateService!.startScheduledUpdates();
+                              }
+                              await _loadData();
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_updateConfig?.lastUpdate != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.history, size: 14, color: Colors.grey.shade500),
+                          const SizedBox(width: 4),
+                          Text(
+                            '上次更新: ${_formatDateTime(_updateConfig!.lastUpdate!)}',
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.cloud_upload, color: Colors.blue),
+                  title: const Text('导出汇率数据'),
+                  subtitle: const Text('备份到本地文件', style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _exportRateData,
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.cloud_download, color: Colors.teal),
+                  title: const Text('导入汇率数据'),
+                  subtitle: const Text('从备份文件恢复', style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _importRateData,
                 ),
               ],
             ),

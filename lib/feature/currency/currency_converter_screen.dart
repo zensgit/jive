@@ -28,6 +28,8 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
   String? _rateSource;
   DateTime? _rateUpdatedAt;
   RateTrendStats? _trendStats;
+  bool _isFavorite = false;
+  List<String> _favoritePairs = [];
 
   List<String> _enabledCurrencies = [];
 
@@ -50,15 +52,18 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     final pref = await _currencyService.getPreference();
     final baseCurrency = pref?.baseCurrency ?? 'CNY';
     final enabled = pref?.enabledCurrencies ?? ['CNY', 'USD', 'EUR', 'JPY', 'HKD'];
+    final favorites = pref?.favoritePairs ?? [];
 
     setState(() {
       _fromCurrency = baseCurrency;
       _toCurrency = enabled.firstWhere((c) => c != baseCurrency, orElse: () => 'USD');
       _enabledCurrencies = enabled;
+      _favoritePairs = favorites;
       _isLoading = false;
     });
 
     _convert();
+    _checkFavorite();
   }
 
   Future<void> _convert() async {
@@ -94,6 +99,75 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
       _toCurrency = temp;
     });
     _convert();
+    _checkFavorite();
+  }
+
+  Future<void> _checkFavorite() async {
+    final isFav = await _currencyService.isFavoritePair(_fromCurrency, _toCurrency);
+    if (mounted) {
+      setState(() => _isFavorite = isFav);
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_isFavorite) {
+      await _currencyService.removeFavoritePair(_fromCurrency, _toCurrency);
+    } else {
+      await _currencyService.addFavoritePair(_fromCurrency, _toCurrency);
+    }
+    _favoritePairs = await _currencyService.getFavoritePairs();
+    _checkFavorite();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_isFavorite ? '已取消收藏' : '已添加到收藏夹'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
+  Future<void> _showFavorites() async {
+    if (_favoritePairs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('暂无收藏的货币对')),
+      );
+      return;
+    }
+
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => _FavoritePairsSheet(
+        favoritePairs: _favoritePairs,
+        currencyService: _currencyService,
+        onRemove: (pair) async {
+          final parts = pair.split('/');
+          if (parts.length == 2) {
+            await _currencyService.removeFavoritePair(parts[0], parts[1]);
+            _favoritePairs = await _currencyService.getFavoritePairs();
+            _checkFavorite();
+          }
+        },
+      ),
+    );
+
+    if (selected != null) {
+      final parts = selected.split('/');
+      if (parts.length == 2) {
+        setState(() {
+          _fromCurrency = parts[0];
+          _toCurrency = parts[1];
+        });
+        _convert();
+        _checkFavorite();
+      }
+    }
   }
 
   Future<void> _selectCurrency(bool isFrom) async {
@@ -120,6 +194,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
         }
       });
       _convert();
+      _checkFavorite();
     }
   }
 
@@ -164,6 +239,19 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
       appBar: AppBar(
         title: const Text('货币换算'),
         actions: [
+          IconButton(
+            icon: Icon(
+              _isFavorite ? Icons.star : Icons.star_border,
+              color: _isFavorite ? Colors.amber : null,
+            ),
+            onPressed: _toggleFavorite,
+            tooltip: _isFavorite ? '取消收藏' : '收藏此货币对',
+          ),
+          IconButton(
+            icon: const Icon(Icons.bookmarks_outlined),
+            onPressed: _showFavorites,
+            tooltip: '收藏夹',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _refreshRate,
@@ -248,7 +336,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
+                  color: JiveTheme.isDark(context)
+                      ? JiveTheme.darkCard
+                      : Colors.grey.shade50,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -261,6 +351,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                           style: GoogleFonts.lato(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
+                            color: JiveTheme.textColor(context),
                           ),
                         ),
                       ],
@@ -273,7 +364,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                           '1 $_toCurrency = ${_currencyService.formatRate(1 / _rate!)} $_fromCurrency',
                           style: GoogleFonts.lato(
                             fontSize: 14,
-                            color: Colors.grey.shade600,
+                            color: JiveTheme.secondaryTextColor(context),
                           ),
                         ),
                       ],
@@ -308,9 +399,9 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: JiveTheme.cardColor(context),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  border: Border.all(color: JiveTheme.dividerColor(context)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -328,6 +419,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                           style: GoogleFonts.lato(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
+                            color: JiveTheme.textColor(context),
                           ),
                         ),
                         const Spacer(),
@@ -403,18 +495,22 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
     required bool isFrom,
     required Widget child,
   }) {
+    final isDark = JiveTheme.isDark(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: JiveTheme.cardColor(context),
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+        border: isDark ? Border.all(color: JiveTheme.darkDivider) : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,19 +529,20 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
                   style: GoogleFonts.lato(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: JiveTheme.textColor(context),
                   ),
                 ),
                 Text(
                   ' - ${data['nameZh']}',
                   style: TextStyle(
                     fontSize: 14,
-                    color: Colors.grey.shade600,
+                    color: JiveTheme.secondaryTextColor(context),
                   ),
                 ),
                 const Spacer(),
                 Icon(
                   Icons.chevron_right,
-                  color: Colors.grey.shade400,
+                  color: JiveTheme.secondaryTextColor(context),
                 ),
               ],
             ),
@@ -465,6 +562,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
           style: GoogleFonts.rubik(
             fontSize: 14,
             fontWeight: FontWeight.bold,
+            color: JiveTheme.textColor(context),
           ),
         ),
         const SizedBox(height: 2),
@@ -472,7 +570,7 @@ class _CurrencyConverterScreenState extends State<CurrencyConverterScreen> {
           label,
           style: TextStyle(
             fontSize: 11,
-            color: Colors.grey.shade600,
+            color: JiveTheme.secondaryTextColor(context),
           ),
         ),
       ],
@@ -711,6 +809,149 @@ class _CurrencySelectSheetState extends State<_CurrencySelectSheet> {
           ],
         );
       },
+    );
+  }
+}
+
+/// 收藏货币对列表底部弹窗
+class _FavoritePairsSheet extends StatefulWidget {
+  final List<String> favoritePairs;
+  final CurrencyService currencyService;
+  final Function(String) onRemove;
+
+  const _FavoritePairsSheet({
+    required this.favoritePairs,
+    required this.currencyService,
+    required this.onRemove,
+  });
+
+  @override
+  State<_FavoritePairsSheet> createState() => _FavoritePairsSheetState();
+}
+
+class _FavoritePairsSheetState extends State<_FavoritePairsSheet> {
+  late List<String> _pairs;
+
+  @override
+  void initState() {
+    super.initState();
+    _pairs = List.from(widget.favoritePairs);
+  }
+
+  Map<String, dynamic> _getCurrencyData(String code) {
+    return CurrencyDefaults.getAllCurrencies().firstWhere(
+      (c) => c['code'] == code,
+      orElse: () => {
+        'code': code,
+        'nameZh': code,
+        'symbol': code,
+        'flag': null,
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.bookmarks, color: JiveTheme.primaryGreen),
+                const SizedBox(width: 8),
+                Text(
+                  '收藏的货币对',
+                  style: GoogleFonts.lato(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const Divider(),
+            if (_pairs.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(32),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.star_border, size: 48, color: Colors.grey.shade300),
+                      const SizedBox(height: 8),
+                      Text(
+                        '暂无收藏',
+                        style: TextStyle(color: Colors.grey.shade500),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.5,
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _pairs.length,
+                  itemBuilder: (context, index) {
+                    final pair = _pairs[index];
+                    final parts = pair.split('/');
+                    if (parts.length != 2) return const SizedBox();
+
+                    final fromCode = parts[0];
+                    final toCode = parts[1];
+                    final fromData = _getCurrencyData(fromCode);
+                    final toData = _getCurrencyData(toCode);
+
+                    return ListTile(
+                      leading: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            fromData['flag'] as String? ?? fromCode,
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(Icons.arrow_forward, size: 16),
+                          ),
+                          Text(
+                            toData['flag'] as String? ?? toCode,
+                            style: const TextStyle(fontSize: 20),
+                          ),
+                        ],
+                      ),
+                      title: Text('$fromCode / $toCode'),
+                      subtitle: Text(
+                        '${fromData['nameZh']} → ${toData['nameZh']}',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        onPressed: () {
+                          setState(() {
+                            _pairs.remove(pair);
+                          });
+                          widget.onRemove(pair);
+                        },
+                      ),
+                      onTap: () => Navigator.pop(context, pair),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

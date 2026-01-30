@@ -197,6 +197,40 @@ class CurrencyService {
     });
   }
 
+  /// 获取收藏的货币对
+  Future<List<String>> getFavoritePairs() async {
+    final pref = await getPreference();
+    return pref?.favoritePairs ?? [];
+  }
+
+  /// 添加货币对到收藏夹
+  Future<void> addFavoritePair(String from, String to) async {
+    final pref = await getPreference();
+    if (pref == null) return;
+    final pair = '$from/$to';
+    if (!pref.favoritePairs.contains(pair)) {
+      pref.favoritePairs = [...pref.favoritePairs, pair];
+      await updatePreference(pref);
+    }
+  }
+
+  /// 从收藏夹移除货币对
+  Future<void> removeFavoritePair(String from, String to) async {
+    final pref = await getPreference();
+    if (pref == null) return;
+    final pair = '$from/$to';
+    if (pref.favoritePairs.contains(pair)) {
+      pref.favoritePairs = pref.favoritePairs.where((p) => p != pair).toList();
+      await updatePreference(pref);
+    }
+  }
+
+  /// 检查货币对是否已收藏
+  Future<bool> isFavoritePair(String from, String to) async {
+    final pairs = await getFavoritePairs();
+    return pairs.contains('$from/$to');
+  }
+
   /// 设置主币种
   Future<void> setBaseCurrency(String code) async {
     final pref = await getPreference();
@@ -741,6 +775,154 @@ class CurrencyService {
         .findAll();
   }
 
+  /// 计算多币种资产总览
+  /// [accounts] 所有账户列表
+  /// [balances] 账户余额映射
+  /// [baseCurrency] 转换的基础货币
+  Future<MultiCurrencyAssetOverview> calculateMultiCurrencyOverview(
+    List<dynamic> accounts, // JiveAccount list
+    Map<int, double> balances,
+    String? baseCurrency,
+  ) async {
+    final targetCurrency = baseCurrency ?? await getBaseCurrency();
+
+    // 按币种和类型分组
+    final assetsByType = <String, Map<String, List<dynamic>>>{}; // 'asset' or 'liability' -> currency -> accounts
+    assetsByType['asset'] = {};
+    assetsByType['liability'] = {};
+
+    for (final account in accounts) {
+      if (account.isHidden || account.isArchived || !account.includeInBalance) continue;
+
+      final currency = account.currency as String;
+      final type = (account.type as String) == 'liability' ? 'liability' : 'asset';
+
+      assetsByType[type] ??= {};
+      assetsByType[type]![currency] ??= [];
+      assetsByType[type]![currency]!.add(account);
+    }
+
+    // 处理资产组
+    final assetGroups = <CurrencyAssetGroup>[];
+    double totalAssets = 0;
+
+    for (final entry in assetsByType['asset']!.entries) {
+      final currency = entry.key;
+      final currencyAccounts = entry.value;
+      final currencyData = CurrencyDefaults.getAllCurrencies().firstWhere(
+        (c) => c['code'] == currency,
+        orElse: () => {'code': currency, 'nameZh': currency, 'symbol': currency},
+      );
+
+      double totalAmount = 0;
+      final accountItems = <CurrencyAccountItem>[];
+
+      for (final account in currencyAccounts) {
+        final balance = balances[account.id] ?? account.openingBalance;
+        totalAmount += balance;
+
+        // 转换为基础货币
+        double convertedBalance = balance;
+        if (currency != targetCurrency) {
+          convertedBalance = await convert(balance, currency, targetCurrency) ?? balance;
+        }
+
+        accountItems.add(CurrencyAccountItem(
+          accountId: account.id,
+          accountName: account.name,
+          accountType: account.type,
+          iconName: account.iconName,
+          balance: balance,
+          convertedBalance: convertedBalance,
+        ));
+      }
+
+      // 计算该币种的转换总额
+      double convertedTotal = totalAmount;
+      if (currency != targetCurrency) {
+        convertedTotal = await convert(totalAmount, currency, targetCurrency) ?? totalAmount;
+      }
+      totalAssets += convertedTotal;
+
+      assetGroups.add(CurrencyAssetGroup(
+        currency: currency,
+        currencyName: currencyData['nameZh'] as String,
+        flag: currencyData['flag'] as String?,
+        symbol: currencyData['symbol'] as String,
+        totalAmount: totalAmount,
+        convertedAmount: convertedTotal,
+        accountCount: currencyAccounts.length,
+        accounts: accountItems,
+      ));
+    }
+
+    // 处理负债组
+    final liabilityGroups = <CurrencyAssetGroup>[];
+    double totalLiabilities = 0;
+
+    for (final entry in assetsByType['liability']!.entries) {
+      final currency = entry.key;
+      final currencyAccounts = entry.value;
+      final currencyData = CurrencyDefaults.getAllCurrencies().firstWhere(
+        (c) => c['code'] == currency,
+        orElse: () => {'code': currency, 'nameZh': currency, 'symbol': currency},
+      );
+
+      double totalAmount = 0;
+      final accountItems = <CurrencyAccountItem>[];
+
+      for (final account in currencyAccounts) {
+        final balance = (balances[account.id] ?? account.openingBalance).abs();
+        totalAmount += balance;
+
+        double convertedBalance = balance;
+        if (currency != targetCurrency) {
+          convertedBalance = await convert(balance, currency, targetCurrency) ?? balance;
+        }
+
+        accountItems.add(CurrencyAccountItem(
+          accountId: account.id,
+          accountName: account.name,
+          accountType: account.type,
+          iconName: account.iconName,
+          balance: balance,
+          convertedBalance: convertedBalance,
+        ));
+      }
+
+      double convertedTotal = totalAmount;
+      if (currency != targetCurrency) {
+        convertedTotal = await convert(totalAmount, currency, targetCurrency) ?? totalAmount;
+      }
+      totalLiabilities += convertedTotal;
+
+      liabilityGroups.add(CurrencyAssetGroup(
+        currency: currency,
+        currencyName: currencyData['nameZh'] as String,
+        flag: currencyData['flag'] as String?,
+        symbol: currencyData['symbol'] as String,
+        totalAmount: totalAmount,
+        convertedAmount: convertedTotal,
+        accountCount: currencyAccounts.length,
+        accounts: accountItems,
+      ));
+    }
+
+    // 按转换后金额排序
+    assetGroups.sort((a, b) => b.convertedAmount.compareTo(a.convertedAmount));
+    liabilityGroups.sort((a, b) => b.convertedAmount.compareTo(a.convertedAmount));
+
+    return MultiCurrencyAssetOverview(
+      baseCurrency: targetCurrency,
+      totalAssets: totalAssets,
+      totalLiabilities: totalLiabilities,
+      netWorth: totalAssets - totalLiabilities,
+      assetGroups: assetGroups,
+      liabilityGroups: liabilityGroups,
+      calculatedAt: DateTime.now(),
+    );
+  }
+
   /// 格式化金额（根据货币）
   String formatAmount(double amount, String currencyCode) {
     final symbol = CurrencyDefaults.getSymbol(currencyCode);
@@ -960,5 +1142,90 @@ class RateTrendStats {
   String get trendIcon {
     if (changePercent.abs() < 0.1) return '→';
     return isUp ? '↑' : '↓';
+  }
+}
+
+/// 按币种分组的资产数据
+class CurrencyAssetGroup {
+  final String currency;
+  final String currencyName;
+  final String? flag;
+  final String symbol;
+  final double totalAmount; // 该币种的总金额
+  final double convertedAmount; // 转换为主币种后的金额
+  final int accountCount; // 该币种的账户数量
+  final List<CurrencyAccountItem> accounts; // 该币种下的账户列表
+
+  CurrencyAssetGroup({
+    required this.currency,
+    required this.currencyName,
+    this.flag,
+    required this.symbol,
+    required this.totalAmount,
+    required this.convertedAmount,
+    required this.accountCount,
+    required this.accounts,
+  });
+
+  /// 该币种占总资产的百分比
+  double percentageOf(double totalAssets) {
+    if (totalAssets <= 0) return 0;
+    return convertedAmount / totalAssets * 100;
+  }
+}
+
+/// 单个账户的资产项
+class CurrencyAccountItem {
+  final int accountId;
+  final String accountName;
+  final String accountType;
+  final String iconName;
+  final double balance;
+  final double convertedBalance;
+
+  CurrencyAccountItem({
+    required this.accountId,
+    required this.accountName,
+    required this.accountType,
+    required this.iconName,
+    required this.balance,
+    required this.convertedBalance,
+  });
+}
+
+/// 多币种资产总览数据
+class MultiCurrencyAssetOverview {
+  final String baseCurrency;
+  final double totalAssets; // 转换后的总资产
+  final double totalLiabilities; // 转换后的总负债
+  final double netWorth; // 净资产
+  final List<CurrencyAssetGroup> assetGroups; // 按币种分组的资产
+  final List<CurrencyAssetGroup> liabilityGroups; // 按币种分组的负债
+  final DateTime calculatedAt;
+
+  MultiCurrencyAssetOverview({
+    required this.baseCurrency,
+    required this.totalAssets,
+    required this.totalLiabilities,
+    required this.netWorth,
+    required this.assetGroups,
+    required this.liabilityGroups,
+    required this.calculatedAt,
+  });
+
+  /// 获取所有涉及的币种列表
+  List<String> get allCurrencies {
+    final currencies = <String>{};
+    for (final group in [...assetGroups, ...liabilityGroups]) {
+      currencies.add(group.currency);
+    }
+    return currencies.toList()..sort();
+  }
+
+  /// 获取资产前N的币种
+  List<CurrencyAssetGroup> topAssetCurrencies(int n) {
+    final sorted = List<CurrencyAssetGroup>.from(assetGroups)
+      ..sort((a, b) => b.convertedAmount.compareTo(a.convertedAmount));
+    return sorted.take(n).toList();
   }
 }

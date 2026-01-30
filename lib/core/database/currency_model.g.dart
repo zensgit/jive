@@ -2920,28 +2920,33 @@ const JiveCurrencyPreferenceSchema = CollectionSchema(
       name: r'enabledCurrencies',
       type: IsarType.stringList,
     ),
-    r'lastRateUpdate': PropertySchema(
+    r'favoritePairs': PropertySchema(
       id: 3,
+      name: r'favoritePairs',
+      type: IsarType.stringList,
+    ),
+    r'lastRateUpdate': PropertySchema(
+      id: 4,
       name: r'lastRateUpdate',
       type: IsarType.dateTime,
     ),
     r'preferredCryptoSource': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'preferredCryptoSource',
       type: IsarType.string,
     ),
     r'preferredRateSource': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'preferredRateSource',
       type: IsarType.string,
     ),
     r'rateChangeAlert': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'rateChangeAlert',
       type: IsarType.bool,
     ),
     r'rateChangeThreshold': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'rateChangeThreshold',
       type: IsarType.double,
     )
@@ -2974,6 +2979,13 @@ int _jiveCurrencyPreferenceEstimateSize(
       bytesCount += value.length * 3;
     }
   }
+  bytesCount += 3 + object.favoritePairs.length * 3;
+  {
+    for (var i = 0; i < object.favoritePairs.length; i++) {
+      final value = object.favoritePairs[i];
+      bytesCount += value.length * 3;
+    }
+  }
   bytesCount += 3 + object.preferredCryptoSource.length * 3;
   bytesCount += 3 + object.preferredRateSource.length * 3;
   return bytesCount;
@@ -2988,11 +3000,12 @@ void _jiveCurrencyPreferenceSerialize(
   writer.writeBool(offsets[0], object.autoUpdateRates);
   writer.writeString(offsets[1], object.baseCurrency);
   writer.writeStringList(offsets[2], object.enabledCurrencies);
-  writer.writeDateTime(offsets[3], object.lastRateUpdate);
-  writer.writeString(offsets[4], object.preferredCryptoSource);
-  writer.writeString(offsets[5], object.preferredRateSource);
-  writer.writeBool(offsets[6], object.rateChangeAlert);
-  writer.writeDouble(offsets[7], object.rateChangeThreshold);
+  writer.writeStringList(offsets[3], object.favoritePairs);
+  writer.writeDateTime(offsets[4], object.lastRateUpdate);
+  writer.writeString(offsets[5], object.preferredCryptoSource);
+  writer.writeString(offsets[6], object.preferredRateSource);
+  writer.writeBool(offsets[7], object.rateChangeAlert);
+  writer.writeDouble(offsets[8], object.rateChangeThreshold);
 }
 
 JiveCurrencyPreference _jiveCurrencyPreferenceDeserialize(
@@ -3005,12 +3018,13 @@ JiveCurrencyPreference _jiveCurrencyPreferenceDeserialize(
   object.autoUpdateRates = reader.readBool(offsets[0]);
   object.baseCurrency = reader.readString(offsets[1]);
   object.enabledCurrencies = reader.readStringList(offsets[2]) ?? [];
+  object.favoritePairs = reader.readStringList(offsets[3]) ?? [];
   object.id = id;
-  object.lastRateUpdate = reader.readDateTimeOrNull(offsets[3]);
-  object.preferredCryptoSource = reader.readString(offsets[4]);
-  object.preferredRateSource = reader.readString(offsets[5]);
-  object.rateChangeAlert = reader.readBool(offsets[6]);
-  object.rateChangeThreshold = reader.readDouble(offsets[7]);
+  object.lastRateUpdate = reader.readDateTimeOrNull(offsets[4]);
+  object.preferredCryptoSource = reader.readString(offsets[5]);
+  object.preferredRateSource = reader.readString(offsets[6]);
+  object.rateChangeAlert = reader.readBool(offsets[7]);
+  object.rateChangeThreshold = reader.readDouble(offsets[8]);
   return object;
 }
 
@@ -3028,14 +3042,16 @@ P _jiveCurrencyPreferenceDeserializeProp<P>(
     case 2:
       return (reader.readStringList(offset) ?? []) as P;
     case 3:
-      return (reader.readDateTimeOrNull(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 4:
-      return (reader.readString(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
       return (reader.readString(offset)) as P;
     case 6:
-      return (reader.readBool(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 7:
+      return (reader.readBool(offset)) as P;
+    case 8:
       return (reader.readDouble(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3508,6 +3524,233 @@ extension JiveCurrencyPreferenceQueryFilter on QueryBuilder<
     return QueryBuilder.apply(this, (query) {
       return query.listLength(
         r'enabledCurrencies',
+        lower,
+        includeLower,
+        upper,
+        includeUpper,
+      );
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsElementEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'favoritePairs',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsElementGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'favoritePairs',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsElementLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'favoritePairs',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsElementBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'favoritePairs',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsElementStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'favoritePairs',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsElementEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'favoritePairs',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+          QAfterFilterCondition>
+      favoritePairsElementContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'favoritePairs',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+          QAfterFilterCondition>
+      favoritePairsElementMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'favoritePairs',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsElementIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'favoritePairs',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsElementIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'favoritePairs',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsLengthEqualTo(int length) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'favoritePairs',
+        length,
+        true,
+        length,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'favoritePairs',
+        0,
+        true,
+        0,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'favoritePairs',
+        0,
+        false,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsLengthLessThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'favoritePairs',
+        0,
+        true,
+        length,
+        include,
+      );
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsLengthGreaterThan(
+    int length, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'favoritePairs',
+        length,
+        include,
+        999999,
+        true,
+      );
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> favoritePairsLengthBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.listLength(
+        r'favoritePairs',
         lower,
         includeLower,
         upper,
@@ -4246,6 +4489,13 @@ extension JiveCurrencyPreferenceQueryWhereDistinct
   }
 
   QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QDistinct>
+      distinctByFavoritePairs() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'favoritePairs');
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QDistinct>
       distinctByLastRateUpdate() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'lastRateUpdate');
@@ -4309,6 +4559,13 @@ extension JiveCurrencyPreferenceQueryProperty on QueryBuilder<
       enabledCurrenciesProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'enabledCurrencies');
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, List<String>, QQueryOperations>
+      favoritePairsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'favoritePairs');
     });
   }
 
