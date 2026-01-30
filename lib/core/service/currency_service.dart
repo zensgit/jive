@@ -181,6 +181,18 @@ class CurrencyService {
     return CurrencyDefaults.getRate(from, to);
   }
 
+  /// 获取完整汇率记录（包含来源信息）
+  Future<JiveExchangeRate?> getRateRecord(String from, String to) async {
+    if (from == to) return null;
+
+    return await _isar.jiveExchangeRates
+        .filter()
+        .fromCurrencyEqualTo(from)
+        .toCurrencyEqualTo(to)
+        .sortByEffectiveDateDesc()
+        .findFirst();
+  }
+
   /// 货币转换
   Future<double?> convert(double amount, String from, String to) async {
     final rate = await getRate(from, to);

@@ -529,9 +529,22 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                         ),
                       ],
                     ),
-                    subtitle: Text(
-                      '1 $baseCurrency = ${_currencyService.formatRate(rate.rate)} ${rate.toCurrency}',
-                      style: const TextStyle(fontSize: 12),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '1 $baseCurrency = ${_currencyService.formatRate(rate.rate)} ${rate.toCurrency}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        if (rate.updatedAt != null)
+                          Text(
+                            '更新于 ${_formatDateTime(rate.updatedAt!)}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                      ],
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,

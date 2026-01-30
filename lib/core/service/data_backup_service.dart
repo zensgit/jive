@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import '../database/account_model.dart';
 import '../database/auto_draft_model.dart';
 import '../database/category_model.dart';
+import '../database/currency_model.dart';
 import '../database/tag_conversion_log.dart';
 import '../database/tag_model.dart';
 import '../database/tag_rule_model.dart';
@@ -23,6 +24,8 @@ class BackupImportSummary {
   final int autoDrafts;
   final int tagConversionLogs;
   final int tagRules;
+  final int exchangeRates;
+  final int currencyPreferences;
 
   const BackupImportSummary({
     required this.accounts,
@@ -34,11 +37,13 @@ class BackupImportSummary {
     required this.autoDrafts,
     required this.tagConversionLogs,
     required this.tagRules,
+    this.exchangeRates = 0,
+    this.currencyPreferences = 0,
   });
 }
 
 class JiveDataBackupService {
-  static const int schemaVersion = 1;
+  static const int schemaVersion = 2;
 
   static Future<File> exportToFile(Isar isar) async {
     final accounts = await isar.collection<JiveAccount>().where().findAll();
@@ -50,6 +55,8 @@ class JiveDataBackupService {
     final transactions = await isar.collection<JiveTransaction>().where().findAll();
     final autoDrafts = await isar.collection<JiveAutoDraft>().where().findAll();
     final logs = await isar.collection<JiveTagConversionLog>().where().findAll();
+    final exchangeRates = await isar.collection<JiveExchangeRate>().where().findAll();
+    final currencyPrefs = await isar.collection<JiveCurrencyPreference>().where().findAll();
 
     final payload = <String, dynamic>{
       'schemaVersion': schemaVersion,
@@ -63,6 +70,8 @@ class JiveDataBackupService {
       'transactions': transactions.map(_transactionToMap).toList(),
       'autoDrafts': autoDrafts.map(_autoDraftToMap).toList(),
       'tagConversionLogs': logs.map(_tagConversionLogToMap).toList(),
+      'exchangeRates': exchangeRates.map(_exchangeRateToMap).toList(),
+      'currencyPreferences': currencyPrefs.map(_currencyPreferenceToMap).toList(),
     };
 
     final dir = await getApplicationDocumentsDirectory();
@@ -89,6 +98,8 @@ class JiveDataBackupService {
     final transactions = _decodeList(data['transactions'], _transactionFromMap);
     final autoDrafts = _decodeList(data['autoDrafts'], _autoDraftFromMap);
     final logs = _decodeList(data['tagConversionLogs'], _tagConversionLogFromMap);
+    final exchangeRates = _decodeList(data['exchangeRates'], _exchangeRateFromMap);
+    final currencyPrefs = _decodeList(data['currencyPreferences'], _currencyPreferenceFromMap);
 
     await isar.writeTxn(() async {
       if (clearBefore) {
@@ -100,6 +111,8 @@ class JiveDataBackupService {
         await isar.collection<JiveTag>().clear();
         await isar.collection<JiveTagGroup>().clear();
         await isar.collection<JiveTagConversionLog>().clear();
+        await isar.collection<JiveExchangeRate>().clear();
+        await isar.collection<JiveCurrencyPreference>().clear();
       }
 
       if (accounts.isNotEmpty) {
@@ -129,6 +142,12 @@ class JiveDataBackupService {
       if (logs.isNotEmpty) {
         await isar.collection<JiveTagConversionLog>().putAll(logs);
       }
+      if (exchangeRates.isNotEmpty) {
+        await isar.collection<JiveExchangeRate>().putAll(exchangeRates);
+      }
+      if (currencyPrefs.isNotEmpty) {
+        await isar.collection<JiveCurrencyPreference>().putAll(currencyPrefs);
+      }
     });
 
     return BackupImportSummary(
@@ -141,6 +160,8 @@ class JiveDataBackupService {
       transactions: transactions.length,
       autoDrafts: autoDrafts.length,
       tagConversionLogs: logs.length,
+      exchangeRates: exchangeRates.length,
+      currencyPreferences: currencyPrefs.length,
     );
   }
 
@@ -367,6 +388,9 @@ class JiveDataBackupService {
         'note': tx.note,
         'accountId': tx.accountId,
         'toAccountId': tx.toAccountId,
+        'toAmount': tx.toAmount,
+        'exchangeRate': tx.exchangeRate,
+        'projectId': tx.projectId,
         'tagKeys': tx.tagKeys,
         'smartTagKeys': tx.smartTagKeys,
       };
@@ -386,6 +410,9 @@ class JiveDataBackupService {
       ..note = map['note']?.toString()
       ..accountId = _parseInt(map['accountId'])
       ..toAccountId = _parseInt(map['toAccountId'])
+      ..toAmount = _parseDouble(map['toAmount'])
+      ..exchangeRate = _parseDouble(map['exchangeRate'])
+      ..projectId = _parseInt(map['projectId'])
       ..tagKeys = List<String>.from(map['tagKeys'] ?? [])
       ..smartTagKeys = List<String>.from(map['smartTagKeys'] ?? []);
     return tx;
@@ -498,5 +525,47 @@ class JiveDataBackupService {
       return DateTime.tryParse(value);
     }
     return null;
+  }
+
+  // 汇率数据转换
+  static Map<String, dynamic> _exchangeRateToMap(JiveExchangeRate rate) => {
+        'id': rate.id,
+        'fromCurrency': rate.fromCurrency,
+        'toCurrency': rate.toCurrency,
+        'rate': rate.rate,
+        'effectiveDate': rate.effectiveDate.toIso8601String(),
+        'source': rate.source,
+        'updatedAt': rate.updatedAt?.toIso8601String(),
+      };
+
+  static JiveExchangeRate _exchangeRateFromMap(Map<String, dynamic> map) {
+    final rate = JiveExchangeRate()
+      ..id = _parseInt(map['id']) ?? Isar.autoIncrement
+      ..fromCurrency = map['fromCurrency']?.toString() ?? ''
+      ..toCurrency = map['toCurrency']?.toString() ?? ''
+      ..rate = _parseDouble(map['rate']) ?? 1.0
+      ..effectiveDate = _parseDate(map['effectiveDate']) ?? DateTime.now()
+      ..source = map['source']?.toString() ?? 'backup'
+      ..updatedAt = _parseDate(map['updatedAt']);
+    return rate;
+  }
+
+  // 货币偏好数据转换
+  static Map<String, dynamic> _currencyPreferenceToMap(JiveCurrencyPreference pref) => {
+        'id': pref.id,
+        'baseCurrency': pref.baseCurrency,
+        'enabledCurrencies': pref.enabledCurrencies,
+        'autoUpdateRates': pref.autoUpdateRates,
+        'lastRateUpdate': pref.lastRateUpdate?.toIso8601String(),
+      };
+
+  static JiveCurrencyPreference _currencyPreferenceFromMap(Map<String, dynamic> map) {
+    final pref = JiveCurrencyPreference()
+      ..id = _parseInt(map['id']) ?? Isar.autoIncrement
+      ..baseCurrency = map['baseCurrency']?.toString() ?? 'CNY'
+      ..enabledCurrencies = List<String>.from(map['enabledCurrencies'] ?? [])
+      ..autoUpdateRates = map['autoUpdateRates'] == true
+      ..lastRateUpdate = _parseDate(map['lastRateUpdate']);
+    return pref;
   }
 }

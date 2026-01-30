@@ -75,7 +75,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   static const String _noteTagUsageKeyPrefix = 'note_tag_usage_v1_';
 
   String _amountStr = "0";
+  String _toAmountStr = ""; // 跨币种转账的转入金额
+  double? _crossCurrencyRate; // 跨币种转账时使用的汇率
+  String? _crossCurrencyRateSource; // 汇率来源
+  bool _isEditingToAmount = false; // 是否正在编辑转入金额
   late Isar _isar;
+  final TextEditingController _toAmountController = TextEditingController();
   bool _isLoading = true;
   bool _hasDataChanges = false;
   bool _isFallbackMode = false;
@@ -112,6 +117,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final Map<String, List<String>> _searchTokenCache = {};
   final Map<String, List<String>> _systemTokenCache = {};
   bool _searchItemsLoaded = false;
+  CurrencyService? _currencyService;
 
   final List<String> _keys = [
     '7',
@@ -145,6 +151,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _inlineSearchController.dispose();
     _inlineSearchFocus.dispose();
     _noteController.dispose();
+    _toAmountController.dispose();
     super.dispose();
   }
 
@@ -164,6 +171,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _noteController.text = editing.note ?? '';
       _selectedTagKeys = List<String>.from(editing.tagKeys);
       _selectedProjectId = editing.projectId;
+      // 跨币种转账数据
+      if (editing.toAmount != null) {
+        _toAmountStr = _formatAmountInput(editing.toAmount!);
+        _toAmountController.text = _toAmountStr;
+        _isEditingToAmount = true; // 已有数据，不自动覆盖
+      }
+      _crossCurrencyRate = editing.exchangeRate;
       return;
     }
 
@@ -181,6 +195,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _noteController.text = prefill.note ?? '';
     _selectedTagKeys = List<String>.from(prefill.tagKeys);
     _selectedProjectId = prefill.projectId;
+    // 跨币种转账数据
+    if (prefill.toAmount != null) {
+      _toAmountStr = _formatAmountInput(prefill.toAmount!);
+      _toAmountController.text = _toAmountStr;
+      _isEditingToAmount = true;
+    }
+    _crossCurrencyRate = prefill.exchangeRate;
   }
 
   Future<void> _initData() async {
@@ -205,6 +226,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ], directory: dir.path);
       }
 
+      _currencyService = CurrencyService(_isar);
       await CategoryService(_isar).initDefaultCategories();
       await AccountService(_isar).initDefaultAccounts();
       await TagService(_isar).initDefaultGroups();
@@ -386,6 +408,75 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _selectedProjectId = null;
       }
     });
+  }
+
+  /// 加载跨币种转账的汇率
+  Future<void> _loadCrossCurrencyRate() async {
+    if (_currencyService == null) return;
+    if (_selectedAccount == null || _selectedToAccount == null) {
+      setState(() {
+        _crossCurrencyRate = null;
+        _crossCurrencyRateSource = null;
+        _toAmountStr = "";
+        _toAmountController.text = "";
+      });
+      return;
+    }
+
+    final fromCurrency = _selectedAccount!.currency;
+    final toCurrency = _selectedToAccount!.currency;
+
+    if (fromCurrency == toCurrency) {
+      setState(() {
+        _crossCurrencyRate = null;
+        _crossCurrencyRateSource = null;
+        _toAmountStr = "";
+        _toAmountController.text = "";
+      });
+      return;
+    }
+
+    // 获取汇率记录
+    final rateRecord = await _currencyService!.getRateRecord(fromCurrency, toCurrency);
+    double? rate;
+    String? source;
+
+    if (rateRecord != null) {
+      rate = rateRecord.rate;
+      source = rateRecord.source;
+    } else {
+      // 使用默认汇率
+      rate = CurrencyDefaults.getRate(fromCurrency, toCurrency);
+      source = 'default';
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _crossCurrencyRate = rate;
+      _crossCurrencyRateSource = source;
+      // 如果有输入金额且未手动编辑转入金额，自动计算
+      if (!_isEditingToAmount && _toAmountStr.isEmpty) {
+        _calculateToAmount();
+      }
+    });
+  }
+
+  /// 根据汇率计算转入金额
+  void _calculateToAmount() {
+    if (_crossCurrencyRate == null) return;
+    final amount = double.tryParse(_amountStr);
+    if (amount == null || amount <= 0) {
+      _toAmountStr = "";
+      _toAmountController.text = "";
+      return;
+    }
+    final toAmount = amount * _crossCurrencyRate!;
+    final toDecimals = CurrencyDefaults.getDecimalPlaces(
+      _selectedToAccount?.currency ?? 'CNY',
+    );
+    _toAmountStr = toAmount.toStringAsFixed(toDecimals);
+    _toAmountController.text = _toAmountStr;
   }
 
   String _typeValue(TransactionType type) {
@@ -850,6 +941,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           }
         }
       }
+      // 如果是跨币种转账且未手动编辑转入金额，自动计算
+      if (!_isEditingToAmount && _crossCurrencyRate != null) {
+        _calculateToAmount();
+      }
     });
   }
 
@@ -907,7 +1002,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _isEditing && source != "Manual" && existingRawText != null;
     tx
       ..amount = amount
-      ..source = source ?? "Manual"
+      ..source = source
       ..type = typeValue
       ..categoryKey = _txType == TransactionType.transfer
           ? null
@@ -922,6 +1017,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ..accountId = _selectedAccount?.id
       ..toAccountId = _txType == TransactionType.transfer
           ? _selectedToAccount?.id
+          : null
+      ..toAmount = _txType == TransactionType.transfer && _crossCurrencyRate != null
+          ? double.tryParse(_toAmountStr)
+          : null
+      ..exchangeRate = _txType == TransactionType.transfer
+          ? _crossCurrencyRate
           : null
       ..projectId = _selectedProjectId
       ..tagKeys = List<String>.from(_selectedTagKeys)
@@ -1347,25 +1448,127 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           ),
           if (isCrossCurrency) ...[
             const SizedBox(height: 8),
+            // 跨币种转账信息卡片
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.orange.shade200),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.currency_exchange, size: 14, color: Colors.orange.shade700),
-                  const SizedBox(width: 6),
-                  Text(
-                    '跨币种转账: $fromCurrency → $toCurrency',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.orange.shade800,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  // 标题行
+                  Row(
+                    children: [
+                      Icon(Icons.currency_exchange, size: 16, color: Colors.orange.shade700),
+                      const SizedBox(width: 6),
+                      Text(
+                        '跨币种转账',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange.shade800,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (_crossCurrencyRate != null) ...[
+                        _buildRateSourceBadge(_crossCurrencyRateSource ?? 'default'),
+                        const SizedBox(width: 6),
+                        Text(
+                          '1 $fromCurrency = ${_crossCurrencyRate!.toStringAsFixed(4)} $toCurrency',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.orange.shade600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // 转入金额输入
+                  Row(
+                    children: [
+                      Text(
+                        '转入金额',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                CurrencyDefaults.getSymbol(toCurrency),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.orange.shade700,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: TextField(
+                                  controller: _toAmountController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.orange.shade800,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    hintText: '0.00',
+                                  ),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _toAmountStr = value;
+                                      _isEditingToAmount = true;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // 重新计算按钮
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _isEditingToAmount = false;
+                            _calculateToAmount();
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            Icons.refresh,
+                            size: 16,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1592,6 +1795,44 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     });
   }
 
+  Widget _buildRateSourceBadge(String source) {
+    Color color;
+    String label;
+    switch (source) {
+      case 'frankfurter':
+      case 'exchangerate.host':
+        color = Colors.green;
+        label = '在线';
+        break;
+      case 'manual':
+        color = Colors.orange;
+        label = '手动';
+        break;
+      case 'default':
+        color = Colors.grey;
+        label = '默认';
+        break;
+      default:
+        color = Colors.grey;
+        label = '默认';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
   Widget _buildAccountChip({
     required String label,
     required JiveAccount? account,
@@ -1764,6 +2005,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _selectedAccount = selected;
       }
     });
+
+    // 跨币种转账时加载汇率
+    if (_txType == TransactionType.transfer) {
+      await _loadCrossCurrencyRate();
+    }
   }
 
   List<_AccountPickerEntry> _buildAccountPickerEntries() {

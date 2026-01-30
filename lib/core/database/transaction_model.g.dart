@@ -37,68 +37,78 @@ const JiveTransactionSchema = CollectionSchema(
       name: r'categoryKey',
       type: IsarType.string,
     ),
-    r'note': PropertySchema(
+    r'exchangeRate': PropertySchema(
       id: 4,
+      name: r'exchangeRate',
+      type: IsarType.double,
+    ),
+    r'note': PropertySchema(
+      id: 5,
       name: r'note',
       type: IsarType.string,
     ),
     r'projectId': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'projectId',
       type: IsarType.long,
     ),
     r'rawText': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'rawText',
       type: IsarType.string,
     ),
     r'smartTagKeys': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'smartTagKeys',
       type: IsarType.stringList,
     ),
     r'smartTagOptOutAll': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'smartTagOptOutAll',
       type: IsarType.bool,
     ),
     r'smartTagOptOutKeys': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'smartTagOptOutKeys',
       type: IsarType.stringList,
     ),
     r'source': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'source',
       type: IsarType.string,
     ),
     r'subCategory': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'subCategory',
       type: IsarType.string,
     ),
     r'subCategoryKey': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
     r'tagKeys': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'tagKeys',
       type: IsarType.stringList,
     ),
     r'timestamp': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'toAccountId': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'toAccountId',
       type: IsarType.long,
     ),
+    r'toAmount': PropertySchema(
+      id: 17,
+      name: r'toAmount',
+      type: IsarType.double,
+    ),
     r'type': PropertySchema(
-      id: 16,
+      id: 18,
       name: r'type',
       type: IsarType.string,
     )
@@ -279,19 +289,21 @@ void _jiveTransactionSerialize(
   writer.writeDouble(offsets[1], object.amount);
   writer.writeString(offsets[2], object.category);
   writer.writeString(offsets[3], object.categoryKey);
-  writer.writeString(offsets[4], object.note);
-  writer.writeLong(offsets[5], object.projectId);
-  writer.writeString(offsets[6], object.rawText);
-  writer.writeStringList(offsets[7], object.smartTagKeys);
-  writer.writeBool(offsets[8], object.smartTagOptOutAll);
-  writer.writeStringList(offsets[9], object.smartTagOptOutKeys);
-  writer.writeString(offsets[10], object.source);
-  writer.writeString(offsets[11], object.subCategory);
-  writer.writeString(offsets[12], object.subCategoryKey);
-  writer.writeStringList(offsets[13], object.tagKeys);
-  writer.writeDateTime(offsets[14], object.timestamp);
-  writer.writeLong(offsets[15], object.toAccountId);
-  writer.writeString(offsets[16], object.type);
+  writer.writeDouble(offsets[4], object.exchangeRate);
+  writer.writeString(offsets[5], object.note);
+  writer.writeLong(offsets[6], object.projectId);
+  writer.writeString(offsets[7], object.rawText);
+  writer.writeStringList(offsets[8], object.smartTagKeys);
+  writer.writeBool(offsets[9], object.smartTagOptOutAll);
+  writer.writeStringList(offsets[10], object.smartTagOptOutKeys);
+  writer.writeString(offsets[11], object.source);
+  writer.writeString(offsets[12], object.subCategory);
+  writer.writeString(offsets[13], object.subCategoryKey);
+  writer.writeStringList(offsets[14], object.tagKeys);
+  writer.writeDateTime(offsets[15], object.timestamp);
+  writer.writeLong(offsets[16], object.toAccountId);
+  writer.writeDouble(offsets[17], object.toAmount);
+  writer.writeString(offsets[18], object.type);
 }
 
 JiveTransaction _jiveTransactionDeserialize(
@@ -305,20 +317,22 @@ JiveTransaction _jiveTransactionDeserialize(
   object.amount = reader.readDouble(offsets[1]);
   object.category = reader.readStringOrNull(offsets[2]);
   object.categoryKey = reader.readStringOrNull(offsets[3]);
+  object.exchangeRate = reader.readDoubleOrNull(offsets[4]);
   object.id = id;
-  object.note = reader.readStringOrNull(offsets[4]);
-  object.projectId = reader.readLongOrNull(offsets[5]);
-  object.rawText = reader.readStringOrNull(offsets[6]);
-  object.smartTagKeys = reader.readStringList(offsets[7]) ?? [];
-  object.smartTagOptOutAll = reader.readBool(offsets[8]);
-  object.smartTagOptOutKeys = reader.readStringList(offsets[9]) ?? [];
-  object.source = reader.readString(offsets[10]);
-  object.subCategory = reader.readStringOrNull(offsets[11]);
-  object.subCategoryKey = reader.readStringOrNull(offsets[12]);
-  object.tagKeys = reader.readStringList(offsets[13]) ?? [];
-  object.timestamp = reader.readDateTime(offsets[14]);
-  object.toAccountId = reader.readLongOrNull(offsets[15]);
-  object.type = reader.readStringOrNull(offsets[16]);
+  object.note = reader.readStringOrNull(offsets[5]);
+  object.projectId = reader.readLongOrNull(offsets[6]);
+  object.rawText = reader.readStringOrNull(offsets[7]);
+  object.smartTagKeys = reader.readStringList(offsets[8]) ?? [];
+  object.smartTagOptOutAll = reader.readBool(offsets[9]);
+  object.smartTagOptOutKeys = reader.readStringList(offsets[10]) ?? [];
+  object.source = reader.readString(offsets[11]);
+  object.subCategory = reader.readStringOrNull(offsets[12]);
+  object.subCategoryKey = reader.readStringOrNull(offsets[13]);
+  object.tagKeys = reader.readStringList(offsets[14]) ?? [];
+  object.timestamp = reader.readDateTime(offsets[15]);
+  object.toAccountId = reader.readLongOrNull(offsets[16]);
+  object.toAmount = reader.readDoubleOrNull(offsets[17]);
+  object.type = reader.readStringOrNull(offsets[18]);
   return object;
 }
 
@@ -338,30 +352,34 @@ P _jiveTransactionDeserializeProp<P>(
     case 3:
       return (reader.readStringOrNull(offset)) as P;
     case 4:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 5:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 6:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 7:
-      return (reader.readStringList(offset) ?? []) as P;
-    case 8:
-      return (reader.readBool(offset)) as P;
-    case 9:
-      return (reader.readStringList(offset) ?? []) as P;
-    case 10:
-      return (reader.readString(offset)) as P;
-    case 11:
       return (reader.readStringOrNull(offset)) as P;
+    case 8:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 9:
+      return (reader.readBool(offset)) as P;
+    case 10:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 11:
+      return (reader.readString(offset)) as P;
     case 12:
       return (reader.readStringOrNull(offset)) as P;
     case 13:
-      return (reader.readStringList(offset) ?? []) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 14:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 15:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 16:
+      return (reader.readLongOrNull(offset)) as P;
+    case 17:
+      return (reader.readDoubleOrNull(offset)) as P;
+    case 18:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1511,6 +1529,90 @@ extension JiveTransactionQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'categoryKey',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      exchangeRateIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'exchangeRate',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      exchangeRateIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'exchangeRate',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      exchangeRateEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'exchangeRate',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      exchangeRateGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'exchangeRate',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      exchangeRateLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'exchangeRate',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      exchangeRateBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'exchangeRate',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
       ));
     });
   }
@@ -3215,6 +3317,90 @@ extension JiveTransactionQueryFilter
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      toAmountIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'toAmount',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      toAmountIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'toAmount',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      toAmountEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'toAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      toAmountGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'toAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      toAmountLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'toAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      toAmountBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'toAmount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
       typeIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -3432,6 +3618,20 @@ extension JiveTransactionQuerySortBy
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByExchangeRate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'exchangeRate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByExchangeRateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'exchangeRate', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> sortByNote() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'note', Sort.asc);
@@ -3555,6 +3755,20 @@ extension JiveTransactionQuerySortBy
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByToAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByToAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toAmount', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> sortByType() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'type', Sort.asc);
@@ -3623,6 +3837,20 @@ extension JiveTransactionQuerySortThenBy
       thenByCategoryKeyDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'categoryKey', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByExchangeRate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'exchangeRate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByExchangeRateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'exchangeRate', Sort.desc);
     });
   }
 
@@ -3761,6 +3989,20 @@ extension JiveTransactionQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByToAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByToAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toAmount', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> thenByType() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'type', Sort.asc);
@@ -3801,6 +4043,13 @@ extension JiveTransactionQueryWhereDistinct
       distinctByCategoryKey({bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'categoryKey', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByExchangeRate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'exchangeRate');
     });
   }
 
@@ -3889,6 +4138,13 @@ extension JiveTransactionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByToAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'toAmount');
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QDistinct> distinctByType(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -3927,6 +4183,13 @@ extension JiveTransactionQueryProperty
       categoryKeyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'categoryKey');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, double?, QQueryOperations>
+      exchangeRateProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'exchangeRate');
     });
   }
 
@@ -4006,6 +4269,12 @@ extension JiveTransactionQueryProperty
   QueryBuilder<JiveTransaction, int?, QQueryOperations> toAccountIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'toAccountId');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, double?, QQueryOperations> toAmountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'toAmount');
     });
   }
 

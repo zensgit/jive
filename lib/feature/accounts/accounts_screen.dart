@@ -51,6 +51,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
   String _baseCurrency = 'CNY';
   CurrencyService? _currencyService;
 
+  // 货币筛选
+  String? _filterCurrency;
+  List<String> _availableCurrencies = [];
+
   static const List<String> _accountColorPalette = [
     '#43A047',
     '#1E88E5',
@@ -125,6 +129,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
     _currencyService ??= CurrencyService(_isar);
     final baseCurrency = await _currencyService!.getBaseCurrency();
 
+    // 计算可用货币列表
+    final currencies = accounts.map((a) => a.currency).toSet().toList()..sort();
+
     // 使用多币种转换计算总资产
     final totals = await service.calculateTotalsWithCurrency(
       accounts,
@@ -143,6 +150,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
       _creditUsed = creditSummary.used;
       _creditAvailable = creditSummary.available;
       _baseCurrency = baseCurrency;
+      _availableCurrencies = currencies;
+      // 如果筛选的货币不再可用，重置筛选
+      if (_filterCurrency != null && !currencies.contains(_filterCurrency)) {
+        _filterCurrency = null;
+      }
       _isLoading = false;
     });
   }
@@ -1215,8 +1227,13 @@ class _AccountsScreenState extends State<AccountsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    // 根据货币筛选过滤账户
+    final filteredAccounts = _filterCurrency == null
+        ? _accounts
+        : _accounts.where((a) => a.currency == _filterCurrency).toList();
+
     final groupedAccounts = <String, List<JiveAccount>>{};
-    for (final account in _accounts) {
+    for (final account in filteredAccounts) {
       final group = AccountService.displayGroupName(account);
       groupedAccounts.putIfAbsent(group, () => []).add(account);
     }
@@ -1250,6 +1267,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
                 ),
               ],
             ),
+            // 货币筛选芯片
+            if (_availableCurrencies.length > 1) ...[
+              const SizedBox(height: 8),
+              _buildCurrencyFilter(),
+            ],
             const SizedBox(height: 12),
             _buildSummaryCard(),
             const SizedBox(height: 24),
@@ -1261,6 +1283,56 @@ class _AccountsScreenState extends State<AccountsScreen> {
             const SizedBox(height: 24),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCurrencyFilter() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          // "全部"选项
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              label: const Text('全部'),
+              selected: _filterCurrency == null,
+              onSelected: (selected) {
+                if (selected) {
+                  setState(() => _filterCurrency = null);
+                }
+              },
+              selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.2),
+              checkmarkColor: JiveTheme.primaryGreen,
+            ),
+          ),
+          // 各货币选项
+          for (final currency in _availableCurrencies)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilterChip(
+                avatar: Text(
+                  CurrencyDefaults.getAllCurrencies()
+                          .firstWhere(
+                            (c) => c['code'] == currency,
+                            orElse: () => {'flag': null, 'symbol': currency},
+                          )['flag'] as String? ??
+                      CurrencyDefaults.getSymbol(currency),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                label: Text(currency),
+                selected: _filterCurrency == currency,
+                onSelected: (selected) {
+                  setState(() {
+                    _filterCurrency = selected ? currency : null;
+                  });
+                },
+                selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.2),
+                checkmarkColor: JiveTheme.primaryGreen,
+              ),
+            ),
+        ],
       ),
     );
   }

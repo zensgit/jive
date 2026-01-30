@@ -25,6 +25,8 @@ class JiveTransaction {
   int? accountId;             // 账户 ID
   @Index()
   int? toAccountId;           // 转账目标账户 ID
+  double? toAmount;           // 跨币种转账时的转入金额
+  double? exchangeRate;       // 跨币种转账时使用的汇率
   @Index()
   int? projectId;             // 关联项目 ID
   List<String> tagKeys = [];  // 标签 Key 列表 (UUID)
