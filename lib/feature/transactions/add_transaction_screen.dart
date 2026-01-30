@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
+import '../../core/database/currency_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
@@ -18,6 +19,7 @@ import '../../core/database/project_model.dart';
 import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/currency_service.dart';
 import '../../core/service/tag_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_rule_service.dart';
@@ -1015,7 +1017,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                "¥",
+                CurrencyDefaults.getSymbol(_selectedAccount?.currency ?? 'CNY'),
                 style: GoogleFonts.rubik(
                   color: Colors.black87,
                   fontSize: currencyFontSize,
@@ -1308,29 +1310,67 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Widget _buildAccountSelector({required bool isLandscape}) {
     final textSize = isLandscape ? 11.0 : 12.0;
     if (_txType == TransactionType.transfer) {
-      return Row(
+      // 检测是否为跨币种转账
+      final fromCurrency = _selectedAccount?.currency ?? 'CNY';
+      final toCurrency = _selectedToAccount?.currency ?? 'CNY';
+      final isCrossCurrency =
+          _selectedAccount != null &&
+          _selectedToAccount != null &&
+          fromCurrency != toCurrency;
+
+      return Column(
         children: [
-          Expanded(
-            child: _buildAccountChip(
-              label: "从",
-              account: _selectedAccount,
-              textSize: textSize,
-              expand: true,
-              onTap: () => _showAccountPicker(pickTo: false),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _buildAccountChip(
+                  label: "从",
+                  account: _selectedAccount,
+                  textSize: textSize,
+                  expand: true,
+                  onTap: () => _showAccountPicker(pickTo: false),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.arrow_forward, size: 14, color: Colors.grey.shade500),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildAccountChip(
+                  label: "到",
+                  account: _selectedToAccount,
+                  textSize: textSize,
+                  expand: true,
+                  onTap: () => _showAccountPicker(pickTo: true),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Icon(Icons.arrow_forward, size: 14, color: Colors.grey.shade500),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildAccountChip(
-              label: "到",
-              account: _selectedToAccount,
-              textSize: textSize,
-              expand: true,
-              onTap: () => _showAccountPicker(pickTo: true),
+          if (isCrossCurrency) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.currency_exchange, size: 14, color: Colors.orange.shade700),
+                  const SizedBox(width: 6),
+                  Text(
+                    '跨币种转账: $fromCurrency → $toCurrency',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange.shade800,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       );
     }
