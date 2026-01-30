@@ -195,7 +195,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await CategoryService(_isar).initDefaultCategories();
     await AccountService(_isar).initDefaultAccounts();
     await TagService(_isar).initDefaultGroups();
-    await CurrencyService(_isar).initCurrencies();
+    final currencyService = CurrencyService(_isar);
+    await currencyService.initCurrencies();
+    // 检查是否需要自动更新汇率
+    await _checkAutoUpdateRates(currencyService);
     await ProjectService(_isar).initTestProjectIfNeeded();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
     await TransactionService(_isar).migrateTransactionAccountIds();
@@ -205,6 +208,30 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _dbReady = true;
     await _flushPendingAutoEvents();
     await _checkAutoPermissions();
+  }
+
+  Future<void> _checkAutoUpdateRates(CurrencyService currencyService) async {
+    try {
+      final pref = await currencyService.getPreference();
+      if (pref == null || !pref.autoUpdateRates) return;
+
+      // 检查是否需要更新（每天最多更新一次）
+      final lastUpdate = pref.lastRateUpdate;
+      if (lastUpdate != null) {
+        final now = DateTime.now();
+        final diff = now.difference(lastUpdate);
+        if (diff.inHours < 24) return; // 24小时内不重复更新
+      }
+
+      // 后台静默更新汇率
+      await currencyService.fetchAndUpdateRates(
+        pref.baseCurrency,
+        pref.enabledCurrencies,
+      );
+    } catch (e) {
+      // 静默失败，不影响应用启动
+      debugPrint('Auto rate update failed: $e');
+    }
   }
 
   Future<void> _loadDemoSeedPrefs() async {

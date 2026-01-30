@@ -402,6 +402,32 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
             ),
           ),
           const SizedBox(height: 8),
+          // 自动更新汇率开关
+          Card(
+            child: SwitchListTile(
+              title: const Text('自动更新汇率'),
+              subtitle: Text(
+                _preference?.autoUpdateRates == true
+                    ? '启动时自动获取最新汇率'
+                    : '手动更新汇率',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              value: _preference?.autoUpdateRates ?? false,
+              onChanged: (value) async {
+                if (_preference == null) return;
+                _preference!.autoUpdateRates = value;
+                await _currencyService.updatePreference(_preference!);
+                setState(() {});
+              },
+              secondary: Icon(
+                Icons.sync,
+                color: _preference?.autoUpdateRates == true
+                    ? JiveTheme.primaryGreen
+                    : Colors.grey,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           // 最后更新时间
           if (_preference?.lastRateUpdate != null)
             Padding(
