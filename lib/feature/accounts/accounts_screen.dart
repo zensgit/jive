@@ -50,6 +50,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
   // 多币种支持
   String _baseCurrency = 'CNY';
   CurrencyService? _currencyService;
+  Map<int, double> _convertedBalances = {}; // 折算为基础货币的余额
 
   // 货币筛选
   String? _filterCurrency;
@@ -141,6 +142,24 @@ class _AccountsScreenState extends State<AccountsScreen> {
     );
     final creditSummary = await _computeCreditSummary(accounts, balances, baseCurrency);
 
+    // 计算每个账户的折算余额（针对非基础货币账户）
+    final convertedBalances = <int, double>{};
+    for (final account in accounts) {
+      if (account.currency != baseCurrency) {
+        final balance = balances[account.id] ?? account.openingBalance;
+        final converted = await _currencyService!.convert(
+          balance.abs(),
+          account.currency,
+          baseCurrency,
+        );
+        if (converted != null) {
+          convertedBalances[account.id] = account.type == AccountService.typeLiability
+              ? -converted
+              : converted;
+        }
+      }
+    }
+
     if (!mounted) return;
     setState(() {
       _accounts = accounts;
@@ -151,6 +170,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
       _creditAvailable = creditSummary.available;
       _baseCurrency = baseCurrency;
       _availableCurrencies = currencies;
+      _convertedBalances = convertedBalances;
       // 如果筛选的货币不再可用，重置筛选
       if (_filterCurrency != null && !currencies.contains(_filterCurrency)) {
         _filterCurrency = null;
@@ -1513,6 +1533,17 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                // 显示折算金额（当账户币种与基础货币不同时）
+                if (account.currency != _baseCurrency && _convertedBalances.containsKey(account.id)) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '≈ ${NumberFormat.currency(symbol: CurrencyDefaults.getSymbol(_baseCurrency)).format(_convertedBalances[account.id]!.abs())}',
+                    style: GoogleFonts.lato(
+                      color: Colors.grey.shade500,
+                      fontSize: 10,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 4),
                 TextButton(
                   onPressed: () => _openReconcile(account),

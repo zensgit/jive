@@ -381,6 +381,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         _buildDetailRow('账户', _resolveAccountName(tx.accountId)),
         if (isTransfer)
           _buildDetailRow('转入账户', _resolveAccountName(tx.toAccountId)),
+        // 跨币种转账信息
+        if (isTransfer && tx.toAmount != null) ...[
+          _buildCrossCurrencyRow(tx),
+        ],
         _buildProjectRow(tx.projectId),
       ]),
       const SizedBox(height: 12),
@@ -526,6 +530,94 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCrossCurrencyRow(JiveTransaction tx) {
+    final fromAccount = tx.accountId != null ? _accountById[tx.accountId] : null;
+    final toAccount = tx.toAccountId != null ? _accountById[tx.toAccountId] : null;
+    final fromCurrency = fromAccount?.currency ?? 'CNY';
+    final toCurrency = toAccount?.currency ?? 'CNY';
+
+    if (fromCurrency == toCurrency) return const SizedBox.shrink();
+
+    final toSymbol = CurrencyDefaults.getSymbol(toCurrency);
+    final toDecimals = CurrencyDefaults.getDecimalPlaces(toCurrency);
+
+    final rateText = tx.exchangeRate != null
+        ? '1 $fromCurrency = ${tx.exchangeRate!.toStringAsFixed(4)} $toCurrency'
+        : '汇率未记录';
+    final toAmountText = '$toSymbol${tx.toAmount!.toStringAsFixed(toDecimals)}';
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 72,
+                child: Text(
+                  '转入金额',
+                  style: GoogleFonts.lato(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.currency_exchange, size: 14, color: Colors.orange.shade700),
+                    const SizedBox(width: 4),
+                    Text(
+                      toAmountText,
+                      style: GoogleFonts.lato(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.orange.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 72,
+                child: Text(
+                  '使用汇率',
+                  style: GoogleFonts.lato(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                rateText,
+                style: GoogleFonts.lato(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

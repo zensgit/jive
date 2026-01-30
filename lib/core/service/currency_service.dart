@@ -202,7 +202,7 @@ class CurrencyService {
 
   /// 从在线 API 获取实时汇率
   Future<ExchangeRateResponse?> fetchLiveRate(String from, String to) async {
-    // 加密货币不支持在线获取
+    // 检查是否为加密货币
     final currencies = CurrencyDefaults.getAllCurrencies();
     final fromCurrency = currencies.firstWhere(
       (c) => c['code'] == from,
@@ -213,8 +213,15 @@ class CurrencyService {
       orElse: () => <String, dynamic>{},
     );
 
-    if (fromCurrency['isCrypto'] == true || toCurrency['isCrypto'] == true) {
-      // 加密货币使用本地 Mock 数据
+    final fromIsCrypto = fromCurrency['isCrypto'] == true;
+    final toIsCrypto = toCurrency['isCrypto'] == true;
+
+    if (fromIsCrypto || toIsCrypto) {
+      // 尝试从 CoinGecko 获取加密货币价格
+      final cryptoResponse = await _fetchCryptoRate(from, to, fromIsCrypto, toIsCrypto);
+      if (cryptoResponse != null) return cryptoResponse;
+
+      // 失败则使用本地 Mock 数据
       final rate = CurrencyDefaults.getRate(from, to);
       if (rate == null) return null;
       return ExchangeRateResponse(
@@ -245,6 +252,116 @@ class CurrencyService {
         source: 'fallback',
       );
     }
+  }
+
+  /// 从 CoinGecko 获取加密货币价格
+  Future<ExchangeRateResponse?> _fetchCryptoRate(
+    String from,
+    String to,
+    bool fromIsCrypto,
+    bool toIsCrypto,
+  ) async {
+    try {
+      // CoinGecko 使用的币种 ID 映射
+      const coinGeckoIds = {
+        'BTC': 'bitcoin',
+        'ETH': 'ethereum',
+        'USDT': 'tether',
+        'USDC': 'usd-coin',
+        'BNB': 'binancecoin',
+        'SOL': 'solana',
+        'XRP': 'ripple',
+        'ADA': 'cardano',
+        'DOGE': 'dogecoin',
+        'LTC': 'litecoin',
+      };
+
+      if (fromIsCrypto && !toIsCrypto) {
+        // 从加密货币转换为法币
+        final cryptoId = coinGeckoIds[from];
+        if (cryptoId == null) return null;
+
+        final vsCurrency = to.toLowerCase();
+        final url = 'https://api.coingecko.com/api/v3/simple/price?ids=$cryptoId&vs_currencies=$vsCurrency';
+        final response = await http.get(Uri.parse(url)).timeout(
+          const Duration(seconds: 10),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          final priceData = data[cryptoId] as Map<String, dynamic>?;
+          if (priceData != null && priceData.containsKey(vsCurrency)) {
+            final price = (priceData[vsCurrency] as num).toDouble();
+            return ExchangeRateResponse(
+              from: from,
+              to: to,
+              rate: price,
+              date: DateTime.now(),
+              source: 'coingecko',
+            );
+          }
+        }
+      } else if (!fromIsCrypto && toIsCrypto) {
+        // 从法币转换为加密货币
+        final cryptoId = coinGeckoIds[to];
+        if (cryptoId == null) return null;
+
+        final vsCurrency = from.toLowerCase();
+        final url = 'https://api.coingecko.com/api/v3/simple/price?ids=$cryptoId&vs_currencies=$vsCurrency';
+        final response = await http.get(Uri.parse(url)).timeout(
+          const Duration(seconds: 10),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          final priceData = data[cryptoId] as Map<String, dynamic>?;
+          if (priceData != null && priceData.containsKey(vsCurrency)) {
+            final price = (priceData[vsCurrency] as num).toDouble();
+            // 反向汇率
+            return ExchangeRateResponse(
+              from: from,
+              to: to,
+              rate: 1.0 / price,
+              date: DateTime.now(),
+              source: 'coingecko',
+            );
+          }
+        }
+      } else if (fromIsCrypto && toIsCrypto) {
+        // 两个都是加密货币，通过 USD 中转
+        final fromId = coinGeckoIds[from];
+        final toId = coinGeckoIds[to];
+        if (fromId == null || toId == null) return null;
+
+        final url = 'https://api.coingecko.com/api/v3/simple/price?ids=$fromId,$toId&vs_currencies=usd';
+        final response = await http.get(Uri.parse(url)).timeout(
+          const Duration(seconds: 10),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          final fromPriceData = data[fromId] as Map<String, dynamic>?;
+          final toPriceData = data[toId] as Map<String, dynamic>?;
+          if (fromPriceData != null &&
+              toPriceData != null &&
+              fromPriceData.containsKey('usd') &&
+              toPriceData.containsKey('usd')) {
+            final fromPrice = (fromPriceData['usd'] as num).toDouble();
+            final toPrice = (toPriceData['usd'] as num).toDouble();
+            if (toPrice > 0) {
+              return ExchangeRateResponse(
+                from: from,
+                to: to,
+                rate: fromPrice / toPrice,
+                date: DateTime.now(),
+                source: 'coingecko',
+              );
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// 从 Frankfurter API 获取汇率
@@ -359,6 +476,15 @@ class CurrencyService {
               ..updatedAt = now;
             await _isar.jiveExchangeRates.put(newReverseRate);
           }
+
+          // 保存汇率历史记录
+          final history = JiveExchangeRateHistory()
+            ..fromCurrency = baseCurrency
+            ..toCurrency = to
+            ..rate = response.rate
+            ..recordedAt = now
+            ..source = response.source;
+          await _isar.jiveExchangeRateHistorys.put(history);
         });
       }
     }
@@ -423,6 +549,15 @@ class CurrencyService {
           ..updatedAt = now;
         await _isar.jiveExchangeRates.put(newReverseRate);
       }
+
+      // 保存汇率历史记录
+      final history = JiveExchangeRateHistory()
+        ..fromCurrency = from
+        ..toCurrency = to
+        ..rate = rate
+        ..recordedAt = now
+        ..source = 'manual';
+      await _isar.jiveExchangeRateHistorys.put(history);
     });
   }
 
@@ -468,4 +603,154 @@ class CurrencyService {
       return rate.toStringAsFixed(8);
     }
   }
+
+  /// 获取汇率历史记录
+  Future<List<JiveExchangeRateHistory>> getRateHistory(
+    String from,
+    String to, {
+    int limit = 30,
+  }) async {
+    return await _isar.jiveExchangeRateHistorys
+        .filter()
+        .fromCurrencyEqualTo(from)
+        .toCurrencyEqualTo(to)
+        .sortByRecordedAtDesc()
+        .limit(limit)
+        .findAll();
+  }
+
+  /// 获取所有汇率历史记录（用于清理）
+  Future<List<JiveExchangeRateHistory>> getAllRateHistory() async {
+    return await _isar.jiveExchangeRateHistorys.where().findAll();
+  }
+
+  /// 清理旧的汇率历史记录（保留最近N条）
+  Future<int> cleanOldRateHistory({int keepCount = 100}) async {
+    // 获取所有货币对
+    final allHistory = await _isar.jiveExchangeRateHistorys.where().findAll();
+    final pairs = <String>{};
+    for (final h in allHistory) {
+      pairs.add('${h.fromCurrency}/${h.toCurrency}');
+    }
+
+    var deletedCount = 0;
+    for (final pair in pairs) {
+      final parts = pair.split('/');
+      final from = parts[0];
+      final to = parts[1];
+
+      // 获取该货币对的所有历史记录，按时间降序
+      final history = await _isar.jiveExchangeRateHistorys
+          .filter()
+          .fromCurrencyEqualTo(from)
+          .toCurrencyEqualTo(to)
+          .sortByRecordedAtDesc()
+          .findAll();
+
+      // 删除超出保留数量的记录
+      if (history.length > keepCount) {
+        final toDelete = history.sublist(keepCount);
+        await _isar.writeTxn(() async {
+          for (final h in toDelete) {
+            await _isar.jiveExchangeRateHistorys.delete(h.id);
+            deletedCount++;
+          }
+        });
+      }
+    }
+
+    return deletedCount;
+  }
+
+  /// 汇率变动信息
+  RateChangeInfo? calculateRateChange(double oldRate, double newRate, String from, String to) {
+    if (oldRate == 0) return null;
+    final changePercent = ((newRate - oldRate) / oldRate) * 100;
+    return RateChangeInfo(
+      from: from,
+      to: to,
+      oldRate: oldRate,
+      newRate: newRate,
+      changePercent: changePercent,
+    );
+  }
+
+  /// 批量获取汇率并检测变动
+  Future<RateUpdateResult> fetchAndUpdateRatesWithChangeDetection(
+    String baseCurrency,
+    List<String> targets, {
+    double? changeThreshold,
+  }) async {
+    final changes = <RateChangeInfo>[];
+    final threshold = changeThreshold ?? 1.0;
+
+    // 先获取旧汇率
+    final oldRates = <String, double>{};
+    for (final to in targets) {
+      if (to == baseCurrency) continue;
+      final rate = await getRate(baseCurrency, to);
+      if (rate != null) {
+        oldRates[to] = rate;
+      }
+    }
+
+    // 更新汇率
+    final updatedRates = await fetchAndUpdateRates(baseCurrency, targets);
+
+    // 检测变动
+    for (final entry in updatedRates.entries) {
+      final to = entry.key;
+      final newRate = entry.value;
+      final oldRate = oldRates[to];
+
+      if (oldRate != null) {
+        final change = calculateRateChange(oldRate, newRate, baseCurrency, to);
+        if (change != null && change.changePercent.abs() >= threshold) {
+          changes.add(change);
+        }
+      }
+    }
+
+    return RateUpdateResult(
+      updatedRates: updatedRates,
+      significantChanges: changes,
+    );
+  }
+}
+
+/// 汇率变动信息
+class RateChangeInfo {
+  final String from;
+  final String to;
+  final double oldRate;
+  final double newRate;
+  final double changePercent;
+
+  RateChangeInfo({
+    required this.from,
+    required this.to,
+    required this.oldRate,
+    required this.newRate,
+    required this.changePercent,
+  });
+
+  bool get isIncrease => changePercent > 0;
+
+  String get changeText {
+    final sign = isIncrease ? '+' : '';
+    return '$sign${changePercent.toStringAsFixed(2)}%';
+  }
+}
+
+/// 汇率更新结果
+class RateUpdateResult {
+  final Map<String, double> updatedRates;
+  final List<RateChangeInfo> significantChanges;
+
+  RateUpdateResult({
+    required this.updatedRates,
+    required this.significantChanges,
+  });
+
+  bool get hasSignificantChanges => significantChanges.isNotEmpty;
 }

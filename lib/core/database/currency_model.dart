@@ -47,6 +47,27 @@ class JiveCurrencyPreference {
   List<String> enabledCurrencies = []; // 启用的货币列表
   bool autoUpdateRates = false; // 是否自动更新汇率
   DateTime? lastRateUpdate; // 最后更新时间
+  bool rateChangeAlert = false; // 是否启用汇率变动提醒
+  double rateChangeThreshold = 1.0; // 汇率变动提醒阈值（百分比）
+}
+
+/// 汇率历史记录
+@collection
+class JiveExchangeRateHistory {
+  Id id = Isar.autoIncrement;
+
+  @Index()
+  late String fromCurrency; // 源货币代码
+
+  @Index()
+  late String toCurrency; // 目标货币代码
+
+  late double rate; // 汇率
+
+  @Index()
+  late DateTime recordedAt; // 记录时间
+
+  String source = 'api'; // 数据源: api, manual
 }
 
 /// 内置货币数据

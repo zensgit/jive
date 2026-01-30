@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
@@ -51,15 +52,23 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
     setState(() => _isUpdatingRates = true);
 
     try {
-      await _currencyService.fetchAndUpdateRates(
+      // 使用带变动检测的更新方法
+      final result = await _currencyService.fetchAndUpdateRatesWithChangeDetection(
         _preference!.baseCurrency,
         _preference!.enabledCurrencies,
+        changeThreshold: _preference!.rateChangeAlert ? _preference!.rateChangeThreshold : null,
       );
       await _loadData();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('汇率更新成功')),
-      );
+
+      // 如果有显著变动且启用了提醒，显示变动详情
+      if (_preference!.rateChangeAlert && result.hasSignificantChanges) {
+        _showRateChangeAlert(result.significantChanges);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('汇率更新成功')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -70,6 +79,65 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
         setState(() => _isUpdatingRates = false);
       }
     }
+  }
+
+  void _showRateChangeAlert(List<RateChangeInfo> changes) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.notifications_active, color: Colors.orange.shade600),
+            const SizedBox(width: 8),
+            const Text('汇率变动提醒'),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: changes.length,
+            itemBuilder: (ctx, index) {
+              final change = changes[index];
+              final isUp = change.isIncrease;
+              return ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Icon(
+                  isUp ? Icons.trending_up : Icons.trending_down,
+                  color: isUp ? Colors.red : JiveTheme.primaryGreen,
+                ),
+                title: Text('${change.from} → ${change.to}'),
+                subtitle: Text(
+                  '${_currencyService.formatRate(change.oldRate)} → ${_currencyService.formatRate(change.newRate)}',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (isUp ? Colors.red : JiveTheme.primaryGreen).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    change.changeText,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isUp ? Colors.red : JiveTheme.primaryGreen,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _changeBaseCurrency() async {
@@ -428,6 +496,71 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
             ),
           ),
           const SizedBox(height: 8),
+          // 汇率变动提醒
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('汇率变动提醒'),
+                  subtitle: Text(
+                    _preference?.rateChangeAlert == true
+                        ? '汇率波动超过阈值时提醒'
+                        : '不提醒汇率变动',
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  value: _preference?.rateChangeAlert ?? false,
+                  onChanged: (value) async {
+                    if (_preference == null) return;
+                    _preference!.rateChangeAlert = value;
+                    await _currencyService.updatePreference(_preference!);
+                    setState(() {});
+                  },
+                  secondary: Icon(
+                    Icons.notifications_active,
+                    color: _preference?.rateChangeAlert == true
+                        ? Colors.orange
+                        : Colors.grey,
+                  ),
+                ),
+                if (_preference?.rateChangeAlert == true) ...[
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        const Text('变动阈值'),
+                        const Spacer(),
+                        ...([0.5, 1.0, 2.0, 5.0]).map((threshold) {
+                          final isSelected = (_preference?.rateChangeThreshold ?? 1.0) == threshold;
+                          return Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: ChoiceChip(
+                              label: Text('${threshold.toStringAsFixed(threshold == threshold.toInt() ? 0 : 1)}%'),
+                              selected: isSelected,
+                              onSelected: (selected) async {
+                                if (!selected || _preference == null) return;
+                                _preference!.rateChangeThreshold = threshold;
+                                await _currencyService.updatePreference(_preference!);
+                                setState(() {});
+                              },
+                              labelStyle: TextStyle(
+                                fontSize: 12,
+                                color: isSelected ? Colors.white : null,
+                              ),
+                              selectedColor: JiveTheme.primaryGreen,
+                              padding: EdgeInsets.zero,
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
           // 最后更新时间
           if (_preference?.lastRateUpdate != null)
             Padding(
@@ -550,7 +683,14 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         _buildSourceBadge(rate.source),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(Icons.history, size: 18),
+                          onPressed: () => _showRateHistory(rate),
+                          tooltip: '历史记录',
+                          constraints: const BoxConstraints(),
+                          padding: const EdgeInsets.all(8),
+                        ),
                         const Icon(Icons.edit, size: 18),
                       ],
                     ),
@@ -564,6 +704,324 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
     );
   }
 
+  Future<void> _showRateHistory(JiveExchangeRate rate) async {
+    final history = await _currencyService.getRateHistory(
+      rate.fromCurrency,
+      rate.toCurrency,
+      limit: 50,
+    );
+
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        expand: false,
+        builder: (ctx, scrollController) => Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    '${rate.fromCurrency} → ${rate.toCurrency} 历史',
+                    style: GoogleFonts.lato(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: history.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.history,
+                            size: 48,
+                            color: Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '暂无历史记录',
+                            style: TextStyle(color: Colors.grey.shade500),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        // 汇率趋势图
+                        if (history.length >= 2) ...[
+                          Text(
+                            '汇率趋势',
+                            style: GoogleFonts.lato(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildRateChart(history),
+                          const SizedBox(height: 24),
+                        ],
+                        // 历史记录列表
+                        Text(
+                          '历史记录',
+                          style: GoogleFonts.lato(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: history.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (ctx, index) {
+                            final item = history[index];
+                            final isFirst = index == 0;
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Container(
+                                width: 36,
+                                height: 36,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: isFirst
+                                      ? JiveTheme.primaryGreen.withValues(alpha: 0.1)
+                                      : Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  isFirst ? Icons.check : Icons.history,
+                                  size: 18,
+                                  color: isFirst ? JiveTheme.primaryGreen : Colors.grey,
+                                ),
+                              ),
+                              title: Row(
+                                children: [
+                                  Text(
+                                    _currencyService.formatRate(item.rate),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: isFirst ? JiveTheme.primaryGreen : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  _buildSourceBadge(item.source),
+                                ],
+                              ),
+                              subtitle: Text(
+                                _formatDateTime(item.recordedAt),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                              trailing: isFirst
+                                  ? Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: JiveTheme.primaryGreen.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: const Text(
+                                        '当前',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: JiveTheme.primaryGreen,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRateChart(List<JiveExchangeRateHistory> history) {
+    // 按时间顺序排列（旧的在前）
+    final sortedHistory = history.reversed.toList();
+
+    // 计算最大最小值，用于 Y 轴范围
+    double minRate = double.infinity;
+    double maxRate = double.negativeInfinity;
+    for (final item in sortedHistory) {
+      if (item.rate < minRate) minRate = item.rate;
+      if (item.rate > maxRate) maxRate = item.rate;
+    }
+
+    // 添加一些边距
+    final range = maxRate - minRate;
+    final padding = range == 0 ? maxRate * 0.1 : range * 0.1;
+    minRate = minRate - padding;
+    maxRate = maxRate + padding;
+    if (minRate < 0) minRate = 0;
+
+    // 生成折线图数据点
+    final spots = <FlSpot>[];
+    for (var i = 0; i < sortedHistory.length; i++) {
+      spots.add(FlSpot(i.toDouble(), sortedHistory[i].rate));
+    }
+
+    return Container(
+      height: 180,
+      padding: const EdgeInsets.only(right: 16, top: 16, bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: LineChart(
+        LineChartData(
+          minY: minRate,
+          maxY: maxRate,
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: (maxRate - minRate) / 4,
+            getDrawingHorizontalLine: (value) {
+              return FlLine(
+                color: Colors.grey.shade200,
+                strokeWidth: 1,
+              );
+            },
+          ),
+          titlesData: FlTitlesData(
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 32,
+                getTitlesWidget: (value, meta) {
+                  final index = value.toInt();
+                  if (index < 0 || index >= sortedHistory.length) {
+                    return const SizedBox.shrink();
+                  }
+                  // 只显示首尾和中间的日期
+                  if (index != 0 &&
+                      index != sortedHistory.length - 1 &&
+                      index != sortedHistory.length ~/ 2) {
+                    return const SizedBox.shrink();
+                  }
+                  final date = sortedHistory[index].recordedAt;
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '${date.month}/${date.day}',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 50,
+                getTitlesWidget: (value, meta) {
+                  return Text(
+                    _currencyService.formatRate(value),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade500,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          borderData: FlBorderData(show: false),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              color: JiveTheme.primaryGreen,
+              barWidth: 2,
+              isStrokeCapRound: true,
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (spot, percent, barData, index) {
+                  return FlDotCirclePainter(
+                    radius: index == spots.length - 1 ? 4 : 2,
+                    color: JiveTheme.primaryGreen,
+                    strokeWidth: index == spots.length - 1 ? 2 : 0,
+                    strokeColor: Colors.white,
+                  );
+                },
+              ),
+              belowBarData: BarAreaData(
+                show: true,
+                color: JiveTheme.primaryGreen.withValues(alpha: 0.1),
+              ),
+            ),
+          ],
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (_) => Colors.black87,
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((spot) {
+                  final index = spot.x.toInt();
+                  if (index < 0 || index >= sortedHistory.length) {
+                    return null;
+                  }
+                  final item = sortedHistory[index];
+                  return LineTooltipItem(
+                    '${_currencyService.formatRate(item.rate)}\n${_formatDateTime(item.recordedAt)}',
+                    const TextStyle(color: Colors.white, fontSize: 12),
+                  );
+                }).toList();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildSourceBadge(String source) {
     Color color;
     String label;
@@ -572,6 +1030,10 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
       case 'exchangerate.host':
         color = JiveTheme.primaryGreen;
         label = '在线';
+        break;
+      case 'coingecko':
+        color = Colors.purple;
+        label = '加密';
         break;
       case 'manual':
         color = Colors.orange;

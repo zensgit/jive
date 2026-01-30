@@ -2924,6 +2924,16 @@ const JiveCurrencyPreferenceSchema = CollectionSchema(
       id: 3,
       name: r'lastRateUpdate',
       type: IsarType.dateTime,
+    ),
+    r'rateChangeAlert': PropertySchema(
+      id: 4,
+      name: r'rateChangeAlert',
+      type: IsarType.bool,
+    ),
+    r'rateChangeThreshold': PropertySchema(
+      id: 5,
+      name: r'rateChangeThreshold',
+      type: IsarType.double,
     )
   },
   estimateSize: _jiveCurrencyPreferenceEstimateSize,
@@ -2967,6 +2977,8 @@ void _jiveCurrencyPreferenceSerialize(
   writer.writeString(offsets[1], object.baseCurrency);
   writer.writeStringList(offsets[2], object.enabledCurrencies);
   writer.writeDateTime(offsets[3], object.lastRateUpdate);
+  writer.writeBool(offsets[4], object.rateChangeAlert);
+  writer.writeDouble(offsets[5], object.rateChangeThreshold);
 }
 
 JiveCurrencyPreference _jiveCurrencyPreferenceDeserialize(
@@ -2981,6 +2993,8 @@ JiveCurrencyPreference _jiveCurrencyPreferenceDeserialize(
   object.enabledCurrencies = reader.readStringList(offsets[2]) ?? [];
   object.id = id;
   object.lastRateUpdate = reader.readDateTimeOrNull(offsets[3]);
+  object.rateChangeAlert = reader.readBool(offsets[4]);
+  object.rateChangeThreshold = reader.readDouble(offsets[5]);
   return object;
 }
 
@@ -2999,6 +3013,10 @@ P _jiveCurrencyPreferenceDeserializeProp<P>(
       return (reader.readStringList(offset) ?? []) as P;
     case 3:
       return (reader.readDateTimeOrNull(offset)) as P;
+    case 4:
+      return (reader.readBool(offset)) as P;
+    case 5:
+      return (reader.readDouble(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -3607,6 +3625,82 @@ extension JiveCurrencyPreferenceQueryFilter on QueryBuilder<
       ));
     });
   }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> rateChangeAlertEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'rateChangeAlert',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> rateChangeThresholdEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'rateChangeThreshold',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> rateChangeThresholdGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'rateChangeThreshold',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> rateChangeThresholdLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'rateChangeThreshold',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference,
+      QAfterFilterCondition> rateChangeThresholdBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'rateChangeThreshold',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
 }
 
 extension JiveCurrencyPreferenceQueryObject on QueryBuilder<
@@ -3656,6 +3750,34 @@ extension JiveCurrencyPreferenceQuerySortBy
       sortByLastRateUpdateDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'lastRateUpdate', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      sortByRateChangeAlert() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rateChangeAlert', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      sortByRateChangeAlertDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rateChangeAlert', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      sortByRateChangeThreshold() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rateChangeThreshold', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      sortByRateChangeThresholdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rateChangeThreshold', Sort.desc);
     });
   }
 }
@@ -3717,6 +3839,34 @@ extension JiveCurrencyPreferenceQuerySortThenBy on QueryBuilder<
       return query.addSortBy(r'lastRateUpdate', Sort.desc);
     });
   }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      thenByRateChangeAlert() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rateChangeAlert', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      thenByRateChangeAlertDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rateChangeAlert', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      thenByRateChangeThreshold() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rateChangeThreshold', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QAfterSortBy>
+      thenByRateChangeThresholdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rateChangeThreshold', Sort.desc);
+    });
+  }
 }
 
 extension JiveCurrencyPreferenceQueryWhereDistinct
@@ -3746,6 +3896,20 @@ extension JiveCurrencyPreferenceQueryWhereDistinct
       distinctByLastRateUpdate() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'lastRateUpdate');
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QDistinct>
+      distinctByRateChangeAlert() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'rateChangeAlert');
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, JiveCurrencyPreference, QDistinct>
+      distinctByRateChangeThreshold() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'rateChangeThreshold');
     });
   }
 }
@@ -3783,6 +3947,1305 @@ extension JiveCurrencyPreferenceQueryProperty on QueryBuilder<
       lastRateUpdateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'lastRateUpdate');
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, bool, QQueryOperations>
+      rateChangeAlertProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'rateChangeAlert');
+    });
+  }
+
+  QueryBuilder<JiveCurrencyPreference, double, QQueryOperations>
+      rateChangeThresholdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'rateChangeThreshold');
+    });
+  }
+}
+
+// coverage:ignore-file
+// ignore_for_file: duplicate_ignore, non_constant_identifier_names, constant_identifier_names, invalid_use_of_protected_member, unnecessary_cast, prefer_const_constructors, lines_longer_than_80_chars, require_trailing_commas, inference_failure_on_function_invocation, unnecessary_parenthesis, unnecessary_raw_strings, unnecessary_null_checks, join_return_with_assignment, prefer_final_locals, avoid_js_rounded_ints, avoid_positional_boolean_parameters, always_specify_types
+
+extension GetJiveExchangeRateHistoryCollection on Isar {
+  IsarCollection<JiveExchangeRateHistory> get jiveExchangeRateHistorys =>
+      this.collection();
+}
+
+const JiveExchangeRateHistorySchema = CollectionSchema(
+  name: r'JiveExchangeRateHistory',
+  id: 8517312444633449987,
+  properties: {
+    r'fromCurrency': PropertySchema(
+      id: 0,
+      name: r'fromCurrency',
+      type: IsarType.string,
+    ),
+    r'rate': PropertySchema(
+      id: 1,
+      name: r'rate',
+      type: IsarType.double,
+    ),
+    r'recordedAt': PropertySchema(
+      id: 2,
+      name: r'recordedAt',
+      type: IsarType.dateTime,
+    ),
+    r'source': PropertySchema(
+      id: 3,
+      name: r'source',
+      type: IsarType.string,
+    ),
+    r'toCurrency': PropertySchema(
+      id: 4,
+      name: r'toCurrency',
+      type: IsarType.string,
+    )
+  },
+  estimateSize: _jiveExchangeRateHistoryEstimateSize,
+  serialize: _jiveExchangeRateHistorySerialize,
+  deserialize: _jiveExchangeRateHistoryDeserialize,
+  deserializeProp: _jiveExchangeRateHistoryDeserializeProp,
+  idName: r'id',
+  indexes: {
+    r'fromCurrency': IndexSchema(
+      id: 9005283779329603710,
+      name: r'fromCurrency',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'fromCurrency',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'toCurrency': IndexSchema(
+      id: 4609850583487918775,
+      name: r'toCurrency',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'toCurrency',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'recordedAt': IndexSchema(
+      id: -5046025352082009396,
+      name: r'recordedAt',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'recordedAt',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    )
+  },
+  links: {},
+  embeddedSchemas: {},
+  getId: _jiveExchangeRateHistoryGetId,
+  getLinks: _jiveExchangeRateHistoryGetLinks,
+  attach: _jiveExchangeRateHistoryAttach,
+  version: '3.1.0+1',
+);
+
+int _jiveExchangeRateHistoryEstimateSize(
+  JiveExchangeRateHistory object,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  var bytesCount = offsets.last;
+  bytesCount += 3 + object.fromCurrency.length * 3;
+  bytesCount += 3 + object.source.length * 3;
+  bytesCount += 3 + object.toCurrency.length * 3;
+  return bytesCount;
+}
+
+void _jiveExchangeRateHistorySerialize(
+  JiveExchangeRateHistory object,
+  IsarWriter writer,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  writer.writeString(offsets[0], object.fromCurrency);
+  writer.writeDouble(offsets[1], object.rate);
+  writer.writeDateTime(offsets[2], object.recordedAt);
+  writer.writeString(offsets[3], object.source);
+  writer.writeString(offsets[4], object.toCurrency);
+}
+
+JiveExchangeRateHistory _jiveExchangeRateHistoryDeserialize(
+  Id id,
+  IsarReader reader,
+  List<int> offsets,
+  Map<Type, List<int>> allOffsets,
+) {
+  final object = JiveExchangeRateHistory();
+  object.fromCurrency = reader.readString(offsets[0]);
+  object.id = id;
+  object.rate = reader.readDouble(offsets[1]);
+  object.recordedAt = reader.readDateTime(offsets[2]);
+  object.source = reader.readString(offsets[3]);
+  object.toCurrency = reader.readString(offsets[4]);
+  return object;
+}
+
+P _jiveExchangeRateHistoryDeserializeProp<P>(
+  IsarReader reader,
+  int propertyId,
+  int offset,
+  Map<Type, List<int>> allOffsets,
+) {
+  switch (propertyId) {
+    case 0:
+      return (reader.readString(offset)) as P;
+    case 1:
+      return (reader.readDouble(offset)) as P;
+    case 2:
+      return (reader.readDateTime(offset)) as P;
+    case 3:
+      return (reader.readString(offset)) as P;
+    case 4:
+      return (reader.readString(offset)) as P;
+    default:
+      throw IsarError('Unknown property with id $propertyId');
+  }
+}
+
+Id _jiveExchangeRateHistoryGetId(JiveExchangeRateHistory object) {
+  return object.id;
+}
+
+List<IsarLinkBase<dynamic>> _jiveExchangeRateHistoryGetLinks(
+    JiveExchangeRateHistory object) {
+  return [];
+}
+
+void _jiveExchangeRateHistoryAttach(
+    IsarCollection<dynamic> col, Id id, JiveExchangeRateHistory object) {
+  object.id = id;
+}
+
+extension JiveExchangeRateHistoryQueryWhereSort
+    on QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QWhere> {
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterWhere>
+      anyId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterWhere>
+      anyRecordedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'recordedAt'),
+      );
+    });
+  }
+}
+
+extension JiveExchangeRateHistoryQueryWhere on QueryBuilder<
+    JiveExchangeRateHistory, JiveExchangeRateHistory, QWhereClause> {
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> idEqualTo(Id id) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IdWhereClause.between(
+        lower: id,
+        upper: id,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> idNotEqualTo(Id id) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(
+              IdWhereClause.lessThan(upper: id, includeUpper: false),
+            )
+            .addWhereClause(
+              IdWhereClause.greaterThan(lower: id, includeLower: false),
+            );
+      } else {
+        return query
+            .addWhereClause(
+              IdWhereClause.greaterThan(lower: id, includeLower: false),
+            )
+            .addWhereClause(
+              IdWhereClause.lessThan(upper: id, includeUpper: false),
+            );
+      }
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> idGreaterThan(Id id, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IdWhereClause.greaterThan(lower: id, includeLower: include),
+      );
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> idLessThan(Id id, {bool include = false}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        IdWhereClause.lessThan(upper: id, includeUpper: include),
+      );
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> idBetween(
+    Id lowerId,
+    Id upperId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IdWhereClause.between(
+        lower: lowerId,
+        includeLower: includeLower,
+        upper: upperId,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> fromCurrencyEqualTo(String fromCurrency) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'fromCurrency',
+        value: [fromCurrency],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> fromCurrencyNotEqualTo(String fromCurrency) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'fromCurrency',
+              lower: [],
+              upper: [fromCurrency],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'fromCurrency',
+              lower: [fromCurrency],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'fromCurrency',
+              lower: [fromCurrency],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'fromCurrency',
+              lower: [],
+              upper: [fromCurrency],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> toCurrencyEqualTo(String toCurrency) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'toCurrency',
+        value: [toCurrency],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> toCurrencyNotEqualTo(String toCurrency) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'toCurrency',
+              lower: [],
+              upper: [toCurrency],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'toCurrency',
+              lower: [toCurrency],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'toCurrency',
+              lower: [toCurrency],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'toCurrency',
+              lower: [],
+              upper: [toCurrency],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> recordedAtEqualTo(DateTime recordedAt) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'recordedAt',
+        value: [recordedAt],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> recordedAtNotEqualTo(DateTime recordedAt) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recordedAt',
+              lower: [],
+              upper: [recordedAt],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recordedAt',
+              lower: [recordedAt],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recordedAt',
+              lower: [recordedAt],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recordedAt',
+              lower: [],
+              upper: [recordedAt],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> recordedAtGreaterThan(
+    DateTime recordedAt, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'recordedAt',
+        lower: [recordedAt],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> recordedAtLessThan(
+    DateTime recordedAt, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'recordedAt',
+        lower: [],
+        upper: [recordedAt],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterWhereClause> recordedAtBetween(
+    DateTime lowerRecordedAt,
+    DateTime upperRecordedAt, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'recordedAt',
+        lower: [lowerRecordedAt],
+        includeLower: includeLower,
+        upper: [upperRecordedAt],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+}
+
+extension JiveExchangeRateHistoryQueryFilter on QueryBuilder<
+    JiveExchangeRateHistory, JiveExchangeRateHistory, QFilterCondition> {
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> fromCurrencyEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fromCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> fromCurrencyGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'fromCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> fromCurrencyLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'fromCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> fromCurrencyBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'fromCurrency',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> fromCurrencyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'fromCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> fromCurrencyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'fromCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+          QAfterFilterCondition>
+      fromCurrencyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'fromCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+          QAfterFilterCondition>
+      fromCurrencyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'fromCurrency',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> fromCurrencyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'fromCurrency',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> fromCurrencyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'fromCurrency',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> idEqualTo(Id value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> idGreaterThan(
+    Id value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> idLessThan(
+    Id value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'id',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> idBetween(
+    Id lower,
+    Id upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'id',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> rateEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'rate',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> rateGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'rate',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> rateLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'rate',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> rateBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'rate',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> recordedAtEqualTo(DateTime value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'recordedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> recordedAtGreaterThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'recordedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> recordedAtLessThan(
+    DateTime value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'recordedAt',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> recordedAtBetween(
+    DateTime lower,
+    DateTime upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'recordedAt',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> sourceEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'source',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> sourceGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'source',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> sourceLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'source',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> sourceBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'source',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> sourceStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'source',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> sourceEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'source',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+          QAfterFilterCondition>
+      sourceContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'source',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+          QAfterFilterCondition>
+      sourceMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'source',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> sourceIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'source',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> sourceIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'source',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> toCurrencyEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'toCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> toCurrencyGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'toCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> toCurrencyLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'toCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> toCurrencyBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'toCurrency',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> toCurrencyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'toCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> toCurrencyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'toCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+          QAfterFilterCondition>
+      toCurrencyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'toCurrency',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+          QAfterFilterCondition>
+      toCurrencyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'toCurrency',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> toCurrencyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'toCurrency',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory,
+      QAfterFilterCondition> toCurrencyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'toCurrency',
+        value: '',
+      ));
+    });
+  }
+}
+
+extension JiveExchangeRateHistoryQueryObject on QueryBuilder<
+    JiveExchangeRateHistory, JiveExchangeRateHistory, QFilterCondition> {}
+
+extension JiveExchangeRateHistoryQueryLinks on QueryBuilder<
+    JiveExchangeRateHistory, JiveExchangeRateHistory, QFilterCondition> {}
+
+extension JiveExchangeRateHistoryQuerySortBy
+    on QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QSortBy> {
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortByFromCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fromCurrency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortByFromCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fromCurrency', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortByRate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortByRateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rate', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortByRecordedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recordedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortByRecordedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recordedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortBySource() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'source', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortBySourceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'source', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortByToCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toCurrency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      sortByToCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toCurrency', Sort.desc);
+    });
+  }
+}
+
+extension JiveExchangeRateHistoryQuerySortThenBy on QueryBuilder<
+    JiveExchangeRateHistory, JiveExchangeRateHistory, QSortThenBy> {
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenByFromCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fromCurrency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenByFromCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'fromCurrency', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenById() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'id', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenByIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'id', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenByRate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rate', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenByRateDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'rate', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenByRecordedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recordedAt', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenByRecordedAtDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recordedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenBySource() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'source', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenBySourceDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'source', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenByToCurrency() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toCurrency', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QAfterSortBy>
+      thenByToCurrencyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'toCurrency', Sort.desc);
+    });
+  }
+}
+
+extension JiveExchangeRateHistoryQueryWhereDistinct on QueryBuilder<
+    JiveExchangeRateHistory, JiveExchangeRateHistory, QDistinct> {
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QDistinct>
+      distinctByFromCurrency({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'fromCurrency', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QDistinct>
+      distinctByRate() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'rate');
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QDistinct>
+      distinctByRecordedAt() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'recordedAt');
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QDistinct>
+      distinctBySource({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'source', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, JiveExchangeRateHistory, QDistinct>
+      distinctByToCurrency({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'toCurrency', caseSensitive: caseSensitive);
+    });
+  }
+}
+
+extension JiveExchangeRateHistoryQueryProperty on QueryBuilder<
+    JiveExchangeRateHistory, JiveExchangeRateHistory, QQueryProperty> {
+  QueryBuilder<JiveExchangeRateHistory, int, QQueryOperations> idProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'id');
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, String, QQueryOperations>
+      fromCurrencyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'fromCurrency');
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, double, QQueryOperations>
+      rateProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'rate');
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, DateTime, QQueryOperations>
+      recordedAtProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'recordedAt');
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, String, QQueryOperations>
+      sourceProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'source');
+    });
+  }
+
+  QueryBuilder<JiveExchangeRateHistory, String, QQueryOperations>
+      toCurrencyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'toCurrency');
     });
   }
 }

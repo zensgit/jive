@@ -47,8 +47,9 @@ class _StatsScreenState extends State<StatsScreen> {
   double _creditAvailable = 0;
 
   // 多币种支持
-  String _baseCurrency = 'CNY';
+  String _displayCurrency = 'CNY'; // 显示用的货币（可切换）
   CurrencyService? _currencyService;
+  List<String> _availableCurrencies = [];
 
   @override
   void initState() {
@@ -100,6 +101,13 @@ class _StatsScreenState extends State<StatsScreen> {
     // 初始化货币服务
     _currencyService ??= CurrencyService(_isar);
     final baseCurrency = await _currencyService!.getBaseCurrency();
+    final pref = await _currencyService!.getPreference();
+    final enabledCurrencies = pref?.enabledCurrencies ?? [baseCurrency];
+
+    // 如果 _displayCurrency 还未初始化，使用基础货币
+    if (_displayCurrency == 'CNY' && baseCurrency != 'CNY') {
+      _displayCurrency = baseCurrency;
+    }
 
     final categories = await _isar.collection<JiveCategory>().where().findAll();
     final categoryMap = {for (final c in categories) c.key: c};
@@ -109,7 +117,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final accounts = await accountService.getActiveAccounts();
     final accountById = {for (final a in accounts) a.id: a};
     final balances = await accountService.computeBalances(accounts: accounts);
-    final creditSummary = await _computeCreditSummary(accounts, balances, baseCurrency);
+    final creditSummary = await _computeCreditSummary(accounts, balances, _displayCurrency);
 
     final now = DateTime.now();
     final monthStart = DateTime(now.year, now.month, 1);
@@ -140,11 +148,11 @@ class _StatsScreenState extends State<StatsScreen> {
       final account = tx.accountId != null ? accountById[tx.accountId] : null;
       final txCurrency = account?.currency ?? 'CNY';
 
-      // 转换为基础货币
+      // 转换为显示货币
       double convertedAmount = tx.amount;
-      if (txCurrency != baseCurrency) {
+      if (txCurrency != _displayCurrency) {
         convertedAmount =
-            await _currencyService!.convert(tx.amount, txCurrency, baseCurrency) ?? tx.amount;
+            await _currencyService!.convert(tx.amount, txCurrency, _displayCurrency) ?? tx.amount;
       }
 
       final key = _groupKeyFor(tx);
@@ -175,7 +183,7 @@ class _StatsScreenState extends State<StatsScreen> {
         _creditLimit = creditSummary.limit;
         _creditUsed = creditSummary.used;
         _creditAvailable = creditSummary.available;
-        _baseCurrency = baseCurrency;
+        _availableCurrencies = enabledCurrencies;
       });
     }
   }
@@ -291,10 +299,89 @@ class _StatsScreenState extends State<StatsScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
+        actions: [
+          if (_availableCurrencies.length > 1)
+            _buildCurrencySelector(),
+        ],
       ),
       body: _categoryStats.isEmpty
           ? _buildEmptyState()
           : (isLandscape ? _buildLandscapeBody() : _buildPortraitBody()),
+    );
+  }
+
+  Widget _buildCurrencySelector() {
+    final currencyData = CurrencyDefaults.getAllCurrencies().firstWhere(
+      (c) => c['code'] == _displayCurrency,
+      orElse: () => {'code': _displayCurrency, 'symbol': _displayCurrency, 'flag': null},
+    );
+    final flag = currencyData['flag'] as String?;
+    final symbol = currencyData['symbol'] as String;
+
+    return PopupMenuButton<String>(
+      initialValue: _displayCurrency,
+      tooltip: '切换货币',
+      onSelected: (currency) {
+        if (currency != _displayCurrency) {
+          setState(() {
+            _displayCurrency = currency;
+            _isLoading = true;
+          });
+          _loadStats();
+        }
+      },
+      itemBuilder: (context) => _availableCurrencies.map((code) {
+        final data = CurrencyDefaults.getAllCurrencies().firstWhere(
+          (c) => c['code'] == code,
+          orElse: () => {'code': code, 'nameZh': code, 'symbol': code, 'flag': null},
+        );
+        final itemFlag = data['flag'] as String?;
+        final itemSymbol = data['symbol'] as String;
+        final nameZh = data['nameZh'] as String;
+
+        return PopupMenuItem<String>(
+          value: code,
+          child: Row(
+            children: [
+              Text(itemFlag ?? itemSymbol, style: const TextStyle(fontSize: 16)),
+              const SizedBox(width: 8),
+              Text(code),
+              const SizedBox(width: 4),
+              Text(
+                nameZh,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              if (code == _displayCurrency) ...[
+                const Spacer(),
+                const Icon(Icons.check, size: 18, color: Colors.green),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        margin: const EdgeInsets.only(right: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(flag ?? symbol, style: const TextStyle(fontSize: 14)),
+            const SizedBox(width: 4),
+            Text(
+              _displayCurrency,
+              style: GoogleFonts.lato(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Icon(Icons.arrow_drop_down, size: 18),
+          ],
+        ),
+      ),
     );
   }
 
@@ -343,7 +430,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildPieChart() {
-    final currencySymbol = CurrencyDefaults.getSymbol(_baseCurrency);
+    final currencySymbol = CurrencyDefaults.getSymbol(_displayCurrency);
     return Stack(
       alignment: Alignment.center,
       children: [
@@ -395,7 +482,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildStatsList(EdgeInsets padding) {
-    final currencySymbol = CurrencyDefaults.getSymbol(_baseCurrency);
+    final currencySymbol = CurrencyDefaults.getSymbol(_displayCurrency);
     return ListView.builder(
       padding: padding,
       itemCount: _categoryStats.length,
@@ -445,7 +532,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildCreditSummary({EdgeInsets? margin, bool dense = false}) {
-    final currencySymbol = CurrencyDefaults.getSymbol(_baseCurrency);
+    final currencySymbol = CurrencyDefaults.getSymbol(_displayCurrency);
     return Container(
       margin: margin ?? const EdgeInsets.fromLTRB(20, 12, 20, 0),
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: dense ? 8 : 10),
