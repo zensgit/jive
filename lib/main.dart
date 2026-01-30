@@ -23,6 +23,7 @@ import 'core/database/tag_model.dart';
 import 'core/database/tag_conversion_log.dart';
 import 'core/database/tag_rule_model.dart';
 import 'core/database/project_model.dart';
+import 'core/database/currency_model.dart';
 import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
 import 'core/service/currency_service.dart';
@@ -136,6 +137,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   List<JiveTransaction> _transactions = [];
   Map<String, JiveCategory> _categoryByKey = {};
   Map<String, JiveTag> _tagByKey = {};
+  Map<int, JiveAccount> _accountById = {};
   bool _isLoading = true;
   double _totalAssets = 0;
   double _totalLiabilities = 0;
@@ -153,6 +155,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _permissionDialogVisible = false;
   final ValueNotifier<int> _dataReloadSignal = ValueNotifier(0);
   final Random _random = Random();
+
+  // 多币种支持
+  String _baseCurrency = 'CNY';
+  CurrencyService? _currencyService;
 
   @override
   void initState() {
@@ -899,16 +905,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final tagMap = {for (final t in tags) t.key: t};
     final accountService = AccountService(_isar);
     final accounts = await accountService.getActiveAccounts();
+    final accountMap = {for (final a in accounts) a.id: a};
     final balances = await accountService.computeBalances(accounts: accounts);
     final totals = accountService.calculateTotals(accounts, balances);
+
+    // 加载基础货币
+    _currencyService ??= CurrencyService(_isar);
+    final baseCurrency = await _currencyService!.getBaseCurrency();
 
     if (mounted) {
       setState(() {
         _transactions = list;
         _categoryByKey = categoryMap;
         _tagByKey = tagMap;
+        _accountById = accountMap;
         _totalAssets = totals.assets;
         _totalLiabilities = totals.liabilities;
+        _baseCurrency = baseCurrency;
         _isLoading = false;
       });
     }
@@ -1888,6 +1901,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         .map((key) => _tagByKey[key])
         .whereType<JiveTag>()
         .toList();
+
+    // 获取交易账户的货币信息
+    final account = item.accountId != null ? _accountById[item.accountId] : null;
+    final txCurrency = account?.currency ?? 'CNY';
+    final txSymbol = CurrencyDefaults.getSymbol(txCurrency);
+    final txDecimals = CurrencyDefaults.getDecimalPlaces(txCurrency);
+    final isMultiCurrency = txCurrency != _baseCurrency;
+
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () async {
@@ -1988,13 +2009,27 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 ],
               ),
             ),
-            Text(
-              "$amountPrefix¥${item.amount.toStringAsFixed(2)}",
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: amountColor,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "$amountPrefix$txSymbol${item.amount.toStringAsFixed(txDecimals)}",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: amountColor,
+                  ),
+                ),
+                if (isMultiCurrency)
+                  Text(
+                    txCurrency,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+              ],
             ),
           ],
         ),

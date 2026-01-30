@@ -9,6 +9,7 @@ import '../data/account_type_catalog.dart';
 import '../database/account_model.dart';
 import '../database/transaction_model.dart';
 import 'category_service.dart';
+import 'currency_service.dart';
 
 class AccountTotals {
   final double assets;
@@ -292,6 +293,40 @@ class AccountService {
         totalLiabilities += balance.abs();
       } else {
         totalAssets += balance;
+      }
+    }
+
+    return AccountTotals(assets: totalAssets, liabilities: totalLiabilities);
+  }
+
+  /// 计算总资产和总负债（支持多币种转换）
+  Future<AccountTotals> calculateTotalsWithCurrency(
+    List<JiveAccount> accounts,
+    Map<int, double> balances,
+    CurrencyService currencyService,
+    String baseCurrency,
+  ) async {
+    double totalAssets = 0;
+    double totalLiabilities = 0;
+
+    for (final account in accounts) {
+      if (!account.includeInBalance) continue;
+      final balance = balances[account.id] ?? account.openingBalance;
+      final accountCurrency = account.currency;
+
+      // 转换为基础货币
+      double convertedBalance = balance;
+      if (accountCurrency != baseCurrency) {
+        convertedBalance =
+            await currencyService.convert(balance.abs(), accountCurrency, baseCurrency) ??
+                balance.abs();
+        if (balance < 0) convertedBalance = -convertedBalance;
+      }
+
+      if (account.type == typeLiability) {
+        totalLiabilities += convertedBalance.abs();
+      } else {
+        totalAssets += convertedBalance;
       }
     }
 
