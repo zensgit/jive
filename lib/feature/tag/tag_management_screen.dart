@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
@@ -18,6 +17,7 @@ import '../../core/database/template_model.dart';
 import '../../core/database/project_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/tag_service.dart';
 import '../../core/service/tag_rule_service.dart';
 import '../../core/service/smart_tag_log_service.dart';
@@ -110,28 +110,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
 
   Future<void> _init() async {
     try {
-      final existing = widget.isar ?? Isar.getInstance();
-      if (existing != null) {
-        _isar = existing;
-      } else {
-        final dir = await getApplicationDocumentsDirectory();
-        _isar = await Isar.open(
-          [
-            JiveTransactionSchema,
-            JiveCategorySchema,
-            JiveCategoryOverrideSchema,
-            JiveAccountSchema,
-            JiveAutoDraftSchema,
-            JiveTemplateSchema,
-            JiveTagSchema,
-            JiveTagGroupSchema,
-            JiveTagRuleSchema,
-            JiveTagConversionLogSchema,
-            JiveProjectSchema,
-          ],
-          directory: dir.path,
-        );
-      }
+      _isar = widget.isar ?? await DatabaseService.getInstance();
       await TagService(_isar).initDefaultGroups();
       await _loadData();
       DataReloadBus.notifier.addListener(_handleReload);
@@ -731,7 +710,15 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   }
 
   List<JiveTagRule> _allRules(JiveTag tag) {
-    return _rulesByTagKey[tag.key] ?? const [];
+    final rules = _rulesByTagKey[tag.key] ?? const [];
+    if (rules.length <= 1) return rules;
+    final sorted = [...rules];
+    sorted.sort((a, b) {
+      final enabledCmp = (b.isEnabled ? 1 : 0) - (a.isEnabled ? 1 : 0);
+      if (enabledCmp != 0) return enabledCmp;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+    return sorted;
   }
 
   String _ruleSummaryLine(JiveTagRule rule) {

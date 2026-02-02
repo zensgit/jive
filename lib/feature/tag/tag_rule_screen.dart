@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
@@ -13,6 +12,7 @@ import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/smart_tag_log_service.dart';
 import '../../core/service/tag_rule_service.dart';
 import '../../core/service/ui_pref_service.dart';
@@ -125,26 +125,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
 
   Future<void> _init() async {
     try {
-      final existing = widget.isar ?? Isar.getInstance();
-      if (existing != null) {
-        _isar = existing;
-      } else {
-        final dir = await getApplicationDocumentsDirectory();
-        _isar = await Isar.open(
-          [
-            JiveTransactionSchema,
-            JiveCategorySchema,
-            JiveCategoryOverrideSchema,
-            JiveAccountSchema,
-            JiveAutoDraftSchema,
-            JiveTagSchema,
-            JiveTagGroupSchema,
-            JiveTagRuleSchema,
-            JiveTagConversionLogSchema,
-          ],
-          directory: dir.path,
-        );
-      }
+      _isar = widget.isar ?? await DatabaseService.getInstance();
       await _loadData();
     } catch (e) {
       if (!mounted) return;
@@ -309,6 +290,8 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     final visibleRules = _applyFilterAndSort(_rules);
     final busy = _backfilling || _cleaning;
     final tagName = tagDisplayName(widget.tag);
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
     _scheduleTitleScroll();
     return Scaffold(
       backgroundColor: Colors.white,
@@ -337,15 +320,15 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(118),
+          preferredSize: Size.fromHeight(isLandscape ? 96 : 118),
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+                padding: EdgeInsets.fromLTRB(8, 0, 8, isLandscape ? 2 : 4),
                 child: _buildActionRow(busy),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                padding: EdgeInsets.fromLTRB(16, 0, 16, isLandscape ? 8 : 12),
                 child: TextField(
                   controller: _searchController,
                   onChanged: (value) {
@@ -376,7 +359,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
                   ? _buildEmpty()
                   : Column(
                       children: [
-                        _buildFilterBar(),
+                        _buildFilterBar(isLandscape: isLandscape),
                         Expanded(
                           child: visibleRules.isEmpty
                               ? _buildEmptySearch()
@@ -392,7 +375,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
                     ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          padding: EdgeInsets.fromLTRB(16, isLandscape ? 6 : 8, 16, isLandscape ? 10 : 16),
           child: ElevatedButton.icon(
             onPressed: _loading ? null : () => _editRule(),
             icon: const Icon(Icons.add),
@@ -400,7 +383,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2E7D32),
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.symmetric(vertical: isLandscape ? 10 : 12),
               shape: const StadiumBorder(),
             ),
           ),
@@ -983,14 +966,14 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     return '$start ~ $end';
   }
 
-  Widget _buildFilterBar() {
+  Widget _buildFilterBar({required bool isLandscape}) {
     final total = _rules.length;
     final enabled = _rules.where((rule) => rule.isEnabled).length;
     final disabled = total - enabled;
     final selectedColor = const Color(0xFF2E7D32);
     final textStyle = const TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+      padding: EdgeInsets.fromLTRB(16, isLandscape ? 6 : 10, 16, isLandscape ? 2 : 4),
       child: Row(
         children: [
           ChoiceChip(

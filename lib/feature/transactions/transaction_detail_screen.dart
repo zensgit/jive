@@ -45,6 +45,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   final Map<int, JiveAccount> _accountById = {};
   final Map<String, JiveTag> _tagByKey = {};
   final Map<int, JiveProject> _projectById = {};
+  Set<String> _smartDisplayKeys = {};
   Map<String, SmartTagMatchExplanation> _smartExplainByTag = {};
   bool _hasDataChanges = false;
 
@@ -77,12 +78,19 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       final accounts = await isar.collection<JiveAccount>().where().findAll();
       final tags = await isar.collection<JiveTag>().where().findAll();
       final projects = await isar.collection<JiveProject>().where().findAll();
+      final hasStoredSmartKeys = tx.smartTagKeys.isNotEmpty;
+      var displaySmartKeys = <String>{};
+      if (hasStoredSmartKeys) {
+        displaySmartKeys = tx.smartTagKeys.toSet();
+      } else if (tx.tagKeys.isNotEmpty) {
+        displaySmartKeys = (await TagRuleService(isar).resolveMatchingTags(tx)).toSet();
+      }
       final explainByTag = <String, SmartTagMatchExplanation>{};
-      if (tx.smartTagKeys.isNotEmpty) {
+      if (displaySmartKeys.isNotEmpty) {
         final explanations = await TagRuleService(isar).explainForTransaction(
           tx,
-          tagKeys: tx.smartTagKeys.toSet(),
-          onlySmartTagged: true,
+          tagKeys: displaySmartKeys,
+          onlySmartTagged: hasStoredSmartKeys,
         );
         explainByTag.addEntries(explanations.map((item) => MapEntry(item.tagKey, item)));
       }
@@ -110,6 +118,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         _tagByKey
           ..clear()
           ..addEntries(tags.map((t) => MapEntry(t.key, t)));
+        _smartDisplayKeys = displaySmartKeys;
         _smartExplainByTag = explainByTag;
         _projectById
           ..clear()
@@ -301,7 +310,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final title = isTransfer ? _transferTitle(tx) : _categoryTitle(tx);
     final subtitle = isTransfer ? _transferSubtitle(tx) : _categorySubtitle(tx);
     final tags = _resolveTags(tx);
-    final smartTagKeys = tx.smartTagKeys.toSet();
+    final smartTagKeys = _smartDisplayKeys.isEmpty
+        ? tx.smartTagKeys.toSet()
+        : _smartDisplayKeys;
     final smartTags = tags.where((tag) => smartTagKeys.contains(tag.key)).toList();
     final optOutTags = _resolveOptOutTags(tx);
     final isOptOutAll = tx.smartTagOptOutAll;
