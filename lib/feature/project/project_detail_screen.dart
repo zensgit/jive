@@ -2746,9 +2746,13 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
           elevation: 0,
           actions: [
             if (widget.isActive)
-              TextButton(
+              IconButton(
                 onPressed: _toggleBatchMode,
-                child: Text(_batchMode ? '退出批量' : '批量取消'),
+                tooltip: _batchMode ? '退出批量' : '批量取消',
+                icon: Icon(
+                  _batchMode ? Icons.close : Icons.link_off,
+                  color: _batchMode ? Colors.orange : Colors.grey.shade700,
+                ),
               ),
           ],
         ),
