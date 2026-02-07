@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
@@ -11,6 +10,7 @@ import '../../core/database/tag_model.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_rule_service.dart';
 import '../transactions/transaction_detail_screen.dart';
@@ -44,24 +44,11 @@ class _SmartTagOptOutScreenState extends State<SmartTagOptOutScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final existing = widget.isar ?? Isar.getInstance();
+    final existing = widget.isar;
     if (existing != null) {
       _isar = existing;
     } else {
-      final dir = await getApplicationDocumentsDirectory();
-      _isar = await Isar.open(
-        [
-          JiveTransactionSchema,
-          JiveCategorySchema,
-          JiveCategoryOverrideSchema,
-          JiveAccountSchema,
-          JiveAutoDraftSchema,
-          JiveTagSchema,
-          JiveTagGroupSchema,
-          JiveTagRuleSchema,
-        ],
-        directory: dir.path,
-      );
+      _isar = await DatabaseService.getInstance();
     }
 
     final categories = await _isar.collection<JiveCategory>().where().findAll();

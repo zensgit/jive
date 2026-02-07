@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
@@ -13,6 +12,7 @@ import '../../core/database/tag_rule_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../../core/service/category_service.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/ui_pref_service.dart';
 import '../transactions/transaction_detail_screen.dart';
 
@@ -86,23 +86,7 @@ class _CategoryTransactionsScreenState
 
   Future<void> _load() async {
     try {
-      final existing = Isar.getInstance();
-      if (existing != null) {
-        _isar = existing;
-      } else {
-        final dir = await getApplicationDocumentsDirectory();
-        _isar = await Isar.open([
-          JiveTransactionSchema,
-          JiveCategorySchema,
-          JiveCategoryOverrideSchema,
-          JiveAccountSchema,
-          JiveAutoDraftSchema,
-          JiveTagSchema,
-          JiveTagGroupSchema,
-          JiveTagRuleSchema,
-          JiveTagConversionLogSchema,
-        ], directory: dir.path);
-      }
+      _isar = await DatabaseService.getInstance();
 
       final showBadge = await UiPrefService.getShowSmartTagBadge();
       final categories = await _isar

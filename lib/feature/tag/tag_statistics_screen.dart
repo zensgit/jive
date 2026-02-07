@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
@@ -13,6 +12,7 @@ import '../../core/database/tag_model.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/widgets/date_range_picker_sheet.dart';
 
@@ -80,25 +80,11 @@ class _TagStatisticsScreenState extends State<TagStatisticsScreen> {
 
   Future<void> _loadStats() async {
     try {
-      final existing = widget.isar ?? Isar.getInstance();
+      final existing = widget.isar;
       if (existing != null) {
         _isar = existing;
       } else {
-        final dir = await getApplicationDocumentsDirectory();
-        _isar = await Isar.open(
-          [
-            JiveTransactionSchema,
-            JiveCategorySchema,
-            JiveCategoryOverrideSchema,
-            JiveAccountSchema,
-            JiveAutoDraftSchema,
-            JiveTagSchema,
-            JiveTagGroupSchema,
-            JiveTagRuleSchema,
-            JiveTagConversionLogSchema,
-          ],
-          directory: dir.path,
-        );
+        _isar = await DatabaseService.getInstance();
       }
 
       final categories = await _isar.collection<JiveCategory>().where().findAll();

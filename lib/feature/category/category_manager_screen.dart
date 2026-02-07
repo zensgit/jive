@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
@@ -15,6 +14,7 @@ import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/service/category_service.dart';
+import '../../core/service/database_service.dart';
 import '../../core/utils/logger_util.dart';
 import '../stats/stats_screen.dart';
 import 'category_create_dialog.dart';
@@ -98,25 +98,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     }
     try {
       JiveLogger.d("Category manager init start");
-      final existing = widget.isar ?? Isar.getInstance();
+      final existing = widget.isar;
       if (existing != null) {
         _isar = existing;
       } else {
-        final dir = await getApplicationDocumentsDirectory();
-        _isar = await Isar.open(
-          [
-            JiveCategorySchema,
-            JiveCategoryOverrideSchema,
-            JiveTransactionSchema,
-            JiveAccountSchema,
-            JiveAutoDraftSchema,
-            JiveTagSchema,
-            JiveTagGroupSchema,
-            JiveTagRuleSchema,
-            JiveTagConversionLogSchema,
-          ],
-          directory: dir.path,
-        );
+        _isar = await DatabaseService.getInstance();
       }
       _service = CategoryService(_isar);
       await _service.initDefaultCategories();

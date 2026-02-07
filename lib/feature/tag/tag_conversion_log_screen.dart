@@ -15,6 +15,7 @@ import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/service/database_service.dart';
 
 class TagConversionLogScreen extends StatefulWidget {
   final Isar? isar;
@@ -54,25 +55,11 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
 
   Future<void> _init() async {
     try {
-      final existing = widget.isar ?? Isar.getInstance();
+      final existing = widget.isar;
       if (existing != null) {
         _isar = existing;
       } else {
-        final dir = await getApplicationDocumentsDirectory();
-        _isar = await Isar.open(
-          [
-            JiveTransactionSchema,
-            JiveCategorySchema,
-            JiveCategoryOverrideSchema,
-            JiveAccountSchema,
-            JiveAutoDraftSchema,
-            JiveTagSchema,
-            JiveTagGroupSchema,
-            JiveTagRuleSchema,
-            JiveTagConversionLogSchema,
-          ],
-          directory: dir.path,
-        );
+        _isar = await DatabaseService.getInstance();
       }
       await _loadLogs();
     } catch (e) {
