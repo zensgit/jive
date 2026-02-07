@@ -1,4 +1,5 @@
 import 'package:isar/isar.dart';
+import 'dart:async';
 import '../database/budget_model.dart';
 import '../database/transaction_model.dart';
 import 'currency_service.dart';
@@ -7,6 +8,7 @@ import 'currency_service.dart';
 class BudgetService {
   final Isar _isar;
   final CurrencyService _currencyService;
+  static const Duration _summaryTimeout = Duration(seconds: 4);
 
   BudgetService(this._isar, this._currencyService);
 
@@ -92,24 +94,22 @@ class BudgetService {
     final transactions = await query.findAll();
 
     // 计算总使用金额（转换为预算货币）
-    double usedAmount = 0;
-    for (final tx in transactions) {
-      // 假设交易有币种字段，这里简化处理
-      final txCurrency = 'CNY'; // TODO: 从交易中获取实际币种
-      double amount = tx.amount;
-
-      if (txCurrency != budget.currency) {
-        final rate = await _currencyService.getRate(txCurrency, budget.currency);
-        if (rate != null) {
-          amount = tx.amount * rate;
-        }
-      }
-
-      usedAmount += amount;
+    // 目前交易默认按 CNY 存储，因此汇率在预算维度只需查询一次，避免逐笔查询导致卡顿。
+    const txCurrency = 'CNY';
+    double exchangeRate = 1.0;
+    if (txCurrency != budget.currency) {
+      final rate = await _currencyService.getRate(txCurrency, budget.currency);
+      exchangeRate = rate ?? 1.0;
     }
+    final usedAmount = transactions.fold<double>(
+      0,
+      (sum, tx) => sum + tx.amount * exchangeRate,
+    );
 
     final remainingAmount = budget.amount - usedAmount;
-    final usedPercent = budget.amount > 0 ? (usedAmount / budget.amount * 100) : 0;
+    final usedPercent = budget.amount > 0
+        ? (usedAmount / budget.amount * 100)
+        : 0;
 
     // 确定状态
     BudgetStatus status;
@@ -140,29 +140,52 @@ class BudgetService {
   Future<List<BudgetSummary>> getAllBudgetSummaries() async {
     final budgets = await getActiveBudgets();
     final summaries = <BudgetSummary>[];
+    final failed = <String>[];
 
     for (final budget in budgets) {
-      final summary = await calculateBudgetUsage(budget);
-      summaries.add(summary);
+      try {
+        final summary = await calculateBudgetUsage(budget).timeout(
+          _summaryTimeout,
+          onTimeout: () => throw TimeoutException('预算计算超时'),
+        );
+        summaries.add(summary);
+      } catch (e) {
+        failed.add('${budget.name}: $e');
+      }
+    }
+
+    if (summaries.isEmpty && budgets.isNotEmpty) {
+      throw Exception('预算计算失败，无法读取预算数据（${failed.length}/${budgets.length}）');
     }
 
     return summaries;
   }
 
   /// 根据周期获取预算日期范围
-  static (DateTime, DateTime) getPeriodDateRange(BudgetPeriod period, {DateTime? referenceDate}) {
+  static (DateTime, DateTime) getPeriodDateRange(
+    BudgetPeriod period, {
+    DateTime? referenceDate,
+  }) {
     final ref = referenceDate ?? DateTime.now();
 
     switch (period) {
       case BudgetPeriod.daily:
         final start = DateTime(ref.year, ref.month, ref.day);
-        final end = start.add(const Duration(days: 1)).subtract(const Duration(seconds: 1));
+        final end = start
+            .add(const Duration(days: 1))
+            .subtract(const Duration(seconds: 1));
         return (start, end);
 
       case BudgetPeriod.weekly:
         final weekday = ref.weekday;
-        final start = DateTime(ref.year, ref.month, ref.day).subtract(Duration(days: weekday - 1));
-        final end = start.add(const Duration(days: 7)).subtract(const Duration(seconds: 1));
+        final start = DateTime(
+          ref.year,
+          ref.month,
+          ref.day,
+        ).subtract(Duration(days: weekday - 1));
+        final end = start
+            .add(const Duration(days: 7))
+            .subtract(const Duration(seconds: 1));
         return (start, end);
 
       case BudgetPeriod.monthly:
@@ -184,7 +207,11 @@ class BudgetService {
   Future<List<BudgetSummary>> checkBudgetAlerts() async {
     final summaries = await getAllBudgetSummaries();
     return summaries
-        .where((s) => s.status == BudgetStatus.warning || s.status == BudgetStatus.exceeded)
+        .where(
+          (s) =>
+              s.status == BudgetStatus.warning ||
+              s.status == BudgetStatus.exceeded,
+        )
         .toList();
   }
 }
