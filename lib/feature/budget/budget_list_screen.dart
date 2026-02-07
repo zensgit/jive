@@ -1,7 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
 import '../../core/database/budget_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
@@ -18,11 +19,12 @@ class BudgetListScreen extends StatefulWidget {
 }
 
 class _BudgetListScreenState extends State<BudgetListScreen> {
+  static const Duration _loadTimeout = Duration(seconds: 12);
   bool _isLoading = true;
   List<BudgetSummary> _summaries = [];
-  late Isar _isar;
-  late BudgetService _budgetService;
-  late CurrencyService _currencyService;
+  String? _loadErrorMessage;
+  BudgetService? _budgetService;
+  CurrencyService? _currencyService;
 
   @override
   void initState() {
@@ -31,21 +33,57 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
   }
 
   Future<void> _loadData() async {
-    _isar = await DatabaseService.getInstance();
-    _currencyService = CurrencyService(_isar);
-    _budgetService = BudgetService(_isar, _currencyService);
-
-    final summaries = await _budgetService.getAllBudgetSummaries();
-
     if (mounted) {
       setState(() {
-        _summaries = summaries;
-        _isLoading = false;
+        _isLoading = true;
+        _loadErrorMessage = null;
       });
+    }
+
+    try {
+      final isar = await DatabaseService.getInstance();
+      final currencyService = CurrencyService(isar);
+      final budgetService = BudgetService(isar, currencyService);
+      final summaries = await budgetService.getAllBudgetSummaries().timeout(
+        _loadTimeout,
+        onTimeout: () => throw TimeoutException('预算数据加载超时'),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _currencyService = currencyService;
+        _budgetService = budgetService;
+        _summaries = summaries;
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _summaries = [];
+        _loadErrorMessage = '预算加载超时，请稍后重试或清理测试数据';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _summaries = [];
+        _loadErrorMessage = '加载预算失败：$e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _createBudget() async {
+    if (_currencyService == null || _budgetService == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('预算服务尚未准备好，请稍后重试')));
+      return;
+    }
+
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -54,8 +92,8 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => _CreateBudgetSheet(
-        currencyService: _currencyService,
-        budgetService: _budgetService,
+        currencyService: _currencyService!,
+        budgetService: _budgetService!,
       ),
     );
 
@@ -70,30 +108,65 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
       appBar: AppBar(
         title: const Text('预算管理'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _createBudget,
-          ),
+          IconButton(icon: const Icon(Icons.add), onPressed: _createBudget),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _loadErrorMessage != null
+          ? _buildLoadErrorState()
           : _summaries.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _summaries.length,
-                    itemBuilder: (context, index) {
-                      return _buildBudgetCard(_summaries[index]);
-                    },
-                  ),
-                ),
+          ? _buildEmptyState()
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _summaries.length,
+                itemBuilder: (context, index) {
+                  return _buildBudgetCard(_summaries[index]);
+                },
+              ),
+            ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createBudget,
+        onPressed: _currencyService == null || _budgetService == null
+            ? null
+            : _createBudget,
         icon: const Icon(Icons.add),
         label: const Text('新建预算'),
+      ),
+    );
+  }
+
+  Widget _buildLoadErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 56, color: Colors.red.shade300),
+            const SizedBox(height: 12),
+            Text(
+              '预算加载失败',
+              style: GoogleFonts.lato(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _loadErrorMessage ?? '',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: JiveTheme.secondaryTextColor(context)),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _loadData,
+              icon: const Icon(Icons.refresh),
+              label: const Text('重试'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -197,7 +270,10 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -296,6 +372,10 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
   }
 
   void _showBudgetDetail(BudgetSummary summary) {
+    if (_currencyService == null || _budgetService == null) {
+      _loadData();
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -305,9 +385,9 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
       ),
       builder: (ctx) => _BudgetDetailSheet(
         summary: summary,
-        currencyService: _currencyService,
+        currencyService: _currencyService!,
         onDelete: () async {
-          await _budgetService.deleteBudget(summary.budget.id);
+          await _budgetService!.deleteBudget(summary.budget.id);
           Navigator.pop(ctx);
           _loadData();
         },
@@ -338,10 +418,12 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
   }
 
   String _formatAmount(double amount) {
-    return amount.toStringAsFixed(2).replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+\.)'),
-      (match) => '${match[1]},',
-    );
+    return amount
+        .toStringAsFixed(2)
+        .replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+\.)'),
+          (match) => '${match[1]},',
+        );
   }
 }
 
@@ -391,16 +473,16 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
     final amount = double.tryParse(_amountController.text) ?? 0;
 
     if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入预算名称')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入预算名称')));
       return;
     }
 
     if (amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入有效金额')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入有效金额')));
       return;
     }
 
@@ -480,7 +562,9 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
                     flex: 2,
                     child: TextField(
                       controller: _amountController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: InputDecoration(
                         labelText: '预算金额',
                         hintText: '0.00',
@@ -511,21 +595,29 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
               const SizedBox(height: 16),
 
               // 周期选择
-              Text('预算周期', style: GoogleFonts.lato(fontWeight: FontWeight.w600)),
+              Text(
+                '预算周期',
+                style: GoogleFonts.lato(fontWeight: FontWeight.w600),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: BudgetPeriod.values.where((p) => p != BudgetPeriod.custom).map((p) {
-                  final isSelected = _period == p;
-                  return ChoiceChip(
-                    label: Text(p.label),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      if (selected) setState(() => _period = p);
-                    },
-                    selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.2),
-                  );
-                }).toList(),
+                children: BudgetPeriod.values
+                    .where((p) => p != BudgetPeriod.custom)
+                    .map((p) {
+                      final isSelected = _period == p;
+                      return ChoiceChip(
+                        label: Text(p.label),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) setState(() => _period = p);
+                        },
+                        selectedColor: JiveTheme.primaryGreen.withValues(
+                          alpha: 0.2,
+                        ),
+                      );
+                    })
+                    .toList(),
               ),
               const SizedBox(height: 16),
 
@@ -636,7 +728,10 @@ class _BudgetDetailSheet extends StatelessWidget {
                               Navigator.pop(ctx);
                               onDelete();
                             },
-                            child: const Text('删除', style: TextStyle(color: Colors.red)),
+                            child: const Text(
+                              '删除',
+                              style: TextStyle(color: Colors.red),
+                            ),
                           ),
                         ],
                       ),
@@ -668,8 +763,8 @@ class _BudgetDetailSheet extends StatelessWidget {
                         summary.status == BudgetStatus.exceeded
                             ? Colors.red
                             : summary.status == BudgetStatus.warning
-                                ? Colors.orange
-                                : JiveTheme.primaryGreen,
+                            ? Colors.orange
+                            : JiveTheme.primaryGreen,
                       ),
                     ),
                     Column(
@@ -693,14 +788,23 @@ class _BudgetDetailSheet extends StatelessWidget {
 
             // 详细信息
             _buildDetailRow('预算金额', '$symbol ${_formatAmount(budget.amount)}'),
-            _buildDetailRow('已使用', '$symbol ${_formatAmount(summary.usedAmount)}'),
+            _buildDetailRow(
+              '已使用',
+              '$symbol ${_formatAmount(summary.usedAmount)}',
+            ),
             _buildDetailRow(
               '剩余',
               '$symbol ${_formatAmount(summary.remainingAmount)}',
               valueColor: summary.remainingAmount < 0 ? Colors.red : null,
             ),
-            _buildDetailRow('开始日期', DateFormat('yyyy-MM-dd').format(budget.startDate)),
-            _buildDetailRow('结束日期', DateFormat('yyyy-MM-dd').format(budget.endDate)),
+            _buildDetailRow(
+              '开始日期',
+              DateFormat('yyyy-MM-dd').format(budget.startDate),
+            ),
+            _buildDetailRow(
+              '结束日期',
+              DateFormat('yyyy-MM-dd').format(budget.endDate),
+            ),
             _buildDetailRow('剩余天数', '${summary.daysRemaining} 天'),
           ],
         ),
@@ -728,9 +832,11 @@ class _BudgetDetailSheet extends StatelessWidget {
   }
 
   String _formatAmount(double amount) {
-    return amount.toStringAsFixed(2).replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+\.)'),
-      (match) => '${match[1]},',
-    );
+    return amount
+        .toStringAsFixed(2)
+        .replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+\.)'),
+          (match) => '${match[1]},',
+        );
   }
 }
