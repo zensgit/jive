@@ -41,19 +41,16 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
     }
 
     try {
-      final isar = await DatabaseService.getInstance();
-      final currencyService = CurrencyService(isar);
-      final budgetService = BudgetService(isar, currencyService);
-      final summaries = await budgetService.getAllBudgetSummaries().timeout(
+      final loaded = await _loadDataInternal().timeout(
         _loadTimeout,
         onTimeout: () => throw TimeoutException('预算数据加载超时'),
       );
 
       if (!mounted) return;
       setState(() {
-        _currencyService = currencyService;
-        _budgetService = budgetService;
-        _summaries = summaries;
+        _currencyService = loaded.currencyService;
+        _budgetService = loaded.budgetService;
+        _summaries = loaded.summaries;
       });
     } on TimeoutException {
       if (!mounted) return;
@@ -74,6 +71,18 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
         });
       }
     }
+  }
+
+  Future<_BudgetLoadResult> _loadDataInternal() async {
+    final isar = await DatabaseService.getInstance();
+    final currencyService = CurrencyService(isar);
+    final budgetService = BudgetService(isar, currencyService);
+    final summaries = await budgetService.getAllBudgetSummaries();
+    return _BudgetLoadResult(
+      currencyService: currencyService,
+      budgetService: budgetService,
+      summaries: summaries,
+    );
   }
 
   Future<void> _createBudget() async {
@@ -425,6 +434,18 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
           (match) => '${match[1]},',
         );
   }
+}
+
+class _BudgetLoadResult {
+  final CurrencyService currencyService;
+  final BudgetService budgetService;
+  final List<BudgetSummary> summaries;
+
+  const _BudgetLoadResult({
+    required this.currencyService,
+    required this.budgetService,
+    required this.summaries,
+  });
 }
 
 /// 创建预算底部弹窗
