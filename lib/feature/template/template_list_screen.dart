@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/template_model.dart';
 import '../../core/database/transaction_model.dart';
@@ -9,6 +8,7 @@ import '../../core/database/category_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/service/template_service.dart';
+import '../../core/service/database_service.dart';
 import '../../core/design_system/theme.dart';
 
 class TemplateListScreen extends StatefulWidget {
@@ -45,22 +45,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
 
   Future<Isar> _ensureIsar() async {
     if (_isar != null) return _isar!;
-    if (Isar.getInstance() != null) {
-      _isar = Isar.getInstance()!;
-      return _isar!;
-    }
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open(
-      [
-        JiveTransactionSchema,
-        JiveCategorySchema,
-        JiveCategoryOverrideSchema,
-        JiveAccountSchema,
-        JiveAutoDraftSchema,
-        JiveTemplateSchema,
-      ],
-      directory: dir.path,
-    );
+    _isar = await DatabaseService.getInstance();
     return _isar!;
   }
 

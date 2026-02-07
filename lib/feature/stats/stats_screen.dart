@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/currency_model.dart';
@@ -15,6 +14,7 @@ import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
+import '../../core/service/database_service.dart';
 import '../settings/report_export_screen.dart';
 
 class StatsScreen extends StatefulWidget {
@@ -79,25 +79,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Future<void> _loadStats() async {
-    final dir = await getApplicationDocumentsDirectory();
-    if (Isar.getInstance() != null) {
-      _isar = Isar.getInstance()!;
-    } else {
-      _isar = await Isar.open(
-        [
-          JiveTransactionSchema,
-          JiveCategorySchema,
-          JiveCategoryOverrideSchema,
-          JiveAccountSchema,
-          JiveAutoDraftSchema,
-          JiveTagSchema,
-          JiveTagGroupSchema,
-          JiveTagRuleSchema,
-          JiveTagConversionLogSchema,
-        ],
-        directory: dir.path,
-      );
-    }
+    _isar = await DatabaseService.getInstance();
 
     // 初始化货币服务
     _currencyService ??= CurrencyService(_isar);

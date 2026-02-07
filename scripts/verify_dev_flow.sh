@@ -28,6 +28,27 @@ fail() {
   exit 1
 }
 
+current_focus_pkg() {
+  adb shell dumpsys activity activities 2>/dev/null \
+    | sed -n 's/.*topResumedActivity=ActivityRecord{[^ ]* [^ ]* \([^ \/}]*\)\/.*/\1/p' \
+    | tail -n 1
+}
+
+ensure_app_foreground() {
+  local max_try="${1:-3}"
+  local i pkg
+  for ((i = 1; i <= max_try; i++)); do
+    pkg="$(current_focus_pkg || true)"
+    if [[ "${pkg}" == "${APP_ID}" ]]; then
+      return 0
+    fi
+    adb shell am start -n "${ACTIVITY}" >/dev/null || true
+    sleep 1
+  done
+  pkg="$(current_focus_pkg || true)"
+  fail "app not foreground, current package: ${pkg:-unknown}"
+}
+
 dump_ui() {
   local name="$1"
   adb shell uiautomator dump /sdcard/"${name}.xml" >/dev/null
@@ -141,6 +162,7 @@ log "launch app: ${ACTIVITY}"
 adb shell am force-stop "${APP_ID}" || true
 adb shell am start -n "${ACTIVITY}" >/dev/null || fail "failed to start app"
 sleep 2
+ensure_app_foreground 5
 cap "01_home"
 dump_ui "01_home"
 assert_text_exists "Recent Transactions" "01_home"
@@ -150,6 +172,7 @@ if ! tap_top_right_clickable "${OUT_DIR}/01_home.nodes.xml"; then
   tap_xy 1124 270
 fi
 sleep 1
+ensure_app_foreground 3
 cap "02_debug_sheet"
 dump_ui "02_debug_sheet"
 if ! grep -q "分类管理" "${OUT_DIR}/02_debug_sheet.nodes.xml"; then
@@ -195,6 +218,7 @@ if ! tap_top_right_clickable "${OUT_DIR}/05_home_for_debug.nodes.xml"; then
   tap_xy 1124 270
 fi
 sleep 1
+ensure_app_foreground 3
 cap "06_debug_sheet_budget"
 dump_ui "06_debug_sheet_budget"
 if ! grep -q "预算管理" "${OUT_DIR}/06_debug_sheet_budget.nodes.xml"; then

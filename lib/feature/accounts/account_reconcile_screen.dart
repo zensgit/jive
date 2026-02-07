@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/database/account_model.dart';
@@ -14,6 +13,7 @@ import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/reconcile_service.dart';
 import '../../core/widgets/date_range_picker_sheet.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
@@ -146,22 +146,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
 
   Future<Isar> _ensureIsar() async {
     if (_isar != null) return _isar!;
-    if (Isar.getInstance() != null) {
-      _isar = Isar.getInstance()!;
-      return _isar!;
-    }
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open([
-      JiveTransactionSchema,
-      JiveCategorySchema,
-      JiveCategoryOverrideSchema,
-      JiveAccountSchema,
-      JiveAutoDraftSchema,
-      JiveTagSchema,
-      JiveTagGroupSchema,
-      JiveTagRuleSchema,
-      JiveTagConversionLogSchema,
-    ], directory: dir.path);
+    _isar = await DatabaseService.getInstance();
     return _isar!;
   }
 

@@ -20,6 +20,7 @@ import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
+import '../../core/service/database_service.dart';
 import 'account_reconcile_screen.dart';
 
 class AccountsScreen extends StatefulWidget {
@@ -104,22 +105,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
   }
 
   Future<void> _loadAccounts() async {
-    final dir = await getApplicationDocumentsDirectory();
-    if (Isar.getInstance() != null) {
-      _isar = Isar.getInstance()!;
-    } else {
-      _isar = await Isar.open([
-        JiveTransactionSchema,
-        JiveCategorySchema,
-        JiveCategoryOverrideSchema,
-        JiveAccountSchema,
-        JiveAutoDraftSchema,
-        JiveTagSchema,
-        JiveTagGroupSchema,
-        JiveTagRuleSchema,
-        JiveTagConversionLogSchema,
-      ], directory: dir.path);
-    }
+    _isar = await DatabaseService.getInstance();
 
     final service = AccountService(_isar);
     await service.initDefaultAccounts();

@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
@@ -23,6 +22,7 @@ import '../../core/service/currency_service.dart';
 import '../../core/service/tag_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_rule_service.dart';
+import '../../core/service/database_service.dart';
 import '../../core/database/category_model.dart';
 import '../../core/utils/logger_util.dart';
 import '../category/category_create_dialog.dart';
@@ -216,24 +216,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _initData() async {
     try {
       JiveLogger.d(">>> INIT DATA STARTED");
-      final dir = await getApplicationDocumentsDirectory();
-
-      if (Isar.getInstance() != null) {
-        _isar = Isar.getInstance()!;
-      } else {
-        _isar = await Isar.open([
-          JiveTransactionSchema,
-          JiveCategorySchema,
-          JiveCategoryOverrideSchema,
-          JiveAccountSchema,
-          JiveAutoDraftSchema,
-          JiveTagSchema,
-          JiveTagGroupSchema,
-          JiveTagRuleSchema,
-          JiveTagConversionLogSchema,
-          JiveProjectSchema,
-        ], directory: dir.path);
-      }
+      _isar = await DatabaseService.getInstance();
 
       _currencyService = CurrencyService(_isar);
       await CategoryService(_isar).initDefaultCategories();

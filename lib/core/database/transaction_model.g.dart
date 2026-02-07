@@ -67,58 +67,68 @@ const JiveTransactionSchema = CollectionSchema(
       name: r'rawText',
       type: IsarType.string,
     ),
-    r'smartTagKeys': PropertySchema(
+    r'recurringKey': PropertySchema(
       id: 10,
+      name: r'recurringKey',
+      type: IsarType.string,
+    ),
+    r'recurringRuleId': PropertySchema(
+      id: 11,
+      name: r'recurringRuleId',
+      type: IsarType.long,
+    ),
+    r'smartTagKeys': PropertySchema(
+      id: 12,
       name: r'smartTagKeys',
       type: IsarType.stringList,
     ),
     r'smartTagOptOutAll': PropertySchema(
-      id: 11,
+      id: 13,
       name: r'smartTagOptOutAll',
       type: IsarType.bool,
     ),
     r'smartTagOptOutKeys': PropertySchema(
-      id: 12,
+      id: 14,
       name: r'smartTagOptOutKeys',
       type: IsarType.stringList,
     ),
     r'source': PropertySchema(
-      id: 13,
+      id: 15,
       name: r'source',
       type: IsarType.string,
     ),
     r'subCategory': PropertySchema(
-      id: 14,
+      id: 16,
       name: r'subCategory',
       type: IsarType.string,
     ),
     r'subCategoryKey': PropertySchema(
-      id: 15,
+      id: 17,
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
     r'tagKeys': PropertySchema(
-      id: 16,
+      id: 18,
       name: r'tagKeys',
       type: IsarType.stringList,
     ),
     r'timestamp': PropertySchema(
-      id: 17,
+      id: 19,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'toAccountId': PropertySchema(
-      id: 18,
+      id: 20,
       name: r'toAccountId',
       type: IsarType.long,
     ),
     r'toAmount': PropertySchema(
-      id: 19,
+      id: 21,
       name: r'toAmount',
       type: IsarType.double,
     ),
     r'type': PropertySchema(
-      id: 20,
+      id: 22,
       name: r'type',
       type: IsarType.string,
     )
@@ -206,6 +216,32 @@ const JiveTransactionSchema = CollectionSchema(
           caseSensitive: false,
         )
       ],
+    ),
+    r'recurringRuleId': IndexSchema(
+      id: 7860537796394788863,
+      name: r'recurringRuleId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'recurringRuleId',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'recurringKey': IndexSchema(
+      id: 1211987308107365496,
+      name: r'recurringKey',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'recurringKey',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
     )
   },
   links: {},
@@ -248,6 +284,12 @@ int _jiveTransactionEstimateSize(
   }
   {
     final value = object.rawText;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
+  {
+    final value = object.recurringKey;
     if (value != null) {
       bytesCount += 3 + value.length * 3;
     }
@@ -311,17 +353,19 @@ void _jiveTransactionSerialize(
   writer.writeString(offsets[7], object.note);
   writer.writeLong(offsets[8], object.projectId);
   writer.writeString(offsets[9], object.rawText);
-  writer.writeStringList(offsets[10], object.smartTagKeys);
-  writer.writeBool(offsets[11], object.smartTagOptOutAll);
-  writer.writeStringList(offsets[12], object.smartTagOptOutKeys);
-  writer.writeString(offsets[13], object.source);
-  writer.writeString(offsets[14], object.subCategory);
-  writer.writeString(offsets[15], object.subCategoryKey);
-  writer.writeStringList(offsets[16], object.tagKeys);
-  writer.writeDateTime(offsets[17], object.timestamp);
-  writer.writeLong(offsets[18], object.toAccountId);
-  writer.writeDouble(offsets[19], object.toAmount);
-  writer.writeString(offsets[20], object.type);
+  writer.writeString(offsets[10], object.recurringKey);
+  writer.writeLong(offsets[11], object.recurringRuleId);
+  writer.writeStringList(offsets[12], object.smartTagKeys);
+  writer.writeBool(offsets[13], object.smartTagOptOutAll);
+  writer.writeStringList(offsets[14], object.smartTagOptOutKeys);
+  writer.writeString(offsets[15], object.source);
+  writer.writeString(offsets[16], object.subCategory);
+  writer.writeString(offsets[17], object.subCategoryKey);
+  writer.writeStringList(offsets[18], object.tagKeys);
+  writer.writeDateTime(offsets[19], object.timestamp);
+  writer.writeLong(offsets[20], object.toAccountId);
+  writer.writeDouble(offsets[21], object.toAmount);
+  writer.writeString(offsets[22], object.type);
 }
 
 JiveTransaction _jiveTransactionDeserialize(
@@ -342,17 +386,19 @@ JiveTransaction _jiveTransactionDeserialize(
   object.note = reader.readStringOrNull(offsets[7]);
   object.projectId = reader.readLongOrNull(offsets[8]);
   object.rawText = reader.readStringOrNull(offsets[9]);
-  object.smartTagKeys = reader.readStringList(offsets[10]) ?? [];
-  object.smartTagOptOutAll = reader.readBool(offsets[11]);
-  object.smartTagOptOutKeys = reader.readStringList(offsets[12]) ?? [];
-  object.source = reader.readString(offsets[13]);
-  object.subCategory = reader.readStringOrNull(offsets[14]);
-  object.subCategoryKey = reader.readStringOrNull(offsets[15]);
-  object.tagKeys = reader.readStringList(offsets[16]) ?? [];
-  object.timestamp = reader.readDateTime(offsets[17]);
-  object.toAccountId = reader.readLongOrNull(offsets[18]);
-  object.toAmount = reader.readDoubleOrNull(offsets[19]);
-  object.type = reader.readStringOrNull(offsets[20]);
+  object.recurringKey = reader.readStringOrNull(offsets[10]);
+  object.recurringRuleId = reader.readLongOrNull(offsets[11]);
+  object.smartTagKeys = reader.readStringList(offsets[12]) ?? [];
+  object.smartTagOptOutAll = reader.readBool(offsets[13]);
+  object.smartTagOptOutKeys = reader.readStringList(offsets[14]) ?? [];
+  object.source = reader.readString(offsets[15]);
+  object.subCategory = reader.readStringOrNull(offsets[16]);
+  object.subCategoryKey = reader.readStringOrNull(offsets[17]);
+  object.tagKeys = reader.readStringList(offsets[18]) ?? [];
+  object.timestamp = reader.readDateTime(offsets[19]);
+  object.toAccountId = reader.readLongOrNull(offsets[20]);
+  object.toAmount = reader.readDoubleOrNull(offsets[21]);
+  object.type = reader.readStringOrNull(offsets[22]);
   return object;
 }
 
@@ -384,26 +430,30 @@ P _jiveTransactionDeserializeProp<P>(
     case 9:
       return (reader.readStringOrNull(offset)) as P;
     case 10:
-      return (reader.readStringList(offset) ?? []) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 11:
-      return (reader.readBool(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 12:
       return (reader.readStringList(offset) ?? []) as P;
     case 13:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 14:
-      return (reader.readStringOrNull(offset)) as P;
-    case 15:
-      return (reader.readStringOrNull(offset)) as P;
-    case 16:
       return (reader.readStringList(offset) ?? []) as P;
+    case 15:
+      return (reader.readString(offset)) as P;
+    case 16:
+      return (reader.readStringOrNull(offset)) as P;
     case 17:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 18:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 19:
-      return (reader.readDoubleOrNull(offset)) as P;
+      return (reader.readDateTime(offset)) as P;
     case 20:
+      return (reader.readLongOrNull(offset)) as P;
+    case 21:
+      return (reader.readDoubleOrNull(offset)) as P;
+    case 22:
       return (reader.readStringOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -459,6 +509,15 @@ extension JiveTransactionQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'projectId'),
+      );
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhere>
+      anyRecurringRuleId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'recurringRuleId'),
       );
     });
   }
@@ -1103,6 +1162,188 @@ extension JiveTransactionQueryWhere
         upper: [upperProjectId],
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringRuleIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'recurringRuleId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringRuleIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'recurringRuleId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringRuleIdEqualTo(int? recurringRuleId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'recurringRuleId',
+        value: [recurringRuleId],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringRuleIdNotEqualTo(int? recurringRuleId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recurringRuleId',
+              lower: [],
+              upper: [recurringRuleId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recurringRuleId',
+              lower: [recurringRuleId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recurringRuleId',
+              lower: [recurringRuleId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recurringRuleId',
+              lower: [],
+              upper: [recurringRuleId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringRuleIdGreaterThan(
+    int? recurringRuleId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'recurringRuleId',
+        lower: [recurringRuleId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringRuleIdLessThan(
+    int? recurringRuleId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'recurringRuleId',
+        lower: [],
+        upper: [recurringRuleId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringRuleIdBetween(
+    int? lowerRecurringRuleId,
+    int? upperRecurringRuleId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'recurringRuleId',
+        lower: [lowerRecurringRuleId],
+        includeLower: includeLower,
+        upper: [upperRecurringRuleId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'recurringKey',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'recurringKey',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringKeyEqualTo(String? recurringKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'recurringKey',
+        value: [recurringKey],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      recurringKeyNotEqualTo(String? recurringKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recurringKey',
+              lower: [],
+              upper: [recurringKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recurringKey',
+              lower: [recurringKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recurringKey',
+              lower: [recurringKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'recurringKey',
+              lower: [],
+              upper: [recurringKey],
+              includeUpper: false,
+            ));
+      }
     });
   }
 }
@@ -2313,6 +2554,234 @@ extension JiveTransactionQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'rawText',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'recurringKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'recurringKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'recurringKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'recurringKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'recurringKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'recurringKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'recurringKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'recurringKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'recurringKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'recurringKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'recurringKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'recurringKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringRuleIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'recurringRuleId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringRuleIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'recurringRuleId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringRuleIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'recurringRuleId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringRuleIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'recurringRuleId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringRuleIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'recurringRuleId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      recurringRuleIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'recurringRuleId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
       ));
     });
   }
@@ -3963,6 +4432,34 @@ extension JiveTransactionQuerySortBy
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByRecurringKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recurringKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByRecurringKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recurringKey', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByRecurringRuleId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recurringRuleId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByRecurringRuleIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recurringRuleId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
       sortBySmartTagOptOutAll() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'smartTagOptOutAll', Sort.asc);
@@ -4225,6 +4722,34 @@ extension JiveTransactionQuerySortThenBy
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByRecurringKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recurringKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByRecurringKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recurringKey', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByRecurringRuleId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recurringRuleId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByRecurringRuleIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'recurringRuleId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
       thenBySmartTagOptOutAll() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'smartTagOptOutAll', Sort.asc);
@@ -4408,6 +4933,20 @@ extension JiveTransactionQueryWhereDistinct
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByRecurringKey({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'recurringKey', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByRecurringRuleId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'recurringRuleId');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
       distinctBySmartTagKeys() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'smartTagKeys');
@@ -4555,6 +5094,20 @@ extension JiveTransactionQueryProperty
   QueryBuilder<JiveTransaction, String?, QQueryOperations> rawTextProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'rawText');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, String?, QQueryOperations>
+      recurringKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'recurringKey');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, int?, QQueryOperations>
+      recurringRuleIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'recurringRuleId');
     });
   }
 

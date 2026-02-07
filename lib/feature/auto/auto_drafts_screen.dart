@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
@@ -13,6 +12,7 @@ import '../../core/service/account_service.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/tag_service.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
@@ -40,25 +40,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
   }
 
   Future<void> _initData() async {
-    final dir = await getApplicationDocumentsDirectory();
-    if (Isar.getInstance() != null) {
-      _isar = Isar.getInstance()!;
-    } else {
-      _isar = await Isar.open(
-        [
-          JiveTransactionSchema,
-          JiveCategorySchema,
-          JiveCategoryOverrideSchema,
-          JiveAccountSchema,
-          JiveAutoDraftSchema,
-          JiveTagSchema,
-          JiveTagGroupSchema,
-          JiveTagRuleSchema,
-          JiveTagConversionLogSchema,
-        ],
-        directory: dir.path,
-      );
-    }
+    _isar = await DatabaseService.getInstance();
     await _loadDrafts();
   }
 

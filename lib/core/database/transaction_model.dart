@@ -35,4 +35,8 @@ class JiveTransaction {
   List<String> smartTagKeys = []; // 智能规则自动添加的标签 Key
   List<String> smartTagOptOutKeys = []; // 对应标签不再自动打标
   bool smartTagOptOutAll = false; // 本笔交易停用全部智能标签
+  @Index()
+  int? recurringRuleId;       // 关联周期规则 ID
+  @Index()
+  String? recurringKey;       // 周期入账去重 Key
 }

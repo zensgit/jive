@@ -34,4 +34,10 @@ class JiveAutoDraft {
   late DateTime createdAt;
 
   List<String> tagKeys = [];
+
+  @Index()
+  int? recurringRuleId;
+
+  @Index()
+  String? recurringKey;
 }
