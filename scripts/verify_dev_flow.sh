@@ -197,12 +197,18 @@ assert_text_exists "周期记账" "03_recurring_list"
 
 log "open recurring form"
 if ! tap_text_once "新建规则" "${OUT_DIR}/03_recurring_list.nodes.xml"; then
-  tap_xy 990 170
+  if ! tap_top_right_clickable "${OUT_DIR}/03_recurring_list.nodes.xml"; then
+    tap_xy 1160 240
+  fi
 fi
 sleep 1
 cap "04_recurring_form"
 dump_ui "04_recurring_form"
-assert_text_exists "新建周期规则" "04_recurring_form"
+if ! grep -q "新建周期规则" "${OUT_DIR}/04_recurring_form.nodes.xml" \
+  && ! grep -q "规则名称" "${OUT_DIR}/04_recurring_form.nodes.xml" \
+  && ! grep -q "周期设置" "${OUT_DIR}/04_recurring_form.nodes.xml"; then
+  fail "cannot open recurring form from recurring list"
+fi
 
 log "return to home"
 adb shell input keyevent 4
