@@ -12,12 +12,14 @@ class RecurringRuleListScreen extends StatefulWidget {
   const RecurringRuleListScreen({super.key});
 
   @override
-  State<RecurringRuleListScreen> createState() => _RecurringRuleListScreenState();
+  State<RecurringRuleListScreen> createState() =>
+      _RecurringRuleListScreenState();
 }
 
 class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
   Isar? _isar;
   bool _isLoading = true;
+  bool _isProcessing = false;
   List<JiveRecurringRule> _rules = [];
 
   @override
@@ -45,14 +47,50 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
   }
 
   Future<void> _openRuleForm({JiveRecurringRule? rule}) async {
-    final result = await Navigator.push(
+    final result = await Navigator.push<RecurringRuleSaveResult>(
       context,
       MaterialPageRoute(
         builder: (context) => RecurringRuleFormScreen(editingRule: rule),
       ),
     );
-    if (result == true) {
+    if (result == null || !result.saved) return;
+    await _loadRules();
+    if (!mounted) return;
+    _showProcessResultSnack(
+      generatedDrafts: result.generatedDrafts,
+      committedTransactions: result.committedTransactions,
+      processingError: result.processingError,
+      successPrefix: '规则已保存',
+    );
+  }
+
+  Future<void> _processNow() async {
+    if (_isProcessing) return;
+    if (mounted) {
+      setState(() => _isProcessing = true);
+    }
+    try {
+      final isar = await _ensureIsar();
+      final result = await RecurringService(isar).processDueRules();
       await _loadRules();
+      if (mounted) {
+        _showProcessResultSnack(
+          generatedDrafts: result.generatedDrafts,
+          committedTransactions: result.committedTransactions,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        _showProcessResultSnack(
+          generatedDrafts: 0,
+          committedTransactions: 0,
+          processingError: e.toString(),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
     }
   }
 
@@ -79,14 +117,73 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
     await _loadRules();
   }
 
+  void _showProcessResultSnack({
+    required int generatedDrafts,
+    required int committedTransactions,
+    String? processingError,
+    String? successPrefix,
+  }) {
+    final message = _buildProcessResultMessage(
+      generatedDrafts: generatedDrafts,
+      committedTransactions: committedTransactions,
+      processingError: processingError,
+      successPrefix: successPrefix,
+    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _buildProcessResultMessage({
+    required int generatedDrafts,
+    required int committedTransactions,
+    String? processingError,
+    String? successPrefix,
+  }) {
+    if (processingError != null && processingError.isNotEmpty) {
+      if (successPrefix == null || successPrefix.isEmpty) {
+        return '执行失败：$processingError';
+      }
+      return '$successPrefix，但自动执行失败：$processingError';
+    }
+
+    final total = generatedDrafts + committedTransactions;
+    if (total == 0) {
+      if (successPrefix == null || successPrefix.isEmpty) {
+        return '当前没有到期规则';
+      }
+      return '$successPrefix，当前没有到期规则';
+    }
+
+    final detail = '草稿 $generatedDrafts 笔，入账 $committedTransactions 笔';
+    if (successPrefix == null || successPrefix.isEmpty) {
+      return '执行完成：$detail';
+    }
+    return '$successPrefix并执行：$detail';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: Text('周期记账', style: GoogleFonts.lato(fontWeight: FontWeight.w600)),
+        title: Text(
+          '周期记账',
+          style: GoogleFonts.lato(fontWeight: FontWeight.w600),
+        ),
         centerTitle: true,
         actions: [
+          IconButton(
+            tooltip: '立即执行一次',
+            icon: _isProcessing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_circle_outline),
+            onPressed: _isProcessing ? null : _processNow,
+          ),
           IconButton(
             icon: const Icon(Icons.add_circle_outline),
             onPressed: () => _openRuleForm(),
@@ -96,8 +193,8 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _rules.isEmpty
-              ? _buildEmptyState()
-              : _buildList(),
+          ? _buildEmptyState()
+          : _buildList(),
     );
   }
 
@@ -111,15 +208,22 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: JiveTheme.primaryGreen.withOpacity(0.08),
+                color: JiveTheme.primaryGreen.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.repeat, size: 48, color: JiveTheme.primaryGreen),
+              child: Icon(
+                Icons.repeat,
+                size: 48,
+                color: JiveTheme.primaryGreen,
+              ),
             ),
             const SizedBox(height: 24),
             Text(
               '创建周期记账规则',
-              style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold),
+              style: GoogleFonts.lato(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
@@ -133,8 +237,13 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: JiveTheme.primaryGreen,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: const Text('新建规则'),
             ),
@@ -158,7 +267,7 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 8,
                 offset: const Offset(0, 4),
               ),
@@ -169,7 +278,7 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: JiveTheme.primaryGreen.withOpacity(0.08),
+                  color: JiveTheme.primaryGreen.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(Icons.schedule, color: JiveTheme.primaryGreen),
@@ -179,11 +288,20 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(rule.name, style: GoogleFonts.lato(fontSize: 15, fontWeight: FontWeight.w600)),
+                    Text(
+                      rule.name,
+                      style: GoogleFonts.lato(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       _ruleSubtitle(rule),
-                      style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600),
+                      style: GoogleFonts.lato(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
@@ -219,8 +337,8 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
     final typeLabel = rule.type == 'income'
         ? '收入'
         : rule.type == 'transfer'
-            ? '转账'
-            : '支出';
+        ? '转账'
+        : '支出';
     final intervalLabel = _intervalLabel(rule);
     final commitLabel = rule.commitMode == 'commit' ? '自动入账' : '生成草稿';
     return '$typeLabel · ${rule.amount.toStringAsFixed(2)} · $intervalLabel · $commitLabel';

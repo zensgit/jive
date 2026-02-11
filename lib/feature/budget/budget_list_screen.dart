@@ -396,8 +396,9 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
         summary: summary,
         currencyService: _currencyService!,
         onDelete: () async {
-          await _budgetService!.deleteBudget(summary.budget.id);
           Navigator.pop(ctx);
+          await _budgetService!.deleteBudget(summary.budget.id);
+          if (!mounted) return;
           _loadData();
         },
       ),
@@ -598,7 +599,7 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _currency,
+                      initialValue: _currency,
                       decoration: InputDecoration(
                         labelText: '货币',
                         border: OutlineInputBorder(

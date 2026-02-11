@@ -13,6 +13,20 @@ import '../../core/service/recurring_service.dart';
 import '../../core/service/tag_service.dart';
 import '../tag/tag_picker_sheet.dart';
 
+class RecurringRuleSaveResult {
+  const RecurringRuleSaveResult({
+    required this.saved,
+    required this.generatedDrafts,
+    required this.committedTransactions,
+    this.processingError,
+  });
+
+  final bool saved;
+  final int generatedDrafts;
+  final int committedTransactions;
+  final String? processingError;
+}
+
 class RecurringRuleFormScreen extends StatefulWidget {
   final JiveRecurringRule? editingRule;
 
@@ -272,8 +286,27 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
         await service.updateRule(rule);
       }
 
+      int generatedDrafts = 0;
+      int committedTransactions = 0;
+      String? processingError;
+      try {
+        final processResult = await service.processDueRules();
+        generatedDrafts = processResult.generatedDrafts;
+        committedTransactions = processResult.committedTransactions;
+      } catch (e) {
+        processingError = e.toString();
+      }
+
       if (!mounted) return;
-      Navigator.pop(context, true);
+      Navigator.pop(
+        context,
+        RecurringRuleSaveResult(
+          saved: true,
+          generatedDrafts: generatedDrafts,
+          committedTransactions: committedTransactions,
+          processingError: processingError,
+        ),
+      );
     } catch (e) {
       _showMessage('保存失败：$e');
     } finally {
@@ -322,7 +355,7 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _type,
+                  initialValue: _type,
                   decoration: const InputDecoration(labelText: '类型'),
                   items: const [
                     DropdownMenuItem(value: 'expense', child: Text('支出')),
@@ -358,7 +391,7 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
-                  value: _accountId,
+                  initialValue: _accountId,
                   decoration: const InputDecoration(labelText: '账户'),
                   items: _accounts
                       .map(
@@ -376,7 +409,7 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                 ),
                 if (_type == 'transfer')
                   DropdownButtonFormField<int>(
-                    value: _toAccountId,
+                    initialValue: _toAccountId,
                     decoration: const InputDecoration(labelText: '转入账户'),
                     items: _accounts
                         .where((account) => account.id != _accountId)
@@ -399,7 +432,7 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                   ),
                 if (_type != 'transfer')
                   DropdownButtonFormField<_CategoryOption>(
-                    value: _selectedCategoryOption(),
+                    initialValue: _selectedCategoryOption(),
                     decoration: const InputDecoration(labelText: '分类'),
                     items: _visibleCategories
                         .map(
@@ -449,7 +482,7 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: _intervalType,
+                  initialValue: _intervalType,
                   decoration: const InputDecoration(labelText: '周期类型'),
                   items: const [
                     DropdownMenuItem(value: 'day', child: Text('按天')),
@@ -511,19 +544,22 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                RadioListTile<String>(
-                  value: 'draft',
+                RadioGroup<String>(
                   groupValue: _commitMode,
-                  title: const Text('生成草稿'),
                   onChanged: (value) =>
                       setState(() => _commitMode = value ?? 'draft'),
-                ),
-                RadioListTile<String>(
-                  value: 'commit',
-                  groupValue: _commitMode,
-                  title: const Text('直接入账'),
-                  onChanged: (value) =>
-                      setState(() => _commitMode = value ?? 'commit'),
+                  child: Column(
+                    children: const [
+                      RadioListTile<String>(
+                        value: 'draft',
+                        title: Text('生成草稿'),
+                      ),
+                      RadioListTile<String>(
+                        value: 'commit',
+                        title: Text('直接入账'),
+                      ),
+                    ],
+                  ),
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
