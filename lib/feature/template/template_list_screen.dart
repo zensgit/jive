@@ -142,7 +142,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: typeColor.withOpacity(0.1),
+                  color: typeColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(typeIcon, color: typeColor, size: 20),

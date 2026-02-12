@@ -428,7 +428,7 @@ class TagRuleService {
     if (tx == null) return 0;
     if (tx.smartTagOptOutKeys.isEmpty) return 0;
 
-    final filterKeys = tagKeys == null ? null : tagKeys.toSet();
+    final filterKeys = tagKeys?.toSet();
     final original = tx.smartTagOptOutKeys;
     final next = filterKeys == null
         ? <String>[]

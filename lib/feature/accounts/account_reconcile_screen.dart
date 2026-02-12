@@ -234,6 +234,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     }
 
     final existingCount = _result?.entries.length ?? 0;
+    if (!mounted) return;
     final proceed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -504,7 +505,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w600),
       ),
       selected: selected,
-      selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+      selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
       onSelected: (_) {
         setState(() => _summaryMode = mode);
         _persistViewPrefs();
@@ -520,7 +521,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w600),
       ),
       selected: selected,
-      selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+      selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
       onSelected: (_) {
         setState(() => _filter = value);
         _persistViewPrefs();
@@ -537,7 +538,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 14,
             offset: const Offset(0, 8),
           ),
@@ -653,7 +654,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -672,7 +673,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
@@ -710,7 +711,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     final rangeLabel = '${_formatDate(_startDate)} - ${_formatDate(_endDate)}';
     return Material(
       elevation: 6,
-      shadowColor: Colors.black.withOpacity(0.08),
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(18),
       color: Colors.white,
       child: SizedBox(
@@ -938,7 +939,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                         return ChoiceChip(
                           label: Text(label),
                           selected: field == value,
-                          selectedColor: JiveTheme.primaryGreen.withOpacity(
+                          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 
                             0.18,
                           ),
                           onSelected: (_) => setModalState(() => field = value),
@@ -962,7 +963,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                         return ChoiceChip(
                           label: Text(label),
                           selected: direction == value,
-                          selectedColor: JiveTheme.primaryGreen.withOpacity(
+                          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 
                             0.18,
                           ),
                           onSelected: (_) =>
@@ -1118,7 +1119,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
             : EdgeInsets.zero,
         decoration: highlighted
             ? BoxDecoration(
-                color: Colors.orange.withOpacity(0.15),
+                color: Colors.orange.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
               )
             : null,
@@ -1242,7 +1243,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),

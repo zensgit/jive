@@ -126,6 +126,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final accounts = _accountById.values.toList(growable: false);
     final isar = await _ensureIsar();
 
+    if (!mounted) return;
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -164,6 +165,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       return;
     }
 
+    if (!mounted) return;
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -193,10 +195,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         Navigator.pop(context, _hasChanges);
-        return false;
       },
       child: Scaffold(
         appBar: AppBar(
@@ -287,7 +290,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 16,
                 offset: const Offset(0, 6),
               ),
@@ -302,7 +305,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+                    colors: [color.withValues(alpha: 0.15), color.withValues(alpha: 0.05)],
                   ),
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 ),
@@ -318,7 +321,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: color.withOpacity(0.2),
+                                color: color.withValues(alpha: 0.2),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),
@@ -431,7 +434,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: remaining < 0 ? Colors.red.shade50 : color.withOpacity(0.1),
+                              color: remaining < 0 ? Colors.red.shade50 : color.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
@@ -653,11 +656,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: selected
-              ? Border.all(color: JiveTheme.primaryGreen.withOpacity(0.35))
+              ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35))
               : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -758,7 +761,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -800,7 +803,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -853,7 +856,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1038,7 +1041,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         child: Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 16, color: color),
@@ -1089,7 +1092,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1162,7 +1165,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 widthFactor: percent,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: color.withOpacity(0.7 + 0.3 * (1 - index / sortedStats.length)),
+                                    color: color.withValues(alpha: 0.7 + 0.3 * (1 - index / sortedStats.length)),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
@@ -1196,7 +1199,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   if (!isLast) Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey.shade100),
                 ],
               );
-            }).toList(),
+            }),
           ],
         ),
       ),
@@ -1310,6 +1313,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       maxDate = unlinkedTransactions.first.timestamp;
     }
 
+    if (!mounted) return;
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -1508,7 +1512,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             color: Colors.white,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 8,
                                 offset: const Offset(0, -2),
                               ),
@@ -1666,6 +1670,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                           );
                                           if (confirmed != true) return;
                                         }
+                                        if (!sheetContext.mounted) return;
                                         Navigator.pop(sheetContext, true);
                                       },
                                 style: ElevatedButton.styleFrom(
@@ -1789,7 +1794,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+      selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
       onSelected: (_) {
         onChanged(value);
         Navigator.pop(ctx);
@@ -1887,6 +1892,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
 
     if (action == null) return;
+    if (!mounted) return;
 
     if (action == 'unlink') {
       await _unlinkTransaction(tx);
@@ -1952,6 +1958,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       maxDate = sortedByTime.last.timestamp;
     }
 
+    if (!mounted) return;
     final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -2162,7 +2169,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             color: Colors.white,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.08),
+                                color: Colors.black.withValues(alpha: 0.08),
                                 blurRadius: 8,
                                 offset: const Offset(0, -2),
                               ),
@@ -2413,7 +2420,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   message,
                   style: GoogleFonts.lato(
                     fontSize: 12,
-                    color: textColor.withOpacity(0.8),
+                    color: textColor.withValues(alpha: 0.8),
                   ),
                 ),
               ],
@@ -2446,7 +2453,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -2558,7 +2565,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       ),
                       belowBarData: BarAreaData(
                         show: true,
-                        color: themeColor.withOpacity(0.1),
+                        color: themeColor.withValues(alpha: 0.1),
                       ),
                     ),
                   ],
@@ -2596,7 +2603,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? JiveTheme.primaryGreen.withOpacity(0.1) : Colors.grey.shade100,
+          color: selected ? JiveTheme.primaryGreen.withValues(alpha: 0.1) : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: selected ? JiveTheme.primaryGreen : Colors.grey.shade300,
@@ -2687,10 +2694,11 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
         _filterDateRange != null;
     final bottomPadding = 120 + (_batchMode ? 64 : 0) + (hasFilter ? 28 : 0);
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         Navigator.pop(context, _changed);
-        return false;
       },
       child: Scaffold(
         appBar: AppBar(
@@ -3135,7 +3143,7 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
     return ChoiceChip(
       label: Text(label),
       selected: isSelected,
-      selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+      selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
       onSelected: (_) {
         onChanged(value);
         Navigator.pop(ctx);
@@ -3218,11 +3226,11 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: selected
-              ? Border.all(color: JiveTheme.primaryGreen.withOpacity(0.35))
+              ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35))
               : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),

@@ -345,20 +345,21 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return value;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final canSave = _parseNames().isNotEmpty || _selectedSystemNames.isNotEmpty;
-    final hasSystemLibrary = _systemGroups.isNotEmpty;
-    final showBottomBar = _isBatch && !widget.autoBatchAdd && _selectedSystemNames.isNotEmpty;
-    return WillPopScope(
-      onWillPop: () async {
-        _exitWithChanges();
-        return false;
-      },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: Text(widget.title, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+	@override
+	Widget build(BuildContext context) {
+	  final canSave = _parseNames().isNotEmpty || _selectedSystemNames.isNotEmpty;
+	  final hasSystemLibrary = _systemGroups.isNotEmpty;
+	  final showBottomBar = _isBatch && !widget.autoBatchAdd && _selectedSystemNames.isNotEmpty;
+	  return PopScope<Object?>(
+	    canPop: false,
+	    onPopInvokedWithResult: (didPop, result) {
+	      if (didPop) return;
+	      _exitWithChanges();
+	    },
+	    child: Scaffold(
+	      backgroundColor: Colors.white,
+	      appBar: AppBar(
+	        title: Text(widget.title, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
           backgroundColor: Colors.white,
           elevation: 0,
           iconTheme: const IconThemeData(color: Colors.black87),
@@ -417,7 +418,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -454,7 +455,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                     onTap: () => _scrollToIcons(),
                     child: CircleAvatar(
                       radius: 26,
-                      backgroundColor: highlightColor.withOpacity(0.1),
+                      backgroundColor: highlightColor.withValues(alpha: 0.1),
                       child: CategoryService.buildIcon(
                         _selectedIcon,
                         size: 22,
@@ -544,7 +545,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -606,7 +607,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                   onTap: _pickCustomIcon,
                   child: CircleAvatar(
                     radius: 16,
-                    backgroundColor: highlightColor.withOpacity(0.12),
+                    backgroundColor: highlightColor.withValues(alpha: 0.12),
                     child: CategoryService.buildIcon(
                       _selectedIcon,
                       size: 16,
@@ -645,7 +646,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -688,7 +689,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -750,7 +751,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 ),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isSelected ? highlightColor.withOpacity(0.15) : Colors.grey.shade100,
+                    color: isSelected ? highlightColor.withValues(alpha: 0.15) : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isSelected ? highlightColor : Colors.transparent,
@@ -783,7 +784,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -898,7 +899,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                 margin: EdgeInsets.symmetric(vertical: leftRowMargin),
                                 padding: EdgeInsets.symmetric(vertical: leftRowPadding, horizontal: 0),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? JiveTheme.primaryGreen.withOpacity(0.04) : Colors.transparent,
+                                  color: isSelected ? JiveTheme.primaryGreen.withValues(alpha: 0.04) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border(
                                     left: BorderSide(
@@ -983,7 +984,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                               width: iconBox,
                                               height: iconBox,
                                               decoration: BoxDecoration(
-                                                color: isSelected ? highlightColor.withOpacity(0.15) : Colors.transparent,
+                                                color: isSelected ? highlightColor.withValues(alpha: 0.15) : Colors.transparent,
                                                 shape: BoxShape.circle,
                                               ),
                                               child: Center(
@@ -1110,22 +1111,22 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       elevation: 6,
       offset: const Offset(0, 8),
       constraints: const BoxConstraints(minWidth: 120),
-      itemBuilder: (context) {
-        return [
-          for (final columns in const [3, 4, 5, 6])
-            PopupMenuItem(
-              value: columns,
-              height: 32,
-              child: Row(
-                children: [
-                  Icon(Icons.grid_view_rounded, size: 16, color: Colors.grey.shade600),
-                  const SizedBox(width: 6),
-                  Text("${columns}列", style: const TextStyle(fontSize: 12)),
-                  const Spacer(),
-                  if (_systemGridColumns == columns)
-                    Icon(Icons.check, size: 16, color: JiveTheme.primaryGreen),
-                ],
-              ),
+	      itemBuilder: (context) {
+	        return [
+	          for (final columns in const [3, 4, 5, 6])
+	            PopupMenuItem(
+	              value: columns,
+	              height: 32,
+	              child: Row(
+	                children: [
+	                  Icon(Icons.grid_view_rounded, size: 16, color: Colors.grey.shade600),
+	                  const SizedBox(width: 6),
+	                  Text('$columns列', style: const TextStyle(fontSize: 12)),
+	                  const Spacer(),
+	                  if (_systemGridColumns == columns)
+	                    Icon(Icons.check, size: 16, color: JiveTheme.primaryGreen),
+	                ],
+	              ),
             ),
         ];
       },
@@ -1254,7 +1255,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, -4))],
         ),
         child: Row(
           children: [
@@ -1563,12 +1564,12 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return target.clamp(240.0, 640.0);
   }
 
-  double _systemTileHeight(BuildContext context, int columns) {
-    final scale = MediaQuery.textScaleFactorOf(context);
-    double base;
-    if (columns <= 3) {
-      base = 80;
-    } else if (columns == 4) {
+	double _systemTileHeight(BuildContext context, int columns) {
+	  final scale = MediaQuery.textScalerOf(context).scale(14.0) / 14.0;
+	  double base;
+	  if (columns <= 3) {
+	    base = 80;
+	  } else if (columns == 4) {
       base = 72;
     } else if (columns == 5) {
       base = 64;
@@ -1584,10 +1585,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return CategoryService.parseColorHex(_selectedColorHex);
   }
 
-  String _colorHexFromColor(Color color) {
-    final value = color.value.toRadixString(16).padLeft(8, '0');
-    return "#${value.substring(2).toUpperCase()}";
-  }
+	String _colorHexFromColor(Color color) {
+	  final value = color.toARGB32().toRadixString(16).padLeft(8, '0');
+	  return "#${value.substring(2).toUpperCase()}";
+	}
 
   Widget _buildColorPicker() {
     return Row(

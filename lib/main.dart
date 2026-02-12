@@ -874,7 +874,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Future<void> _exportBackup() async {
     try {
       final file = await JiveDataBackupService.exportToFile(_isar);
-      await Share.shareXFiles([XFile(file.path)], text: 'Jive 数据备份');
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'Jive 数据备份',
+        ),
+      );
       _showMessage('已导出数据');
     } catch (e) {
       _showMessage('导出失败：$e');
@@ -888,6 +893,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1702,7 +1708,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF2E7D32).withOpacity(0.4),
+            color: const Color(0xFF2E7D32).withValues(alpha: 0.4),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -1922,7 +1928,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           Container(
             padding: EdgeInsets.all(padding),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(icon, color: Colors.white, size: iconSize),
@@ -2115,9 +2121,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.12),
+                            color: color.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: color.withOpacity(0.4)),
+                            border: Border.all(color: color.withValues(alpha: 0.4)),
                           ),
                           child: Text(
                             tagDisplayName(tag),
@@ -2164,9 +2170,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       width: 18,
       height: 18,
       decoration: BoxDecoration(
-        color: JiveTheme.primaryGreen.withOpacity(0.12),
+        color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
         shape: BoxShape.circle,
-        border: Border.all(color: JiveTheme.primaryGreen.withOpacity(0.4)),
+        border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.4)),
       ),
       child: const Icon(
         Icons.auto_awesome,

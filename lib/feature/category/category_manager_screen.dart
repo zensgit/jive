@@ -426,7 +426,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
   Color _resolveCategoryBackground(JiveCategory category) {
     final color = CategoryService.parseColorHex(category.colorHex);
-    return color?.withOpacity(0.12) ?? Colors.grey.shade100;
+    return color?.withValues(alpha: 0.12) ?? Colors.grey.shade100;
   }
 
   void _switchType(bool showIncome) {
@@ -546,6 +546,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         .map((child) => child.name)
         .toSet();
     final systemLibrary = _service.getSystemLibrary(isIncome: parent.isIncome, includeIncome: true);
+    if (!mounted) return;
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
@@ -625,6 +626,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       return;
     }
     await _reloadAndMarkChanged();
+    if (!mounted) return;
     if (skipped.isNotEmpty) {
       final preview = skipped.take(3).join("、");
       final suffix = skipped.length > 3 ? "等" : "";
@@ -918,6 +920,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         .map((parent) => parent.name)
         .toSet();
     final systemLibrary = _mergeSystemLibraries();
+    if (!mounted) return;
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
@@ -992,6 +995,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       return;
     }
     await _reloadAndMarkChanged();
+    if (!mounted) return;
     if (skipped.isNotEmpty) {
       final preview = skipped.take(3).join("、");
       final suffix = skipped.length > 3 ? "等" : "";
@@ -1134,6 +1138,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     );
     if (targetParent == null) return;
 
+    if (!mounted) return;
     final children = List<JiveCategory>.from(_childrenByParentKey[parent.key] ?? const []);
     if (children.isNotEmpty) {
       final proceed = await showDialog<bool>(
@@ -1187,6 +1192,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         : <JiveCategory>[];
     final totalTxCount = await _countTransactionsForCategories([category, ...children]);
 
+    if (!mounted) return;
     if (children.isNotEmpty) {
       final cascade = await showDialog<bool>(
         context: context,
@@ -1233,6 +1239,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       }
     }
 
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1423,6 +1430,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       list.sort((a, b) => a.order.compareTo(b.order));
     }
 
+    if (!mounted) return null;
     return showModalBottomSheet<_TransferTarget>(
       context: context,
       backgroundColor: Colors.white,
@@ -1458,7 +1466,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
               }
               tiles.add(const Divider(height: 16));
               return tiles;
-            }).toList(),
+            }),
           ],
         ),
       ),
@@ -1930,10 +1938,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         Navigator.pop(context, _hasChanges);
-        return false;
       },
       child: Scaffold(
         backgroundColor: Colors.grey.shade100,
@@ -1983,8 +1992,8 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         : _resolveCategoryColor(parent, fallback: JiveTheme.categoryIconInactive);
 
     return DragTarget<JiveCategory>(
-      onWillAccept: (incoming) => incoming != null && incoming.parentKey != parent.key,
-      onAccept: (incoming) => _moveSubCategoryToParent(incoming, parent),
+      onWillAcceptWithDetails: (details) => details.data.parentKey != parent.key,
+      onAcceptWithDetails: (details) => _moveSubCategoryToParent(details.data, parent),
       builder: (context, candidateData, _) {
         final isTarget = candidateData.isNotEmpty;
         return Container(
@@ -1993,7 +2002,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           decoration: BoxDecoration(
             color: Colors.grey.shade50,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: isTarget ? JiveTheme.primaryGreen.withOpacity(0.4) : Colors.grey.shade200),
+            border: Border.all(color: isTarget ? JiveTheme.primaryGreen.withValues(alpha: 0.4) : Colors.grey.shade200),
           ),
           child: Opacity(
             opacity: isHidden ? 0.6 : 1,
@@ -2101,15 +2110,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         const columns = 5;
         final items = _buildSubGridItems(children, showAddChip: showAddChip);
         return DragTarget<JiveCategory>(
-          onWillAccept: (incoming) => incoming != null && incoming.parentKey != parent.key,
-          onAccept: (incoming) => _moveSubCategoryToParent(incoming, parent),
+          onWillAcceptWithDetails: (details) => details.data.parentKey != parent.key,
+          onAcceptWithDetails: (details) => _moveSubCategoryToParent(details.data, parent),
           builder: (context, candidateData, _) {
             final isTarget = candidateData.isNotEmpty;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
-                border: isTarget ? Border.all(color: JiveTheme.primaryGreen.withOpacity(0.35)) : null,
+                border: isTarget ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35)) : null,
               ),
               padding: const EdgeInsets.all(2),
               child: GridView.builder(
@@ -2172,10 +2181,12 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       );
     }
     return DragTarget<JiveCategory>(
-      onWillAccept: (incoming) {
-        return incoming != null && incoming.key != sub.key && incoming.parentKey != null;
+      onWillAcceptWithDetails: (details) {
+        final incoming = details.data;
+        return incoming.key != sub.key && incoming.parentKey != null;
       },
-      onAccept: (incoming) {
+      onAcceptWithDetails: (details) {
+        final incoming = details.data;
         if (incoming.parentKey == parent.key) {
           _reorderSubCategory(parent, incoming, sub);
         } else {
@@ -2229,7 +2240,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           border: isTarget
-              ? Border.all(color: JiveTheme.primaryGreen.withOpacity(0.35))
+              ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35))
               : Border.all(color: Colors.transparent),
         ),
         child: Column(
