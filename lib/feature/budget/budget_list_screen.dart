@@ -385,6 +385,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
       _loadData();
       return;
     }
+    final messenger = ScaffoldMessenger.of(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -396,10 +397,18 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
         summary: summary,
         currencyService: _currencyService!,
         onDelete: () async {
-          Navigator.pop(ctx);
-          await _budgetService!.deleteBudget(summary.budget.id);
-          if (!mounted) return;
-          _loadData();
+          try {
+            await _budgetService!.deleteBudget(summary.budget.id);
+            if (!ctx.mounted) return;
+            Navigator.of(ctx).pop();
+            _loadData();
+          } catch (e) {
+            if (ctx.mounted) {
+              Navigator.of(ctx).pop();
+            }
+            if (!mounted) return;
+            messenger.showSnackBar(SnackBar(content: Text('删除失败：$e')));
+          }
         },
       ),
     );

@@ -20,13 +20,16 @@ class RecurringService {
 
   final Isar isar;
 
-  Future<List<JiveRecurringRule>> getRules({bool includeInactive = true}) async {
+  Future<List<JiveRecurringRule>> getRules({
+    bool includeInactive = true,
+  }) async {
     final list = includeInactive
         ? await isar.collection<JiveRecurringRule>().where().findAll()
-        : await isar.collection<JiveRecurringRule>()
-            .filter()
-            .isActiveEqualTo(true)
-            .findAll();
+        : await isar
+              .collection<JiveRecurringRule>()
+              .filter()
+              .isActiveEqualTo(true)
+              .findAll();
     list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
     return list;
   }
@@ -48,6 +51,21 @@ class RecurringService {
 
   Future<void> updateRule(JiveRecurringRule rule) async {
     rule.name = rule.name.trim();
+    final previous = await isar.collection<JiveRecurringRule>().get(rule.id);
+    final scheduleChanged =
+        previous == null ||
+        previous.startDate != rule.startDate ||
+        previous.endDate != rule.endDate ||
+        previous.intervalType != rule.intervalType ||
+        previous.intervalValue != rule.intervalValue ||
+        previous.dayOfMonth != rule.dayOfMonth ||
+        previous.dayOfWeek != rule.dayOfWeek;
+    rule.intervalValue = rule.intervalValue <= 0 ? 1 : rule.intervalValue;
+    if (scheduleChanged) {
+      rule
+        ..nextRunAt = _normalizeNextRun(rule, rule.startDate)
+        ..lastRunAt = null;
+    }
     rule.updatedAt = DateTime.now();
     await isar.writeTxn(() async {
       await isar.collection<JiveRecurringRule>().put(rule);
@@ -70,7 +88,8 @@ class RecurringService {
 
   Future<RecurringProcessResult> processDueRules({DateTime? now}) async {
     final reference = now ?? DateTime.now();
-    final rules = await isar.collection<JiveRecurringRule>()
+    final rules = await isar
+        .collection<JiveRecurringRule>()
         .filter()
         .isActiveEqualTo(true)
         .findAll();
@@ -86,6 +105,9 @@ class RecurringService {
     var commitCount = 0;
 
     for (final rule in rules) {
+      if (rule.intervalValue <= 0) {
+        rule.intervalValue = 1;
+      }
       var next = rule.nextRunAt;
       final endDate = rule.endDate;
       while (!next.isAfter(reference)) {
@@ -99,7 +121,13 @@ class RecurringService {
           commitCount += 1;
         }
         rule.lastRunAt = next;
-        next = _computeNextRunAt(rule, next);
+        final advanced = _computeNextRunAt(rule, next);
+        if (!advanced.isAfter(next)) {
+          // Defensive guard: avoid infinite loop on corrupted scheduling data.
+          next = next.add(const Duration(days: 1));
+        } else {
+          next = advanced;
+        }
         rule.nextRunAt = next;
       }
       rule.updatedAt = DateTime.now();
@@ -121,96 +149,118 @@ class RecurringService {
   ) async {
     final recurringKey = _buildRecurringKey(rule.id, runAt);
     if (rule.commitMode == 'draft') {
-      final exists = await isar.collection<JiveAutoDraft>()
-          .filter()
-          .dedupKeyEqualTo(recurringKey)
-          .findFirst();
-      if (exists != null) return _RecurringGenerated.none;
+      var generated = _RecurringGenerated.none;
+      await isar.writeTxn(() async {
+        final exists = await isar
+            .collection<JiveAutoDraft>()
+            .where()
+            .recurringKeyEqualTo(recurringKey)
+            .findFirst();
+        if (exists != null) return;
 
-      final draft = JiveAutoDraft()
+        final draft = JiveAutoDraft()
+          ..amount = rule.amount
+          ..source = 'Recurring'
+          ..timestamp = runAt
+          ..rawText = rule.name
+          ..metadataJson = null
+          ..type = rule.type
+          ..categoryKey = rule.categoryKey
+          ..subCategoryKey = rule.subCategoryKey
+          ..category = null
+          ..subCategory = null
+          ..accountId = rule.accountId
+          ..toAccountId = rule.toAccountId
+          ..dedupKey = recurringKey
+          ..createdAt = DateTime.now()
+          ..tagKeys = List<String>.from(rule.tagKeys)
+          ..recurringRuleId = rule.id
+          ..recurringKey = recurringKey;
+        await isar.collection<JiveAutoDraft>().put(draft);
+        generated = _RecurringGenerated.draft;
+      });
+      return generated;
+    }
+
+    var generated = _RecurringGenerated.none;
+    JiveTransaction? createdTx;
+    await isar.writeTxn(() async {
+      final existing = await isar
+          .collection<JiveTransaction>()
+          .where()
+          .recurringKeyEqualTo(recurringKey)
+          .findFirst();
+      if (existing != null) return;
+
+      final tx = JiveTransaction()
         ..amount = rule.amount
         ..source = 'Recurring'
         ..timestamp = runAt
         ..rawText = rule.name
-        ..metadataJson = null
         ..type = rule.type
         ..categoryKey = rule.categoryKey
         ..subCategoryKey = rule.subCategoryKey
         ..category = null
         ..subCategory = null
+        ..note = rule.note
         ..accountId = rule.accountId
         ..toAccountId = rule.toAccountId
-        ..dedupKey = recurringKey
-        ..createdAt = DateTime.now()
+        ..projectId = rule.projectId
         ..tagKeys = List<String>.from(rule.tagKeys)
+        ..smartTagKeys = []
         ..recurringRuleId = rule.id
         ..recurringKey = recurringKey;
-
-      await isar.writeTxn(() async {
-        await isar.collection<JiveAutoDraft>().put(draft);
-      });
-      return _RecurringGenerated.draft;
-    }
-
-    final existing = await isar.collection<JiveTransaction>()
-        .filter()
-        .recurringKeyEqualTo(recurringKey)
-        .findFirst();
-    if (existing != null) return _RecurringGenerated.none;
-
-    final tx = JiveTransaction()
-      ..amount = rule.amount
-      ..source = 'Recurring'
-      ..timestamp = runAt
-      ..rawText = rule.name
-      ..type = rule.type
-      ..categoryKey = rule.categoryKey
-      ..subCategoryKey = rule.subCategoryKey
-      ..category = null
-      ..subCategory = null
-      ..note = rule.note
-      ..accountId = rule.accountId
-      ..toAccountId = rule.toAccountId
-      ..projectId = rule.projectId
-      ..tagKeys = List<String>.from(rule.tagKeys)
-      ..smartTagKeys = []
-      ..recurringRuleId = rule.id
-      ..recurringKey = recurringKey;
-
-    await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
+      createdTx = tx;
+      generated = _RecurringGenerated.commit;
     });
-    if (tx.tagKeys.isNotEmpty) {
-      await TagService(isar).markTagsUsed(tx.tagKeys, tx.timestamp);
+    if (createdTx != null && createdTx!.tagKeys.isNotEmpty) {
+      await TagService(
+        isar,
+      ).markTagsUsed(createdTx!.tagKeys, createdTx!.timestamp);
     }
-    return _RecurringGenerated.commit;
+    return generated;
   }
 
   DateTime _computeNextRunAt(JiveRecurringRule rule, DateTime from) {
+    final safeInterval = rule.intervalValue <= 0 ? 1 : rule.intervalValue;
     switch (rule.intervalType) {
       case 'day':
-        return from.add(Duration(days: rule.intervalValue));
+        return from.add(Duration(days: safeInterval));
       case 'week':
-        return from.add(Duration(days: 7 * rule.intervalValue));
+        return from.add(Duration(days: 7 * safeInterval));
       case 'year':
-        return _addYears(from, rule.intervalValue, rule.dayOfMonth);
+        return _addYears(from, safeInterval, rule.dayOfMonth);
       case 'month':
       default:
-        return _addMonths(from, rule.intervalValue, rule.dayOfMonth);
+        return _addMonths(from, safeInterval, rule.dayOfMonth);
     }
   }
 
   DateTime _normalizeNextRun(JiveRecurringRule rule, DateTime start) {
-    final base = DateTime(start.year, start.month, start.day, start.hour, start.minute);
+    final base = DateTime(
+      start.year,
+      start.month,
+      start.day,
+      start.hour,
+      start.minute,
+    );
+    final safeInterval = rule.intervalValue <= 0 ? 1 : rule.intervalValue;
     if (rule.intervalType == 'week' && rule.dayOfWeek != null) {
-      final diff = (rule.dayOfWeek! - base.weekday) % 7;
+      final diff = (rule.dayOfWeek! - base.weekday + 7) % 7;
       return base.add(Duration(days: diff));
     }
     if (rule.intervalType == 'month' && rule.dayOfMonth != null) {
-      return _alignDayOfMonth(base, rule.dayOfMonth!);
+      final aligned = _alignDayOfMonth(base, rule.dayOfMonth!);
+      return aligned.isBefore(base)
+          ? _addMonths(aligned, safeInterval, rule.dayOfMonth)
+          : aligned;
     }
     if (rule.intervalType == 'year' && rule.dayOfMonth != null) {
-      return _alignDayOfMonth(base, rule.dayOfMonth!);
+      final aligned = _alignDayOfMonth(base, rule.dayOfMonth!);
+      return aligned.isBefore(base)
+          ? _addYears(aligned, safeInterval, rule.dayOfMonth)
+          : aligned;
     }
     return base;
   }
@@ -271,7 +321,11 @@ class RecurringService {
   }
 
   String _buildRecurringKey(int ruleId, DateTime runAt) {
-    final dayKey = DateTime(runAt.year, runAt.month, runAt.day).toIso8601String();
+    final dayKey = DateTime(
+      runAt.year,
+      runAt.month,
+      runAt.day,
+    ).toIso8601String();
     return 'recurring:$ruleId:$dayKey';
   }
 }

@@ -21,6 +21,7 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
   bool _isLoading = true;
   bool _isProcessing = false;
   List<JiveRecurringRule> _rules = [];
+  String? _loadErrorMessage;
 
   @override
   void initState() {
@@ -29,15 +30,31 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
   }
 
   Future<void> _loadRules() async {
-    setState(() => _isLoading = true);
-    final isar = await _ensureIsar();
-    final service = RecurringService(isar);
-    final rules = await service.getRules();
-    if (!mounted) return;
-    setState(() {
-      _rules = rules;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _loadErrorMessage = null;
+      });
+    }
+    try {
+      final isar = await _ensureIsar();
+      final service = RecurringService(isar);
+      final rules = await service.getRules();
+      if (!mounted) return;
+      setState(() {
+        _rules = rules;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _rules = [];
+        _loadErrorMessage = '加载周期规则失败：$e';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Future<Isar> _ensureIsar() async {
@@ -192,9 +209,45 @@ class _RecurringRuleListScreenState extends State<RecurringRuleListScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _loadErrorMessage != null
+          ? _buildLoadErrorState()
           : _rules.isEmpty
           ? _buildEmptyState()
           : _buildList(),
+    );
+  }
+
+  Widget _buildLoadErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 56, color: Colors.red.shade300),
+            const SizedBox(height: 12),
+            Text(
+              '周期规则加载失败',
+              style: GoogleFonts.lato(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _loadErrorMessage ?? '',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _loadRules,
+              icon: const Icon(Icons.refresh),
+              label: const Text('重试'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

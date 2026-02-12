@@ -155,6 +155,76 @@ void main() {
     expect(await isar.collection<JiveAutoDraft>().count(), 0);
     expect(await isar.collection<JiveTransaction>().count(), 0);
   });
+
+  test('weekly normalization uses next future weekday', () async {
+    final rule = await service.createRule(
+      _buildRule(
+        name: '每周一执行',
+        commitMode: 'draft',
+        intervalType: 'week',
+        intervalValue: 1,
+        dayOfWeek: DateTime.monday,
+        startDate: DateTime(2024, 1, 3, 9), // Wednesday
+      ),
+    );
+
+    expect(rule.nextRunAt, DateTime(2024, 1, 8, 9));
+  });
+
+  test('updateRule recalculates nextRunAt when schedule changes', () async {
+    final created = await service.createRule(
+      _buildRule(
+        name: '周期更新测试',
+        commitMode: 'draft',
+        intervalType: 'month',
+        intervalValue: 1,
+        dayOfMonth: 10,
+        startDate: DateTime(2024, 1, 10),
+      ),
+    );
+
+    created
+      ..startDate = DateTime(2024, 2, 20)
+      ..dayOfMonth = 25
+      ..intervalType = 'month'
+      ..intervalValue = 1;
+    await service.updateRule(created);
+
+    final saved = await isar.collection<JiveRecurringRule>().get(created.id);
+    expect(saved, isNotNull);
+    expect(saved!.nextRunAt, DateTime(2024, 2, 25));
+    expect(saved.lastRunAt, isNull);
+  });
+
+  test(
+    'processDueRules clamps invalid intervalValue to avoid infinite loop',
+    () async {
+      final created = await service.createRule(
+        _buildRule(
+          name: '非法间隔防护',
+          commitMode: 'draft',
+          intervalType: 'day',
+          intervalValue: 1,
+          startDate: DateTime(2024, 1, 1),
+        ),
+      );
+
+      await isar.writeTxn(() async {
+        created.intervalValue = 0;
+        await isar.collection<JiveRecurringRule>().put(created);
+      });
+
+      final result = await service.processDueRules(
+        now: DateTime(2024, 1, 1, 12),
+      );
+      expect(result.generatedDrafts, 1);
+
+      final saved = await isar.collection<JiveRecurringRule>().get(created.id);
+      expect(saved, isNotNull);
+      expect(saved!.intervalValue, 1);
+      expect(saved.nextRunAt.isAfter(DateTime(2024, 1, 1, 12)), isTrue);
+    },
+  );
 }
 
 JiveRecurringRule _buildRule({
@@ -164,6 +234,7 @@ JiveRecurringRule _buildRule({
   required int intervalValue,
   required DateTime startDate,
   int? dayOfMonth,
+  int? dayOfWeek,
   bool isActive = true,
 }) {
   final now = DateTime.now();
@@ -184,7 +255,7 @@ JiveRecurringRule _buildRule({
     ..intervalType = intervalType
     ..intervalValue = intervalValue
     ..dayOfMonth = dayOfMonth
-    ..dayOfWeek = null
+    ..dayOfWeek = dayOfWeek
     ..nextRunAt = startDate
     ..lastRunAt = null
     ..isActive = isActive

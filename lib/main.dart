@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -161,6 +162,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _permissionDialogVisible = false;
   final ValueNotifier<int> _dataReloadSignal = ValueNotifier(0);
   final Random _random = Random();
+  bool _isProcessingRecurringRules = false;
 
   // 多币种支持
   String _baseCurrency = 'CNY';
@@ -190,7 +192,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkAutoPermissions();
-      _processRecurringRules();
+      unawaited(_processRecurringRules());
     }
   }
 
@@ -219,14 +221,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _processRecurringRules() async {
-    if (!_dbReady) return;
-    final result = await RecurringService(_isar).processDueRules();
-    if (result.generatedDrafts > 0) {
-      await _loadAutoDraftCount();
-    }
-    if (result.committedTransactions > 0) {
-      await _loadTransactions();
-      _notifyDataChanged();
+    if (!_dbReady || _isProcessingRecurringRules) return;
+    _isProcessingRecurringRules = true;
+    try {
+      final result = await RecurringService(_isar).processDueRules();
+      if (result.generatedDrafts > 0) {
+        await _loadAutoDraftCount();
+      }
+      if (result.committedTransactions > 0) {
+        await _loadTransactions();
+        _notifyDataChanged();
+      }
+    } catch (e) {
+      debugPrint('Recurring processing failed: $e');
+    } finally {
+      _isProcessingRecurringRules = false;
     }
   }
 

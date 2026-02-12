@@ -17,6 +17,8 @@ ACTIVITY="${APP_ID}/com.jive.app.MainActivity"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 OUT_DIR="/tmp/jive-verify-${STAMP}"
 mkdir -p "${OUT_DIR}"
+ORIG_ACCELEROMETER_ROTATION=""
+ORIG_USER_ROTATION=""
 
 log() {
   echo "[verify] $*"
@@ -150,10 +152,22 @@ assert_text_exists() {
   fi
 }
 
+restore_rotation() {
+  if [[ -n "${ORIG_ACCELEROMETER_ROTATION}" ]]; then
+    adb shell settings put system accelerometer_rotation "${ORIG_ACCELEROMETER_ROTATION}" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "${ORIG_USER_ROTATION}" ]]; then
+    adb shell settings put system user_rotation "${ORIG_USER_ROTATION}" >/dev/null 2>&1 || true
+  fi
+}
+
 log "artifacts dir: ${OUT_DIR}"
 adb get-state >/dev/null 2>&1 || fail "no adb device"
+trap restore_rotation EXIT
 
 log "force portrait for stable coordinates"
+ORIG_ACCELEROMETER_ROTATION="$(adb shell settings get system accelerometer_rotation 2>/dev/null | tr -d '\r' | tail -n 1)"
+ORIG_USER_ROTATION="$(adb shell settings get system user_rotation 2>/dev/null | tr -d '\r' | tail -n 1)"
 adb shell settings put system accelerometer_rotation 0 >/dev/null
 adb shell settings put system user_rotation 0 >/dev/null
 sleep 1

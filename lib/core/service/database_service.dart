@@ -38,6 +38,7 @@ class DatabaseService {
     JiveProjectSchema,
     JiveCurrencySchema,
     JiveExchangeRateSchema,
+    JiveExchangeRateHistorySchema,
     JiveCurrencyPreferenceSchema,
     JiveRecurringRuleSchema,
   ];
@@ -63,10 +64,7 @@ class DatabaseService {
     _instance = await Isar.open(
       schemas,
       directory: dir.path,
-    ).timeout(
-      _openTimeout,
-      onTimeout: () => throw TimeoutException('打开数据库超时'),
-    );
+    ).timeout(_openTimeout, onTimeout: () => throw TimeoutException('打开数据库超时'));
     return _instance!;
   }
 
