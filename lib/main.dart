@@ -23,6 +23,7 @@ import 'core/database/tag_rule_model.dart';
 import 'core/database/currency_model.dart';
 import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
+import 'core/service/category_icon_style.dart';
 import 'core/service/currency_service.dart';
 import 'core/service/transaction_service.dart';
 import 'core/service/auto_draft_service.dart';
@@ -60,6 +61,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
   await JiveLogger.init();
+  final iconStyle = await CategoryIconStyleStore.load();
+  CategoryIconStyleConfig.current = iconStyle;
   runApp(const JiveApp());
 }
 
@@ -68,28 +71,33 @@ class JiveApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Jive 积叶',
-      debugShowCheckedModeBanner: false,
-      theme: JiveTheme.lightTheme,
-      darkTheme: JiveTheme.darkTheme,
-      themeMode: ThemeMode.system, // 跟随系统主题
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-      localeResolutionCallback: (locale, supportedLocales) {
-        if (locale == null) return supportedLocales.first;
-        for (final supported in supportedLocales) {
-          if (supported.languageCode == locale.languageCode) {
-            return supported;
-          }
-        }
-        return supportedLocales.first;
+    return ValueListenableBuilder<CategoryIconStyle>(
+      valueListenable: CategoryIconStyleConfig.notifier,
+      builder: (context, _, __) {
+        return MaterialApp(
+          title: 'Jive 积叶',
+          debugShowCheckedModeBanner: false,
+          theme: JiveTheme.lightTheme,
+          darkTheme: JiveTheme.darkTheme,
+          themeMode: ThemeMode.system, // 跟随系统主题
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+          localeResolutionCallback: (locale, supportedLocales) {
+            if (locale == null) return supportedLocales.first;
+            for (final supported in supportedLocales) {
+              if (supported.languageCode == locale.languageCode) {
+                return supported;
+              }
+            }
+            return supportedLocales.first;
+          },
+          home: const MainScreen(),
+        );
       },
-      home: const MainScreen(),
     );
   }
 }
@@ -1412,6 +1420,70 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               onTap: () async {
                                 Navigator.pop(context);
                                 await _openCategoryManager();
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.palette_outlined),
+                              title: const Text("分类图标风格"),
+                              subtitle: Text(CategoryIconStyleConfig.current.label),
+                              onTap: () async {
+                                final current = CategoryIconStyleConfig.current;
+                                var selected = current;
+                                final picked = await showDialog<CategoryIconStyle>(
+                                  context: context,
+                                  builder: (dialogContext) => StatefulBuilder(
+                                    builder: (dialogContext, setDialogState) {
+                                      return AlertDialog(
+                                        title: const Text("分类图标风格"),
+                                        content: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            ListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              leading: Icon(
+                                                selected == CategoryIconStyle.colored
+                                                    ? Icons.radio_button_checked
+                                                    : Icons.radio_button_unchecked,
+                                                color: JiveTheme.primaryGreen,
+                                              ),
+                                              title: Text(CategoryIconStyle.colored.label),
+                                              onTap: () => setDialogState(
+                                                () => selected = CategoryIconStyle.colored,
+                                              ),
+                                            ),
+                                            ListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              leading: Icon(
+                                                selected == CategoryIconStyle.tinted
+                                                    ? Icons.radio_button_checked
+                                                    : Icons.radio_button_unchecked,
+                                                color: JiveTheme.primaryGreen,
+                                              ),
+                                              title: Text(CategoryIconStyle.tinted.label),
+                                              onTap: () => setDialogState(
+                                                () => selected = CategoryIconStyle.tinted,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(dialogContext),
+                                            child: const Text("取消"),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(dialogContext, selected),
+                                            child: const Text("确定"),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+                                );
+                                if (picked == null || picked == current) return;
+                                await CategoryIconStyleStore.save(picked);
+                                CategoryIconStyleConfig.current = picked;
+                                setSheetState(() {});
                               },
                             ),
                             ListTile(
