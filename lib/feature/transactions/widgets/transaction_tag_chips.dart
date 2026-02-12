@@ -54,7 +54,7 @@ class TransactionTagChips extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: JiveTheme.accentLime.withOpacity(0.3),
+        color: JiveTheme.accentLime.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: JiveTheme.accentLime,

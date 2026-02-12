@@ -83,3 +83,24 @@
 ## 7. 结论更新
 - 色卡与标签模块分析噪音已从 `86` 收敛到 `0`（按 `--no-fatal-infos` 口径）。
 - `1+2` 已完成：异步上下文安全与 `RadioGroup` 迁移已落地，并通过回归测试。
+
+## 8. 继续推进（Transactions 模块）
+### 8.1 本轮新增修复
+- `lib/feature/transactions/*` 低风险清理：
+  - 移除 `unused import`、`duplicate import`、`unreachable switch default`
+  - 批量迁移 `withOpacity(...)` -> `withValues(alpha: ...)`
+  - 补全若干 `if` 语句花括号（lint 一致性）
+- 中风险兼容修复：
+  - `add_transaction_screen.dart` / `transaction_detail_screen.dart` 增加 async 后 `mounted/context.mounted` 防护
+  - `WillPopScope` -> `PopScope` 迁移（两处）
+
+### 8.2 本轮验证结果
+- 命令：`flutter analyze --no-fatal-infos lib/feature/transactions`
+  - 结果：`51 issues found` -> `10 issues found` -> `No issues found!`
+- 命令：`flutter test`
+  - 结果：`All tests passed!`
+
+## 9. 总体状态
+- `lib/feature/tag`：`No issues found!`（`--no-fatal-infos`）
+- `lib/feature/transactions`：`No issues found!`（`--no-fatal-infos`）
+- 回归测试：通过（`flutter test`）
