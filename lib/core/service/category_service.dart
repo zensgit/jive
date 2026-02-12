@@ -1236,6 +1236,7 @@ class CategoryService {
     required String iconName,
     String? colorHex,
     bool isSystem = false,
+    bool iconForceTinted = false,
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return null;
@@ -1273,6 +1274,7 @@ class CategoryService {
       ..name = trimmed
       ..iconName = iconName
       ..colorHex = _normalizeColorHex(colorHex)
+      ..iconForceTinted = iconForceTinted
       ..parentKey = parent.key
       ..order = baseOrder ?? (last?.order ?? -1) + 1
       ..isSystem = isSystem
@@ -1293,6 +1295,7 @@ class CategoryService {
     required bool isIncome,
     String? colorHex,
     bool isSystem = false,
+    bool iconForceTinted = false,
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) return null;
@@ -1330,6 +1333,7 @@ class CategoryService {
       ..name = trimmed
       ..iconName = iconName
       ..colorHex = _normalizeColorHex(colorHex)
+      ..iconForceTinted = iconForceTinted
       ..parentKey = null
       ..order = baseOrder ?? (last?.order ?? -1) + 1
       ..isSystem = isSystem

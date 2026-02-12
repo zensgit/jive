@@ -22,7 +22,7 @@ class CategoryCreateScreen extends StatefulWidget {
   final Set<String> existingNames;
   final String? initialGroupName;
   final bool autoBatchAdd;
-  final Future<bool> Function(SystemCategorySuggestion suggestion, String? colorHex)? onBatchAdd;
+  final Future<bool> Function(SystemCategorySuggestion suggestion, String? colorHex, bool iconForceTinted)? onBatchAdd;
 
   const CategoryCreateScreen({
     super.key,
@@ -55,6 +55,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   late String _selectedIcon;
   String? _lastAutoFilledName;
   String? _selectedColorHex;
+  bool _iconForceTinted = false;
   String _iconQuery = "";
   String _systemQuery = "";
   bool _isBatch = false;
@@ -278,6 +279,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       context,
       initialIcon: _selectedIcon,
       forSystemCategory: false,
+      forceTinted: _iconForceTinted,
     );
     if (selected != null) {
       _applyIconSelection(selected);
@@ -291,6 +293,8 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         builder: (context) => CategoryIconPickerScreen(
           initialIcon: _selectedIcon,
           initialMode: CategoryIconPickerMode.emoji,
+          forSystemCategory: false,
+          forceTinted: _iconForceTinted,
         ),
         fullscreenDialog: true,
       ),
@@ -465,6 +469,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                         size: 22,
                         color: highlightColor,
                         isSystemCategory: false,
+                        forceTinted: _iconForceTinted,
                       ),
                     ),
                   ),
@@ -526,6 +531,19 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
             ],
             const SizedBox(height: 6),
             _buildColorPicker(),
+            const SizedBox(height: 2),
+            SwitchListTile(
+              dense: true,
+              visualDensity: const VisualDensity(horizontal: -2, vertical: -4),
+              contentPadding: EdgeInsets.zero,
+              value: _iconForceTinted,
+              onChanged: (value) => setState(() => _iconForceTinted = value),
+              title: const Text("图标强制单色", style: TextStyle(fontSize: 11)),
+              subtitle: Text(
+                "即使在彩色模式下也显示为单色（跟随分类颜色）",
+                style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+              ),
+            ),
             const SizedBox(height: 2),
             if (!showSystemBatch && !isParentCreate)
               SwitchListTile(
@@ -618,6 +636,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                       size: 16,
                       color: highlightColor,
                       isSystemCategory: false,
+                      forceTinted: _iconForceTinted,
                     ),
                   ),
                 ),
@@ -632,6 +651,19 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
           ],
           const SizedBox(height: 10),
           _buildColorPicker(),
+          const SizedBox(height: 2),
+          SwitchListTile(
+            dense: true,
+            visualDensity: const VisualDensity(horizontal: -2, vertical: -4),
+            contentPadding: EdgeInsets.zero,
+            value: _iconForceTinted,
+            onChanged: (value) => setState(() => _iconForceTinted = value),
+            title: const Text("图标强制单色", style: TextStyle(fontSize: 11)),
+            subtitle: Text(
+              "即使在彩色模式下也显示为单色（跟随分类颜色）",
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+            ),
+          ),
         ],
       ),
     );
@@ -767,6 +799,8 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                     entry.name,
                     size: 20,
                     color: isSelected ? highlightColor : JiveTheme.categoryIconInactive,
+                    isSystemCategory: false,
+                    forceTinted: _iconForceTinted,
                   ),
                 ),
               );
@@ -1003,6 +1037,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                                           ? highlightColor
                                                           : JiveTheme.categoryIconInactive),
                                                   isSystemCategory: true,
+                                                  forceTinted: _iconForceTinted,
                                                 ),
                                               ),
                                             ),
@@ -1214,7 +1249,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   Future<void> _applyBatchAdd(SystemCategorySuggestion suggestion) async {
     final handler = widget.onBatchAdd;
     if (handler == null) return;
-    final added = await handler(suggestion, _selectedColorHex);
+    final added = await handler(suggestion, _selectedColorHex, _iconForceTinted);
     if (!mounted) return;
     ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
     if (added) {
@@ -1296,6 +1331,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         names: const [],
         iconName: _selectedIcon,
         colorHex: _selectedColorHex,
+        iconForceTinted: _iconForceTinted,
         hasChanges: _hasAutoChanges,
       ),
     );
@@ -1316,6 +1352,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
           names: selections.map((entry) => entry.name).toList(),
           iconName: _selectedIcon,
           colorHex: _selectedColorHex,
+          iconForceTinted: _iconForceTinted,
           autoMatchIcon: false,
           systemSelections: selections,
         ),
@@ -1330,6 +1367,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         names: names,
         iconName: _selectedIcon,
         colorHex: _selectedColorHex,
+        iconForceTinted: _iconForceTinted,
         autoMatchIcon: _autoMatchIcon,
       ),
     );

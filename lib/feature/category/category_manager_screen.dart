@@ -563,13 +563,14 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           existingNames: existingNames,
           initialGroupName: parent.name,
           autoBatchAdd: true,
-          onBatchAdd: (suggestion, colorHex) async {
+          onBatchAdd: (suggestion, colorHex, iconForceTinted) async {
             final created = await _service.createSubCategory(
               parent: parent,
               name: suggestion.name,
               iconName: suggestion.iconName,
               colorHex: colorHex,
               isSystem: addAsSystem,
+              iconForceTinted: iconForceTinted,
             );
             return created != null;
           },
@@ -593,6 +594,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           iconName: item.iconName,
           colorHex: result.colorHex,
           isSystem: addAsSystem,
+          iconForceTinted: result.iconForceTinted,
         );
         if (created == null) {
           skipped.add(item.name);
@@ -610,6 +612,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           name: name,
           iconName: iconName,
           colorHex: result.colorHex,
+          iconForceTinted: result.iconForceTinted,
         );
         if (created == null) {
           skipped.add(name);
@@ -800,6 +803,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     String name, {
     String? colorHex,
     String? iconName,
+    bool iconForceTinted = false,
   }) async {
     final existing = await _isar.collection<JiveCategory>()
         .filter()
@@ -816,6 +820,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       isIncome: _showIncome,
       isSystem: false,
       colorHex: colorHex,
+      iconForceTinted: iconForceTinted,
     );
   }
 
@@ -957,6 +962,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         selection.name,
         colorHex: result.colorHex,
         iconName: selection.iconName,
+        iconForceTinted: result.iconForceTinted,
       );
       if (parent != null) {
         createdAny = true;
@@ -979,6 +985,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         iconName: iconName,
         isIncome: _showIncome,
         colorHex: result.colorHex,
+        iconForceTinted: result.iconForceTinted,
       );
       if (created == null) {
         skipped.add(name);

@@ -55,6 +55,7 @@ import 'feature/recurring/recurring_rule_list_screen.dart';
 import 'feature/currency/currency_settings_screen.dart';
 import 'feature/currency/currency_converter_screen.dart';
 import 'feature/budget/budget_list_screen.dart';
+import 'feature/settings/settings_screen.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -1423,80 +1424,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               },
                             ),
                             ListTile(
-                              leading: const Icon(Icons.palette_outlined),
-                              title: const Text("分类图标风格"),
-                              subtitle: Text(CategoryIconStyleConfig.current.label),
+                              leading: const Icon(Icons.settings_outlined),
+                              title: const Text("设置"),
+                              subtitle: const Text("外观与偏好"),
                               onTap: () async {
-                                final current = CategoryIconStyleConfig.current;
-                                var selected = current;
-                                final picked = await showDialog<CategoryIconStyle>(
-                                  context: context,
-                                  builder: (dialogContext) => StatefulBuilder(
-                                    builder: (dialogContext, setDialogState) {
-                                      return AlertDialog(
-                                        title: const Text("分类图标风格"),
-                                        content: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            ListTile(
-                                              contentPadding: EdgeInsets.zero,
-                                              leading: Icon(
-                                                selected == CategoryIconStyle.colored
-                                                    ? Icons.radio_button_checked
-                                                    : Icons.radio_button_unchecked,
-                                                color: JiveTheme.primaryGreen,
-                                              ),
-                                              title: Text(CategoryIconStyle.colored.label),
-                                              onTap: () => setDialogState(
-                                                () => selected = CategoryIconStyle.colored,
-                                              ),
-                                            ),
-                                            ListTile(
-                                              contentPadding: EdgeInsets.zero,
-                                              leading: Icon(
-                                                selected == CategoryIconStyle.tinted
-                                                    ? Icons.radio_button_checked
-                                                    : Icons.radio_button_unchecked,
-                                                color: JiveTheme.primaryGreen,
-                                              ),
-                                              title: Text(CategoryIconStyle.tinted.label),
-                                              onTap: () => setDialogState(
-                                                () => selected = CategoryIconStyle.tinted,
-                                              ),
-                                            ),
-                                            ListTile(
-                                              contentPadding: EdgeInsets.zero,
-                                              leading: Icon(
-                                                selected == CategoryIconStyle.hybrid
-                                                    ? Icons.radio_button_checked
-                                                    : Icons.radio_button_unchecked,
-                                                color: JiveTheme.primaryGreen,
-                                              ),
-                                              title: Text(CategoryIconStyle.hybrid.label),
-                                              onTap: () => setDialogState(
-                                                () => selected = CategoryIconStyle.hybrid,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(dialogContext),
-                                            child: const Text("取消"),
-                                          ),
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(dialogContext, selected),
-                                            child: const Text("确定"),
-                                          ),
-                                        ],
-                                      );
-                                    },
+                                Navigator.pop(context);
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const SettingsScreen(),
                                   ),
                                 );
-                                if (picked == null || picked == current) return;
-                                await CategoryIconStyleStore.save(picked);
-                                CategoryIconStyleConfig.current = picked;
-                                setSheetState(() {});
                               },
                             ),
                             ListTile(

@@ -716,13 +716,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           existingNames: existingNames,
           initialGroupName: parent.name,
           autoBatchAdd: true,
-          onBatchAdd: (suggestion, colorHex) async {
+          onBatchAdd: (suggestion, colorHex, iconForceTinted) async {
             final created = await CategoryService(_isar).createSubCategory(
               parent: parent,
               name: suggestion.name,
               iconName: suggestion.iconName,
               colorHex: colorHex,
               isSystem: true,
+              iconForceTinted: iconForceTinted,
             );
             return created != null;
           },
@@ -747,6 +748,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           iconName: item.iconName,
           colorHex: result.colorHex,
           isSystem: true,
+          iconForceTinted: result.iconForceTinted,
         );
         if (created == null) {
           skipped.add(item.name);
@@ -766,6 +768,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           name: name,
           iconName: iconName,
           colorHex: result.colorHex,
+          iconForceTinted: result.iconForceTinted,
         );
         if (created == null) {
           skipped.add(name);

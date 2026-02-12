@@ -79,6 +79,14 @@ tap_text_once() {
     line="$(grep -m1 "content-desc=\"${text}" "${xml}" || true)"
   fi
   if [[ -z "${line}" ]]; then
+    # Flutter a11y nodes sometimes merge section title + tile title + subtitle
+    # into a single content-desc with line breaks.
+    line="$(grep -m1 "content-desc=\"[^\"]*${text}[^\"]*\".*clickable=\"true\"" "${xml}" || true)"
+  fi
+  if [[ -z "${line}" ]]; then
+    line="$(grep -m1 "content-desc=\"[^\"]*${text}[^\"]*\"" "${xml}" || true)"
+  fi
+  if [[ -z "${line}" ]]; then
     return 1
   fi
   bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/p')"
@@ -162,6 +170,108 @@ tap_top_right_clickable() {
   return 0
 }
 
+tap_top_bar_clickable_rank_from_right() {
+  # Tap the Nth clickable element in the top bar area (rank 1 = rightmost).
+  local xml="$1"
+  local rank="${2:-1}"
+  local candidate bounds x1 y1 x2 y2 h
+
+  candidate="$(
+    grep 'clickable="true"' "${xml}" 2>/dev/null \
+      | while IFS= read -r line; do
+          bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\\[([0-9]+),([0-9]+)\\]\\[([0-9]+),([0-9]+)\\]".*/\\1 \\2 \\3 \\4/p')"
+          if [[ -z "${bounds}" ]]; then
+            continue
+          fi
+          read -r x1 y1 x2 y2 <<<"${bounds}"
+          h="$((y2 - y1))"
+          # Some devices/layouts push the app bar slightly lower.
+          if (( y2 <= 420 )) && (( h >= 80 )); then
+            # Sort key: x2 desc => rightmost first
+            echo "${x2} ${x1} ${y1} ${x2} ${y2}"
+          fi
+        done \
+      | sort -nr -k1,1 \
+      | sed -n "${rank}p"
+  )"
+
+  if [[ -z "${candidate}" ]]; then
+    return 1
+  fi
+
+  read -r _ x1 y1 x2 y2 <<<"${candidate}"
+  tap_xy "$(((x1 + x2) / 2))" "$(((y1 + y2) / 2))"
+  return 0
+}
+
+tap_first_parent_expand_toggle() {
+  # Tap the left expand/collapse button of the first parent card (CategoryManagerScreen).
+  local xml="$1"
+  local candidate bounds x1 y1 x2 y2 h w
+
+  candidate="$(
+    grep 'clickable="true"' "${xml}" 2>/dev/null \
+      | while IFS= read -r line; do
+          bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\\[([0-9]+),([0-9]+)\\]\\[([0-9]+),([0-9]+)\\]".*/\\1 \\2 \\3 \\4/p')"
+          if [[ -z "${bounds}" ]]; then
+            continue
+          fi
+          read -r x1 y1 x2 y2 <<<"${bounds}"
+          h="$((y2 - y1))"
+          w="$((x2 - x1))"
+          # Body starts at y ~= 336. Pick the top-left-ish clickable button.
+          if (( y1 >= 330 )) && (( y2 <= 1200 )) && (( x2 <= 360 )) && (( h >= 80 )) && (( w >= 80 )); then
+            echo "${y1} ${x2} ${x1} ${y1} ${x2} ${y2}"
+          fi
+        done \
+      | sort -n -k1,1 -k2,2 \
+      | head -n 1
+  )"
+
+  if [[ -z "${candidate}" ]]; then
+    return 1
+  fi
+
+  read -r _ _ x1 y1 x2 y2 <<<"${candidate}"
+  tap_xy "$(((x1 + x2) / 2))" "$(((y1 + y2) / 2))"
+  return 0
+}
+
+tap_first_parent_more_button() {
+  # Tap the "more" button (right-side) on the first parent card header.
+  local xml="$1"
+  local candidate bounds x1 y1 x2 y2 h w
+
+  candidate="$(
+    grep 'class="android.widget.Button"' "${xml}" 2>/dev/null \
+      | grep 'clickable="true"' \
+      | grep 'content-desc=""' \
+      | while IFS= read -r line; do
+          bounds="$(echo "${line}" | sed -E -n 's/.*bounds=\"\\[([0-9]+),([0-9]+)\\]\\[([0-9]+),([0-9]+)\\]\".*/\\1 \\2 \\3 \\4/p')"
+          if [[ -z "${bounds}" ]]; then
+            continue
+          fi
+          read -r x1 y1 x2 y2 <<<"${bounds}"
+          h="$((y2 - y1))"
+          w="$((x2 - x1))"
+          if (( y1 >= 500 )) && (( h >= 80 )) && (( w >= 80 )); then
+            # Sort: topmost (y1 asc), then rightmost (x2 desc).
+            echo "${y1} ${x2} ${x1} ${y1} ${x2} ${y2}"
+          fi
+        done \
+      | sort -k1,1n -k2,2nr \
+      | head -n 1
+  )"
+
+  if [[ -z "${candidate}" ]]; then
+    return 1
+  fi
+
+  read -r _ _ x1 y1 x2 y2 <<<"${candidate}"
+  tap_xy "$(((x1 + x2) / 2))" "$(((y1 + y2) / 2))"
+  return 0
+}
+
 assert_text_exists() {
   local text="$1"
   local name="$2"
@@ -232,8 +342,15 @@ if ! grep -q "分类管理" "${OUT_DIR}/02_debug_sheet.nodes.xml"; then
 fi
 assert_text_exists "分类管理" "02_debug_sheet"
 
-log "verify category icon style dialog + switch to hybrid"
-tap_text_with_scroll "分类图标风格" "02_debug_sheet_style_scrolled" 4 || fail "cannot open 分类图标风格"
+log "open settings and verify category icon style dialog + switch to hybrid"
+tap_text_with_scroll_small "设置" "02_debug_sheet_settings_scrolled" 10 || fail "cannot open 设置"
+sleep 1
+cap "02_settings"
+dump_ui "02_settings"
+assert_text_exists "设置" "02_settings"
+assert_text_exists "分类图标风格" "02_settings"
+
+tap_text_with_scroll_small "分类图标风格" "02_settings_style_scrolled" 6 || fail "cannot open 分类图标风格"
 sleep 1
 cap "02_icon_style_dialog"
 dump_ui "02_icon_style_dialog"
@@ -244,29 +361,129 @@ assert_text_exists "混合" "02_icon_style_dialog"
 tap_text "混合" "02_icon_style_dialog"
 tap_text "确定" "02_icon_style_dialog"
 sleep 1
-cap "02_debug_sheet_after_icon_style"
-dump_ui "02_debug_sheet_after_icon_style"
-assert_text_exists "混合" "02_debug_sheet_after_icon_style"
+cap "02_settings_after_icon_style"
+dump_ui "02_settings_after_icon_style"
+assert_text_exists "混合" "02_settings_after_icon_style"
+
+log "return to home from settings"
+adb shell input keyevent 4
+sleep 1
+ensure_app_foreground 3
+cap "02_home_after_settings"
+dump_ui "02_home_after_settings"
+
+log "open debug sheet for category checks"
+dump_ui "02_home_for_debug"
+if ! tap_top_right_clickable "${OUT_DIR}/02_home_for_debug.nodes.xml"; then
+  tap_xy 1124 270
+fi
+sleep 1
+ensure_app_foreground 3
+cap "02_debug_sheet_after_settings"
+dump_ui "02_debug_sheet_after_settings"
+assert_text_exists "分类管理" "02_debug_sheet_after_settings"
+
+log "open category manager"
+tap_text "分类管理" "02_debug_sheet_after_settings"
+sleep 1
+cap "03_category_manager"
+dump_ui "03_category_manager"
+assert_text_exists "分类管理" "03_category_manager"
+
+if grep -q "一键添加常用分类" "${OUT_DIR}/03_category_manager.nodes.xml" \
+  || grep -q "一键添加" "${OUT_DIR}/03_category_manager.nodes.xml"; then
+  log "category manager empty, quick add common categories"
+  if ! tap_text_once "一键添加常用分类" "${OUT_DIR}/03_category_manager.nodes.xml"; then
+    tap_text_once "一键添加" "${OUT_DIR}/03_category_manager.nodes.xml" || true
+  fi
+  sleep 3
+  cap "03_category_manager_after_seed"
+  dump_ui "03_category_manager_after_seed"
+fi
+
+dump_ui "03_category_manager_for_add_parent"
+log "verify create category screen contains force-tinted switch (parent category)"
+if ! tap_top_bar_clickable_rank_from_right "${OUT_DIR}/03_category_manager_for_add_parent.nodes.xml" 2; then
+  # Fallback to an approximate coordinate for the + button.
+  tap_xy 1012 240
+fi
+sleep 1
+cap "03_create_parent"
+dump_ui "03_create_parent"
+assert_text_exists "图标强制单色" "03_create_parent"
+adb shell input keyevent 4
+sleep 1
+
+log "verify subcategory create screen contains force-tinted switch"
+dump_ui "03_category_manager_for_parent_actions_sub"
+if ! tap_first_parent_more_button "${OUT_DIR}/03_category_manager_for_parent_actions_sub.nodes.xml"; then
+  # Fallback to a rough coordinate (first parent card "more" button).
+  tap_xy 1030 868
+fi
+sleep 1
+dump_ui "03_parent_actions_menu_sub"
+assert_text_exists "修改" "03_parent_actions_menu_sub"
+tap_text_with_scroll_small "添加子类" "03_parent_actions_add_sub" 8 || fail "cannot find 添加子类 action"
+sleep 1
+cap "04_create_sub"
+dump_ui "04_create_sub"
+assert_text_exists "图标强制单色" "04_create_sub"
+adb shell input keyevent 4
+sleep 1
+
+log "verify edit category screen contains force-tinted switch"
+dump_ui "03_category_manager_for_parent_actions_edit"
+if ! tap_first_parent_more_button "${OUT_DIR}/03_category_manager_for_parent_actions_edit.nodes.xml"; then
+  tap_xy 1030 868
+fi
+sleep 1
+dump_ui "03_parent_actions_menu_edit"
+assert_text_exists "修改" "03_parent_actions_menu_edit"
+tap_text_with_scroll_small "修改" "03_parent_actions_edit" 6 || fail "cannot find 修改 action"
+sleep 1
+cap "04_category_edit"
+dump_ui "04_category_edit"
+assert_text_exists "编辑分类" "04_category_edit"
+assert_text_exists "图标强制单色" "04_category_edit"
+adb shell input keyevent 4
+sleep 1
+
+log "return to home from category manager"
+adb shell input keyevent 4
+sleep 1
+ensure_app_foreground 3
+cap "04_home_after_categories"
+dump_ui "04_home_after_categories"
+
+log "open debug sheet for recurring"
+dump_ui "04_home_for_recurring_menu"
+if ! tap_top_right_clickable "${OUT_DIR}/04_home_for_recurring_menu.nodes.xml"; then
+  tap_xy 1124 270
+fi
+sleep 1
+ensure_app_foreground 3
+cap "04_debug_sheet_recurring"
+dump_ui "04_debug_sheet_recurring"
 
 log "open recurring page"
-tap_text_with_scroll "周期记账" "02_debug_sheet_scrolled" 8 || fail "cannot open 周期记账"
+tap_text_with_scroll "周期记账" "04_debug_sheet_scrolled" 8 || fail "cannot open 周期记账"
 sleep 1
-cap "03_recurring_list"
-dump_ui "03_recurring_list"
-assert_text_exists "周期记账" "03_recurring_list"
+cap "05_recurring_list"
+dump_ui "05_recurring_list"
+assert_text_exists "周期记账" "05_recurring_list"
 
 log "open recurring form"
-if ! tap_text_once "新建规则" "${OUT_DIR}/03_recurring_list.nodes.xml"; then
-  if ! tap_top_right_clickable "${OUT_DIR}/03_recurring_list.nodes.xml"; then
+if ! tap_text_once "新建规则" "${OUT_DIR}/05_recurring_list.nodes.xml"; then
+  if ! tap_top_right_clickable "${OUT_DIR}/05_recurring_list.nodes.xml"; then
     tap_xy 1160 240
   fi
 fi
 sleep 1
-cap "04_recurring_form"
-dump_ui "04_recurring_form"
-if ! grep -q "新建周期规则" "${OUT_DIR}/04_recurring_form.nodes.xml" \
-  && ! grep -q "规则名称" "${OUT_DIR}/04_recurring_form.nodes.xml" \
-  && ! grep -q "周期设置" "${OUT_DIR}/04_recurring_form.nodes.xml"; then
+cap "06_recurring_form"
+dump_ui "06_recurring_form"
+if ! grep -q "新建周期规则" "${OUT_DIR}/06_recurring_form.nodes.xml" \
+  && ! grep -q "规则名称" "${OUT_DIR}/06_recurring_form.nodes.xml" \
+  && ! grep -q "周期设置" "${OUT_DIR}/06_recurring_form.nodes.xml"; then
   fail "cannot open recurring form from recurring list"
 fi
 
@@ -275,52 +492,52 @@ adb shell input keyevent 4
 sleep 1
 adb shell input keyevent 4
 sleep 1
-cap "05_home_after_recurring"
-dump_ui "05_home_after_recurring"
+cap "07_home_after_recurring"
+dump_ui "07_home_after_recurring"
 
 log "open debug sheet for budget"
-dump_ui "05_home_for_debug"
-HOME_DEBUG_XML="${OUT_DIR}/05_home_for_debug.nodes.xml"
-if grep -q "自动记账权限未开启" "${OUT_DIR}/05_home_for_debug.nodes.xml"; then
+dump_ui "07_home_for_debug"
+HOME_DEBUG_XML="${OUT_DIR}/07_home_for_debug.nodes.xml"
+if grep -q "自动记账权限未开启" "${OUT_DIR}/07_home_for_debug.nodes.xml"; then
   log "dismiss auto permission dialog (before budget)"
-  tap_text_once "稍后" "${OUT_DIR}/05_home_for_debug.nodes.xml" || tap_text_once "关闭" "${OUT_DIR}/05_home_for_debug.nodes.xml" || true
+  tap_text_once "稍后" "${OUT_DIR}/07_home_for_debug.nodes.xml" || tap_text_once "关闭" "${OUT_DIR}/07_home_for_debug.nodes.xml" || true
   sleep 1
-  dump_ui "05_home_for_debug_after_dialog"
-  HOME_DEBUG_XML="${OUT_DIR}/05_home_for_debug_after_dialog.nodes.xml"
+  dump_ui "07_home_for_debug_after_dialog"
+  HOME_DEBUG_XML="${OUT_DIR}/07_home_for_debug_after_dialog.nodes.xml"
 fi
 if ! tap_top_right_clickable "${HOME_DEBUG_XML}"; then
   tap_xy 1124 270
 fi
 sleep 1
 ensure_app_foreground 3
-cap "06_debug_sheet_budget"
-dump_ui "06_debug_sheet_budget"
-if ! grep -q "分类管理" "${OUT_DIR}/06_debug_sheet_budget.nodes.xml"; then
+cap "08_debug_sheet_budget"
+dump_ui "08_debug_sheet_budget"
+if ! grep -q "分类管理" "${OUT_DIR}/08_debug_sheet_budget.nodes.xml"; then
   log "budget step: debug sheet not detected, retry opening"
   tap_xy 1124 270
   sleep 1
-  cap "06_debug_sheet_budget_retry"
-  dump_ui "06_debug_sheet_budget_retry"
-  if grep -q "分类管理" "${OUT_DIR}/06_debug_sheet_budget_retry.nodes.xml"; then
-    cp "${OUT_DIR}/06_debug_sheet_budget_retry.nodes.xml" "${OUT_DIR}/06_debug_sheet_budget.nodes.xml"
-    cp "${OUT_DIR}/06_debug_sheet_budget_retry.xml" "${OUT_DIR}/06_debug_sheet_budget.xml"
-    cp "${OUT_DIR}/06_debug_sheet_budget_retry.png" "${OUT_DIR}/06_debug_sheet_budget.png"
+  cap "08_debug_sheet_budget_retry"
+  dump_ui "08_debug_sheet_budget_retry"
+  if grep -q "分类管理" "${OUT_DIR}/08_debug_sheet_budget_retry.nodes.xml"; then
+    cp "${OUT_DIR}/08_debug_sheet_budget_retry.nodes.xml" "${OUT_DIR}/08_debug_sheet_budget.nodes.xml"
+    cp "${OUT_DIR}/08_debug_sheet_budget_retry.xml" "${OUT_DIR}/08_debug_sheet_budget.xml"
+    cp "${OUT_DIR}/08_debug_sheet_budget_retry.png" "${OUT_DIR}/08_debug_sheet_budget.png"
   else
     fail "budget step: cannot open debug sheet"
   fi
 fi
 
-tap_text_with_scroll_small "预算管理" "06_debug_sheet_budget_scrolled" 12 || fail "cannot open 预算管理"
+tap_text_with_scroll_small "预算管理" "08_debug_sheet_budget_scrolled" 12 || fail "cannot open 预算管理"
 sleep 2
-cap "07_budget_open"
-dump_ui "07_budget_open"
-assert_text_exists "预算管理" "07_budget_open"
+cap "09_budget_open"
+dump_ui "09_budget_open"
+assert_text_exists "预算管理" "09_budget_open"
 
 log "check loading spinner does not persist"
 sleep 4
-cap "08_budget_after_wait"
-dump_ui "08_budget_after_wait"
-if grep -q "progressbar" "${OUT_DIR}/08_budget_after_wait.nodes.xml"; then
+cap "10_budget_after_wait"
+dump_ui "10_budget_after_wait"
+if grep -q "progressbar" "${OUT_DIR}/10_budget_after_wait.nodes.xml"; then
   fail "budget screen still shows loading indicator after wait"
 fi
 

@@ -75,11 +75,15 @@
 
 ### 4) UI 入口
 
-- 全局：`lib/main.dart` 的 Debug Sheet 增加“分类图标风格”选项
+- 全局：`lib/feature/settings/settings_screen.dart`
+  - 入口：主页右上角菜单 → `设置` → `分类图标风格`
 - 分类级：`lib/feature/category/category_edit_dialog.dart`
   - 新增开关：`图标强制单色（即使在彩色模式下也显示为单色）`
   - 保存时持久化：`CategoryService.updateCategory(..., iconForceTinted: ...)`
   - 进入图标选择器时透传 `forceTinted`，预览与实际一致
+- 创建分类：`lib/feature/category/category_create_screen.dart`
+  - 新增开关：`图标强制单色`
+  - 创建时直接写入 `iconForceTinted`，避免创建后再编辑
 
 ### 5) 关键页面透传（保证一致性）
 
@@ -113,9 +117,15 @@ cd app
 bash scripts/verify_dev_flow.sh com.jivemoney.app.dev
 ```
 
+脚本覆盖（节选）：
+
+- 打开 `设置`，校验“分类图标风格”弹窗包含 `彩色/单色/混合` 并可切换
+- 打开 `分类管理`，校验“创建一级分类/创建子类/编辑分类”均包含 `图标强制单色`
+- 继续验证：周期记账、预算页加载不应一直转圈
+
 最新一次验证通过（PASS），产物目录：
 
-- `/tmp/jive-verify-20260213-004700`
+- `/tmp/jive-verify-20260213-015925`
 
 ### 3) 备份/恢复兼容
 
@@ -123,16 +133,19 @@ bash scripts/verify_dev_flow.sh com.jivemoney.app.dev
 
 ## 如何验收（建议手动走一遍）
 
-1. 打开 Debug Sheet -> `分类图标风格` 选 `彩色`
+1. 主页右上角菜单 → `设置` → `分类图标风格` 选 `彩色`
 2. 进入 `分类管理`：
    - 自定义分类图标应保持彩色（PNG 原色）
 3. 编辑任意分类：
    - 打开 `图标强制单色`
    - 回到“记一笔/分类管理/交易详情”等页面确认该分类图标已变为单色并跟随分类色
-4. 将全局切到 `混合`：
+4. 创建任意分类（或子类）：
+   - 勾选 `图标强制单色` 后创建
+   - 确认新分类图标为单色并跟随分类色
+5. 将全局切到 `混合`：
    - 系统分类应为单色
    - 自定义分类应保持彩色
-5. 将全局切到 `单色`：
+6. 将全局切到 `单色`：
    - 所有分类应为单色
 
 ## 过程记录（可选参考）
