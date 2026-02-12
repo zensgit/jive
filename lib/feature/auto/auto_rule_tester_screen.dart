@@ -71,6 +71,7 @@ class _AutoRuleTesterScreenState extends State<AutoRuleTesterScreen> {
         type: type,
         matchedParent: match.parent,
         matchedSub: match.sub,
+        matchedTags: match.tags,
         resolvedParent: parentName,
         resolvedSub: subName,
         parentKey: resolved.parent?.key,
@@ -127,7 +128,7 @@ class _AutoRuleTesterScreenState extends State<AutoRuleTesterScreen> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String?>(
-            value: _typeOverride,
+            initialValue: _typeOverride,
             decoration: const InputDecoration(
               labelText: '类型覆盖（可选）',
               border: OutlineInputBorder(),
@@ -181,7 +182,7 @@ class _AutoRuleTesterScreenState extends State<AutoRuleTesterScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -207,6 +208,11 @@ class _AutoRuleTesterScreenState extends State<AutoRuleTesterScreen> {
           _buildRow(
             '分类Key',
             '${result.parentKey ?? '-'} / ${result.childKey ?? '-'}',
+          ),
+          const SizedBox(height: 8),
+          _buildRow(
+            '标签',
+            result.matchedTags.isEmpty ? '-' : result.matchedTags.join(', '),
           ),
         ],
       ),
@@ -245,6 +251,7 @@ class _RuleTestResult {
   final String type;
   final String? matchedParent;
   final String? matchedSub;
+  final List<String> matchedTags;
   final String resolvedParent;
   final String resolvedSub;
   final String? parentKey;
@@ -255,6 +262,7 @@ class _RuleTestResult {
     required this.type,
     required this.matchedParent,
     required this.matchedSub,
+    required this.matchedTags,
     required this.resolvedParent,
     required this.resolvedSub,
     required this.parentKey,

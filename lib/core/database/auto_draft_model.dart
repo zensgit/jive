@@ -13,6 +13,7 @@ class JiveAutoDraft {
   late DateTime timestamp;
 
   String? rawText;
+  String? metadataJson;
   String? type; // expense | income | transfer
 
   String? category;
@@ -31,4 +32,12 @@ class JiveAutoDraft {
   String? dedupKey;
 
   late DateTime createdAt;
+
+  List<String> tagKeys = [];
+
+  @Index()
+  int? recurringRuleId;
+
+  @Index()
+  String? recurringKey;
 }

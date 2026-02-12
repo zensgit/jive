@@ -1,0 +1,3425 @@
+{
+  "source": "qianji",
+  "banks": [
+    {
+      "name": "ANZ",
+      "name2": "澳新银行",
+      "name3": "Australia and New Zealand Banking",
+      "icon": "banks/bank_anz.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "ASB Bank",
+      "name2": "奥克兰储蓄银行",
+      "name3": "",
+      "icon": "banks/ic_bank_asb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Alliance Bank Malaysia Berhad",
+      "name2": "马来西亚联盟银行",
+      "name3": "",
+      "icon": "banks/ic_bank_alliance.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "AmBank",
+      "name2": "大马银行",
+      "name3": "大馬銀行",
+      "icon": "banks/bank_ambank.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "American Express",
+      "name2": "美国运通",
+      "name3": "",
+      "icon": "banks/ic_bank_yuntong2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Apple",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_apple.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "BNZ",
+      "name2": "Bank of New Zealand",
+      "name3": "",
+      "icon": "banks/ic_bank_bnz.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "BPMB Bank",
+      "name2": "马来西亚发展银行",
+      "name3": "",
+      "icon": "banks/bank_bpmb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Bank Islam Malaysia",
+      "name2": "马来西亚伊斯兰银行",
+      "name3": "馬來西亞伊斯蘭銀行",
+      "icon": "banks/ic_bank_bankislam.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Bank Simpanan National",
+      "name2": "国民储蓄银行",
+      "name3": "BSN",
+      "icon": "banks/ic_bank_bsn.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Bank of America",
+      "name2": "美国银行",
+      "name3": "",
+      "icon": "banks/ic_bank_boa.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Bank of England",
+      "name2": "英格兰银行",
+      "name3": "",
+      "icon": "banks/ic_bank_england.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Bank of Montreal",
+      "name2": "满地可银行",
+      "name3": "滿地可銀行",
+      "icon": "banks/ic_bank_montreal.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Bank of Nova Scotia",
+      "name2": "加拿大丰业银行",
+      "name3": "加拿大豐業銀行",
+      "icon": "banks/ic_bank_scotia.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Bank of Scotland",
+      "name2": "苏格兰银行",
+      "name3": "",
+      "icon": "banks/bank_scotland.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Barclays",
+      "name2": "巴克莱银行",
+      "name3": "",
+      "icon": "banks/ic_bank_barclays.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Bourso Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_bourso.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Bunq",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_bunq.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "CIMB Bank",
+      "name2": "马来西亚联昌国际银行",
+      "name3": "",
+      "icon": "banks/ic_bank_cimb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Canadian Imperial Bank of Commerce",
+      "name2": "CIBC",
+      "name3": "加拿大帝國商業銀行",
+      "icon": "banks/ic_bank_cibc3.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Capital One",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_capitalone.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Central Bank Of Malaysia",
+      "name2": "马来西亚国家银行",
+      "name3": "",
+      "icon": "banks/ic_bank_malaysia.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Charles Schwab Bank",
+      "name2": "嘉信银行",
+      "name3": "嘉信銀行",
+      "icon": "banks/ic_bank_schwab.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Chase",
+      "name2": "摩根大通银行",
+      "name3": "",
+      "icon": "banks/ic_bank_morganchase.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Chime",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_chime.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Citibank",
+      "name2": "花旗银行",
+      "name3": "花旗銀行",
+      "icon": "banks/bank_citi.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Comdirect Bank",
+      "name2": "康姆德萊克银行",
+      "name3": "",
+      "icon": "banks/ic_bank_comdirect.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Commerz bank",
+      "name2": "德国商业银行",
+      "name3": "",
+      "icon": "banks/ic_bank_commerzbank.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Commonwealth Bank of Australia",
+      "name2": "澳大利亚联邦银行",
+      "name3": "澳洲聯邦銀行",
+      "icon": "banks/ic_bank_cba.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Deutsche Bank AG",
+      "name2": "德意志银行",
+      "name3": "",
+      "icon": "banks/bank_deutsche.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Deutsche Bundesbank",
+      "name2": "德国联邦银行",
+      "name3": "德國聯邦銀行",
+      "icon": "banks/ic_bank_dglb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Discover Card",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_discover.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "EBRD",
+      "name2": "欧洲复兴开发银行",
+      "name3": "欧洲復興開發银行",
+      "icon": "banks/ic_bank_ebrd.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Fusion Bank",
+      "name2": "富融银行",
+      "name3": "富融銀行",
+      "icon": "banks/ic_bank_fusion.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Halifax",
+      "name2": "哈利法克斯银行",
+      "name3": "哈利法克斯銀行",
+      "icon": "banks/ic_bank_halifax.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Hello Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_hello2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Hong Leong Bank",
+      "name2": "丰隆银行",
+      "name3": "",
+      "icon": "banks/ic_bank_hongleong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Hypovereins bank",
+      "name2": "德国裕宝联合银行",
+      "name3": "",
+      "icon": "banks/ic_bank_hypovereins.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "ING Group",
+      "name2": "荷兰安智银行",
+      "name3": "荷蘭安智銀行",
+      "icon": "banks/ic_bank_ing.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Intesa Sanpaolo",
+      "name2": "意大利联合圣保罗银行",
+      "name3": "",
+      "icon": "banks/bank_intesa_sanpaolo.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "JCB",
+      "name2": "Japan Credit Bureau",
+      "name3": "",
+      "icon": "banks/bank_jcb2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Kakao Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_kakao.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Kiwibank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_kiwi.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Livi Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_livi.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Lloyds Bank",
+      "name2": "劳埃德银行",
+      "name3": "",
+      "icon": "banks/ic_bank_lloyds2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Maybank",
+      "name2": "马来亚银行",
+      "name3": "",
+      "icon": "banks/ic_bank_malaiya.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Monzo",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_monzo2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Mox Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_mox.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "N26",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_n26_3.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "National Australia Bank",
+      "name2": "澳大利亚国民银行",
+      "name3": "澳洲国民银行",
+      "icon": "banks/ic_bank_nab.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "National Westminster Bank",
+      "name2": "国民西敏寺银行",
+      "name3": "國民威斯敏斯特銀行",
+      "icon": "banks/ic_bank_natwest.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Navy Federal Credit Union",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_nfcu.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "OCBC Bank",
+      "name2": "华侨永亨银行",
+      "name3": "",
+      "icon": "banks/ic_bank_hqyh.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "POSB Bank",
+      "name2": "新加坡邮政储蓄银行",
+      "name3": "",
+      "icon": "banks/bank_posb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Paypal",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_paypal.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Plaid",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_plaid2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Public Bank Berhad",
+      "name2": "马来西亚大众银行",
+      "name3": "",
+      "icon": "banks/bank_dazhong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "RHB Bank",
+      "name2": "马来西亚兴业银行",
+      "name3": "",
+      "icon": "banks/bank_rhb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Revolut",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_revolut2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Royal Bank of Canada",
+      "name2": "加拿大皇家银行",
+      "name3": "多倫多道明銀行",
+      "icon": "banks/ic_bank_rbc_canada.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Santander Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_santander.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Sparkasse",
+      "name2": "德国储蓄银行",
+      "name3": "德國儲蓄銀行",
+      "icon": "banks/ic_bank_sparkasse.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Starling Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_starling.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "TD Bank",
+      "name2": "美国道明银行",
+      "name3": "美國道明銀行",
+      "icon": "banks/ic_bank_tdbank.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Tangerine Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_tangerine.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Toronto-Dominion Bank",
+      "name2": "道明银行",
+      "name3": "多倫多道明銀行",
+      "icon": "banks/ic_bank_tdbank.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Toss Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_toss.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Touch 'n Go eWallet",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_touchngo.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Truist Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_truist.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Trust Bank",
+      "name2": "优信银行",
+      "name3": "",
+      "icon": "banks/ic_bank_trust.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "U.S. Bank",
+      "name2": "美国合众银行",
+      "name3": "",
+      "icon": "banks/ic_bank_usbank.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "UniCredit Banca",
+      "name2": "裕信銀行",
+      "name3": "",
+      "icon": "banks/bank_unicredit.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "United Overseas Bank",
+      "name2": "新加坡大华银行",
+      "name3": "UOB",
+      "icon": "banks/ic_bank_uob.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Visa",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_visa.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Vivid",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_vivid.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Wells Fargo",
+      "name2": "富国银行",
+      "name3": "",
+      "icon": "banks/ic_bank_wellsfargo2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Westpac",
+      "name2": "西太平洋银行",
+      "name3": "西太平洋銀行",
+      "icon": "banks/ic_bank_westpac.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Wise",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_wise.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "Woori Bank",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_woori.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "ZA Bank",
+      "name2": "众安银行",
+      "name3": "眾安銀行",
+      "icon": "banks/ic_bank_za.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "ゆうちょ銀行",
+      "name2": "Japan Post Bank",
+      "name3": "日本邮政银行",
+      "icon": "banks/ic_bank_jppost.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "万事达",
+      "name2": "MasterCard",
+      "name3": "",
+      "icon": "banks/bank_wsd.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "三井住友銀行",
+      "name2": "三井住友银行",
+      "name3": "",
+      "icon": "banks/bank_smbc.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "三菱日联银行",
+      "name2": "三菱日聯日本信販",
+      "name3": "",
+      "icon": "banks/bank_mufg2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "上海农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_shnongshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "上海华瑞银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_huarui.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "上海商業儲蓄銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_scsb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "上海商業銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_shsy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "上海银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_shanghai.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "上饶银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_shangrao.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "东亚银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_dongya.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "东莞农村商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_dgns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "东莞银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_dongguan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "东营银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_dongying.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "中信银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_zhongxin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "中原银行",
+      "name2": "焦作中旅银行",
+      "name3": "",
+      "icon": "banks/ic_bank_zy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "中国银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhongguo.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "中國信託商業銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_ctbc.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "中國銀行(香港)",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhongguo.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "中央銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_central_bank.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "中華郵政（台灣）",
+      "name2": "中华邮政（台湾）",
+      "name3": "",
+      "icon": "banks/bank_zhyz.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "临商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_linshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "丹东银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ddong.png",
+      "color": "",
+      "type": "",
+      "sort": "DD"
+    },
+    {
+      "name": "义乌农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhenong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "乌海银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_wh.png",
+      "color": "",
+      "type": "",
+      "sort": "WH"
+    },
+    {
+      "name": "乌鲁木齐商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_wlmqsy.png",
+      "color": "",
+      "type": "",
+      "sort": "WLMQ"
+    },
+    {
+      "name": "乐山市商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_leshansy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "九江银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jiujiang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "云南农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_ynnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "交通银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jiaotong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "亿联银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_yilian.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "众邦银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zb.png",
+      "color": "C62A27",
+      "type": "",
+      "sort": "ZB"
+    },
+    {
+      "name": "俄罗斯联邦储蓄银行",
+      "name2": "Сбербанк России",
+      "name3": "Savings Bank of the Russian Federation",
+      "icon": "banks/bank_sberbank.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "保定银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_baoding.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "兆豐國際商業銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_mega.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "光大银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_guangda.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "光州银行",
+      "name2": "Kwangju Bank",
+      "name3": "",
+      "icon": "banks/bank_kwangju.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "兰州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_lanzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "兴业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_xingye.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "其他银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_other.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "内蒙古农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_nmgnx.png",
+      "color": "",
+      "type": "",
+      "sort": "NMGNX"
+    },
+    {
+      "name": "内蒙古银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_nmg.png",
+      "color": "",
+      "type": "",
+      "sort": "NMG"
+    },
+    {
+      "name": "农业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_nongye.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ncxy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "創興銀行",
+      "name2": "Chong Hing Bank",
+      "name3": "创兴银行",
+      "icon": "banks/bank_chonghing.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "包商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ban_baoshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "北京中关村银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_bjzgc.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "北京农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_bjns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "北京银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_beijing.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "华商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_huashang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "华夏银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_huaxia.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "华美银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_huamei.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "华融湘江银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hrxj.png",
+      "color": "",
+      "type": "",
+      "sort": "HRXJ"
+    },
+    {
+      "name": "南京银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_nanjing.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "南洋商業銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_nysy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "南粤银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_nanyue.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "厦门国际银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_xiamenguoji.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "厦门银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_xiamen.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "友利銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_youli.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "台州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_taizhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "台新銀行",
+      "name2": "台新國際商業銀行",
+      "name3": "",
+      "icon": "banks/bank_taishin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "合作金庫銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_tcb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "合肥科技农村商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_hfkjns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "吉林农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jlnx.png",
+      "color": "",
+      "type": "",
+      "sort": "JLNX"
+    },
+    {
+      "name": "吉林银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jilin.png",
+      "color": "",
+      "type": "",
+      "sort": "JL"
+    },
+    {
+      "name": "吴兴农村商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhenong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "哈尔滨银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_haerbin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "唐山银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_tangshan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "嘉兴银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jiaxing.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "嘉善农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhenong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "四川农信",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ncxy.png",
+      "color": "",
+      "type": "",
+      "sort": "SCNX"
+    },
+    {
+      "name": "四川银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_sc.png",
+      "color": "",
+      "type": "",
+      "sort": "SC"
+    },
+    {
+      "name": "国民村镇银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_gmcz.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "國家開發銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_guojiakaifa.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "國泰世華商業銀行",
+      "name2": "国泰世华银行",
+      "name3": "",
+      "icon": "banks/ic_bank_gtsh.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "國泰銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_guotai.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "大新銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_daxin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "大生銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_dasheng.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "大眾銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_dazhong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "大華銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_dahua.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "大西洋銀行",
+      "name2": "大西洋银行",
+      "name3": "",
+      "icon": "banks/ic_bank_bnu.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "大豐銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_dafeng.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "大连银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_dalian.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "大邱银行",
+      "name2": "DGB Daegu Bank",
+      "name3": "",
+      "icon": "banks/bank_dgb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "天府银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_tianfu.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "天星銀行",
+      "name2": "AirStar Bank",
+      "name3": "天星银行",
+      "icon": "banks/bank_airstar2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "天津农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_tianjinns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "天津滨海农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_tjbhns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "天津金城银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_tianjinjc.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "天津银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_tianjin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "太仓农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_tcns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "威海商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_weihai.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "宁夏银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_ningxia.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "宁波银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ningbo.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "安信信貸",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_primecredit.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "安徽农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ahnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "宜宾商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ybsy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "富民银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_fuming.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "富滇银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_fudian.png",
+      "color": "",
+      "type": "",
+      "sort": "FD"
+    },
+    {
+      "name": "富邦华一",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_fubanghuanyi.png",
+      "color": "",
+      "type": "",
+      "sort": "FBHY"
+    },
+    {
+      "name": "富邦銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_fubanghuanyi.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "山东农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_sdnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "山东省农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_sdnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "山西农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_sxnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "山西银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_shanxi.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "工商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_gongshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "常熟农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_changshuns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "平安银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_pingan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "平顶山银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_pds.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "广东农信银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_gdnongxin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "广东华兴银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_gdhx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "广发银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_guangfa.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "广州农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_gznongshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "广州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_guangzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "广西农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ncxy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "广西北部湾银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_beibuwan2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "库尔勒银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_kuerle.png",
+      "color": "",
+      "type": "",
+      "sort": "KEL"
+    },
+    {
+      "name": "廊坊银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_langfang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "建设银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jianshe.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "张家口银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zjk.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "张家港农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zjgns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "彰化商業銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_chb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "微众银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_weizhong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "德州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_dezhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "徽商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_huishang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "恒丰银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hengfeng2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "恒生银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hengsheng.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "惠东农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_gdnongxin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "惠州农商",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_huizhounongshang.png",
+      "color": "",
+      "type": "",
+      "sort": "HZNS"
+    },
+    {
+      "name": "成都农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_chengduns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "成都银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_chengdu.png",
+      "color": "",
+      "type": "",
+      "sort": "CD"
+    },
+    {
+      "name": "承德银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_chengde.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "抚顺银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_fushun.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "招商永隆銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhaoshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "招商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhaoshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "摩根士丹利国际银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_morgan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "新安银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_xinan.png",
+      "color": "C62A27",
+      "type": "",
+      "sort": "XA"
+    },
+    {
+      "name": "新疆农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_xjnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "新疆汇和银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_huihe.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "新疆银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_xj.png",
+      "color": "",
+      "type": "",
+      "sort": "XJ"
+    },
+    {
+      "name": "新疆银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_xinjiang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "新网银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_xw.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "新韩银行",
+      "name2": "Shinhan Bank",
+      "name3": "",
+      "icon": "banks/ic_bank_xinhan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "无锡农村商业银行",
+      "name2": "无锡农商银行",
+      "name3": "",
+      "icon": "banks/ic_bank_wuxins.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "日本瑞穗银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_mizuho.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "日照银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_rizhao.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "昆仑银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_kunlun.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "昆山农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ksns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "星展銀行",
+      "name2": "DBS Bank",
+      "name3": "",
+      "icon": "banks/ic_bank_xingzhan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "晋商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jinshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "朝阳银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_chaoyang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "本溪银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_benxi.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "杭州联合银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hzlh.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "杭州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hangzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "枣庄银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zaozhuang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "柳州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_liuzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "桂林银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_guilin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "梅州客商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_mzks.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "武汉农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_wuhannongshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "民生银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_minsheng.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "永豐銀行",
+      "name2": "永丰商业银行",
+      "name3": "Bank SinoPac",
+      "icon": "banks/bank_sinopac.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "汇丰银行",
+      "name2": "HSBC Bank",
+      "name3": "",
+      "icon": "banks/bank_hsbc.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "汉口银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hankou.png",
+      "color": "459E4D",
+      "type": "",
+      "sort": "HK"
+    },
+    {
+      "name": "江南农商行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_jnns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "江苏农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jiangsunongshang.png",
+      "color": "095CAB",
+      "type": "",
+      "sort": "JSNS"
+    },
+    {
+      "name": "江苏银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jiangsu.png",
+      "color": "095CAB",
+      "type": "",
+      "sort": "JS"
+    },
+    {
+      "name": "江苏长江商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_changjiangshangye.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "江西农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ncxy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "江西银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_jiangxi.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "江阴农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jyns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "沧州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_cangzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "河北银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hebei.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "河南农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_henannx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "泉州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_quanzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "法国东方汇理银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_fgdfhl.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "法国兴业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_fgxy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "法国巴黎银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_fgbl.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "泰国大城银行",
+      "name2": "Bank of Ayudhya",
+      "name3": "ธนาคารกรุงศรีอยุธยา",
+      "icon": "banks/bank_ayudhya.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "泰国开泰银行",
+      "name2": "Kasikorn Bank",
+      "name3": "ธนาคารกสิกรไทย",
+      "icon": "banks/bank_kasikorn.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "泰国盘谷银行",
+      "name2": "Bangkok Bank",
+      "name3": "ธนาคารกรุงเทพ",
+      "icon": "banks/bank_bangkok.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "泰安银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_taian.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "泸州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_luzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "洛阳银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_luoyang.png",
+      "color": "",
+      "type": "",
+      "sort": "LY"
+    },
+    {
+      "name": "济南农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_sdnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "济宁银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_jining.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "浙商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_zheshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "浙江农信",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhenong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "浙江农商联合银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhenong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "浙江民泰商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_mtsy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "浙江泰隆商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_tl.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "浙江稠州商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zjczsy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "浦发硅谷银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_pufaguigu.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "浦发银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_pufa.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "海南农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hainnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "海南银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hainan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "海宁农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhenong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "淮海农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_huaihains.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "深圳农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_szns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "深圳发展银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_shenzhenfazhan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "渣打银行",
+      "name2": "Standard Chartered Bank",
+      "name3": "",
+      "icon": "banks/bank_zhada.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "渤海银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_bohai.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "温州民商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_wenzhoumingshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "温州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_wenzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "湖北农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hbnongxin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "湖北农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hbnongxin.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "湖北银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hubei.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "湖南三湘银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hnsx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "湖南农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_hnns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "湖南省农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hnnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "湖南银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hunan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "湖商村镇银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hscz.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "湖州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_huzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "潍坊银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_wf.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "澳門發展銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zmfz.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "澳门中国银行分行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhongguo.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "澳门商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_amsy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "烟台银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_yantai.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "玉山銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_yushan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "珠海华润银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhhr.png",
+      "color": "",
+      "type": "",
+      "sort": "ZHHR"
+    },
+    {
+      "name": "瑞士银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ruishi.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "甘肃农村信用社",
+      "name2": "甘肃信合",
+      "name3": "",
+      "icon": "banks/ic_bank_gsxh.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "甘肃银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_gansu.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "百信银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_baixin.png",
+      "color": "",
+      "type": "",
+      "sort": "BX"
+    },
+    {
+      "name": "盛京银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_shengjing.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "福建农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ncxy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "福建华通银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_fjhuatong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "福建海峡银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_fujianhx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "秦农银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_qinnong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "秦皇岛银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_qhd.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "第一商業銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_firstbank.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "紫金农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zjns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "绍兴银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_shaoxing.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "绵阳商业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_mysy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "网商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_wangshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "自贡银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zigong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "臺灣土地銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_twtd.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "臺灣銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_tw.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "苏宁银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_suning.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "苏州农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_suzhouns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "苏州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_suzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "莱商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_laishang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "華僑永亨銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hqyh.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "華南銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_hncb.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "菲律宾首都银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_flbshoudu.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "营口银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_yingkou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "萧山农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zhenong.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "葫芦岛银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_hld.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "蒙商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_mengshang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "蒙特利尔银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_motelier.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "蓝海银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_lanhai.png",
+      "color": "C62A27",
+      "type": "",
+      "sort": "LH"
+    },
+    {
+      "name": "螞蟻銀行（香港）",
+      "name2": "蚂蚁银行（香港）",
+      "name3": "",
+      "icon": "banks/bank_ant_hk.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "衡水银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_hengshui.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "西安银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_xian.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "西藏银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_xizang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "贵州农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_ncxy.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "贵州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_guizhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "贵阳农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_gyns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "贵阳银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_guiyang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "赣州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_ganzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "辽宁农村信用社",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_lnnx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "辽宁振兴银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_lnzx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "辽沈银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_liaos.png",
+      "color": "",
+      "type": "",
+      "sort": "LS"
+    },
+    {
+      "name": "达州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_dazhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "遂宁银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_suining.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "邢台银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_xingtai.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "邮慧万家银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_yhwj.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "邮政储蓄银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_youzheng2.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "邯郸银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_handan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "郑州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_zhengzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "郑银村镇银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_zycz.png",
+      "color": "",
+      "type": "",
+      "sort": "ZYCZ"
+    },
+    {
+      "name": "鄂尔多斯银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_eeds.png",
+      "color": "",
+      "type": "",
+      "sort": "EEDS"
+    },
+    {
+      "name": "鄞州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_yinzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "重庆三峡银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_cqsx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "重庆农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_chongqingns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "重庆银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_chongqing.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "金华银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_jinhua.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "铁岭银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_tieling.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "锡商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_xishang.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "锦州银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jinzhou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "长城华西银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_cchx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "长安银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_changan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "长春朝阳和润村镇银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_cccyhr.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "长沙农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_hnns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "长沙银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_changsha.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "阜新银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_fx.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "陕西信合",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_sxxinhe.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "集友銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_jiyou.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "青岛农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_qdns.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "青岛银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_qingdao.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "青海银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_qinghai.png",
+      "color": "2D3969",
+      "type": "",
+      "sort": "QH"
+    },
+    {
+      "name": "鞍山银行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/bank_anshan.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "韩亚银行",
+      "name2": "Hana Bank",
+      "name3": "",
+      "icon": "",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "韩国企业银行",
+      "name2": "",
+      "name3": "",
+      "icon": "",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "韩国国民银行",
+      "name2": "KB Kookmin Bank",
+      "name3": "",
+      "icon": "",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "顺德农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "馬來亞銀行",
+      "name2": "",
+      "name3": "",
+      "icon": "banks/ic_bank_malaiya.png",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "黄河农商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "齐商银行",
+      "name2": "",
+      "name3": "",
+      "icon": "",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "齐鲁银行",
+      "name2": "",
+      "name3": "",
+      "icon": "",
+      "color": "",
+      "type": "",
+      "sort": ""
+    },
+    {
+      "name": "龙江银行",
+      "name2": "",
+      "name3": "",
+      "icon": "",
+      "color": "",
+      "type": "",
+      "sort": ""
+    }
+  ]
+}

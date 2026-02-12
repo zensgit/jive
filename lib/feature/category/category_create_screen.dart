@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:lpinyin/lpinyin.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_service.dart';
+import 'category_icon_library.dart';
+import 'category_icon_picker_screen.dart';
+import 'category_icon_source_picker.dart';
 import 'category_create_dialog.dart';
 
 class CategoryCreateScreen extends StatefulWidget {
@@ -9,6 +12,9 @@ class CategoryCreateScreen extends StatefulWidget {
   final String? parentName;
   final String initialIcon;
   final String? nameLabel;
+  final String? typeName;
+  final String? typeLabel;
+  final bool parentOnly;
   final bool allowBatch;
   final String? initialText;
   final bool initialBatch;
@@ -24,6 +30,9 @@ class CategoryCreateScreen extends StatefulWidget {
     required this.initialIcon,
     this.parentName,
     this.nameLabel,
+    this.typeName,
+    this.typeLabel,
+    this.parentOnly = false,
     this.allowBatch = false,
     this.initialText,
     this.initialBatch = false,
@@ -44,6 +53,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   final TextEditingController _systemSearchController = TextEditingController();
   late final VoidCallback _systemSearchListener;
   late String _selectedIcon;
+  String? _lastAutoFilledName;
   String? _selectedColorHex;
   String _iconQuery = "";
   String _systemQuery = "";
@@ -54,6 +64,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   final Set<String> _selectedSystemNames = {};
   final Set<String> _existingNames = {};
   bool _hasAutoChanges = false;
+  late final Map<String, String> _iconLabelByName;
   late final List<_SystemGroup> _systemGroups;
   late final Map<String, SystemCategorySuggestion> _systemItemByName;
   String _selectedGroupName = "";
@@ -65,9 +76,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialText ?? "");
+    _nameController.addListener(_handleNameChange);
     _selectedIcon = widget.initialIcon;
     _isBatch = widget.allowBatch && widget.initialBatch;
     _existingNames.addAll(widget.existingNames);
+    _iconLabelByName = _buildIconLabelMap();
     _initSystemGroups();
     _systemSearchListener = () {
       final value = _systemSearchController.text;
@@ -79,6 +92,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
 
   @override
   void dispose() {
+    _nameController.removeListener(_handleNameChange);
     _nameController.dispose();
     _iconSearchController.dispose();
     _systemSearchController.removeListener(_systemSearchListener);
@@ -96,18 +110,86 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       return;
     }
 
+    if (_isParentCreateMode()) {
+      final groups = <_SystemGroup>[];
+      final itemByName = <String, SystemCategorySuggestion>{};
+      final allChildren = <String, SystemCategorySuggestion>{};
+
+      for (final entry in library.entries) {
+        final groupName = _canonicalGroupName(entry.key);
+        final icon = _normalizeSystemIcon(entry.value['icon'] as String?, groupName);
+        final parentSuggestion = SystemCategorySuggestion(
+          name: groupName,
+          iconName: icon,
+          isParent: true,
+        );
+        itemByName[groupName] = parentSuggestion;
+        final childrenRaw = entry.value['children'] as List<dynamic>? ?? const [];
+        final seenChildren = <String>{};
+        final children = <SystemCategorySuggestion>[];
+        for (final child in childrenRaw) {
+          final name = (child['name'] as String? ?? "").trim();
+          if (name.isEmpty || !seenChildren.add(name)) continue;
+          final childIcon = _normalizeSystemIcon(child['icon'] as String?, name);
+          final suggestion = SystemCategorySuggestion(
+            name: name,
+            iconName: childIcon,
+            parentName: groupName,
+            isParent: false,
+          );
+          children.add(suggestion);
+          allChildren.putIfAbsent(name, () => suggestion);
+        }
+
+        children.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+        groups.add(
+          _SystemGroup(
+            name: groupName,
+            iconName: icon,
+            children: children,
+          ),
+        );
+      }
+
+      groups.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+      final sortedGroups = <_SystemGroup>[];
+      if (allChildren.isNotEmpty) {
+        final allList = allChildren.values.toList();
+        allList.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+        sortedGroups.add(_SystemGroup(name: "全部", iconName: "category", children: allList));
+      }
+      sortedGroups.addAll(groups);
+      _systemGroups = sortedGroups;
+      _systemItemByName = itemByName;
+      _selectedGroupName = _resolveInitialGroup();
+      return;
+    }
+
     final groupChildren = <String, List<SystemCategorySuggestion>>{};
     final groupChildNames = <String, Set<String>>{};
     final groupIcons = <String, String>{};
     final itemByName = <String, SystemCategorySuggestion>{};
     final allSuggestions = <String, SystemCategorySuggestion>{};
     final globalChildNames = <String>{};
-    void upsertSuggestion(Map<String, SystemCategorySuggestion> map, String name, String iconName) {
-      if (name.trim().isEmpty) return;
+    void upsertSuggestion(Map<String, SystemCategorySuggestion> map, SystemCategorySuggestion suggestion) {
+      final name = suggestion.name.trim();
+      if (name.isEmpty) return;
       final existing = map[name];
-      if (existing == null || (existing.iconName == "category" && iconName != "category")) {
-        map[name] = SystemCategorySuggestion(name: name, iconName: iconName);
+      if (existing == null) {
+        map[name] = suggestion;
+        return;
       }
+      final isParent = existing.isParent || suggestion.isParent;
+      final iconName = (existing.iconName == "category" && suggestion.iconName != "category")
+          ? suggestion.iconName
+          : existing.iconName;
+      final parentName = isParent ? null : (existing.parentName ?? suggestion.parentName);
+      map[name] = SystemCategorySuggestion(
+        name: name,
+        iconName: iconName,
+        parentName: parentName,
+        isParent: isParent,
+      );
     }
 
     for (final entry in library.entries) {
@@ -124,7 +206,12 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       final rawGroupName = entry.key;
       final groupName = _canonicalGroupName(rawGroupName);
       final icon = _normalizeSystemIcon(entry.value['icon'] as String?, groupName);
-      upsertSuggestion(allSuggestions, groupName, icon);
+      final parentSuggestion = SystemCategorySuggestion(
+        name: groupName,
+        iconName: icon,
+        isParent: true,
+      );
+      upsertSuggestion(allSuggestions, parentSuggestion);
 
       final childrenRaw = entry.value['children'] as List<dynamic>? ?? const [];
       final children = groupChildren.putIfAbsent(groupName, () => <SystemCategorySuggestion>[]);
@@ -140,9 +227,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         if (name.isEmpty) continue;
         if (!seenNames.add(name)) continue;
         final childIcon = _normalizeSystemIcon(child['icon'] as String?, name);
-        final suggestion = SystemCategorySuggestion(name: name, iconName: childIcon);
+        final suggestion = SystemCategorySuggestion(
+          name: name,
+          iconName: childIcon,
+          parentName: groupName,
+        );
         children.add(suggestion);
-        upsertSuggestion(allSuggestions, name, childIcon);
+        upsertSuggestion(allSuggestions, suggestion);
       }
     }
 
@@ -182,9 +273,36 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     _selectedGroupName = _resolveInitialGroup();
   }
 
+  Future<void> _pickCustomIcon() async {
+    final selected = await pickCategoryIcon(context, initialIcon: _selectedIcon);
+    if (selected != null) {
+      _applyIconSelection(selected);
+    }
+  }
+
+  Future<void> _pickEmojiIcon() async {
+    final selected = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryIconPickerScreen(
+          initialIcon: _selectedIcon,
+          initialMode: CategoryIconPickerMode.emoji,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+    if (selected != null) {
+      _applyIconSelection(selected);
+    }
+  }
+
   String _resolveInitialGroup() {
     if (_systemGroups.isEmpty) return "";
     final initial = widget.initialGroupName?.trim();
+    if (initial == "全部") {
+      final hasAll = _systemGroups.any((group) => group.name == "全部");
+      if (hasAll) return "全部";
+    }
     final groups = _systemGroups.where((group) => group.name != "全部").toList();
     if (initial != null && initial.isNotEmpty) {
       final tokens = _expandGroupTokens(initial);
@@ -227,20 +345,21 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return value;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final canSave = _parseNames().isNotEmpty || _selectedSystemNames.isNotEmpty;
-    final hasSystemLibrary = _systemGroups.isNotEmpty;
-    final showBottomBar = _isBatch && !widget.autoBatchAdd && _selectedSystemNames.isNotEmpty;
-    return WillPopScope(
-      onWillPop: () async {
-        _exitWithChanges();
-        return false;
-      },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: Text(widget.title, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+	@override
+	Widget build(BuildContext context) {
+	  final canSave = _parseNames().isNotEmpty || _selectedSystemNames.isNotEmpty;
+	  final hasSystemLibrary = _systemGroups.isNotEmpty;
+	  final showBottomBar = _isBatch && !widget.autoBatchAdd && _selectedSystemNames.isNotEmpty;
+	  return PopScope<Object?>(
+	    canPop: false,
+	    onPopInvokedWithResult: (didPop, result) {
+	      if (didPop) return;
+	      _exitWithChanges();
+	    },
+	    child: Scaffold(
+	      backgroundColor: Colors.white,
+	      appBar: AppBar(
+	        title: Text(widget.title, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
           backgroundColor: Colors.white,
           elevation: 0,
           iconTheme: const IconThemeData(color: Colors.black87),
@@ -277,7 +396,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 title: const Text("批量添加"),
               ),
             _buildInfoCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 6),
             if (hasSystemLibrary) _buildSystemCategorySection(),
             if (!hasSystemLibrary) _buildIconSection(),
           ],
@@ -290,13 +409,16 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   Widget _buildInfoCard() {
     final highlightColor = _resolveSelectedColor() ?? JiveTheme.primaryGreen;
     final showSystemBatch = _isBatch && _systemGroups.isNotEmpty;
-    if (widget.parentName == null) {
+    final duplicateHint = showSystemBatch ? null : _duplicateNameHint();
+    final isParentCreate = _isParentCreateMode();
+    if (isParentCreate) {
+      final typeName = _effectiveTypeName();
       return Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -307,7 +429,24 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 const Spacer(),
               ],
             ),
-            const SizedBox(height: 12),
+            if (typeName != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text(
+                    widget.typeLabel ?? "收支类型",
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  ),
+                  const Spacer(),
+                  Text(
+                    typeName,
+                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                  ),
+                ],
+              ),
+              const Divider(height: 20),
+            ] else
+              const SizedBox(height: 12),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -316,7 +455,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                     onTap: () => _scrollToIcons(),
                     child: CircleAvatar(
                       radius: 26,
-                      backgroundColor: highlightColor.withOpacity(0.1),
+                      backgroundColor: highlightColor.withValues(alpha: 0.1),
                       child: CategoryService.buildIcon(
                         _selectedIcon,
                         size: 22,
@@ -329,12 +468,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                     child: TextField(
                       controller: _nameController,
                       decoration: InputDecoration(
-                        labelText: widget.nameLabel ?? "分类名称",
+                        labelText: widget.nameLabel ?? "一级分类名称",
                         border: const OutlineInputBorder(),
                       ),
                       keyboardType: _isBatch ? TextInputType.multiline : TextInputType.text,
                       textInputAction: _isBatch ? TextInputAction.newline : TextInputAction.done,
                       maxLines: _isBatch ? 4 : 1,
+                      onChanged: (_) => setState(() {}),
                       onSubmitted: _isBatch ? null : (_) => _save(),
                     ),
                   ),
@@ -372,16 +512,28 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 style: TextStyle(fontSize: 11, color: Colors.grey),
               ),
             ],
-            const SizedBox(height: 8),
+            if (duplicateHint != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                duplicateHint,
+                style: TextStyle(fontSize: 11, color: Colors.red.shade400),
+              ),
+            ],
+            const SizedBox(height: 6),
             _buildColorPicker(),
-            const SizedBox(height: 4),
-            if (!showSystemBatch)
+            const SizedBox(height: 2),
+            if (!showSystemBatch && !isParentCreate)
               SwitchListTile(
+                dense: true,
+                visualDensity: const VisualDensity(horizontal: -2, vertical: -4),
                 contentPadding: EdgeInsets.zero,
                 value: _autoMatchIcon,
                 onChanged: (value) => setState(() => _autoMatchIcon = value),
-                title: const Text("自动匹配图标"),
-                subtitle: const Text("根据名称自动选择更合适的图标"),
+                title: const Text("自动匹配图标", style: TextStyle(fontSize: 11)),
+                subtitle: Text(
+                  "根据名称自动选择更合适的图标",
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+                ),
               ),
           ],
         ),
@@ -393,7 +545,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -447,20 +599,31 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                       border: InputBorder.none,
                     ),
                     textInputAction: TextInputAction.done,
+                    onChanged: (_) => setState(() {}),
                     onSubmitted: (_) => _save(),
                   ),
                 ),
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: highlightColor.withOpacity(0.12),
-                  child: CategoryService.buildIcon(
-                    _selectedIcon,
-                    size: 16,
-                    color: highlightColor,
+                GestureDetector(
+                  onTap: _pickCustomIcon,
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: highlightColor.withValues(alpha: 0.12),
+                    child: CategoryService.buildIcon(
+                      _selectedIcon,
+                      size: 16,
+                      color: highlightColor,
+                    ),
                   ),
                 ),
               ],
             ),
+          if (duplicateHint != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              duplicateHint,
+              style: TextStyle(fontSize: 11, color: Colors.red.shade400),
+            ),
+          ],
           const SizedBox(height: 10),
           _buildColorPicker(),
         ],
@@ -471,9 +634,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   Widget _buildIconSection() {
     final query = _normalizeSearch(_iconQuery);
     final highlightColor = _resolveSelectedColor() ?? JiveTheme.primaryGreen;
-    final icons = _iconEntries.where((entry) {
+    final icons = categoryIconEntries.where((entry) {
       if (query.isEmpty) return true;
-      final key = _iconSearchCache[entry.name] ??= _buildIconSearchKey(entry);
+      final key = _iconSearchCache[entry.name] ??= buildIconSearchKey(entry);
       return key.contains(query);
     }).toList();
 
@@ -483,7 +646,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -526,12 +689,22 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("分类图标", style: TextStyle(fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("分类图标", style: TextStyle(fontWeight: FontWeight.bold)),
+              TextButton.icon(
+                onPressed: _pickCustomIcon,
+                icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),
+                label: const Text("更多图标"),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _iconSearchController,
@@ -572,10 +745,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               final isSelected = entry.name == _selectedIcon;
               return InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => setState(() => _selectedIcon = entry.name),
+                onTap: () => _applyIconSelection(
+                  entry.name,
+                  label: _iconLabelByName[entry.name],
+                ),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isSelected ? highlightColor.withOpacity(0.15) : Colors.grey.shade100,
+                    color: isSelected ? highlightColor.withValues(alpha: 0.15) : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isSelected ? highlightColor : Colors.transparent,
@@ -584,7 +760,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                   child: CategoryService.buildIcon(
                     entry.name,
                     size: 20,
-                    color: isSelected ? highlightColor : Colors.grey.shade700,
+                    color: isSelected ? highlightColor : JiveTheme.categoryIconInactive,
                   ),
                 ),
               );
@@ -608,7 +784,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -624,10 +800,14 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               final countWidth = countText.isEmpty ? 0.0 : _measureTextWidth(countText, countStyle);
               const columnsButtonWidth = 32.0;
               const columnsButtonGap = 8.0;
+              const emojiButtonWidth = 32.0;
+              const emojiButtonGap = 8.0;
               final reserved = labelWidth +
                   (countText.isEmpty ? 0.0 : (8 + countWidth)) +
                   columnsButtonWidth +
                   columnsButtonGap +
+                  emojiButtonWidth +
+                  emojiButtonGap +
                   12;
               final maxSearchWidth = (constraints.maxWidth - reserved).clamp(120.0, constraints.maxWidth);
               final maxCompactWidth = maxSearchWidth < constraints.maxWidth * 0.65
@@ -647,6 +827,8 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                   const Spacer(),
                   _buildColumnsMenu(),
                   const SizedBox(width: 8),
+                  _buildEmojiPickerButton(),
+                  const SizedBox(width: 8),
                   _buildInlineSearchField(searchWidth),
                 ],
               );
@@ -659,7 +841,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 : "点击可填充名称与图标",
             style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           SizedBox(
             height: listHeight,
             child: LayoutBuilder(
@@ -681,7 +863,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 final iconBox = _systemIconBoxForColumns(columns);
                 final labelSize = _systemLabelSizeForColumns(columns);
                 final labelHeight = _systemLabelHeightForColumns(columns);
-                final metaSize = _systemMetaSizeForColumns(columns);
                 final indicatorSize = _systemIndicatorSizeForColumns(columns);
                 final gridSpacing = _systemGridSpacingForColumns(columns);
                 final tileHeight = _systemTileHeight(context, columns);
@@ -707,7 +888,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                             return InkWell(
                               onTap: () {
                                 if (isSearching) return;
-                                setState(() => _selectedGroupName = group.name);
+                                setState(() {
+                                  _selectedGroupName = group.name;
+                                  _applyGroupSelection(group);
+                                });
                               },
                               borderRadius: BorderRadius.circular(12),
                               child: Container(
@@ -715,7 +899,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                 margin: EdgeInsets.symmetric(vertical: leftRowMargin),
                                 padding: EdgeInsets.symmetric(vertical: leftRowPadding, horizontal: 0),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? JiveTheme.primaryGreen.withOpacity(0.04) : Colors.transparent,
+                                  color: isSelected ? JiveTheme.primaryGreen.withValues(alpha: 0.04) : Colors.transparent,
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border(
                                     left: BorderSide(
@@ -778,10 +962,15 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                 itemBuilder: (context, index) {
                                   final entry = items[index];
                                   final isExisting = _existingNames.contains(entry.name);
+                                  final isParentCreate = _isParentCreateMode();
+                                  final isDisabled = _isBatch && isExisting;
                                   final isSelected = _isBatch
                                       ? _selectedSystemNames.contains(entry.name)
-                                      : entry.name == _nameController.text.trim() && entry.iconName == _selectedIcon;
-                                  final canTap = !isExisting;
+                                      : (isParentCreate
+                                          ? entry.iconName == _selectedIcon
+                                          : entry.name == _nameController.text.trim() &&
+                                              entry.iconName == _selectedIcon);
+                                  final canTap = !isDisabled;
                                   return RepaintBoundary(
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(12),
@@ -795,16 +984,18 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                               width: iconBox,
                                               height: iconBox,
                                               decoration: BoxDecoration(
-                                                color: isSelected ? highlightColor.withOpacity(0.15) : Colors.transparent,
+                                                color: isSelected ? highlightColor.withValues(alpha: 0.15) : Colors.transparent,
                                                 shape: BoxShape.circle,
                                               ),
                                               child: Center(
                                                 child: CategoryService.buildIcon(
                                                   entry.iconName,
                                                   size: iconSize,
-                                                  color: isExisting
+                                                  color: isDisabled
                                                       ? Colors.grey.shade400
-                                                      : (isSelected ? highlightColor : Colors.grey.shade700),
+                                                      : (isSelected
+                                                          ? highlightColor
+                                                          : JiveTheme.categoryIconInactive),
                                                 ),
                                               ),
                                             ),
@@ -814,22 +1005,19 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                               style: TextStyle(
                                                 fontSize: labelSize,
                                                 height: labelHeight,
-                                                color: isExisting ? Colors.grey.shade400 : Colors.grey.shade700,
+                                                color: isDisabled
+                                                    ? Colors.grey.shade400
+                                                    : JiveTheme.categoryLabelInactive,
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                               textAlign: TextAlign.center,
                                               maxLines: 1,
                                             ),
-                                            if (_isBatch && !widget.autoBatchAdd && !isExisting)
+                                            if (_isBatch && !widget.autoBatchAdd && !isDisabled)
                                               Icon(
                                                 isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
                                                 size: indicatorSize,
                                                 color: isSelected ? highlightColor : Colors.grey.shade400,
-                                              )
-                                            else if (isExisting)
-                                              Text(
-                                                "已添加",
-                                                style: TextStyle(fontSize: metaSize, color: Colors.grey.shade400),
                                               ),
                                           ],
                                         ),
@@ -923,22 +1111,22 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       elevation: 6,
       offset: const Offset(0, 8),
       constraints: const BoxConstraints(minWidth: 120),
-      itemBuilder: (context) {
-        return [
-          for (final columns in const [3, 4, 5, 6])
-            PopupMenuItem(
-              value: columns,
-              height: 32,
-              child: Row(
-                children: [
-                  Icon(Icons.grid_view_rounded, size: 16, color: Colors.grey.shade600),
-                  const SizedBox(width: 6),
-                  Text("${columns}列", style: const TextStyle(fontSize: 12)),
-                  const Spacer(),
-                  if (_systemGridColumns == columns)
-                    Icon(Icons.check, size: 16, color: JiveTheme.primaryGreen),
-                ],
-              ),
+	      itemBuilder: (context) {
+	        return [
+	          for (final columns in const [3, 4, 5, 6])
+	            PopupMenuItem(
+	              value: columns,
+	              height: 32,
+	              child: Row(
+	                children: [
+	                  Icon(Icons.grid_view_rounded, size: 16, color: Colors.grey.shade600),
+	                  const SizedBox(width: 6),
+	                  Text('$columns列', style: const TextStyle(fontSize: 12)),
+	                  const Spacer(),
+	                  if (_systemGridColumns == columns)
+	                    Icon(Icons.check, size: 16, color: JiveTheme.primaryGreen),
+	                ],
+	              ),
             ),
         ];
       },
@@ -949,6 +1137,24 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(Icons.grid_view_rounded, size: 18, color: Colors.grey.shade600),
+      ),
+    );
+  }
+
+  Widget _buildEmojiPickerButton() {
+    return Tooltip(
+      message: "表情符号",
+      child: InkWell(
+        onTap: _pickEmojiIcon,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(Icons.emoji_emotions_outlined, size: 18, color: Colors.grey.shade600),
+        ),
       ),
     );
   }
@@ -978,7 +1184,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   }
 
   Future<void> _applySuggestion(SystemCategorySuggestion suggestion) async {
-    if (_existingNames.contains(suggestion.name)) return;
+    if (_isBatch && _existingNames.contains(suggestion.name)) return;
     if (_isBatch && widget.autoBatchAdd && widget.onBatchAdd != null) {
       await _applyBatchAdd(suggestion);
       return;
@@ -1018,6 +1224,30 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     }
   }
 
+  void _applyGroupSelection(_SystemGroup group) {
+    final allowParentPick = _isParentCreateMode();
+    if (!allowParentPick) return;
+    final suggestion = _systemItemByName[group.name];
+    if (suggestion == null) return;
+    _applySuggestion(suggestion);
+  }
+
+  bool _isParentCreateMode() {
+    final parentName = widget.parentName?.trim();
+    return widget.parentOnly ||
+        parentName == null ||
+        parentName.isEmpty ||
+        parentName == "支出" ||
+        parentName == "收入";
+  }
+
+  String? _effectiveTypeName() {
+    if (widget.typeName != null) return widget.typeName;
+    final parentName = widget.parentName?.trim();
+    if (parentName == "支出" || parentName == "收入") return parentName;
+    return null;
+  }
+
   Widget _buildBatchActionBar() {
     return SafeArea(
       top: false,
@@ -1025,7 +1255,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -4))],
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, -4))],
         ),
         child: Row(
           children: [
@@ -1116,12 +1346,105 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return names;
   }
 
+  String? _duplicateNameHint() {
+    final raw = _nameController.text.trim();
+    if (raw.isEmpty) return null;
+    if (_isBatch) {
+      final names = _parseNames();
+      final duplicates = names.where((name) => _existingNames.contains(name)).toList();
+      if (duplicates.isEmpty) return null;
+      final preview = duplicates.take(3).join("、");
+      final suffix = duplicates.length > 3 ? "等" : "";
+      return "包含已存在名称：$preview$suffix，将自动跳过";
+    }
+    if (_existingNames.contains(raw)) {
+      return "名称已存在";
+    }
+    return null;
+  }
+
   void _scrollToIcons() {
-    // Keeping this for future extension (jump to icon area).
+    _pickCustomIcon();
   }
 
   String _normalizeSearch(String input) {
     return input.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+  }
+
+  Map<String, String> _buildIconLabelMap() {
+    final map = <String, String>{};
+    for (final entry in categoryIconEntries) {
+      final label = _preferredIconLabel(entry);
+      if (label.isEmpty) continue;
+      map[entry.name] = label;
+    }
+    return map;
+  }
+
+  String _preferredIconLabel(CategoryIconEntry entry) {
+    if (entry.name == "category") return "";
+    for (final keyword in entry.keywords) {
+      if (_containsCjk(keyword)) return keyword;
+    }
+    return entry.keywords.isEmpty ? "" : entry.keywords.first;
+  }
+
+  bool _containsCjk(String value) {
+    return RegExp(r'[\\u4e00-\\u9fff]').hasMatch(value);
+  }
+
+  void _applyIconSelection(String iconName, {String? label}) {
+    setState(() => _selectedIcon = iconName);
+    _maybeFillName(label ?? _guessLabelFromIcon(iconName));
+  }
+
+  void _maybeFillName(String? label) {
+    if (_isBatch) return;
+    final trimmed = label?.trim();
+    if (trimmed == null || trimmed.isEmpty) return;
+    final current = _nameController.text.trim();
+    if (current.isNotEmpty && current != _lastAutoFilledName) return;
+    _nameController.text = trimmed;
+    _nameController.selection = TextSelection.collapsed(offset: _nameController.text.length);
+    _lastAutoFilledName = trimmed;
+  }
+
+  void _handleNameChange() {
+    final current = _nameController.text.trim();
+    if (_lastAutoFilledName != null && current != _lastAutoFilledName) {
+      _lastAutoFilledName = null;
+    }
+  }
+
+  String? _guessLabelFromIcon(String iconName) {
+    final trimmed = iconName.trim();
+    if (trimmed.isEmpty || trimmed == "category") return null;
+    if (trimmed.startsWith("emoji:") || trimmed.startsWith("file:")) return null;
+    if (trimmed.startsWith("text:")) {
+      final text = trimmed.substring("text:".length).trim();
+      return text.isEmpty ? null : text;
+    }
+    final mapped = _iconLabelByName[trimmed];
+    if (mapped != null && mapped.isNotEmpty) return mapped;
+    return _labelFromAssetName(trimmed);
+  }
+
+  String? _labelFromAssetName(String iconName) {
+    var name = iconName;
+    if (name.startsWith("assets/")) {
+      name = name.split("/").last;
+    } else if (name.startsWith("qj/")) {
+      name = name.substring(3);
+    }
+    name = name.replaceAll(RegExp(r'\\.(png|svg)$'), '');
+    if (name.contains('__')) {
+      final parts = name.split('__');
+      if (parts.length > 1) {
+        final label = parts[1].replaceAll('_', ' ').trim();
+        return label.isEmpty ? null : label;
+      }
+    }
+    return null;
   }
 
   String _canonicalGroupName(String name) {
@@ -1214,11 +1537,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return 1.0;
   }
 
-  double _systemMetaSizeForColumns(int columns) {
-    final size = _systemLabelSizeForColumns(columns) - 1;
-    return size < 8 ? 8 : size;
-  }
-
   double _systemIndicatorSizeForColumns(int columns) {
     if (columns <= 3) return 14;
     if (columns == 4) return 12;
@@ -1246,17 +1564,17 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return target.clamp(240.0, 640.0);
   }
 
-  double _systemTileHeight(BuildContext context, int columns) {
-    final scale = MediaQuery.textScaleFactorOf(context);
-    double base;
-    if (columns <= 3) {
-      base = 74;
-    } else if (columns == 4) {
-      base = 66;
+	double _systemTileHeight(BuildContext context, int columns) {
+	  final scale = MediaQuery.textScalerOf(context).scale(14.0) / 14.0;
+	  double base;
+	  if (columns <= 3) {
+	    base = 80;
+	  } else if (columns == 4) {
+      base = 72;
     } else if (columns == 5) {
-      base = 58;
+      base = 64;
     } else {
-      base = 52;
+      base = 58;
     }
     if (scale >= 1.2) return base + 6;
     if (scale >= 1.1) return base + 3;
@@ -1267,10 +1585,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return CategoryService.parseColorHex(_selectedColorHex);
   }
 
-  String _colorHexFromColor(Color color) {
-    final value = color.value.toRadixString(16).padLeft(8, '0');
-    return "#${value.substring(2).toUpperCase()}";
-  }
+	String _colorHexFromColor(Color color) {
+	  final value = color.toARGB32().toRadixString(16).padLeft(8, '0');
+	  return "#${value.substring(2).toUpperCase()}";
+	}
 
   Widget _buildColorPicker() {
     return Row(
@@ -1313,18 +1631,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     );
   }
 
-  String _buildIconSearchKey(_IconEntry entry) {
-    final buffer = StringBuffer();
-    buffer.write(_normalizeSearch(entry.name));
-    for (final keyword in entry.keywords) {
-      final normalized = _normalizeSearch(keyword);
-      buffer.write(" $normalized");
-      buffer.write(" ${_normalizeSearch(PinyinHelper.getPinyinE(keyword))}");
-      buffer.write(" ${_normalizeSearch(PinyinHelper.getShortPinyin(keyword))}");
-    }
-    return buffer.toString();
-  }
-
   String _buildSystemSearchKey(SystemCategorySuggestion entry) {
     final name = _normalizeSearch(entry.name);
     final icon = _normalizeSearch(entry.iconName);
@@ -1340,13 +1646,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     }
     return buffer.toString();
   }
-}
-
-class _IconEntry {
-  final String name;
-  final List<String> keywords;
-
-  const _IconEntry(this.name, this.keywords);
 }
 
 class _SystemGroup {
@@ -1389,27 +1688,6 @@ const Map<String, List<String>> _groupAliasReverseMap = {
   '其它': ['其他'],
 };
 
-const List<String> _preferredGroupOrder = [
-  '薪酬',
-  '投资',
-  '租金',
-  '二手',
-  '补偿',
-  '餐饮',
-  '交通',
-  '住房居家',
-  '日用杂货',
-  '服饰鞋包',
-  '数码电器',
-  '娱乐休闲',
-  '教育学习',
-  '医疗',
-  '人情往来',
-  '宠物',
-  '税费',
-  '其他',
-];
-
 const List<Color> _categoryColorOptions = [
   Color(0xFFF44336),
   Color(0xFFFF9800),
@@ -1419,62 +1697,4 @@ const List<Color> _categoryColorOptions = [
   Color(0xFF9C27B0),
   Color(0xFF795548),
   Color(0xFF607D8B),
-];
-
-const List<_IconEntry> _iconEntries = [
-  _IconEntry('restaurant', ['餐饮', '美食', 'food', 'restaurant']),
-  _IconEntry('bakery_dining', ['早餐', '早饭', 'breakfast']),
-  _IconEntry('lunch_dining', ['午餐', '午饭', 'lunch']),
-  _IconEntry('dinner_dining', ['晚餐', '晚饭', 'dinner']),
-  _IconEntry('tapas', ['夜宵', '宵夜', 'snack']),
-  _IconEntry('delivery_dining', ['外卖', 'delivery']),
-  _IconEntry('local_cafe', ['饮料', '奶茶', '咖啡', '茶', 'coffee', 'tea']),
-  _IconEntry('icecream', ['零食', '甜品', 'icecream']),
-  _IconEntry('shopping_basket', ['买菜', '生鲜', 'grocery']),
-  _IconEntry('nutrition', ['水果', '果蔬', 'fruit', 'veg']),
-  _IconEntry('celebration', ['聚会', 'party']),
-  _IconEntry('liquor', ['酒', '酒水', 'liquor', 'wine']),
-  _IconEntry('shopping_bag', ['购物', 'shopping']),
-  _IconEntry('checkroom', ['服饰', '衣服', 'clothes']),
-  _IconEntry('cases', ['鞋包', '包', 'shoes', 'bag']),
-  _IconEntry('phone_iphone', ['数码', '手机', 'digital']),
-  _IconEntry('kitchen', ['家电', 'appliance']),
-  _IconEntry('chair', ['家居', '家具', 'home']),
-  _IconEntry('local_shipping', ['快递', '物流', 'delivery']),
-  _IconEntry('directions_car', ['交通', '出行', 'car']),
-  _IconEntry('local_taxi', ['打车', '出租', 'taxi']),
-  _IconEntry('subway', ['地铁', 'subway']),
-  _IconEntry('directions_bus', ['公交', 'bus']),
-  _IconEntry('local_gas_station', ['加油', 'gas']),
-  _IconEntry('local_parking', ['停车', 'parking']),
-  _IconEntry('train', ['火车', '高铁', 'train']),
-  _IconEntry('flight', ['飞机', '机票', 'flight']),
-  _IconEntry('house', ['居住', '住房', 'house']),
-  _IconEntry('key', ['房租', '租房', 'rent']),
-  _IconEntry('wifi', ['宽带', '网络', 'wifi']),
-  _IconEntry('phone_android', ['话费', '手机费', 'phone']),
-  _IconEntry('lightbulb', ['水电', '电费', 'water']),
-  _IconEntry('business', ['物业', 'property']),
-  _IconEntry('sports_esports', ['娱乐', '游戏', 'game']),
-  _IconEntry('movie', ['电影', 'movie']),
-  _IconEntry('videogame_asset', ['游戏', 'game']),
-  _IconEntry('mic', ['KTV', '唱歌', 'karaoke']),
-  _IconEntry('sports_basketball', ['运动', '健身', 'sport']),
-  _IconEntry('landscape', ['旅行', '旅游', 'travel']),
-  _IconEntry('card_membership', ['会员', 'member']),
-  _IconEntry('local_hospital', ['医疗', '医院', 'hospital']),
-  _IconEntry('medication', ['药品', '药', 'medicine']),
-  _IconEntry('local_pharmacy', ['挂号', 'pharmacy']),
-  _IconEntry('monitor_heart', ['检查', '体检']),
-  _IconEntry('people', ['人情', '社交', 'people']),
-  _IconEntry('redeem', ['红包', 'gift', 'bonus']),
-  _IconEntry('local_dining', ['请客', '聚餐']),
-  _IconEntry('pets', ['宠物', 'pet']),
-  _IconEntry('pest_control_rodent', ['猫粮', '狗粮', 'petfood']),
-  _IconEntry('trending_up', ['理财', '收益', 'invest']),
-  _IconEntry('attach_money', ['工资', '收入', 'salary']),
-  _IconEntry('military_tech', ['奖金', 'bonus']),
-  _IconEntry('work', ['兼职', '工作', 'job']),
-  _IconEntry('sell', ['二手', '卖出', 'sell']),
-  _IconEntry('category', ['默认', '分类', 'category']),
 ];

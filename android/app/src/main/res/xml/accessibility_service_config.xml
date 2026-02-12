@@ -6,4 +6,4 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_service_description"
     android:notificationTimeout="100"
-    android:packageNames="com.tencent.mm,com.eg.android.AlipayGphone" />
+    android:packageNames="com.tencent.mm,com.eg.android.AlipayGphone,com.unionpay,com.jd.jrapp,com.jingdong.app.mall,com.xunmeng.pinduoduo,com.sankuai.meituan,com.dianping.v1,com.sankuai.meituan.takeoutnew,com.ss.android.ugc.aweme,com.ss.android.ugc.livelite,com.ss.android.ugc.aweme.lite,com.ss.android.yumme.video,com.taobao.taobao,com.alibaba.wireless,com.taobao.idlefish,com.wudaokou.hippo,me.ele,com.huawei.wallet,com.ccb.longjiLife,com.smile.gifmaker,com.kuaishou.nebula" />

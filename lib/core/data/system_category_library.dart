@@ -2706,10 +2706,6 @@ const Map<String, Map<String, dynamic>> kSystemExpenseLibrary = {
         'icon': '品牌__阿联酋航空__Brand__Emirates.png',
       },
       {
-        'name': '阿迪达斯',
-        'icon': '品牌__阿迪达斯__Brand__Adidas.png',
-      },
-      {
         'name': '阿里1688',
         'icon': '品牌__阿里1688__Brand__Alibaba1688.png',
       },
@@ -3279,7 +3275,7 @@ const Map<String, Map<String, dynamic>> kSystemExpenseLibrary = {
       },
     ],
   },
-  '心情': {
+  '表情': {
     'icon': '心情__点赞__Mood__Like.png',
     'children': [
       {
@@ -3289,6 +3285,86 @@ const Map<String, Map<String, dynamic>> kSystemExpenseLibrary = {
       {
         'name': '鄙视',
         'icon': '心情__鄙视__Mood__Dislike.png',
+      },
+      {
+        'name': 'UwU',
+        'icon': '表情__UwU__Emoji__Uwu.png',
+      },
+      {
+        'name': '中性',
+        'icon': '表情__中性__Emoji__Neutral.png',
+      },
+      {
+        'name': '亲吻',
+        'icon': '表情__亲吻__Emoji__Kiss.png',
+      },
+      {
+        'name': '呕吐',
+        'icon': '表情__呕吐__Emoji__Vomiting.png',
+      },
+      {
+        'name': '哭泣',
+        'icon': '表情__哭泣__Emoji__Crying.png',
+      },
+      {
+        'name': '困惑',
+        'icon': '表情__困惑__Emoji__Confused.png',
+      },
+      {
+        'name': '大笑',
+        'icon': '表情__大笑__Emoji__Laughter.png',
+      },
+      {
+        'name': '失落',
+        'icon': '表情__失落__Emoji__Disappointed.png',
+      },
+      {
+        'name': '开心',
+        'icon': '表情__开心__Emoji__Happy.png',
+      },
+      {
+        'name': '微笑',
+        'icon': '表情__微笑__Emoji__Smile.png',
+      },
+      {
+        'name': '恋爱',
+        'icon': '表情__恋爱__Emoji__Romance.png',
+      },
+      {
+        'name': '恳求',
+        'icon': '表情__恳求__Emoji__Pleading.png',
+      },
+      {
+        'name': '惊喜',
+        'icon': '表情__惊喜__Emoji__Surprise.png',
+      },
+      {
+        'name': '无聊',
+        'icon': '表情__无聊__Emoji__Bored.png',
+      },
+      {
+        'name': '淡定',
+        'icon': '表情__淡定__Emoji__Zen.png',
+      },
+      {
+        'name': '生气',
+        'icon': '表情__生气__Emoji__Angry.png',
+      },
+      {
+        'name': '疯狂',
+        'icon': '表情__疯狂__Emoji__Crazy.png',
+      },
+      {
+        'name': '脸红',
+        'icon': '表情__脸红__Emoji__Blushing.png',
+      },
+      {
+        'name': '难过',
+        'icon': '表情__难过__Emoji__Sad.png',
+      },
+      {
+        'name': '震惊',
+        'icon': '表情__震惊__Emoji__Shocked.png',
       },
     ],
   },
@@ -4686,91 +4762,6 @@ const Map<String, Map<String, dynamic>> kSystemExpenseLibrary = {
       {
         'name': '钥匙',
         'icon': '物业__钥匙__Property__Key.png',
-      },
-    ],
-  },
-  '表情': {
-    'icon': '表情__UwU__Emoji__Uwu.png',
-    'children': [
-      {
-        'name': 'UwU',
-        'icon': '表情__UwU__Emoji__Uwu.png',
-      },
-      {
-        'name': '中性',
-        'icon': '表情__中性__Emoji__Neutral.png',
-      },
-      {
-        'name': '亲吻',
-        'icon': '表情__亲吻__Emoji__Kiss.png',
-      },
-      {
-        'name': '呕吐',
-        'icon': '表情__呕吐__Emoji__Vomiting.png',
-      },
-      {
-        'name': '哭泣',
-        'icon': '表情__哭泣__Emoji__Crying.png',
-      },
-      {
-        'name': '困惑',
-        'icon': '表情__困惑__Emoji__Confused.png',
-      },
-      {
-        'name': '大笑',
-        'icon': '表情__大笑__Emoji__Laughter.png',
-      },
-      {
-        'name': '失落',
-        'icon': '表情__失落__Emoji__Disappointed.png',
-      },
-      {
-        'name': '开心',
-        'icon': '表情__开心__Emoji__Happy.png',
-      },
-      {
-        'name': '微笑',
-        'icon': '表情__微笑__Emoji__Smile.png',
-      },
-      {
-        'name': '恋爱',
-        'icon': '表情__恋爱__Emoji__Romance.png',
-      },
-      {
-        'name': '恳求',
-        'icon': '表情__恳求__Emoji__Pleading.png',
-      },
-      {
-        'name': '惊喜',
-        'icon': '表情__惊喜__Emoji__Surprise.png',
-      },
-      {
-        'name': '无聊',
-        'icon': '表情__无聊__Emoji__Bored.png',
-      },
-      {
-        'name': '淡定',
-        'icon': '表情__淡定__Emoji__Zen.png',
-      },
-      {
-        'name': '生气',
-        'icon': '表情__生气__Emoji__Angry.png',
-      },
-      {
-        'name': '疯狂',
-        'icon': '表情__疯狂__Emoji__Crazy.png',
-      },
-      {
-        'name': '脸红',
-        'icon': '表情__脸红__Emoji__Blushing.png',
-      },
-      {
-        'name': '难过',
-        'icon': '表情__难过__Emoji__Sad.png',
-      },
-      {
-        'name': '震惊',
-        'icon': '表情__震惊__Emoji__Shocked.png',
       },
     ],
   },
