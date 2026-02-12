@@ -4,12 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 
 import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
-import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_rule_model.dart';
-import '../../core/database/transaction_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/database_service.dart';
@@ -292,6 +289,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     final tagName = tagDisplayName(widget.tag);
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
+    final appBarBottomHeight = isLandscape ? 86.0 : 118.0;
     _scheduleTitleScroll();
     return Scaffold(
       backgroundColor: Colors.white,
@@ -320,15 +318,15 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         bottom: PreferredSize(
-          preferredSize: Size.fromHeight(isLandscape ? 96 : 118),
+          preferredSize: Size.fromHeight(appBarBottomHeight),
           child: Column(
             children: [
               Padding(
-                padding: EdgeInsets.fromLTRB(8, 0, 8, isLandscape ? 2 : 4),
+                padding: EdgeInsets.fromLTRB(8, 0, 8, isLandscape ? 0 : 4),
                 child: _buildActionRow(busy),
               ),
               Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, isLandscape ? 8 : 12),
+                padding: EdgeInsets.fromLTRB(16, 0, 16, isLandscape ? 6 : 12),
                 child: TextField(
                   controller: _searchController,
                   onChanged: (value) {
@@ -364,7 +362,12 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
                           child: visibleRules.isEmpty
                               ? _buildEmptySearch()
                               : ListView.separated(
-                                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                                  padding: EdgeInsets.fromLTRB(
+                                    16,
+                                    4,
+                                    16,
+                                    isLandscape ? 12 : 24,
+                                  ),
                                   itemCount: visibleRules.length,
                                   separatorBuilder: (_, __) => const SizedBox(height: 10),
                                   itemBuilder: (context, index) =>
@@ -375,7 +378,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
                     ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(16, isLandscape ? 6 : 8, 16, isLandscape ? 10 : 16),
+          padding: EdgeInsets.fromLTRB(16, isLandscape ? 4 : 8, 16, isLandscape ? 8 : 16),
           child: ElevatedButton.icon(
             onPressed: _loading ? null : () => _editRule(),
             icon: const Icon(Icons.add),
@@ -383,7 +386,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2E7D32),
               foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(vertical: isLandscape ? 10 : 12),
+              padding: EdgeInsets.symmetric(vertical: isLandscape ? 8 : 12),
               shape: const StadiumBorder(),
             ),
           ),
@@ -541,6 +544,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     final range = await _pickBackfillRange();
     if (range == null) return;
     final rangeLabel = _rangeLabel(range);
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -667,6 +671,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
       });
     }
 
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -691,7 +696,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
                       await UiPrefService.setSmartCleanupRemoveTagToo(value);
                       await refreshEstimate(setDialogState);
                     },
-                    activeColor: const Color(0xFF2E7D32),
+                    activeThumbColor: const Color(0xFF2E7D32),
                   ),
                   const SizedBox(height: 6),
                   if (estimating)
@@ -941,7 +946,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
                 if (range == null) return;
                 final start = DateTime(range.start.year, range.start.month, range.start.day);
                 final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
-                if (!mounted) return;
+                if (!context.mounted) return;
                 Navigator.pop(context, _BackfillRange(start: start, end: end));
               },
             ),
@@ -973,27 +978,27 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     final selectedColor = const Color(0xFF2E7D32);
     final textStyle = const TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, isLandscape ? 6 : 10, 16, isLandscape ? 2 : 4),
+      padding: EdgeInsets.fromLTRB(16, isLandscape ? 4 : 10, 16, isLandscape ? 0 : 4),
       child: Row(
         children: [
           ChoiceChip(
             label: Text('全部 $total', style: textStyle),
             selected: _filter == _RuleFilter.all,
-            selectedColor: selectedColor.withOpacity(0.15),
+            selectedColor: selectedColor.withValues(alpha: 0.15),
             onSelected: (_) => setState(() => _filter = _RuleFilter.all),
           ),
           const SizedBox(width: 8),
           ChoiceChip(
             label: Text('启用 $enabled', style: textStyle),
             selected: _filter == _RuleFilter.enabled,
-            selectedColor: selectedColor.withOpacity(0.15),
+            selectedColor: selectedColor.withValues(alpha: 0.15),
             onSelected: (_) => setState(() => _filter = _RuleFilter.enabled),
           ),
           const SizedBox(width: 8),
           ChoiceChip(
             label: Text('停用 $disabled', style: textStyle),
             selected: _filter == _RuleFilter.disabled,
-            selectedColor: selectedColor.withOpacity(0.15),
+            selectedColor: selectedColor.withValues(alpha: 0.15),
             onSelected: (_) => setState(() => _filter = _RuleFilter.disabled),
           ),
         ],
@@ -1054,7 +1059,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
               Switch(
                 value: rule.isEnabled,
                 onChanged: (value) => _toggleRule(rule, value),
-                activeColor: const Color(0xFF2E7D32),
+                activeThumbColor: const Color(0xFF2E7D32),
               ),
               IconButton(
                 onPressed: () => _editRule(rule: rule),
@@ -1124,7 +1129,6 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         case _RuleSort.createdDesc:
           return b.createdAt.compareTo(a.createdAt);
         case _RuleSort.updatedDesc:
-        default:
           return b.updatedAt.compareTo(a.updatedAt);
       }
     });
@@ -1423,7 +1427,7 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                   title: const Text('启用规则'),
                   value: _enabled,
                   onChanged: (value) => setState(() => _enabled = value),
-                  activeColor: const Color(0xFF2E7D32),
+                  activeThumbColor: const Color(0xFF2E7D32),
                 ),
                 const SizedBox(height: 6),
                 Text('类型', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
@@ -1496,7 +1500,7 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                 Text('分类', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String?>(
-                  value: _categoryKey,
+                  initialValue: _categoryKey,
                   decoration: const InputDecoration(
                     labelText: '一级分类（可选）',
                     isDense: true,
@@ -1523,7 +1527,7 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String?>(
-                  value: _subCategoryKey,
+                  initialValue: _subCategoryKey,
                   decoration: const InputDecoration(
                     labelText: '二级分类（可选）',
                     isDense: true,
@@ -1638,7 +1642,7 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
       decoration: BoxDecoration(
         color: const Color(0xFFE8F5E9),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2E7D32).withOpacity(0.25)),
+        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

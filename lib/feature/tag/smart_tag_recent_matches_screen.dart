@@ -3,11 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 
 import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
-import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_model.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/database_service.dart';
@@ -176,10 +173,10 @@ class _SmartTagRecentMatchesScreenState
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.black.withOpacity(0.04)),
+          border: Border.all(color: Colors.black.withValues(alpha: 0.04)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -232,7 +229,7 @@ class _SmartTagRecentMatchesScreenState
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: JiveTheme.primaryGreen.withOpacity(0.1),
+                      color: JiveTheme.primaryGreen.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(

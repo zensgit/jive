@@ -8,13 +8,7 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
-import '../../core/database/category_model.dart';
 import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_model.dart';
-import '../../core/database/tag_rule_model.dart';
-import '../../core/database/transaction_model.dart';
 import '../../core/service/database_service.dart';
 
 class TagConversionLogScreen extends StatefulWidget {
@@ -55,12 +49,7 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
 
   Future<void> _init() async {
     try {
-      final existing = widget.isar;
-      if (existing != null) {
-        _isar = existing;
-      } else {
-        _isar = await DatabaseService.getInstance();
-      }
+      _isar = widget.isar ?? await DatabaseService.getInstance();
       await _loadLogs();
     } catch (e) {
       if (!mounted) return;
@@ -485,9 +474,11 @@ class _TagConversionLogScreenState extends State<TagConversionLogScreen> {
       ].join(','));
     }
     await file.writeAsString(buffer.toString(), flush: true);
-    await Share.shareXFiles(
-      [XFile(file.path)],
-      text: '转换记录导出（CSV）',
+    await SharePlus.instance.share(
+      ShareParams(
+        files: [XFile(file.path)],
+        text: '转换记录导出（CSV）',
+      ),
     );
   }
 

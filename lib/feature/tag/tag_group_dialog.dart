@@ -292,7 +292,7 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: showCustom ? _colorFromHex(customHex!) : null,
+          color: selected && customHex != null ? _colorFromHex(customHex) : null,
           gradient: showCustom
               ? null
               : const LinearGradient(

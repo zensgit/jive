@@ -12,9 +12,6 @@ import '../../core/database/tag_rule_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
-import '../../core/database/template_model.dart';
-import '../../core/database/project_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/database_service.dart';
@@ -491,7 +488,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           decoration: BoxDecoration(
             color: _accentSoft,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _accentColor.withOpacity(0.25)),
+            border: Border.all(color: _accentColor.withValues(alpha: 0.25)),
           ),
           child: Text(
             label,
@@ -645,9 +642,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.35)),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -669,7 +666,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.18),
+                  color: color.withValues(alpha: 0.18),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text('${tag.usageCount}', style: countStyle),
@@ -680,9 +677,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                   width: 16,
                   height: 16,
                   decoration: BoxDecoration(
-                    color: _accentColor.withOpacity(0.12),
+                    color: _accentColor.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
-                    border: Border.all(color: _accentColor.withOpacity(0.4)),
+                    border: Border.all(color: _accentColor.withValues(alpha: 0.4)),
                   ),
                   child: const Icon(
                     Icons.auto_awesome,
@@ -1050,7 +1047,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                       children: [
                                         Text(
                                           sheetTotal == 0
-                                              ? '${sheetProgressLabel}准备中...'
+                                              ? '$sheetProgressLabel准备中...'
                                               : '$sheetProgressLabel：已处理 $sheetProcessed / $sheetTotal',
                                           style: TextStyle(
                                             fontSize: 12,
@@ -1144,7 +1141,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                                   setSheetState(() => _showSmartTagBadge = value);
                                                   await _setShowSmartTagBadge(value);
                                                 },
-                                          activeColor: _accentColor,
+                                          activeThumbColor: _accentColor,
                                         ),
                                         Divider(height: 1, color: Colors.green.shade100),
                                         SwitchListTile(
@@ -1166,7 +1163,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                                   );
                                                   await _setCleanupRemoveTagTooDefault(value);
                                                 },
-                                          activeColor: _accentColor,
+                                          activeThumbColor: _accentColor,
                                         ),
                                       ],
                                     ),
@@ -1367,7 +1364,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                       setSheetState(() {});
                                       await _loadData();
                                     },
-                                    activeColor: _accentColor,
+                                    activeThumbColor: _accentColor,
                                   ),
                                   onTap: () async {
                                     await _openTagRules(tag);
@@ -1445,6 +1442,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     final range = await _pickBackfillRange();
     if (range == null) return;
     final rangeLabel = _rangeLabel(range);
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1625,6 +1623,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       }
     }
 
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -1823,6 +1822,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     final range = await _pickBackfillRange();
     if (range == null) return;
     final rangeLabel = _rangeLabel(range);
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -1959,6 +1959,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       estimating = false;
     }
 
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -2190,7 +2191,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                 if (range == null) return;
                 final start = DateTime(range.start.year, range.start.month, range.start.day);
                 final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
-                if (!mounted) return;
+                if (!context.mounted) return;
                 Navigator.pop(context, _BackfillRange(start: start, end: end));
               },
             ),
@@ -2498,6 +2499,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   Future<bool?> _openTagSheet({JiveTag? tag, String? groupKey}) async {
     final groupCount = (await TagService(_isar).getGroups(includeArchived: false)).length;
     final initialSize = _tagSheetInitialSize(groupCount);
+    if (!mounted) return null;
     return showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -2630,7 +2632,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
               return ListTile(
                 leading: CircleAvatar(
                   radius: 12,
-                  backgroundColor: color.withOpacity(0.2),
+                  backgroundColor: color.withValues(alpha: 0.2),
                 ),
                 title: Text(tagDisplayName(tag)),
                 onTap: () => Navigator.pop(context, tag),
@@ -2729,8 +2731,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                   parentKey: resolvedParentKey,
                 );
                 final hasExisting = existing != null;
-                final parentName = hasExisting && existing!.parentKey != null
-                    ? categoryNameByKey[existing.parentKey!]
+                final existingParentKey = existing?.parentKey;
+                final parentName = hasExisting && existingParentKey != null
+                    ? categoryNameByKey[existingParentKey]
                     : null;
                 final estimate = _estimateConversion(
                   transactions: tagTransactions,
@@ -2793,7 +2796,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '已存在分类：${existing!.name}',
+                              '已存在分类：${existing.name}',
                               style: const TextStyle(fontWeight: FontWeight.w600),
                             ),
                             if (parentName != null && parentName.isNotEmpty)
@@ -2880,7 +2883,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                     ),
                     if (asSub)
                       DropdownButtonFormField<String?>(
-                        value: parentKey,
+                        initialValue: parentKey,
                         decoration: const InputDecoration(
                           labelText: '父分类',
                           border: OutlineInputBorder(),
@@ -2897,32 +2900,35 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                     const SizedBox(height: 8),
                     _buildEstimateBanner(estimate),
                     const SizedBox(height: 8),
-                    RadioListTile<TagMigratePolicy>(
-                      value: TagMigratePolicy.onlyNull,
+                    RadioGroup<TagMigratePolicy>(
                       groupValue: policy,
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: const Text('仅补全空分类'),
-                      subtitle: const Text('不会修改已设置分类的交易'),
-                      onChanged: (value) => setSheetState(() => policy = value!),
-                    ),
-                    RadioListTile<TagMigratePolicy>(
-                      value: TagMigratePolicy.overwrite,
-                      groupValue: policy,
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: const Text('覆盖同类型分类'),
-                      subtitle: const Text('仅在分类类型一致时覆盖已有分类'),
-                      onChanged: (value) => setSheetState(() => policy = value!),
-                    ),
-                    RadioListTile<TagMigratePolicy>(
-                      value: TagMigratePolicy.none,
-                      groupValue: policy,
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: const Text('不迁移'),
-                      subtitle: const Text('仅创建分类，不改交易'),
-                      onChanged: (value) => setSheetState(() => policy = value!),
+                      onChanged: (value) =>
+                          setSheetState(() => policy = value ?? policy),
+                      child: Column(
+                        children: const [
+                          RadioListTile<TagMigratePolicy>(
+                            value: TagMigratePolicy.onlyNull,
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            title: Text('仅补全空分类'),
+                            subtitle: Text('不会修改已设置分类的交易'),
+                          ),
+                          RadioListTile<TagMigratePolicy>(
+                            value: TagMigratePolicy.overwrite,
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            title: Text('覆盖同类型分类'),
+                            subtitle: Text('仅在分类类型一致时覆盖已有分类'),
+                          ),
+                          RadioListTile<TagMigratePolicy>(
+                            value: TagMigratePolicy.none,
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            title: Text('不迁移'),
+                            subtitle: Text('仅创建分类，不改交易'),
+                          ),
+                        ],
+                      ),
                     ),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,

@@ -2,13 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
-import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/database_service.dart';
@@ -54,12 +49,7 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
 
   Future<void> _load() async {
     try {
-      final existing = widget.isar;
-      if (existing != null) {
-        _isar = existing;
-      } else {
-        _isar = await DatabaseService.getInstance();
-      }
+      _isar = widget.isar ?? await DatabaseService.getInstance();
 
       final showBadge = await UiPrefService.getShowSmartTagBadge();
       final categories = await _isar.collection<JiveCategory>().where().findAll();
@@ -172,13 +162,13 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
                         ChoiceChip(
                           label: const Text('账单模式'),
                           selected: groupByDate,
-                          selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+                          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
                           onSelected: (_) => setModalState(() => groupByDate = true),
                         ),
                         ChoiceChip(
                           label: const Text('列表模式'),
                           selected: !groupByDate,
-                          selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+                          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
                           onSelected: (_) => setModalState(() => groupByDate = false),
                         ),
                       ],
@@ -364,7 +354,7 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -427,9 +417,9 @@ class _TagTransactionsScreenState extends State<TagTransactionsScreen> {
       width: 18,
       height: 18,
       decoration: BoxDecoration(
-        color: JiveTheme.primaryGreen.withOpacity(0.12),
+        color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
         shape: BoxShape.circle,
-        border: Border.all(color: JiveTheme.primaryGreen.withOpacity(0.4)),
+        border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.4)),
       ),
       child: const Icon(
         Icons.auto_awesome,

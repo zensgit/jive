@@ -4,12 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 
-import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
-import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_model.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/database_service.dart';
@@ -80,12 +76,7 @@ class _TagStatisticsScreenState extends State<TagStatisticsScreen> {
 
   Future<void> _loadStats() async {
     try {
-      final existing = widget.isar;
-      if (existing != null) {
-        _isar = existing;
-      } else {
-        _isar = await DatabaseService.getInstance();
-      }
+      _isar = widget.isar ?? await DatabaseService.getInstance();
 
       final categories = await _isar.collection<JiveCategory>().where().findAll();
       final categoryMap = {for (final c in categories) c.key: c};
@@ -155,12 +146,10 @@ class _TagStatisticsScreenState extends State<TagStatisticsScreen> {
     }).toList();
 
     final grouped = <String, double>{};
-    double total = 0;
     for (final tx in filtered) {
       if (tx.amount <= 0) continue;
       final key = _groupKeyFor(tx);
       grouped[key] = (grouped[key] ?? 0) + tx.amount;
-      total += tx.amount;
     }
 
     final stats = <_TagStat>[];
