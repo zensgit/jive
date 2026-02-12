@@ -158,9 +158,9 @@ class _TagPickerSheetState extends State<TagPickerSheet> {
               ],
             )
           : Text(label, style: labelStyle),
-      backgroundColor: color.withOpacity(0.08),
-      selectedColor: color.withOpacity(0.18),
-      side: BorderSide(color: color.withOpacity(selected ? 0.6 : 0.3)),
+      backgroundColor: color.withValues(alpha: 0.08),
+      selectedColor: color.withValues(alpha: 0.18),
+      side: BorderSide(color: color.withValues(alpha: selected ? 0.6 : 0.3)),
       checkmarkColor: color,
       showCheckmark: selected,
       onSelected: (value) {

@@ -20,11 +20,18 @@ Color _colorFromHex(String hex, {Color fallback = const Color(0xFF4D7CFE)}) {
 
 String _hexFromColor(Color color) {
   final value = color.toARGB32();
-  if (color.alpha == 255) {
+  if (_alpha8(color) == 255) {
     final rgb = value & 0xFFFFFF;
     return '#${rgb.toRadixString(16).padLeft(6, '0')}';
   }
   return '#${value.toRadixString(16).padLeft(8, '0')}';
+}
+
+int _alpha8(Color color) {
+  final value = (color.a * 255.0).round();
+  if (value < 0) return 0;
+  if (value > 255) return 255;
+  return value;
 }
 
 String _rgbHexFromColor(Color color) {
@@ -321,7 +328,7 @@ class _TagColorPickerSheetState extends State<TagColorPickerSheet>
                 boxShadow: selected
                     ? [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
+                          color: Colors.black.withValues(alpha: 0.06),
                           blurRadius: 6,
                           offset: const Offset(0, 2),
                         ),
@@ -425,7 +432,7 @@ class _TagColorPickerSheetState extends State<TagColorPickerSheet>
     final dy = (position.dy / size.height).clamp(0.0, 1.0);
     final hue = dx * 360.0;
     final value = 1.0 - dy;
-    final color = HSVColor.fromAHSV(_currentColor.alpha / 255.0, hue, 1.0, value).toColor();
+    final color = HSVColor.fromAHSV(_alpha8(_currentColor) / 255.0, hue, 1.0, value).toColor();
     _setColor(color, preserveAlpha: false);
   }
 
@@ -498,9 +505,9 @@ class _TagColorPickerSheetState extends State<TagColorPickerSheet>
             data: SliderTheme.of(context).copyWith(
               trackHeight: 16,
               activeTrackColor: activeColor,
-              inactiveTrackColor: activeColor.withOpacity(0.2),
+              inactiveTrackColor: activeColor.withValues(alpha: 0.2),
               thumbColor: Colors.white,
-              overlayColor: activeColor.withOpacity(0.12),
+              overlayColor: activeColor.withValues(alpha: 0.12),
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
             ),
             child: Slider(
@@ -568,7 +575,7 @@ class _TagColorPickerSheetState extends State<TagColorPickerSheet>
                       activeTrackColor: Colors.transparent,
                       inactiveTrackColor: Colors.transparent,
                       thumbColor: Colors.white,
-                      overlayColor: Colors.black.withOpacity(0.06),
+                      overlayColor: Colors.black.withValues(alpha: 0.06),
                       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 9),
                     ),
                     child: Slider(
@@ -863,12 +870,12 @@ class _TagColorPickerSheetState extends State<TagColorPickerSheet>
               color: color,
               shape: BoxShape.circle,
               border: Border.all(
-                color: isSelected ? _panelText : Colors.black.withOpacity(0.2),
+                color: isSelected ? _panelText : Colors.black.withValues(alpha: 0.2),
                 width: isSelected ? 2 : 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
+                  color: Colors.black.withValues(alpha: 0.12),
                   blurRadius: 6,
                   offset: const Offset(0, 2),
                 ),
@@ -986,7 +993,7 @@ class _TagColorPickerSheetState extends State<TagColorPickerSheet>
     if (value.isEmpty) return;
     final parsed = int.tryParse(value);
     if (parsed == null) return;
-    final clamped = parsed.clamp(0, max) as int;
+    final clamped = parsed.clamp(0, max).toInt();
     if (clamped.toString() != controller.text) {
       _setControllerText(controller, null, clamped.toString());
     }
@@ -1020,14 +1027,14 @@ class _TagColorPickerSheetState extends State<TagColorPickerSheet>
   }
 
   void _setColor(Color color, {bool preserveAlpha = true}) {
-    final updated = preserveAlpha ? color.withAlpha(_currentColor.alpha) : color;
+    final updated = preserveAlpha ? color.withAlpha(_alpha8(_currentColor)) : color;
     setState(() => _currentColor = updated);
     _syncControllers();
   }
 
   void _setRgb({int? red, int? green, int? blue}) {
     final updated = Color.fromARGB(
-      _currentColor.alpha,
+      _alpha8(_currentColor),
       red ?? _channelValue(_currentColor.r),
       green ?? _channelValue(_currentColor.g),
       blue ?? _channelValue(_currentColor.b),
@@ -1036,14 +1043,19 @@ class _TagColorPickerSheetState extends State<TagColorPickerSheet>
   }
 
   void _setAlphaPercent(int percent) {
-    final clamped = percent.clamp(0, 100) as int;
+    final clamped = percent.clamp(0, 100).toInt();
     final alpha = (clamped / 100.0 * 255).round();
-    final updated = Color.fromARGB(alpha, _currentColor.red, _currentColor.green, _currentColor.blue);
+    final updated = Color.fromARGB(
+      alpha,
+      _channelValue(_currentColor.r),
+      _channelValue(_currentColor.g),
+      _channelValue(_currentColor.b),
+    );
     _setColor(updated, preserveAlpha: false);
   }
 
   int _alphaPercent() {
-    return ((_currentColor.alpha / 255.0) * 100).round();
+    return ((_alpha8(_currentColor) / 255.0) * 100).round();
   }
 
   int _channelValue(double channel) {

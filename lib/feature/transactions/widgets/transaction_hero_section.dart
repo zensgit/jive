@@ -36,7 +36,7 @@ class TransactionHeroSection extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            JiveTheme.primaryGreen.withOpacity(0.08),
+            JiveTheme.primaryGreen.withValues(alpha: 0.08),
             JiveTheme.surfaceWhite,
           ],
         ),
@@ -71,12 +71,12 @@ class TransactionHeroSection extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: JiveTheme.primaryGreen.withOpacity(0.3),
+          color: JiveTheme.primaryGreen.withValues(alpha: 0.3),
           width: 2,
         ),
         boxShadow: [
           BoxShadow(
-            color: JiveTheme.primaryGreen.withOpacity(0.1),
+            color: JiveTheme.primaryGreen.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),

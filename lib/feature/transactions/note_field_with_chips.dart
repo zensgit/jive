@@ -68,7 +68,7 @@ class NoteFieldWithChips extends StatelessWidget {
                           onTagSelected?.call(tag);
                         }
                       },
-                      selectedColor: JiveTheme.primaryGreen.withOpacity(0.15),
+                      selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.15),
                       backgroundColor: Colors.grey.shade100,
                       side: BorderSide(
                         color: selected ? JiveTheme.primaryGreen : Colors.transparent,

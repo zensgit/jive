@@ -3,11 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 
-import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/tag_model.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/database_service.dart';
@@ -44,12 +41,7 @@ class _SmartTagOptOutScreenState extends State<SmartTagOptOutScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final existing = widget.isar;
-    if (existing != null) {
-      _isar = existing;
-    } else {
-      _isar = await DatabaseService.getInstance();
-    }
+    _isar = widget.isar ?? await DatabaseService.getInstance();
 
     final categories = await _isar.collection<JiveCategory>().where().findAll();
     final tags = await _isar.collection<JiveTag>().where().findAll();
@@ -431,19 +423,19 @@ class _SmartTagOptOutScreenState extends State<SmartTagOptOutScreen> {
         ChoiceChip(
           label: const Text('全部'),
           selected: _filter == 'all',
-          selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
           onSelected: (_) => setState(() => _filter = 'all'),
         ),
         ChoiceChip(
           label: const Text('全部停用'),
           selected: _filter == 'all_off',
-          selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
           onSelected: (_) => setState(() => _filter = 'all_off'),
         ),
         ChoiceChip(
           label: const Text('部分停用'),
           selected: _filter == 'partial',
-          selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
           onSelected: (_) => setState(() => _filter = 'partial'),
         ),
       ],
@@ -469,13 +461,13 @@ class _SmartTagOptOutScreenState extends State<SmartTagOptOutScreen> {
               ChoiceChip(
                 label: const Text('时间'),
                 selected: _sortField == 'time',
-                selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+                selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
                 onSelected: (_) => setState(() => _sortField = 'time'),
               ),
               ChoiceChip(
                 label: const Text('金额'),
                 selected: _sortField == 'amount',
-                selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+                selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
                 onSelected: (_) => setState(() => _sortField = 'amount'),
               ),
             ],

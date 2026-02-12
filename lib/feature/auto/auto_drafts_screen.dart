@@ -5,13 +5,10 @@ import 'package:isar/isar.dart';
 import '../../core/database/auto_draft_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
-import '../../core/database/transaction_model.dart';
 import '../../core/service/auto_draft_service.dart';
 import '../../core/service/auto_account_mapping.dart';
 import '../../core/service/account_service.dart';
 import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/tag_service.dart';
 import '../tag/tag_icon_catalog.dart';
@@ -105,6 +102,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     final tagService = TagService(_isar);
     await tagService.initDefaultGroups();
     final tags = await tagService.getTags(includeArchived: false);
+    if (!mounted) return null;
     var selectedTagKeys = List<String>.from(draft.tagKeys);
     var type = draft.type ?? (_isTransferDraft(draft) ? 'transfer' : 'expense');
     var amountText = draft.amount.toStringAsFixed(2);
@@ -239,7 +237,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                               ),
                               const SizedBox(height: 12),
                               DropdownButtonFormField<String>(
-                                value: type,
+                                initialValue: type,
                                 decoration: const InputDecoration(labelText: '类型'),
                                 items: const [
                                   DropdownMenuItem(value: 'expense', child: Text('支出')),
@@ -260,7 +258,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                               const SizedBox(height: 12),
                               if (type != 'transfer') ...[
                                 DropdownButtonFormField<int>(
-                                  value: accountId,
+                                  initialValue: accountId,
                                   decoration: InputDecoration(
                                     labelText: '账户',
                                     errorText: accountError,
@@ -277,7 +275,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 DropdownButtonFormField<String>(
-                                  value: selectedParent?.key,
+                                  initialValue: selectedParent?.key,
                                   decoration: const InputDecoration(labelText: '分类'),
                                   items: [
                                     for (final category in parentOptions)
@@ -296,7 +294,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 DropdownButtonFormField<String>(
-                                  value: selectedSub?.key,
+                                  initialValue: selectedSub?.key,
                                   decoration: const InputDecoration(labelText: '子分类'),
                                   items: [
                                     for (final sub in subOptions)
@@ -315,7 +313,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                               ],
                               if (type == 'transfer') ...[
                                 DropdownButtonFormField<int>(
-                                  value: accountId,
+                                  initialValue: accountId,
                                   decoration: InputDecoration(
                                     labelText: '转出账户',
                                     errorText: fromAccountError,
@@ -331,7 +329,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 DropdownButtonFormField<int>(
-                                  value: toAccountId,
+                                  initialValue: toAccountId,
                                   decoration: InputDecoration(
                                     labelText: '转入账户',
                                     errorText: toAccountError,
@@ -516,10 +514,11 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         Navigator.pop(context, _hasChanges);
-        return false;
       },
       child: Scaffold(
         backgroundColor: Colors.white,
@@ -576,8 +575,8 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
         tagDisplayName(tag),
         style: TextStyle(color: color, fontWeight: FontWeight.w600),
       ),
-      backgroundColor: color.withOpacity(0.12),
-      side: BorderSide(color: color.withOpacity(0.4)),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.4)),
       onDeleted: onDeleted,
     );
   }
@@ -601,7 +600,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -815,7 +814,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   ),
                                 ),
                               DropdownButtonFormField<int>(
-                                value: fromId,
+                                initialValue: fromId,
                                 decoration: const InputDecoration(labelText: '转出账户'),
                                 hint: fromHintLabel == null ? const Text('请选择') : Text(fromHintLabel),
                                 items: [
@@ -840,7 +839,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   ),
                                 ),
                               DropdownButtonFormField<int>(
-                                value: toId,
+                                initialValue: toId,
                                 decoration: const InputDecoration(labelText: '转入账户'),
                                 hint: toHintLabel == null ? const Text('请选择') : Text(toHintLabel),
                                 items: [
@@ -890,10 +889,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   alignment: Alignment.centerLeft,
                                   child: TextButton(
                                     onPressed: () async {
-                                      final createdFrom = fromId == null && fromHintLabel != null
+                                      final createdFrom = fromId == null
                                           ? await _createAccountWithName(fromHintLabel)
                                           : null;
-                                      final createdTo = toId == null && toHintLabel != null
+                                      final createdTo = toId == null
                                           ? await _createAccountWithName(toHintLabel)
                                           : null;
                                       if (createdFrom == null && createdTo == null) return;
@@ -950,6 +949,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                       ),
                                     );
                                   }
+                                  if (!context.mounted) return;
                                   Navigator.pop(
                                     context,
                                     _TransferSelection(fromId: fromId!, toId: toId!),

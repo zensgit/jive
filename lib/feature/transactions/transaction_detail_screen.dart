@@ -208,10 +208,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         Navigator.pop(context, _hasDataChanges);
-        return false;
       },
       child: widget.isSheet ? _buildSheet() : _buildScreen(),
     );
@@ -483,7 +484,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     required VoidCallback onPressed,
   }) {
     return Material(
-      color: color.withOpacity(0.12),
+      color: color.withValues(alpha: 0.12),
       shape: const CircleBorder(),
       child: IconButton(
         onPressed: onPressed,
@@ -501,7 +502,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -787,9 +788,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             Container(
               padding: const EdgeInsets.all(3),
               decoration: BoxDecoration(
-                color: JiveTheme.primaryGreen.withOpacity(0.12),
+                color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: JiveTheme.primaryGreen.withOpacity(0.4)),
+                border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.4)),
               ),
               child: const Icon(
                 Icons.auto_awesome,
@@ -804,11 +805,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           ? null
           : CircleAvatar(
               radius: 10,
-              backgroundColor: color.withOpacity(0.15),
+              backgroundColor: color.withValues(alpha: 0.15),
               child: icon,
             ),
-      backgroundColor: color.withOpacity(0.12),
-      side: BorderSide(color: color.withOpacity(0.4)),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.4)),
     );
   }
 
@@ -912,7 +913,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                   children: [
                                     CircleAvatar(
                                       radius: 14,
-                                      backgroundColor: color.withOpacity(0.15),
+                                      backgroundColor: color.withValues(alpha: 0.15),
                                       child: tagIcon,
                                     ),
                                     const SizedBox(width: 10),
@@ -1089,7 +1090,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                           final matchedCount = wasGlobal
                                               ? await _restoreAllSmartTagsForTransaction()
                                               : await _restoreAllSmartTags(currentTags);
-                                          if (!mounted) return;
+                                          if (!mounted || !context.mounted) return;
                                           setSheetState(() {
                                             currentTags.clear();
                                             globalOptOut = false;
@@ -1112,7 +1113,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                   onPressed: hasAnyOptOut
                                       ? () async {
                                           final removed = await _clearAllOptOuts();
-                                          if (!mounted) return;
+                                          if (!mounted || !context.mounted) return;
                                           setSheetState(() {
                                             currentTags.clear();
                                             globalOptOut = false;
@@ -1198,7 +1199,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                         children: [
                                           CircleAvatar(
                                             radius: 14,
-                                            backgroundColor: color.withOpacity(0.15),
+                                            backgroundColor: color.withValues(alpha: 0.15),
                                             child: tagIcon,
                                           ),
                                           const SizedBox(width: 10),
@@ -1219,7 +1220,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                                 : () async {
                                                     final restored =
                                                         await _restoreSmartTag(tag);
-                                                    if (!mounted) return;
+                                                    if (!mounted || !context.mounted) return;
                                                     setSheetState(() {
                                                       currentTags.removeWhere(
                                                         (item) => item.key == tag.key,
@@ -1333,7 +1334,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           amountRange: _amountRange,
           onOptOut: () async {
             final didOptOut = await _optOutSmartTag(tag);
-            if (didOptOut && mounted) {
+            if (didOptOut && context.mounted) {
               Navigator.pop(context);
             }
           },
@@ -1376,7 +1377,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
+                      color: Colors.black.withValues(alpha: 0.12),
                       blurRadius: 16,
                       offset: const Offset(0, 8),
                     ),
@@ -1583,9 +1584,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withOpacity(0.3)),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -1674,7 +1675,7 @@ class _SmartTagExplainSheet extends StatelessWidget {
                         padding:
                             const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: JiveTheme.primaryGreen.withOpacity(0.1),
+                          color: JiveTheme.primaryGreen.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -1771,10 +1772,10 @@ class _RuleExplainCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withOpacity(0.05)),
+        border: Border.all(color: Colors.black.withValues(alpha: 0.05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -1788,7 +1789,7 @@ class _RuleExplainCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: JiveTheme.primaryGreen.withOpacity(0.12),
+                  color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(

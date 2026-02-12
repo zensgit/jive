@@ -10,19 +10,16 @@ import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/database/transaction_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/database/project_model.dart';
 import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/tag_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_rule_service.dart';
-import '../../core/service/database_service.dart';
 import '../../core/database/category_model.dart';
 import '../../core/utils/logger_util.dart';
 import '../category/category_create_dialog.dart';
@@ -478,7 +475,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       case TransactionType.transfer:
         return "transfer";
       case TransactionType.expense:
-      default:
         return "expense";
     }
   }
@@ -705,6 +701,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final systemLibrary = CategoryService(
       _isar,
     ).getSystemLibrary(isIncome: parent.isIncome, includeIncome: true);
+    if (!mounted) return;
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
@@ -792,6 +789,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _searchTokenCache.clear();
     setState(() => _selectedParent = parent);
     await _loadSubCategories(parent.key, selectKey: lastCreated.key);
+    if (!mounted) return;
     if (skipped.isNotEmpty) {
       final preview = skipped.take(3).join("、");
       final suffix = skipped.length > 3 ? "等" : "";
@@ -893,7 +891,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 if (!mounted) return;
                 if (!deleted) {
                   ScaffoldMessenger.of(
-                    context,
+                    this.context,
                   ).showSnackBar(const SnackBar(content: Text("请先处理子类后再删除")));
                   return;
                 }
@@ -948,6 +946,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       lastDate: DateTime.now(),
     );
     if (date == null) return;
+    if (!mounted) return;
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_selectedTime),
@@ -969,11 +968,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (amount == null || amount <= 0) return;
     if (_txType != TransactionType.transfer && _selectedParent == null) return;
     if (_selectedAccount == null) return;
-    if (_txType == TransactionType.transfer && _selectedToAccount == null)
+    if (_txType == TransactionType.transfer && _selectedToAccount == null) {
       return;
+    }
     if (_txType == TransactionType.transfer &&
-        _selectedToAccount?.id == _selectedAccount?.id)
+        _selectedToAccount?.id == _selectedAccount?.id) {
       return;
+    }
 
     final typeValue = _typeValue(_txType);
     final parentName = _txType == TransactionType.transfer
@@ -1195,14 +1196,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             ),
           );
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         if (_isSearchMode) {
           _exitSearchMode();
-          return false;
+          return;
         }
         Navigator.pop(context, _hasDataChanges);
-        return false;
       },
       child: Scaffold(
         backgroundColor: Colors.white,
@@ -1650,8 +1652,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           fontWeight: FontWeight.w600,
         ),
       ),
-      backgroundColor: color.withOpacity(0.12),
-      side: BorderSide(color: color.withOpacity(0.4)),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.4)),
       onDeleted: () => setState(() => _selectedTagKeys.remove(tag.key)),
     );
   }
@@ -1710,8 +1712,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ),
             ],
           ),
-          backgroundColor: color.withOpacity(0.12),
-          side: BorderSide(color: color.withOpacity(0.4)),
+          backgroundColor: color.withValues(alpha: 0.12),
+          side: BorderSide(color: color.withValues(alpha: 0.4)),
           onDeleted: () => setState(() => _selectedProjectId = null),
           onPressed: _showProjectPicker,
         ),
@@ -1788,7 +1790,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     final isSelected = project.id == _selectedProjectId;
                     return ListTile(
                       leading: CircleAvatar(
-                        backgroundColor: color.withOpacity(0.15),
+                        backgroundColor: color.withValues(alpha: 0.15),
                         child: iconWidgetForName(project.iconName, size: 18, color: color),
                       ),
                       title: Text(project.name),
@@ -1872,7 +1874,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
@@ -1987,7 +1989,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               final subtitle = _accountSubtitle(account);
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: color.withOpacity(0.15),
+                  backgroundColor: color.withValues(alpha: 0.15),
                   child: AccountService.buildIcon(
                     account.iconName,
                     size: 18,
@@ -2679,7 +2681,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: JiveTheme.primaryGreen.withOpacity(0.3),
+                color: JiveTheme.primaryGreen.withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
@@ -2717,12 +2719,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Widget _buildOpIcon(String key) {
-    if (key == 'date')
+    if (key == 'date') {
       return const Icon(
         Icons.calendar_today_rounded,
         size: 20,
         color: Colors.black45,
       );
+    }
     return Text(
       key,
       style: const TextStyle(fontSize: 24, color: Colors.black45),

@@ -68,7 +68,7 @@ class _AutoAccountMappingScreenState extends State<AutoAccountMappingScreen> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
-                    value: accountId,
+                    initialValue: accountId,
                     decoration: const InputDecoration(labelText: '映射到账户'),
                     items: [
                       for (final account in _accounts)
