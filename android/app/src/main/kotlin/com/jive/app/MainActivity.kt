@@ -20,6 +20,7 @@ class MainActivity: FlutterActivity() {
     private val CHANNEL = "com.jive.app/stream"
     private val METHOD_CHANNEL = "com.jive.app/methods" // New channel for methods
     private var eventSink: EventChannel.EventSink? = null
+    private var pendingEvent: Map<String, Any?>? = null
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -29,6 +30,10 @@ class MainActivity: FlutterActivity() {
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     eventSink = events
+                    pendingEvent?.let { payload ->
+                        events?.success(payload)
+                        pendingEvent = null
+                    }
                 }
                 override fun onCancel(arguments: Any?) {
                     eventSink = null
@@ -130,10 +135,7 @@ class MainActivity: FlutterActivity() {
                     "package_name" to packageName
                 )
 
-                // Send to Flutter
-                runOnUiThread {
-                    eventSink?.success(data)
-                }
+                sendEvent(data)
             }
         }
     }
@@ -152,6 +154,13 @@ class MainActivity: FlutterActivity() {
         } else {
             registerReceiver(transactionReceiver, filter)
         }
+        maybeHandleAutoDeepLink(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        maybeHandleAutoDeepLink(intent)
     }
 
     override fun onDestroy() {
@@ -187,5 +196,43 @@ class MainActivity: FlutterActivity() {
     private fun isIgnoringBatteryOptimizations(): Boolean {
         val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
         return powerManager.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    private fun maybeHandleAutoDeepLink(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme != "jive") return
+        val isAuto = uri.host == "auto" || uri.path == "/auto"
+        if (!isAuto) return
+
+        val source = uri.getQueryParameter("source") ?: uri.getQueryParameter("app") ?: "Shortcut"
+        val amount = uri.getQueryParameter("amount") ?: uri.getQueryParameter("money") ?: "0"
+        val rawText =
+            uri.getQueryParameter("raw_text")
+                ?: uri.getQueryParameter("text")
+                ?: uri.getQueryParameter("note")
+                ?: ""
+        val type = uri.getQueryParameter("type") ?: ""
+        val ts = uri.getQueryParameter("timestamp")?.toLongOrNull() ?: System.currentTimeMillis()
+
+        Log.i("JiveAuto", "DeepLink: source=$source amount=$amount type=$type ts=$ts uri=$uri")
+        val payload = mapOf(
+            "source" to source,
+            "amount" to amount,
+            "raw_text" to rawText,
+            "type" to type,
+            "timestamp" to ts
+        )
+        sendEvent(payload)
+    }
+
+    private fun sendEvent(payload: Map<String, Any?>) {
+        runOnUiThread {
+            val sink = eventSink
+            if (sink != null) {
+                sink.success(payload)
+            } else {
+                pendingEvent = payload
+            }
+        }
     }
 }
