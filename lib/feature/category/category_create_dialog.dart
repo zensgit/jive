@@ -5,8 +5,15 @@ import '../../core/service/category_service.dart';
 class SystemCategorySuggestion {
   final String name;
   final String iconName;
+  final String? parentName;
+  final bool isParent;
 
-  const SystemCategorySuggestion({required this.name, required this.iconName});
+  const SystemCategorySuggestion({
+    required this.name,
+    required this.iconName,
+    this.parentName,
+    this.isParent = false,
+  });
 }
 
 class CategoryCreateResult {
@@ -85,7 +92,7 @@ class _CategoryCreateDialogState extends State<CategoryCreateDialog> {
               onTap: _showIconPicker,
               child: CircleAvatar(
                 radius: 32,
-                backgroundColor: highlightColor.withOpacity(0.1),
+                backgroundColor: highlightColor.withValues(alpha: 0.1),
                 child: CategoryService.buildIcon(
                   _selectedIcon,
                   size: 32,
@@ -254,7 +261,7 @@ class _CategoryCreateDialogState extends State<CategoryCreateDialog> {
   }
 
   String _colorHexFromColor(Color color) {
-    final value = color.value.toRadixString(16).padLeft(8, '0');
+    final value = color.toARGB32().toRadixString(16).padLeft(8, '0');
     return "#${value.substring(2).toUpperCase()}";
   }
 

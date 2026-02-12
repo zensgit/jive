@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:isar/isar.dart';
@@ -6,35 +9,94 @@ import 'package:lpinyin/lpinyin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/category_model.dart';
 import '../database/transaction_model.dart';
-import '../data/category_icon_tintable.dart';
 import '../data/system_category_library.dart';
 
 class CategoryService {
   final Isar isar;
-  static const int _systemCategorySeedVersion = 2;
+  static const int _systemCategorySeedVersion = 4;
   static const String _systemCategorySeedKey = 'system_category_seed_version';
+  static const String _noParentOverrideKey = '__no_parent__';
+  static const Color _defaultIconColor = Color(0xFF202020);
+  static const Set<String> _softIconKeys = {
+    '装修__搬家__Renovation__Moving.png',
+    '餐饮__请客__Catering__Treat.png',
+    '餐饮__三餐__Catering__ThreeMeals.png',
+    '餐饮__烧烤__Catering__Barbecue.png',
+    '餐饮__生鲜__Catering__FreshFood.png',
+    '餐饮__外卖__Catering__Takeaway.png',
+    '餐饮__午餐__Catering__Lunch.png',
+    '餐饮__西餐__Catering__WesternFood.png',
+    '餐饮__烟酒__Catering__SmokeAndWine.png',
+  };
+  static const List<double> _grayscaleMatrix = [
+    0.2126, 0.7152, 0.0722, 0, 0,
+    0.2126, 0.7152, 0.0722, 0, 0,
+    0.2126, 0.7152, 0.0722, 0, 0,
+    0, 0, 0, 1, 0,
+  ];
+  static const double _contrastFactor = 1.02;
+  static const double _contrastOffset = 128 * (1 - _contrastFactor);
+  static const List<double> _contrastMatrix = [
+    _contrastFactor, 0, 0, 0, _contrastOffset,
+    0, _contrastFactor, 0, 0, _contrastOffset,
+    0, 0, _contrastFactor, 0, _contrastOffset,
+    0, 0, 0, 1, 0,
+  ];
+  static const double _defaultLiftTarget = 0.40;
+  static const double _softLiftTarget = 0.95;
+  static const Map<String, String> _systemParentAliases = {
+    "心情": "表情",
+  };
 
   CategoryService(this.isar);
 
   // 初始化/补齐系统分类
   Future<void> initDefaultCategories() async {
-    await _resetCategoriesIfNeeded();
+    final migrated = await _applySystemSeedIfNeeded();
     await _migrateLegacyIconPaths();
     await _ensureSystemDefaults();
+    await _applySystemOverrides();
     await _mergeSystemCategoryVariants();
     await _syncSystemCategoryIcons();
+    await _syncCategoryIconsFromSystemLibrary();
+    if (migrated) {
+      await _refreshTransactionCategoryNames();
+    }
   }
 
-  Future<void> _resetCategoriesIfNeeded() async {
+  Future<void> resetCategories() async {
+    await _clearCategoriesAndTransactions();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_systemCategorySeedKey, _systemCategorySeedVersion);
+    await _migrateLegacyIconPaths();
+    await _ensureSystemDefaults();
+    await _applySystemOverrides();
+    await _mergeSystemCategoryVariants();
+    await _syncSystemCategoryIcons();
+    await _syncCategoryIconsFromSystemLibrary();
+  }
+
+  Future<bool> _applySystemSeedIfNeeded() async {
     final prefs = await SharedPreferences.getInstance();
     final current = prefs.getInt(_systemCategorySeedKey) ?? 0;
-    if (current == _systemCategorySeedVersion) return;
+    if (current == _systemCategorySeedVersion) return false;
+    final migrated = await _migrateSystemCategoriesByName();
+    await prefs.setInt(_systemCategorySeedKey, _systemCategorySeedVersion);
+    return migrated;
+  }
 
+  Future<void> _clearCategoriesAndTransactions() async {
     await isar.writeTxn(() async {
       final categories = await isar.collection<JiveCategory>().where().findAll();
       if (categories.isNotEmpty) {
         final ids = categories.map((cat) => cat.id).toList();
         await isar.collection<JiveCategory>().deleteAll(ids);
+      }
+
+      final overrides = await isar.collection<JiveCategoryOverride>().where().findAll();
+      if (overrides.isNotEmpty) {
+        final ids = overrides.map((ov) => ov.id).toList();
+        await isar.collection<JiveCategoryOverride>().deleteAll(ids);
       }
 
       final txs = await isar.jiveTransactions.where().findAll();
@@ -48,111 +110,77 @@ class CategoryService {
         await isar.jiveTransactions.putAll(txs);
       }
     });
-
-    await prefs.setInt(_systemCategorySeedKey, _systemCategorySeedVersion);
   }
 
   Future<void> _ensureSystemDefaults() async {
-    final existing = await isar.collection<JiveCategory>()
-        .filter()
-        .isSystemEqualTo(true)
-        .findAll();
-    final existingKeys = {for (final cat in existing) cat.key};
+    final systemIndex = _buildSystemIndex();
+    if (systemIndex.byKey.isEmpty) return;
 
-    int maxExpenseOrder = -1;
-    int maxIncomeOrder = -1;
-    final maxChildOrder = <String, int>{};
-    for (final cat in existing) {
-      if (cat.parentKey == null) {
-        if (cat.isIncome) {
-          if (cat.order > maxIncomeOrder) maxIncomeOrder = cat.order;
-        } else {
-          if (cat.order > maxExpenseOrder) maxExpenseOrder = cat.order;
-        }
-      } else {
-        final parentKey = cat.parentKey!;
-        final current = maxChildOrder[parentKey] ?? -1;
-        if (cat.order > current) maxChildOrder[parentKey] = cat.order;
-      }
-    }
+    final overridesByKey = await _loadOverridesByKey();
+    final existing = await isar.collection<JiveCategory>().where().findAll();
+    final existingByKey = {for (final cat in existing) cat.key: cat};
 
     final now = DateTime.now();
     final toInsert = <JiveCategory>[];
+    final toUpdate = <JiveCategory>[];
 
-    void ensureParent(String name, Map<String, dynamic> data, {required bool isIncome}) {
-      final key = _buildSystemParentKey(name, isIncome);
-      if (existingKeys.contains(key)) return;
-      final order = isIncome ? ++maxIncomeOrder : ++maxExpenseOrder;
-      final parent = JiveCategory()
-        ..key = key
-        ..name = name
-        ..iconName = _normalizeIconName(data['icon'] as String?, name)
-        ..parentKey = null
-        ..order = order
-        ..isSystem = true
-        ..isHidden = false
-        ..isIncome = isIncome
-        ..updatedAt = now;
-      toInsert.add(parent);
-      existingKeys.add(key);
-      maxChildOrder[key] = -1;
-    }
-
-    void ensureChildren(
-      String parentKey,
-      String parentName,
-      List<dynamic> children, {
-      required bool isIncome,
-    }) {
-      var nextOrder = maxChildOrder[parentKey] ?? -1;
-      for (final entry in children) {
-        final cData = entry as Map<String, dynamic>;
-        final cName = cData['name'] as String;
-        final cKey = _buildChildKey(parentKey, cName);
-        if (existingKeys.contains(cKey)) continue;
-        nextOrder += 1;
-        final child = JiveCategory()
-          ..key = cKey
-          ..name = cName
-          ..iconName = _normalizeIconName(
-            cData['icon'] as String?,
-            cName,
-            parentName: parentName,
-          )
-          ..parentKey = parentKey
-          ..order = nextOrder
-          ..isSystem = true
-          ..isHidden = false
-          ..isIncome = isIncome
-          ..updatedAt = now;
-        toInsert.add(child);
-        existingKeys.add(cKey);
+    for (final base in systemIndex.byKey.values) {
+      final existingCat = existingByKey[base.key];
+      if (existingCat == null) {
+        toInsert.add(_buildSystemCategoryFromBase(base, now));
+        continue;
       }
-      maxChildOrder[parentKey] = nextOrder;
-    }
 
-    void syncDefaults(Map<String, Map<String, dynamic>> defaults, {required bool isIncome}) {
-      final parents = defaults.keys.toList()
-        ..sort((a, b) => compareCategoryName(a, b));
-      for (final pName in parents) {
-        final pData = defaults[pName] ?? const {};
-        ensureParent(pName, pData, isIncome: isIncome);
-        final pKey = _buildSystemParentKey(pName, isIncome);
-        final rawChildren = (pData['children'] as List<dynamic>?) ?? const [];
-        final children = rawChildren
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .toList()
-          ..sort((a, b) => compareCategoryName(a['name'] as String, b['name'] as String));
-        ensureChildren(pKey, pName, children, isIncome: isIncome);
+      final override = overridesByKey[base.key];
+      var changed = false;
+      if (!existingCat.isSystem) {
+        existingCat.isSystem = true;
+        changed = true;
+      }
+      if (existingCat.isIncome != base.isIncome) {
+        existingCat.isIncome = base.isIncome;
+        changed = true;
+      }
+      if (override?.nameOverride == null && existingCat.name != base.name) {
+        existingCat.name = base.name;
+        changed = true;
+      }
+      if (override?.iconOverride == null &&
+          _normalizeIconKey(existingCat.iconName) != _normalizeIconKey(base.iconName)) {
+        existingCat.iconName = base.iconName;
+        changed = true;
+      }
+      if (override?.colorHexOverride == null && existingCat.colorHex != base.colorHex) {
+        existingCat.colorHex = base.colorHex;
+        changed = true;
+      }
+      if (override?.parentOverrideKey == null && existingCat.parentKey != base.parentKey) {
+        existingCat.parentKey = base.parentKey;
+        changed = true;
+      }
+      if (override?.orderOverride == null && existingCat.order != base.order) {
+        existingCat.order = base.order;
+        changed = true;
+      }
+      if (override?.isHiddenOverride == null && existingCat.isHidden != base.isHidden) {
+        existingCat.isHidden = base.isHidden;
+        changed = true;
+      }
+
+      if (changed) {
+        existingCat.updatedAt = now;
+        toUpdate.add(existingCat);
       }
     }
 
-    syncDefaults(kSystemExpenseLibrary, isIncome: false);
-    syncDefaults(kSystemIncomeLibrary, isIncome: true);
-
-    if (toInsert.isEmpty) return;
+    if (toInsert.isEmpty && toUpdate.isEmpty) return;
     await isar.writeTxn(() async {
-      await isar.collection<JiveCategory>().putAll(toInsert);
+      if (toInsert.isNotEmpty) {
+        await isar.collection<JiveCategory>().putAll(toInsert);
+      }
+      if (toUpdate.isNotEmpty) {
+        await isar.collection<JiveCategory>().putAll(toUpdate);
+      }
     });
   }
 
@@ -459,7 +487,7 @@ class CategoryService {
         tx.categoryKey = target.parentKey;
         tx.subCategoryKey = target.key;
         if (parent != null) {
-          tx.category = parent!.name;
+          tx.category = parent.name;
         }
         tx.subCategory = target.name;
       }
@@ -516,6 +544,18 @@ class CategoryService {
     return isIncome ? kSystemIncomeLibrary : kSystemExpenseLibrary;
   }
 
+  String buildSystemParentKey(String name, {required bool isIncome}) {
+    return _buildSystemParentKey(name, isIncome);
+  }
+
+  String buildSystemChildKey(String parentName, String childName, {required bool isIncome}) {
+    return _buildSystemChildKey(parentName, childName, isIncome);
+  }
+
+  String? resolveSystemParentName(String key) {
+    return _buildSystemIndex().parentByKey[key]?.name;
+  }
+
   Map<String, Map<String, dynamic>> _mergeSystemLibraries(
     Map<String, Map<String, dynamic>> expense,
     Map<String, Map<String, dynamic>> income,
@@ -563,7 +603,7 @@ class CategoryService {
         for (final child in children) {
           final childName = child['name'] as String? ?? "";
           if (childName.trim().isEmpty) continue;
-          final childKey = _buildChildKey(parentKey, childName);
+          final childKey = _buildSystemChildKey(parentName, childName, isIncome);
           iconByKey[childKey] = _normalizeIconName(
             child['icon'] as String?,
             childName,
@@ -576,6 +616,7 @@ class CategoryService {
     indexLibrary(kSystemExpenseLibrary, isIncome: false);
     indexLibrary(kSystemIncomeLibrary, isIncome: true);
 
+    final overridesByKey = await _loadOverridesByKey();
     final systemCats = await isar.collection<JiveCategory>()
         .filter()
         .isSystemEqualTo(true)
@@ -585,10 +626,11 @@ class CategoryService {
     final now = DateTime.now();
     final updated = <JiveCategory>[];
     for (final cat in systemCats) {
+      if (overridesByKey[cat.key]?.iconOverride != null) continue;
       final desired = iconByKey[cat.key];
       if (desired == null || desired == "category") continue;
-      if (cat.iconName == desired) continue;
-      if (cat.iconName.isNotEmpty && cat.iconName != "category") continue;
+      if (_isFileIcon(cat.iconName) || _isTextIcon(cat.iconName)) continue;
+      if (_normalizeIconKey(cat.iconName) == _normalizeIconKey(desired)) continue;
       cat.iconName = desired;
       cat.updatedAt = now;
       updated.add(cat);
@@ -597,6 +639,509 @@ class CategoryService {
     if (updated.isEmpty) return;
     await isar.writeTxn(() async {
       await isar.collection<JiveCategory>().putAll(updated);
+    });
+  }
+
+  Future<void> _syncCategoryIconsFromSystemLibrary() async {
+    final merged = _mergeSystemLibraries(kSystemExpenseLibrary, kSystemIncomeLibrary);
+    if (merged.isEmpty) return;
+
+    final parentIconByName = <String, String>{};
+    final childIconByName = <String, String>{};
+
+    for (final entry in merged.entries) {
+      final rawParentName = entry.key;
+      final parentName = _systemParentAliases[rawParentName] ?? rawParentName;
+      final parentKey = _normalizeMatchName(parentName);
+      final parentIcon = _normalizeIconName(entry.value['icon'] as String?, parentName);
+      if (parentIcon != "category") {
+        parentIconByName[parentKey] = parentIcon;
+      }
+
+      final children = entry.value['children'] as List<dynamic>? ?? const [];
+      for (final child in children) {
+        final childName = (child['name'] as String? ?? "").trim();
+        if (childName.isEmpty) continue;
+        final childKey = "$parentKey|${_normalizeMatchName(childName)}";
+        final childIcon = _normalizeIconName(
+          child['icon'] as String?,
+          childName,
+          parentName: parentName,
+        );
+        if (childIcon != "category") {
+          childIconByName[childKey] = childIcon;
+        }
+      }
+    }
+
+    final overridesByKey = await _loadOverridesByKey();
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    if (categories.isEmpty) return;
+
+    final parentNameByKey = {
+      for (final cat in categories)
+        if (cat.parentKey == null) cat.key: cat.name,
+    };
+    final systemIconKeys = <String>{
+      for (final icon in parentIconByName.values) _normalizeIconKey(icon),
+      for (final icon in childIconByName.values) _normalizeIconKey(icon),
+    };
+
+    final now = DateTime.now();
+    final updated = <JiveCategory>[];
+    for (final cat in categories) {
+      if (_isFileIcon(cat.iconName) || _isTextIcon(cat.iconName) || _isEmojiIcon(cat.iconName)) continue;
+      if (cat.isSystem && overridesByKey[cat.key]?.iconOverride != null) continue;
+
+      String? desired;
+      if (cat.parentKey == null) {
+        final parentName = _systemParentAliases[cat.name] ?? cat.name;
+        desired = parentIconByName[_normalizeMatchName(parentName)];
+      } else {
+        final parentName = parentNameByKey[cat.parentKey];
+        if (parentName == null) continue;
+        final parentKey = _normalizeMatchName(_systemParentAliases[parentName] ?? parentName);
+        final childKey = "$parentKey|${_normalizeMatchName(cat.name)}";
+        desired = childIconByName[childKey];
+      }
+
+      if (desired == null || desired == "category") continue;
+      final desiredKey = _normalizeIconKey(desired);
+      final currentKey = _normalizeIconKey(cat.iconName);
+      if (currentKey == desiredKey) continue;
+      final shouldUpdate = cat.isSystem ||
+          cat.iconName == "category" ||
+          cat.iconName == "attach_money" ||
+          systemIconKeys.contains(currentKey);
+      if (!shouldUpdate) continue;
+
+      cat.iconName = desired;
+      cat.updatedAt = now;
+      updated.add(cat);
+    }
+
+    if (updated.isEmpty) return;
+    await isar.writeTxn(() async {
+      await isar.collection<JiveCategory>().putAll(updated);
+    });
+  }
+
+  Future<Map<String, JiveCategoryOverride>> _loadOverridesByKey() async {
+    final overrides = await isar.collection<JiveCategoryOverride>().where().findAll();
+    return {for (final override in overrides) override.systemKey: override};
+  }
+
+  Future<void> _applySystemOverrides() async {
+    final overrides = await isar.collection<JiveCategoryOverride>().where().findAll();
+    if (overrides.isEmpty) return;
+
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    if (categories.isEmpty) return;
+    final categoryByKey = {for (final cat in categories) cat.key: cat};
+
+    final now = DateTime.now();
+    final updated = <JiveCategory>[];
+    for (final override in overrides) {
+      final cat = categoryByKey[override.systemKey];
+      if (cat == null) continue;
+      var changed = false;
+
+      if (override.nameOverride != null && cat.name != override.nameOverride) {
+        cat.name = override.nameOverride!;
+        changed = true;
+      }
+      if (override.iconOverride != null &&
+          _normalizeIconKey(cat.iconName) != _normalizeIconKey(override.iconOverride!)) {
+        cat.iconName = override.iconOverride!;
+        changed = true;
+      }
+      if (override.colorHexOverride != null && cat.colorHex != override.colorHexOverride) {
+        cat.colorHex = override.colorHexOverride;
+        changed = true;
+      }
+      if (override.parentOverrideKey != null) {
+        final desiredParentKey = override.parentOverrideKey == _noParentOverrideKey
+            ? null
+            : override.parentOverrideKey;
+        if (desiredParentKey == null || categoryByKey.containsKey(desiredParentKey)) {
+          if (cat.parentKey != desiredParentKey) {
+            cat.parentKey = desiredParentKey;
+            changed = true;
+          }
+        }
+      }
+      if (override.orderOverride != null && cat.order != override.orderOverride) {
+        cat.order = override.orderOverride!;
+        changed = true;
+      }
+      if (override.isHiddenOverride != null && cat.isHidden != override.isHiddenOverride) {
+        cat.isHidden = override.isHiddenOverride!;
+        changed = true;
+      }
+
+      if (changed) {
+        cat.updatedAt = now;
+        updated.add(cat);
+      }
+    }
+
+    if (updated.isEmpty) return;
+    await isar.writeTxn(() async {
+      await isar.collection<JiveCategory>().putAll(updated);
+    });
+  }
+
+  Future<void> _syncSystemOverridesForCategories(
+    List<JiveCategory> categories, {
+    bool includeOrder = false,
+  }) async {
+    final systemCats = categories.where((cat) => cat.isSystem).toList();
+    if (systemCats.isEmpty) return;
+
+    final systemIndex = _buildSystemIndex();
+    final overridesByKey = await _loadOverridesByKey();
+    final now = DateTime.now();
+
+    final toUpsert = <JiveCategoryOverride>[];
+    final toDelete = <int>[];
+    for (final cat in systemCats) {
+      final base = systemIndex.byKey[cat.key];
+      if (base == null) continue;
+      final existing = overridesByKey[cat.key];
+      final override = _buildOverrideFromCategory(
+        cat,
+        base,
+        existing,
+        includeOrder: includeOrder,
+        now: now,
+      );
+      if (override == null) {
+        if (existing != null) toDelete.add(existing.id);
+        continue;
+      }
+      toUpsert.add(override);
+    }
+
+    if (toUpsert.isEmpty && toDelete.isEmpty) return;
+    await isar.writeTxn(() async {
+      if (toUpsert.isNotEmpty) {
+        await isar.collection<JiveCategoryOverride>().putAll(toUpsert);
+      }
+      if (toDelete.isNotEmpty) {
+        await isar.collection<JiveCategoryOverride>().deleteAll(toDelete);
+      }
+    });
+  }
+
+  Future<bool> _migrateSystemCategoriesByName() async {
+    final systemIndex = _buildSystemIndex();
+    if (systemIndex.byKey.isEmpty) return false;
+
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    if (categories.isEmpty) return false;
+
+    final overrides = await isar.collection<JiveCategoryOverride>().where().findAll();
+    final overridesByKey = {for (final override in overrides) override.systemKey: override};
+
+    final parents = <JiveCategory>[];
+    final children = <JiveCategory>[];
+    final parentByKey = <String, JiveCategory>{};
+    for (final cat in categories) {
+      if (cat.parentKey == null) {
+        parents.add(cat);
+        parentByKey[cat.key] = cat;
+      } else {
+        children.add(cat);
+      }
+    }
+
+    final now = DateTime.now();
+    final updated = <JiveCategory>[];
+    final deletedIds = <int>[];
+    final keyRemap = <String, String>{};
+    final parentKeyRemap = <String, String>{};
+    final overrideUpdates = <String, JiveCategoryOverride>{};
+    final overrideDeleteIds = <int>{};
+
+    void mergeOverride({
+      required String systemKey,
+      required JiveCategory source,
+      required _SystemCategoryBase base,
+      String? parentOverrideKey,
+    }) {
+      final incoming = _buildOverrideSnapshot(
+        systemKey: systemKey,
+        source: source,
+        base: base,
+        parentOverrideKey: parentOverrideKey,
+        now: now,
+      );
+      if (incoming == null) return;
+      final existing = overridesByKey[systemKey];
+      final preferIncoming = existing == null || source.updatedAt.isAfter(existing.updatedAt);
+      final merged = _mergeOverridesForMigration(
+        existing: existing,
+        incoming: incoming,
+        preferIncoming: preferIncoming,
+        now: now,
+      );
+      if (merged == null) return;
+      overrideUpdates[systemKey] = merged;
+      overridesByKey[systemKey] = merged;
+    }
+
+    for (final parent in parents) {
+      final baseByKey = systemIndex.byKey[parent.key];
+      if (baseByKey != null && baseByKey.parentKey == null) {
+        parentKeyRemap[parent.key] = parent.key;
+        if (!parent.isSystem || parent.isIncome != baseByKey.isIncome) {
+          parent.isSystem = true;
+          parent.isIncome = baseByKey.isIncome;
+          parent.updatedAt = now;
+          updated.add(parent);
+        }
+        mergeOverride(systemKey: parent.key, source: parent, base: baseByKey);
+        continue;
+      }
+
+      final baseParent = systemIndex.parentByMatchName[_parentMatchKey(parent.name, parent.isIncome)];
+      if (baseParent != null) {
+        parentKeyRemap[parent.key] = baseParent.key;
+        if (parent.key != baseParent.key) {
+          keyRemap[parent.key] = baseParent.key;
+          deletedIds.add(parent.id);
+        } else if (!parent.isSystem) {
+          parent.isSystem = true;
+          parent.updatedAt = now;
+          updated.add(parent);
+        }
+        mergeOverride(systemKey: baseParent.key, source: parent, base: baseParent);
+        continue;
+      }
+
+      final aliasName = _systemParentAliases[parent.name];
+      if (aliasName != null) {
+        final aliasParent = systemIndex.parentByMatchName[_parentMatchKey(aliasName, parent.isIncome)];
+        if (aliasParent != null) {
+          parentKeyRemap[parent.key] = aliasParent.key;
+          keyRemap[parent.key] = aliasParent.key;
+          deletedIds.add(parent.id);
+          mergeOverride(systemKey: aliasParent.key, source: parent, base: aliasParent);
+          continue;
+        }
+      }
+
+      if (parent.isSystem) {
+        parent.isSystem = false;
+        parent.updatedAt = now;
+        updated.add(parent);
+      }
+    }
+
+    for (final child in children) {
+      final baseByKey = systemIndex.byKey[child.key];
+      if (baseByKey != null && baseByKey.parentKey != null) {
+        final parentWasRemapped = child.parentKey != null && parentKeyRemap.containsKey(child.parentKey);
+        final remappedParentKey = child.parentKey == null
+            ? null
+            : (parentKeyRemap[child.parentKey!] ?? child.parentKey);
+        if (parentWasRemapped && remappedParentKey != child.parentKey) {
+          child.parentKey = remappedParentKey;
+          child.updatedAt = now;
+          updated.add(child);
+        }
+        if (!child.isSystem || child.isIncome != baseByKey.isIncome) {
+          child.isSystem = true;
+          child.isIncome = baseByKey.isIncome;
+          child.updatedAt = now;
+          updated.add(child);
+        }
+        final parentOverrideKey = _computeParentOverrideKey(
+          currentParentKey: remappedParentKey,
+          baseParentKey: baseByKey.parentKey,
+        );
+        mergeOverride(
+          systemKey: child.key,
+          source: child,
+          base: baseByKey,
+          parentOverrideKey: parentOverrideKey,
+        );
+        continue;
+      }
+
+      final parent = child.parentKey == null ? null : parentByKey[child.parentKey!];
+      final parentName = parent?.name;
+      final resolvedParentName =
+          parentName == null ? null : (_systemParentAliases[parentName] ?? parentName);
+      final baseParent = resolvedParentName == null
+          ? null
+          : systemIndex.parentByMatchName[_parentMatchKey(resolvedParentName, child.isIncome)];
+      if (baseParent != null) {
+        final baseChild = systemIndex.childByMatchName[_childMatchKey(baseParent.name, child.name, child.isIncome)];
+        if (baseChild != null) {
+          if (child.key != baseChild.key) {
+            keyRemap[child.key] = baseChild.key;
+            deletedIds.add(child.id);
+          } else if (!child.isSystem) {
+            child.isSystem = true;
+            child.updatedAt = now;
+            updated.add(child);
+          }
+
+          final parentWasRemapped = child.parentKey != null && parentKeyRemap.containsKey(child.parentKey);
+          final remappedParentKey = child.parentKey == null
+              ? null
+              : (parentKeyRemap[child.parentKey!] ?? child.parentKey);
+          if (parentWasRemapped && remappedParentKey != child.parentKey) {
+            child.parentKey = remappedParentKey;
+            child.updatedAt = now;
+            updated.add(child);
+          }
+
+          final parentOverrideKey = _computeParentOverrideKey(
+            currentParentKey: remappedParentKey,
+            baseParentKey: baseChild.parentKey,
+          );
+          mergeOverride(
+            systemKey: baseChild.key,
+            source: child,
+            base: baseChild,
+            parentOverrideKey: parentOverrideKey,
+          );
+          continue;
+        }
+      }
+
+      final remappedParentKey = child.parentKey == null
+          ? null
+          : (parentKeyRemap[child.parentKey!] ?? child.parentKey);
+      if (remappedParentKey != child.parentKey) {
+        child.parentKey = remappedParentKey;
+        child.updatedAt = now;
+        updated.add(child);
+      }
+      if (child.isSystem) {
+        child.isSystem = false;
+        child.updatedAt = now;
+        updated.add(child);
+      }
+    }
+
+    for (final entry in overridesByKey.entries) {
+      if (!systemIndex.byKey.containsKey(entry.key)) {
+        overrideDeleteIds.add(entry.value.id);
+      }
+    }
+
+    final hasChanges = updated.isNotEmpty ||
+        deletedIds.isNotEmpty ||
+        keyRemap.isNotEmpty ||
+        overrideUpdates.isNotEmpty ||
+        overrideDeleteIds.isNotEmpty;
+    if (!hasChanges) return false;
+
+    await isar.writeTxn(() async {
+      if (updated.isNotEmpty) {
+        await isar.collection<JiveCategory>().putAll(updated);
+      }
+      if (deletedIds.isNotEmpty) {
+        await isar.collection<JiveCategory>().deleteAll(deletedIds);
+      }
+      if (overrideUpdates.isNotEmpty) {
+        await isar.collection<JiveCategoryOverride>().putAll(overrideUpdates.values.toList());
+      }
+      if (overrideDeleteIds.isNotEmpty) {
+        await isar.collection<JiveCategoryOverride>().deleteAll(overrideDeleteIds.toList());
+      }
+    });
+
+    if (keyRemap.isNotEmpty) {
+      await _remapTransactionCategoryKeys(keyRemap);
+    }
+    return true;
+  }
+
+  Future<void> _remapTransactionCategoryKeys(Map<String, String> keyRemap) async {
+    if (keyRemap.isEmpty) return;
+    final txs = await isar.jiveTransactions.where().findAll();
+    if (txs.isEmpty) return;
+
+    final updated = <JiveTransaction>[];
+    for (final tx in txs) {
+      var changed = false;
+      final currentParentKey = tx.categoryKey;
+      if (currentParentKey != null && keyRemap.containsKey(currentParentKey)) {
+        tx.categoryKey = keyRemap[currentParentKey];
+        changed = true;
+      }
+      final currentSubKey = tx.subCategoryKey;
+      if (currentSubKey != null && keyRemap.containsKey(currentSubKey)) {
+        tx.subCategoryKey = keyRemap[currentSubKey];
+        changed = true;
+      }
+      if (changed) updated.add(tx);
+    }
+
+    if (updated.isEmpty) return;
+    await isar.writeTxn(() async {
+      await isar.jiveTransactions.putAll(updated);
+    });
+  }
+
+  Future<void> _refreshTransactionCategoryNames() async {
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    if (categories.isEmpty) return;
+    final categoryByKey = {for (final cat in categories) cat.key: cat};
+
+    final txs = await isar.jiveTransactions.where().findAll();
+    if (txs.isEmpty) return;
+
+    final updated = <JiveTransaction>[];
+    for (final tx in txs) {
+      var changed = false;
+
+      final subKey = tx.subCategoryKey;
+      if (subKey != null && subKey.isNotEmpty) {
+        final sub = categoryByKey[subKey];
+        if (sub != null) {
+          final parentKey = sub.parentKey;
+          if (parentKey != null && tx.categoryKey != parentKey) {
+            tx.categoryKey = parentKey;
+            changed = true;
+          }
+          final parent = parentKey == null ? null : categoryByKey[parentKey];
+          final parentName = parent?.name;
+          if (parentName != null && tx.category != parentName) {
+            tx.category = parentName;
+            changed = true;
+          }
+          if (tx.subCategory != sub.name) {
+            tx.subCategory = sub.name;
+            changed = true;
+          }
+        }
+      }
+
+      final parentKey = tx.categoryKey;
+      if (parentKey != null && parentKey.isNotEmpty) {
+        final parent = categoryByKey[parentKey];
+        if (parent != null && tx.category != parent.name) {
+          tx.category = parent.name;
+          changed = true;
+        }
+        if ((tx.subCategoryKey == null || tx.subCategoryKey!.isEmpty) &&
+            (tx.subCategory ?? "").isNotEmpty) {
+          tx.subCategory = "";
+          changed = true;
+        }
+      }
+
+      if (changed) updated.add(tx);
+    }
+
+    if (updated.isEmpty) return;
+    await isar.writeTxn(() async {
+      await isar.jiveTransactions.putAll(updated);
     });
   }
 
@@ -611,12 +1156,15 @@ class CategoryService {
     
     if (parent == null) {
       // FIX: Use stable key format consistent with initDefaultCategories
+      final systemIndex = _buildSystemIndex();
+      final parentKey = _buildSystemParentKey(parentName, isIncome);
+      final baseOrder = systemIndex.byKey[parentKey]?.order;
       parent = JiveCategory()
-        ..key = _buildSystemParentKey(parentName, isIncome)
+        ..key = parentKey
         ..name = parentName
         ..iconName = _findParentIcon(parentName, isIncome)
         ..parentKey = null
-        ..order = 99
+        ..order = baseOrder ?? 99
         ..isSystem = true
         ..isHidden = false
         ..isIncome = isIncome
@@ -628,11 +1176,13 @@ class CategoryService {
     }
 
     final childName = childData['name'];
-    final childKey = "${parent.key}_${childName.hashCode}";
+    final systemIndex = _buildSystemIndex();
+    final childKey = _buildSystemChildKey(parentName, childName, isIncome);
     
     final exists = await isar.collection<JiveCategory>().filter().keyEqualTo(childKey).findFirst();
     if (exists != null) return; 
 
+    final baseOrder = systemIndex.byKey[childKey]?.order;
     final child = JiveCategory()
       ..key = childKey
       ..name = childName
@@ -642,7 +1192,7 @@ class CategoryService {
         parentName: parentName,
       )
       ..parentKey = parent.key
-      ..order = 99
+      ..order = baseOrder ?? 99
       ..isSystem = true
       ..isHidden = false
       ..isIncome = isIncome
@@ -670,12 +1220,17 @@ class CategoryService {
         .findFirst();
     if (existsByName != null) return null;
 
-    var key = _buildChildKey(parent.key, trimmed);
+    final systemIndex = isSystem ? _buildSystemIndex() : null;
+    final baseParentName = isSystem ? systemIndex?.parentByKey[parent.key]?.name ?? parent.name : parent.name;
+    var key = isSystem
+        ? _buildSystemChildKey(baseParentName, trimmed, parent.isIncome)
+        : _buildChildKey(parent.key, trimmed);
     final existsByKey = await isar.collection<JiveCategory>()
         .filter()
         .keyEqualTo(key)
         .findFirst();
     if (existsByKey != null) {
+      if (isSystem) return null;
       key = "${key}_${DateTime.now().millisecondsSinceEpoch}";
     }
 
@@ -684,6 +1239,7 @@ class CategoryService {
         .parentKeyEqualTo(parent.key)
         .sortByOrderDesc()
         .findFirst();
+    final baseOrder = isSystem ? systemIndex?.byKey[key]?.order : null;
 
     final child = JiveCategory()
       ..key = key
@@ -691,7 +1247,7 @@ class CategoryService {
       ..iconName = iconName
       ..colorHex = _normalizeColorHex(colorHex)
       ..parentKey = parent.key
-      ..order = (last?.order ?? -1) + 1
+      ..order = baseOrder ?? (last?.order ?? -1) + 1
       ..isSystem = isSystem
       ..isHidden = false
       ..isIncome = parent.isIncome
@@ -700,10 +1256,6 @@ class CategoryService {
     await isar.writeTxn(() async {
       await isar.collection<JiveCategory>().put(child);
     });
-
-    if (isSystem) {
-      await _reorderChildrenByName(parent.key);
-    }
 
     return child;
   }
@@ -722,16 +1274,19 @@ class CategoryService {
         .filter()
         .parentKeyIsNull()
         .isIncomeEqualTo(isIncome)
+        .isSystemEqualTo(isSystem)
         .nameEqualTo(trimmed)
         .findFirst();
     if (existsByName != null) return null;
 
-    var key = _buildParentKey(trimmed);
+    final systemIndex = isSystem ? _buildSystemIndex() : null;
+    var key = isSystem ? _buildSystemParentKey(trimmed, isIncome) : _buildParentKey(trimmed);
     final existsByKey = await isar.collection<JiveCategory>()
         .filter()
         .keyEqualTo(key)
         .findFirst();
     if (existsByKey != null) {
+      if (isSystem) return null;
       key = "${key}_${DateTime.now().millisecondsSinceEpoch}";
     }
 
@@ -742,13 +1297,14 @@ class CategoryService {
         .sortByOrderDesc()
         .findFirst();
 
+    final baseOrder = isSystem ? systemIndex?.byKey[key]?.order : null;
     final parent = JiveCategory()
       ..key = key
       ..name = trimmed
       ..iconName = iconName
       ..colorHex = _normalizeColorHex(colorHex)
       ..parentKey = null
-      ..order = (last?.order ?? -1) + 1
+      ..order = baseOrder ?? (last?.order ?? -1) + 1
       ..isSystem = isSystem
       ..isHidden = false
       ..isIncome = isIncome
@@ -757,10 +1313,6 @@ class CategoryService {
     await isar.writeTxn(() async {
       await isar.collection<JiveCategory>().put(parent);
     });
-
-    if (isSystem) {
-      await _reorderParentsByName(isIncome: isIncome);
-    }
 
     return parent;
   }
@@ -779,17 +1331,7 @@ class CategoryService {
     await isar.writeTxn(() async {
       await isar.collection<JiveCategory>().putAll(updated);
     });
-  }
-
-  Future<void> _reorderParentsByName({required bool isIncome}) async {
-    final parents = await isar.collection<JiveCategory>()
-        .filter()
-        .parentKeyIsNull()
-        .isIncomeEqualTo(isIncome)
-        .isSystemEqualTo(true)
-        .findAll();
-    parents.sort((a, b) => compareCategoryName(a.name, b.name));
-    await reorderParents(parents);
+    await _syncSystemOverridesForCategories(updated, includeOrder: true);
   }
 
   Future<void> reorderChildren(String parentKey, List<JiveCategory> children) async {
@@ -807,16 +1349,7 @@ class CategoryService {
     await isar.writeTxn(() async {
       await isar.collection<JiveCategory>().putAll(updated);
     });
-  }
-
-  Future<void> _reorderChildrenByName(String parentKey) async {
-    final children = await isar.collection<JiveCategory>()
-        .filter()
-        .parentKeyEqualTo(parentKey)
-        .isSystemEqualTo(true)
-        .findAll();
-    children.sort((a, b) => compareCategoryName(a.name, b.name));
-    await reorderChildren(parentKey, children);
+    await _syncSystemOverridesForCategories(updated, includeOrder: true);
   }
 
   Future<bool> deleteCategory(JiveCategory category) async {
@@ -868,12 +1401,12 @@ class CategoryService {
   }
 
   String _buildChildKey(String parentKey, String name) {
-    final safeName = name.replaceAll(RegExp(r'\s+'), '');
+    final safeName = _normalizeUserKeyName(name);
     return "${parentKey}_$safeName";
   }
 
   String _buildParentKey(String name) {
-    final safeName = name.replaceAll(RegExp(r'\s+'), '');
+    final safeName = _normalizeUserKeyName(name);
     return "usr_$safeName";
   }
 
@@ -886,9 +1419,32 @@ class CategoryService {
   }
 
   String _buildSystemParentKey(String name, bool isIncome) {
-    final safeName = name.replaceAll(RegExp(r'\\s+'), '');
-    final prefix = isIncome ? "sys_income_" : "sys_";
-    return "$prefix$safeName";
+    final type = isIncome ? "income" : "expense";
+    return _hashSystemKey("$type|${_normalizeMatchName(name)}");
+  }
+
+  String _buildSystemChildKey(String parentName, String childName, bool isIncome) {
+    final type = isIncome ? "income" : "expense";
+    final parentToken = _normalizeMatchName(parentName);
+    final childToken = _normalizeMatchName(childName);
+    return _hashSystemKey("$type|$parentToken|$childToken");
+  }
+
+  String _hashSystemKey(String raw) {
+    final digest = sha1.convert(utf8.encode(raw)).toString();
+    return "sys_$digest";
+  }
+
+  String _normalizeMatchName(String name) {
+    return name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  }
+
+  String _normalizeUserKeyName(String name) {
+    return name.trim().replaceAll(RegExp(r'\s+'), '');
+  }
+
+  String _normalizeIconKey(String name) {
+    return _assetIconKey(name);
   }
 
   String _normalizeIconName(String? icon, String name, {String? parentName}) {
@@ -932,6 +1488,101 @@ class CategoryService {
     return name;
   }
 
+  static Color _resolveIconTone(String name, Color base) {
+    if (!_isNeutralGray(base)) return base;
+    final key = _assetIconKey(name);
+    if (_softIconKeys.contains(key)) {
+      return const Color(0xFFC0C0C0);
+    }
+    return base;
+  }
+
+  static bool _isSoftIcon(String name) {
+    final key = _assetIconKey(name);
+    return _softIconKeys.contains(key);
+  }
+
+  static bool _isBrandIcon(String name) {
+    final key = _assetIconKey(name);
+    return key.startsWith("品牌__") || key.contains("__Brand__");
+  }
+
+  static Widget _applyDetailPreservingTint(
+    Widget child,
+    Color color, {
+    bool soften = false,
+    double? liftTarget,
+  }) {
+    var toned = color;
+    if (_isNeutralGray(toned)) {
+      toned = _liftGray(toned, targetLuminance: liftTarget ?? _defaultLiftTarget);
+    } else if (soften) {
+      toned = Color.lerp(toned, Colors.black, 0.06) ?? toned;
+    }
+    return ColorFiltered(
+      colorFilter: const ColorFilter.matrix(_grayscaleMatrix),
+      child: ColorFiltered(
+        colorFilter: const ColorFilter.matrix(_contrastMatrix),
+        child: ColorFiltered(
+          colorFilter: ColorFilter.mode(toned, BlendMode.modulate),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  static bool _isNeutralGray(Color color) {
+    final r = (color.r * 255.0).round() & 0xff;
+    final g = (color.g * 255.0).round() & 0xff;
+    final b = (color.b * 255.0).round() & 0xff;
+    final maxChannel = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    final minChannel = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    return (maxChannel - minChannel) <= 4;
+  }
+
+  static Color _liftGray(Color color, {double targetLuminance = _defaultLiftTarget}) {
+    final luminance = color.computeLuminance();
+    if (luminance >= targetLuminance) return color;
+    final raw = (targetLuminance - luminance) / (1.0 - luminance);
+    final t = raw < 0 ? 0.0 : (raw > 0.55 ? 0.55 : raw);
+    return Color.lerp(color, Colors.white, t) ?? color;
+  }
+
+  static bool _isFileIcon(String name) {
+    return name.startsWith("file:");
+  }
+
+  static bool _isTextIcon(String name) {
+    return name.startsWith("text:");
+  }
+
+  static bool _isEmojiIcon(String name) {
+    return name.startsWith("emoji:");
+  }
+
+  static String _textIconValue(String name) {
+    return name.substring("text:".length).trim();
+  }
+
+  static String _emojiSequence(String name) {
+    return name.substring("emoji:".length).trim();
+  }
+
+  static String _emojiAssetPath(String sequence) {
+    return "assets/emoji/emoji_u$sequence.png";
+  }
+
+  static String _emojiFromSequence(String sequence) {
+    try {
+      final codepoints = sequence.split("_").where((part) => part.isNotEmpty);
+      return String.fromCharCodes(
+        codepoints.map((part) => int.parse(part, radix: 16)),
+      );
+    } catch (_) {
+      return "?";
+    }
+  }
+
   static int _cacheWidth(double size) {
     final views = ui.PlatformDispatcher.instance.views;
     final ratio = views.isEmpty ? 1.0 : views.first.devicePixelRatio;
@@ -952,33 +1603,85 @@ class CategoryService {
     double size = 20,
     Color? color,
   }) {
+    final resolvedColor = color ?? _defaultIconColor;
+    final isSoft = _isSoftIcon(name);
+    final tonedColor = _resolveIconTone(name, resolvedColor);
+    if (_isTextIcon(name)) {
+      final text = _textIconValue(name);
+      return Center(
+        child: Text(
+          text.isEmpty ? "?" : text,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: size * 0.6,
+            fontWeight: FontWeight.w600,
+            color: tonedColor,
+          ),
+        ),
+      );
+    }
+    if (_isEmojiIcon(name)) {
+      final sequence = _emojiSequence(name);
+      final cacheWidth = _cacheWidth(size);
+      return Image.asset(
+        _emojiAssetPath(sequence),
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        cacheWidth: cacheWidth,
+        errorBuilder: (_, __, ___) => Text(
+          _emojiFromSequence(sequence),
+          style: TextStyle(fontSize: size * 0.8),
+        ),
+      );
+    }
+    if (_isFileIcon(name)) {
+      final path = name.substring("file:".length);
+      final cacheWidth = _cacheWidth(size);
+      return Image.file(
+        File(path),
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        cacheWidth: cacheWidth,
+        errorBuilder: (_, __, ___) => Icon(Icons.category, size: size, color: tonedColor),
+      );
+    }
     if (_isAssetIcon(name)) {
       final path = _assetIconPath(name);
-      final iconKey = _assetIconKey(name);
-      final shouldTint = color != null && kCategoryIconNeedsTint.contains(iconKey);
       if (path.endsWith(".svg")) {
-        return SvgPicture.asset(
+        final svg = SvgPicture.asset(
           path,
           width: size,
           height: size,
           fit: BoxFit.contain,
-          colorFilter: shouldTint ? ColorFilter.mode(color!, BlendMode.srcIn) : null,
+        );
+        return _applyDetailPreservingTint(
+          svg,
+          tonedColor,
+          soften: _isBrandIcon(name),
+          liftTarget: isSoft ? _softLiftTarget : _defaultLiftTarget,
         );
       }
       final cacheWidth = _cacheWidth(size);
-      return Image.asset(
+      final image = Image.asset(
         path,
         width: size,
         height: size,
         fit: BoxFit.contain,
         cacheWidth: cacheWidth,
-        color: shouldTint ? color : null,
-        colorBlendMode: shouldTint ? BlendMode.srcIn : null,
         errorBuilder:
-            (_, __, ___) => Icon(Icons.category, size: size, color: color),
+            (_, __, ___) => Icon(Icons.category, size: size, color: tonedColor),
+      );
+      return _applyDetailPreservingTint(
+        image,
+        tonedColor,
+        soften: _isBrandIcon(name),
+        liftTarget: isSoft ? _softLiftTarget : _defaultLiftTarget,
       );
     }
-    return Icon(getIcon(name), size: size, color: color);
+    return Icon(getIcon(name), size: size, color: tonedColor);
   }
 
   static Color? parseColorHex(String? value) {
@@ -1002,6 +1705,18 @@ class CategoryService {
         .filter().parentKeyIsNull().sortByOrder().findAll();
   }
 
+  Future<void> setCategoryHidden(int id, bool isHidden) async {
+    final cat = await isar.collection<JiveCategory>().get(id);
+    if (cat == null) return;
+    if (cat.isHidden == isHidden) return;
+    cat.isHidden = isHidden;
+    cat.updatedAt = DateTime.now();
+    await isar.writeTxn(() async {
+      await isar.collection<JiveCategory>().put(cat);
+    });
+    await _syncSystemOverridesForCategories([cat]);
+  }
+
   // 更新分类 (核心逻辑: 改名、改图标、改爸爸)
   Future<void> updateCategory(
     int id,
@@ -1012,10 +1727,6 @@ class CategoryService {
   ) async {
     final cat = await isar.collection<JiveCategory>().get(id);
     if (cat == null) return;
-
-    final previousName = cat.name;
-    final previousParentKey = cat.parentKey;
-    final previousIsIncome = cat.isIncome;
 
     // 如果变成二级分类，需要生成一个新的 Key 吗？
     // 钱迹逻辑：Key/ID 不变，只改 parentKey。这样账单不会丢。
@@ -1029,21 +1740,7 @@ class CategoryService {
       await isar.collection<JiveCategory>().put(cat);
       await _syncTransactionsForCategoryChange(cat);
     });
-
-    if (cat.isSystem) {
-      final nameChanged = previousName != name;
-      final parentChanged = previousParentKey != newParentKey;
-      if (nameChanged || parentChanged) {
-        if (previousParentKey != null && previousParentKey != newParentKey) {
-          await _reorderChildrenByName(previousParentKey);
-        }
-        if (newParentKey != null) {
-          await _reorderChildrenByName(newParentKey);
-        } else {
-          await _reorderParentsByName(isIncome: previousIsIncome);
-        }
-      }
-    }
+    await _syncSystemOverridesForCategories([cat]);
   }
 
   Future<void> _syncTransactionsForCategoryChange(JiveCategory cat) async {
@@ -1095,6 +1792,222 @@ class CategoryService {
 
     if (updated.isEmpty) return;
     await isar.jiveTransactions.putAll(updated.values.toList());
+  }
+
+  JiveCategory _buildSystemCategoryFromBase(_SystemCategoryBase base, DateTime now) {
+    return JiveCategory()
+      ..key = base.key
+      ..name = base.name
+      ..iconName = base.iconName
+      ..colorHex = base.colorHex
+      ..parentKey = base.parentKey
+      ..order = base.order
+      ..isSystem = true
+      ..isHidden = base.isHidden
+      ..isIncome = base.isIncome
+      ..updatedAt = now;
+  }
+
+  _SystemCategoryIndex _buildSystemIndex() {
+    final byKey = <String, _SystemCategoryBase>{};
+    final parentByKey = <String, _SystemCategoryBase>{};
+    final parentByMatchName = <String, _SystemCategoryBase>{};
+    final childByMatchName = <String, _SystemCategoryBase>{};
+    final childrenByParentKey = <String, List<_SystemCategoryBase>>{};
+
+    void indexLibrary(Map<String, Map<String, dynamic>> lib, {required bool isIncome}) {
+      final parentNames = lib.keys.toList()
+        ..sort((a, b) => compareCategoryName(a, b));
+      var parentOrder = 0;
+      for (final parentName in parentNames) {
+        final data = lib[parentName] ?? const {};
+        final parentKey = _buildSystemParentKey(parentName, isIncome);
+        final parentBase = _SystemCategoryBase(
+          key: parentKey,
+          name: parentName,
+          iconName: _normalizeIconName(data['icon'] as String?, parentName),
+          parentKey: null,
+          parentName: null,
+          isIncome: isIncome,
+          order: parentOrder++,
+          colorHex: null,
+          isHidden: false,
+        );
+        byKey[parentKey] = parentBase;
+        parentByKey[parentKey] = parentBase;
+        parentByMatchName[_parentMatchKey(parentName, isIncome)] = parentBase;
+        childrenByParentKey.putIfAbsent(parentKey, () => []);
+
+        final rawChildren = (data['children'] as List<dynamic>? ?? const []);
+        final children = rawChildren
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList()
+          ..sort((a, b) => compareCategoryName(a['name'] as String, b['name'] as String));
+
+        var childOrder = 0;
+        for (final child in children) {
+          final childName = child['name'] as String? ?? "";
+          if (childName.trim().isEmpty) continue;
+          final childKey = _buildSystemChildKey(parentName, childName, isIncome);
+          final childBase = _SystemCategoryBase(
+            key: childKey,
+            name: childName,
+            iconName: _normalizeIconName(
+              child['icon'] as String?,
+              childName,
+              parentName: parentName,
+            ),
+            parentKey: parentKey,
+            parentName: parentName,
+            isIncome: isIncome,
+            order: childOrder++,
+            colorHex: null,
+            isHidden: false,
+          );
+          byKey[childKey] = childBase;
+          childByMatchName[_childMatchKey(parentName, childName, isIncome)] = childBase;
+          childrenByParentKey[parentKey]!.add(childBase);
+        }
+      }
+    }
+
+    indexLibrary(kSystemExpenseLibrary, isIncome: false);
+    indexLibrary(kSystemIncomeLibrary, isIncome: true);
+    return _SystemCategoryIndex(
+      byKey: byKey,
+      parentByKey: parentByKey,
+      parentByMatchName: parentByMatchName,
+      childByMatchName: childByMatchName,
+      childrenByParentKey: childrenByParentKey,
+    );
+  }
+
+  String _parentMatchKey(String name, bool isIncome) {
+    final type = isIncome ? "income" : "expense";
+    return "$type|${_normalizeMatchName(name)}";
+  }
+
+  String _childMatchKey(String parentName, String childName, bool isIncome) {
+    final type = isIncome ? "income" : "expense";
+    return "$type|${_normalizeMatchName(parentName)}|${_normalizeMatchName(childName)}";
+  }
+
+  JiveCategoryOverride? _buildOverrideFromCategory(
+    JiveCategory category,
+    _SystemCategoryBase base,
+    JiveCategoryOverride? existing, {
+    required bool includeOrder,
+    required DateTime now,
+  }) {
+    final override = existing ?? JiveCategoryOverride()..systemKey = category.key;
+    if (existing != null) {
+      override.id = existing.id;
+    }
+    override
+      ..nameOverride = category.name != base.name ? category.name : null
+      ..iconOverride = _normalizeIconKey(category.iconName) != _normalizeIconKey(base.iconName)
+          ? category.iconName
+          : null
+      ..colorHexOverride = _normalizeColorHex(category.colorHex)
+      ..parentOverrideKey = _computeParentOverrideKey(
+        currentParentKey: category.parentKey,
+        baseParentKey: base.parentKey,
+      )
+      ..orderOverride = includeOrder && category.order != base.order ? category.order : null
+      ..isHiddenOverride = category.isHidden != base.isHidden ? category.isHidden : null
+      ..updatedAt = now;
+
+    if (override.colorHexOverride == base.colorHex) {
+      override.colorHexOverride = null;
+    }
+
+    return _hasOverrideData(override) ? override : null;
+  }
+
+  JiveCategoryOverride? _buildOverrideSnapshot({
+    required String systemKey,
+    required JiveCategory source,
+    required _SystemCategoryBase base,
+    String? parentOverrideKey,
+    required DateTime now,
+  }) {
+    final snapshot = JiveCategoryOverride()..systemKey = systemKey;
+    snapshot
+      ..nameOverride = source.name != base.name ? source.name : null
+      ..iconOverride = _normalizeIconKey(source.iconName) != _normalizeIconKey(base.iconName)
+          ? source.iconName
+          : null
+      ..colorHexOverride = _normalizeColorHex(source.colorHex)
+      ..parentOverrideKey = parentOverrideKey ?? _computeParentOverrideKey(
+        currentParentKey: source.parentKey,
+        baseParentKey: base.parentKey,
+      )
+      ..orderOverride = null
+      ..isHiddenOverride = source.isHidden != base.isHidden ? source.isHidden : null
+      ..updatedAt = now;
+
+    if (snapshot.colorHexOverride == base.colorHex) {
+      snapshot.colorHexOverride = null;
+    }
+
+    return _hasOverrideData(snapshot) ? snapshot : null;
+  }
+
+  JiveCategoryOverride? _mergeOverridesForMigration({
+    required JiveCategoryOverride? existing,
+    required JiveCategoryOverride incoming,
+    required bool preferIncoming,
+    required DateTime now,
+  }) {
+    if (existing == null) {
+      incoming.updatedAt = now;
+      return incoming;
+    }
+
+    final merged = JiveCategoryOverride()
+      ..id = existing.id
+      ..systemKey = existing.systemKey
+      ..nameOverride = existing.nameOverride
+      ..iconOverride = existing.iconOverride
+      ..colorHexOverride = existing.colorHexOverride
+      ..parentOverrideKey = existing.parentOverrideKey
+      ..orderOverride = existing.orderOverride
+      ..isHiddenOverride = existing.isHiddenOverride
+      ..updatedAt = now;
+
+    void applyIfNeeded(String? incomingValue, void Function(String? value) setter, String? existingValue) {
+      if (incomingValue == null) return;
+      if (preferIncoming || existingValue == null) {
+        setter(incomingValue);
+      }
+    }
+
+    applyIfNeeded(incoming.nameOverride, (value) => merged.nameOverride = value, merged.nameOverride);
+    applyIfNeeded(incoming.iconOverride, (value) => merged.iconOverride = value, merged.iconOverride);
+    applyIfNeeded(incoming.colorHexOverride, (value) => merged.colorHexOverride = value, merged.colorHexOverride);
+    applyIfNeeded(incoming.parentOverrideKey, (value) => merged.parentOverrideKey = value, merged.parentOverrideKey);
+    if (incoming.isHiddenOverride != null && (preferIncoming || merged.isHiddenOverride == null)) {
+      merged.isHiddenOverride = incoming.isHiddenOverride;
+    }
+
+    return _hasOverrideData(merged) ? merged : null;
+  }
+
+  String? _computeParentOverrideKey({
+    required String? currentParentKey,
+    required String? baseParentKey,
+  }) {
+    if (currentParentKey == baseParentKey) return null;
+    return currentParentKey ?? _noParentOverrideKey;
+  }
+
+  bool _hasOverrideData(JiveCategoryOverride override) {
+    return override.nameOverride != null ||
+        override.iconOverride != null ||
+        override.colorHexOverride != null ||
+        override.parentOverrideKey != null ||
+        override.orderOverride != null ||
+        override.isHiddenOverride != null;
   }
 
   String suggestIconName(String name, {String fallback = "category"}) {
@@ -1296,7 +2209,9 @@ class CategoryService {
       "coco",
       "1点点",
       "茶",
-    ])) return "local_cafe";
+    ])) {
+      return "local_cafe";
+    }
     if (containsAny(["冰淇淋", "雪糕", "甜品", "icecream"])) return "icecream";
     if (containsAny(["火锅", "烧烤", "烤肉", "麻辣烫", "麻辣香锅", "串串", "张亮", "杨国福", "小龙坎", "海底捞", "巴奴"])) return "local_dining";
     if (containsAny(["面条", "面食", "面粉", "拉面", "饺子", "馄饨", "米粉", "米线", "米饭", "沙县", "真功夫", "老乡鸡"])) {
@@ -1350,7 +2265,9 @@ class CategoryService {
       "打扫",
       "垃圾袋",
       "垃圾费",
-    ])) return "cleaning_services";
+    ])) {
+      return "cleaning_services";
+    }
     if (containsAny([
       "服饰", "衣服", "clothes", "内衣", "外套", "冲锋衣", "羽绒", "裤", "裙", "袜", "帽",
       "优衣库", "ZARA", "HM", "UR", "GAP", "ONLY", "Vero Moda", "Ochirly", "Adidas", "Nike", "Puma", "LiNing", "Anta", "Fila", "Under Armour", "NewBalance", "Skechers", "Converse", "Vans", "HOKA", "Timberland", "UGG", "ECCO",
@@ -1420,7 +2337,9 @@ class CategoryService {
       "潜水",
       "漂流",
       "卡丁车",
-    ])) return "sports_basketball";
+    ])) {
+      return "sports_basketball";
+    }
     if (containsAny(["旅行", "旅游", "travel", "景点", "门票"])) return "landscape";
     if (containsAny(["会员", "member"])) return "card_membership";
     if (containsAny(["充值", "续费", "缴费"])) return "payments";
@@ -1593,4 +2512,44 @@ class CategoryService {
       default: return Icons.category;
     }
   }
+}
+
+class _SystemCategoryBase {
+  final String key;
+  final String name;
+  final String iconName;
+  final String? parentKey;
+  final String? parentName;
+  final bool isIncome;
+  final int order;
+  final String? colorHex;
+  final bool isHidden;
+
+  const _SystemCategoryBase({
+    required this.key,
+    required this.name,
+    required this.iconName,
+    required this.parentKey,
+    required this.parentName,
+    required this.isIncome,
+    required this.order,
+    required this.colorHex,
+    required this.isHidden,
+  });
+}
+
+class _SystemCategoryIndex {
+  final Map<String, _SystemCategoryBase> byKey;
+  final Map<String, _SystemCategoryBase> parentByKey;
+  final Map<String, _SystemCategoryBase> parentByMatchName;
+  final Map<String, _SystemCategoryBase> childByMatchName;
+  final Map<String, List<_SystemCategoryBase>> childrenByParentKey;
+
+  const _SystemCategoryIndex({
+    required this.byKey,
+    required this.parentByKey,
+    required this.parentByMatchName,
+    required this.childByMatchName,
+    required this.childrenByParentKey,
+  });
 }

@@ -8,7 +8,7 @@ class JiveTransaction {
 
   late double amount;         // 金额
   late String source;         // 来源: WeChat, Alipay
-  
+
   @Index()                    // 加索引，方便按时间查询
   late DateTime timestamp;    // 交易时间
 
@@ -21,6 +21,22 @@ class JiveTransaction {
   String? subCategoryKey;     // 子分类 Key (稳定标识)
   String? type;               // expense | income | transfer
   String? note;               // 备注
+  @Index()
   int? accountId;             // 账户 ID
+  @Index()
   int? toAccountId;           // 转账目标账户 ID
+  double? toAmount;           // 跨币种转账时的转入金额
+  double? exchangeRate;       // 跨币种转账时使用的汇率
+  double? exchangeFee;        // 换汇手续费
+  String? exchangeFeeType;    // 手续费类型: fixed(固定金额), percent(百分比)
+  @Index()
+  int? projectId;             // 关联项目 ID
+  List<String> tagKeys = [];  // 标签 Key 列表 (UUID)
+  List<String> smartTagKeys = []; // 智能规则自动添加的标签 Key
+  List<String> smartTagOptOutKeys = []; // 对应标签不再自动打标
+  bool smartTagOptOutAll = false; // 本笔交易停用全部智能标签
+  @Index()
+  int? recurringRuleId;       // 关联周期规则 ID
+  @Index()
+  String? recurringKey;       // 周期入账去重 Key
 }

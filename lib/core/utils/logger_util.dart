@@ -26,7 +26,7 @@ class JiveLogger {
         lineLength: 120,
         colors: false, // 文件日志不带颜色
         printEmojis: false,
-        printTime: true,
+        dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
       ),
       output: FileOutput(file: _logFile!),
     );
@@ -54,9 +54,14 @@ class JiveLogger {
   // 导出日志
   static Future<void> exportLogs() async {
     if (_logFile != null && await _logFile!.exists()) {
-      await Share.shareXFiles([XFile(_logFile!.path)], text: 'Jive App Logs');
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(_logFile!.path)],
+          text: 'Jive App Logs',
+        ),
+      );
     } else {
-      print("No log file to export.");
+      _logger.w("No log file to export.");
     }
   }
 

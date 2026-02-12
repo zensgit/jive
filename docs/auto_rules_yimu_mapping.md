@@ -44,5 +44,6 @@ UnionPay:
 - 信用卡还款
 
 Notes:
-- These candidates are not yet merged into `app/assets/auto_rules.json` to avoid
-  false positives. We should validate with real notification samples first.
+- These candidates have been merged into `app/assets/auto_rules.json` as
+  source-scoped transfer rules and transfer keyword hints. Validate with real
+  notification samples and tune if false positives appear.

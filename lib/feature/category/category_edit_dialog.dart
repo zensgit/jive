@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import '../../core/database/category_model.dart';
+import '../../core/database/transaction_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/design_system/theme.dart';
+import '../stats/stats_screen.dart';
+import 'category_icon_source_picker.dart';
+import 'category_transactions_screen.dart';
 
 class CategoryEditDialog extends StatefulWidget {
   final JiveCategory category;
@@ -15,10 +19,13 @@ class CategoryEditDialog extends StatefulWidget {
 }
 
 class _CategoryEditDialogState extends State<CategoryEditDialog> {
+  static const String _noParentKey = "__no_parent__";
   late TextEditingController _nameController;
   late String _selectedIcon;
   String? _selectedColorHex;
   String? _selectedParentKey;
+  late bool _isHidden;
+  bool _isSaving = false;
   List<JiveCategory> _parents = [];
 
   @override
@@ -28,136 +35,615 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     _selectedIcon = widget.category.iconName;
     _selectedColorHex = widget.category.colorHex;
     _selectedParentKey = widget.category.parentKey;
+    _isHidden = widget.category.isHidden;
     _loadParents();
   }
 
   Future<void> _loadParents() async {
     final parents = await CategoryService(widget.isar).getAllParents();
-    // 排除自己 (不能认自己做爸爸)
-    parents.removeWhere((p) => p.id == widget.category.id);
+    parents.removeWhere((p) => p.id == widget.category.id || p.isIncome != widget.category.isIncome);
+    parents.sort((a, b) => a.order.compareTo(b.order));
     if (mounted) setState(() => _parents = parents);
   }
 
   @override
   Widget build(BuildContext context) {
     final highlightColor = _resolveSelectedColor() ?? JiveTheme.primaryGreen;
-    return AlertDialog(
-      title: const Text("编辑分类"),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return Scaffold(
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        title: const Text("编辑分类", style: TextStyle(fontWeight: FontWeight.w600)),
+        backgroundColor: Colors.grey.shade100,
+        elevation: 0,
+        actions: [
+          TextButton(
+            onPressed: _isSaving ? null : _save,
+            child: const Text("保存"),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        children: [
+          _buildSectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GestureDetector(
+                      onTap: _showIconPicker,
+                      child: CircleAvatar(
+                        radius: 28,
+                        backgroundColor: highlightColor.withValues(alpha: 0.12),
+                        child: CategoryService.buildIcon(
+                          _selectedIcon,
+                          size: 28,
+                          color: highlightColor,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _nameController,
+                        decoration: const InputDecoration(
+                          labelText: "分类名称",
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                _buildColorPicker(),
+                const SizedBox(height: 12),
+                _buildParentSelector(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildSectionCard(_buildActionList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionCard(Widget child) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildParentSelector() {
+    final selectedParent = _parents.firstWhere(
+      (p) => p.key == _selectedParentKey,
+      orElse: () => _parents.isNotEmpty ? _parents.first : widget.category,
+    );
+    final hasParent = _selectedParentKey != null;
+    final label = hasParent ? selectedParent.name : "无 (作为一级分类)";
+    final iconName = hasParent ? selectedParent.iconName : "category";
+    final iconColor = hasParent
+        ? (CategoryService.parseColorHex(selectedParent.colorHex) ?? Colors.grey.shade600)
+        : Colors.grey.shade500;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: _showParentPicker,
+      child: InputDecorator(
+        decoration: const InputDecoration(
+          labelText: "所属父级 (层级)",
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+        child: Row(
           children: [
-            // 1. 图标 (点击切换 - 简版)
-            GestureDetector(
-              onTap: _showIconPicker,
-              child: CircleAvatar(
-                radius: 32,
-                backgroundColor: highlightColor.withOpacity(0.1),
-                child: CategoryService.buildIcon(
-                  _selectedIcon,
-                  size: 32,
-                  color: highlightColor,
+            CategoryService.buildIcon(iconName, size: 16, color: iconColor),
+            const SizedBox(width: 8),
+            Expanded(child: Text(label)),
+            Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade500),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showParentPicker() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        var tempKey = _selectedParentKey ?? _noParentKey;
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text("分类选择", style: TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 260,
+                      child: GridView.builder(
+                        itemCount: _parents.length + 1,
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 12,
+                          childAspectRatio: 1.1,
+                        ),
+                        itemBuilder: (context, index) {
+                          if (index == 0) {
+                            final isSelected = tempKey == _noParentKey;
+                            return _buildParentPickerTile(
+                              iconName: "category",
+                              label: "无",
+                              isSelected: isSelected,
+                              onTap: () => setStateDialog(() => tempKey = _noParentKey),
+                            );
+                          }
+                          final parent = _parents[index - 1];
+                          final isSelected = tempKey == parent.key;
+                          return _buildParentPickerTile(
+                            iconName: parent.iconName,
+                            label: parent.name,
+                            iconColor: CategoryService.parseColorHex(parent.colorHex) ?? Colors.grey.shade600,
+                            isSelected: isSelected,
+                            onTap: () => setStateDialog(() => tempKey = parent.key),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text("取消"),
+                          ),
+                        ),
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context, tempKey),
+                            child: const Text("确定"),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text("点击修改图标", style: TextStyle(fontSize: 10, color: Colors.grey)),
+            );
+          },
+        );
+      },
+    );
+    if (result == null) return;
+    setState(() => _selectedParentKey = result == _noParentKey ? null : result);
+  }
 
-            const SizedBox(height: 12),
-            _buildColorPicker(),
-            const SizedBox(height: 16),
-
-            // 2. 名称
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: "分类名称",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            
-            const SizedBox(height: 16),
-
-            // 3. 所属父级
-            DropdownButtonFormField<String?>(
-              value: _selectedParentKey,
-              decoration: const InputDecoration(
-                labelText: "所属父级 (层级)",
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                const DropdownMenuItem(value: null, child: Text("无 (作为一级分类)")),
-                ..._parents.map((p) => DropdownMenuItem(
-                  value: p.key,
-                  child: Row(
-                    children: [
-                      CategoryService.buildIcon(
-                        p.iconName,
-                        size: 16,
-                        color: CategoryService.parseColorHex(p.colorHex) ?? Colors.grey,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(p.name),
-                    ],
-                  ),
-                )),
-              ],
-              onChanged: (val) {
-                setState(() => _selectedParentKey = val);
-              },
+  Widget _buildParentPickerTile({
+    required String iconName,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    Color? iconColor,
+  }) {
+    final color = iconColor ?? Colors.grey.shade600;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: isSelected ? JiveTheme.primaryGreen.withValues(alpha: 0.12) : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? JiveTheme.primaryGreen : Colors.transparent,
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CategoryService.buildIcon(iconName, size: 20, color: isSelected ? JiveTheme.primaryGreen : color),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(fontSize: 11, color: isSelected ? JiveTheme.primaryGreen : Colors.grey.shade700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("取消"),
+    );
+  }
+
+  Widget _buildActionList() {
+    final isSubCategory = widget.category.parentKey != null;
+    final canDelete = !widget.category.isSystem;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("分类操作", style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 8),
+        _buildActionTile(
+          icon: Icons.pie_chart,
+          label: "查看统计数据",
+          onTap: _openStats,
         ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: JiveTheme.primaryGreen, foregroundColor: Colors.white),
-          onPressed: _save,
-          child: const Text("保存"),
+        _buildActionTile(
+          icon: Icons.receipt_long,
+          label: "查看账单",
+          onTap: _openTransactions,
         ),
+        _buildActionTile(
+          icon: Icons.swap_horiz,
+          label: "将账单转移至其它分类",
+          onTap: _transferTransactions,
+        ),
+        if (isSubCategory)
+          _buildActionTile(
+            icon: Icons.arrow_upward,
+            label: "改为一级分类",
+            onTap: _promoteToParent,
+          ),
+        _buildActionTile(
+          icon: _isHidden ? Icons.visibility : Icons.visibility_off,
+          label: _isHidden ? "显示分类" : "隐藏分类",
+          onTap: _toggleHidden,
+        ),
+        if (canDelete)
+          _buildActionTile(
+            icon: Icons.delete_outline,
+            label: "删除分类",
+            iconColor: Colors.red,
+            textColor: Colors.red,
+            onTap: _confirmDelete,
+          ),
       ],
     );
   }
 
-  void _showIconPicker() {
-    // 简易图标选择器
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => GridView.count(
-        crossAxisCount: 6,
-        padding: const EdgeInsets.all(16),
-        children: [
-          'restaurant', 'shopping_bag', 'directions_car', 'house', 'sports_esports', 
-          'local_hospital', 'school', 'people', 'pets', 'trending_up', 'attach_money',
-          'bakery_dining', 'local_cafe', 'icecream', 'movie', 'flight', 'key'
-        ].map((name) => IconButton(
-          icon: CategoryService.buildIcon(name, size: 22),
-          onPressed: () {
-            setState(() => _selectedIcon = name);
-            Navigator.pop(context);
-          },
-        )).toList(),
+  Widget _buildActionTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Color? iconColor,
+    Color? textColor,
+  }) {
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icon, color: iconColor ?? Colors.grey.shade700, size: 20),
+      title: Text(
+        label,
+        style: TextStyle(fontSize: 14, color: textColor ?? Colors.grey.shade800),
       ),
+      onTap: onTap,
     );
+  }
+
+  Future<void> _showIconPicker() async {
+    final selected = await pickCategoryIcon(context, initialIcon: _selectedIcon);
+    if (selected != null) {
+      setState(() => _selectedIcon = selected);
+    }
   }
 
   Future<void> _save() async {
     final newName = _nameController.text.trim();
     if (newName.isEmpty) return;
 
+    setState(() => _isSaving = true);
     await CategoryService(widget.isar).updateCategory(
-      widget.category.id, 
-      newName, 
-      _selectedIcon, 
+      widget.category.id,
+      newName,
+      _selectedIcon,
       _selectedParentKey,
       _selectedColorHex,
     );
+    if (!mounted) return;
+    Navigator.pop(context, true);
+  }
 
+  Future<void> _openStats() async {
+    final isSub = widget.category.parentKey != null;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => StatsScreen(
+          filterCategoryKey: isSub ? null : widget.category.key,
+          filterSubCategoryKey: isSub ? widget.category.key : null,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openTransactions() async {
+    final isSub = widget.category.parentKey != null;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryTransactionsScreen(
+          title: "账单 · ${widget.category.name}",
+          filterCategoryKey: isSub ? null : widget.category.key,
+          filterSubCategoryKey: isSub ? widget.category.key : null,
+          includeSubCategories: false,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _transferTransactions() async {
+    final target = await _pickTransferTarget();
+    if (target == null) return;
+
+    final targetName = target.child == null
+        ? target.parent.name
+        : "${target.parent.name} · ${target.child!.name}";
+    final sourceName = widget.category.name;
+
+    if (!mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("确认转移账单"),
+        content: Text("将 $sourceName 的账单转移到 $targetName？"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("转移"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    final moved = await _applyTransactionTransfer(target);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(moved == 0 ? "没有可转移的账单" : "已转移 $moved 笔账单")),
+    );
+  }
+
+  Future<int> _applyTransactionTransfer(_TransferTarget target) async {
+    final isSub = widget.category.parentKey != null;
+    final base = widget.isar.jiveTransactions.filter();
+    final filtered = isSub
+        ? base.subCategoryKeyEqualTo(widget.category.key)
+        : base.categoryKeyEqualTo(widget.category.key);
+    final txs = await filtered.findAll();
+    if (txs.isEmpty) return 0;
+
+    for (final tx in txs) {
+      tx.categoryKey = target.parent.key;
+      tx.category = target.parent.name;
+      if (target.child != null) {
+        tx.subCategoryKey = target.child!.key;
+        tx.subCategory = target.child!.name;
+      } else {
+        tx.subCategoryKey = null;
+        tx.subCategory = "";
+      }
+    }
+
+    await widget.isar.writeTxn(() async {
+      await widget.isar.jiveTransactions.putAll(txs);
+    });
+    return txs.length;
+  }
+
+  Future<_TransferTarget?> _pickTransferTarget() async {
+    final all = await widget.isar.collection<JiveCategory>().where().findAll();
+    final parents = all
+        .where((c) => c.parentKey == null && c.isIncome == widget.category.isIncome)
+        .toList();
+    parents.sort((a, b) => a.order.compareTo(b.order));
+
+    final Map<String, List<JiveCategory>> childrenByParent = {};
+    for (final cat in all) {
+      if (cat.parentKey == null || cat.isIncome != widget.category.isIncome) continue;
+      childrenByParent.putIfAbsent(cat.parentKey!, () => []).add(cat);
+    }
+    for (final list in childrenByParent.values) {
+      list.sort((a, b) => a.order.compareTo(b.order));
+    }
+
+    if (!mounted) return null;
+    return showModalBottomSheet<_TransferTarget>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              child: Text("选择目标分类", style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+            ...parents.expand((parent) {
+              final tiles = <Widget>[];
+              final isCurrentParent = widget.category.parentKey == null && parent.key == widget.category.key;
+              if (!isCurrentParent) {
+                tiles.add(_buildTargetTile(
+                  parent: parent,
+                  child: null,
+                  indent: 0,
+                ));
+              }
+              final children = childrenByParent[parent.key] ?? [];
+              for (final child in children) {
+                if (child.key == widget.category.key) continue;
+                tiles.add(_buildTargetTile(
+                  parent: parent,
+                  child: child,
+                  indent: 24,
+                ));
+              }
+              tiles.add(const Divider(height: 16));
+              return tiles;
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTargetTile({
+    required JiveCategory parent,
+    required JiveCategory? child,
+    required double indent,
+  }) {
+    final title = child == null ? parent.name : child.name;
+    final subtitle = child == null ? "仅一级" : parent.name;
+    return ListTile(
+      dense: true,
+      contentPadding: EdgeInsets.only(left: 12 + indent, right: 12),
+      leading: CategoryService.buildIcon(
+        child?.iconName ?? parent.iconName,
+        size: 18,
+        color: Colors.grey.shade700,
+      ),
+      title: Text(title, style: const TextStyle(fontSize: 14)),
+      subtitle: child == null ? null : Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+      onTap: () => Navigator.pop(context, _TransferTarget(parent: parent, child: child)),
+    );
+  }
+
+  Future<void> _promoteToParent() async {
+    final newName = _nameController.text.trim();
+    if (newName.isEmpty) return;
+    await CategoryService(widget.isar).updateCategory(
+      widget.category.id,
+      newName,
+      _selectedIcon,
+      null,
+      _selectedColorHex,
+    );
     if (mounted) Navigator.pop(context, true);
+  }
+
+  Future<void> _toggleHidden() async {
+    await CategoryService(widget.isar).setCategoryHidden(widget.category.id, !_isHidden);
+    if (!mounted) return;
+    setState(() => _isHidden = !_isHidden);
+  }
+
+  Future<int> _countTransactionsForCategory() async {
+    final isSub = widget.category.parentKey != null;
+    final base = widget.isar.jiveTransactions.filter();
+    final filtered = isSub
+        ? base.subCategoryKeyEqualTo(widget.category.key)
+        : base.categoryKeyEqualTo(widget.category.key);
+    return filtered.count();
+  }
+
+  Future<int> _uncategorizeTransactions() async {
+    final isSub = widget.category.parentKey != null;
+    final base = widget.isar.jiveTransactions.filter();
+    final filtered = isSub
+        ? base.subCategoryKeyEqualTo(widget.category.key)
+        : base.categoryKeyEqualTo(widget.category.key);
+    final txs = await filtered.findAll();
+    if (txs.isEmpty) return 0;
+    for (final tx in txs) {
+      tx.categoryKey = null;
+      tx.subCategoryKey = null;
+      tx.category = "未分类";
+      tx.subCategory = "";
+    }
+    await widget.isar.writeTxn(() async {
+      await widget.isar.jiveTransactions.putAll(txs);
+    });
+    return txs.length;
+  }
+
+  Future<_DeleteHandling?> _askDeleteHandling(int txCount) async {
+    return showDialog<_DeleteHandling>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("该分类有账单"),
+        content: Text("检测到 $txCount 笔账单，请选择处理方式。"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _DeleteHandling.uncategorize),
+            child: const Text("设为未分类"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, _DeleteHandling.transfer),
+            child: const Text("转移到其它分类"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete() async {
+    final txCount = await _countTransactionsForCategory();
+    if (txCount > 0) {
+      final handling = await _askDeleteHandling(txCount);
+      if (handling == null) return;
+      if (handling == _DeleteHandling.transfer) {
+        final target = await _pickTransferTarget();
+        if (target == null) return;
+        await _applyTransactionTransfer(target);
+      } else if (handling == _DeleteHandling.uncategorize) {
+        await _uncategorizeTransactions();
+      }
+    }
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("删除分类？"),
+        content: const Text("删除后分类将无法恢复，相关账单会保留原名称。"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text("删除"),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final deleted = await CategoryService(widget.isar).deleteCategory(widget.category);
+    if (!mounted) return;
+    if (!deleted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("请先处理子类后再删除")),
+      );
+      return;
+    }
+    Navigator.pop(context, true);
   }
 
   Widget _buildColorPicker() {
@@ -166,13 +652,20 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         const Text("颜色", style: TextStyle(fontSize: 12, color: Colors.grey)),
         const SizedBox(width: 12),
         Expanded(
-          child: Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildColorDot(null),
-              ..._categoryColorOptions.map(_buildColorDot),
-            ],
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildColorDot(null),
+                const SizedBox(width: 8),
+                ..._categoryColorOptions.map((color) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: _buildColorDot(color),
+                  );
+                }),
+              ],
+            ),
           ),
         ),
       ],
@@ -206,9 +699,21 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   }
 
   String _colorHexFromColor(Color color) {
-    final value = color.value.toRadixString(16).padLeft(8, '0');
+    final value = color.toARGB32().toRadixString(16).padLeft(8, '0');
     return "#${value.substring(2).toUpperCase()}";
   }
+}
+
+class _TransferTarget {
+  final JiveCategory parent;
+  final JiveCategory? child;
+
+  const _TransferTarget({required this.parent, this.child});
+}
+
+enum _DeleteHandling {
+  transfer,
+  uncategorize,
 }
 
 const List<Color> _categoryColorOptions = [

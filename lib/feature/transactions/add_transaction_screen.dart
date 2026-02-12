@@ -1,14 +1,25 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
+import '../../core/database/currency_model.dart';
 import '../../core/database/transaction_model.dart';
-import '../../core/database/auto_draft_model.dart';
+import '../../core/database/tag_model.dart';
+import '../../core/database/project_model.dart';
+import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/currency_service.dart';
+import '../../core/service/database_service.dart';
+import '../../core/service/tag_service.dart';
+import '../../core/service/data_reload_bus.dart';
+import '../../core/service/tag_rule_service.dart';
 import '../../core/database/category_model.dart';
 import '../../core/utils/logger_util.dart';
 import '../category/category_create_dialog.dart';
@@ -17,58 +28,120 @@ import '../category/category_edit_dialog.dart';
 import '../category/category_manager_screen.dart';
 import '../category/category_search_delegate.dart';
 import '../stats/stats_screen.dart';
+import '../tag/tag_icon_catalog.dart';
+import '../tag/tag_picker_sheet.dart';
+import 'note_field_with_chips.dart';
 
 enum TransactionType { expense, income, transfer }
 
 class AddTransactionScreen extends StatefulWidget {
-  const AddTransactionScreen({super.key});
+  final JiveTransaction? editingTransaction;
+  final JiveTransaction? prefillTransaction;
+  final TransactionType? initialType;
+
+  const AddTransactionScreen({
+    super.key,
+    this.editingTransaction,
+    this.prefillTransaction,
+    this.initialType,
+  });
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
 }
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
-  static const List<String> _accountGroupOrder = [
-    AccountService.groupAssets,
-    AccountService.groupCredit,
-    AccountService.groupDebt,
-    AccountService.groupReimburse,
-    AccountService.groupOther,
+  static const List<String> _accountGroupOrder = [...AccountService.groupOrder];
+  static const List<String> _expenseNoteSuggestions = [
+    '早餐',
+    '午餐',
+    '晚餐',
+    '交通',
+    '打车',
+    '网购',
+    '房租',
+    '水电',
   ];
+  static const List<String> _incomeNoteSuggestions = [
+    '工资',
+    '报销',
+    '奖金',
+    '退款',
+    '理财',
+    '兼职',
+  ];
+  static const List<String> _transferNoteSuggestions = ['还款', '储蓄', '调拨', '借还'];
+  static const String _noteTagUsageKeyPrefix = 'note_tag_usage_v1_';
 
   String _amountStr = "0";
+  String _toAmountStr = ""; // 跨币种转账的转入金额
+  double? _crossCurrencyRate; // 跨币种转账时使用的汇率
+  String? _crossCurrencyRateSource; // 汇率来源
+  bool _isEditingToAmount = false; // 是否正在编辑转入金额
   late Isar _isar;
+  final TextEditingController _toAmountController = TextEditingController();
   bool _isLoading = true;
   bool _hasDataChanges = false;
   bool _isFallbackMode = false;
   bool _isSearchMode = false;
+  bool _isEditing = false;
   TransactionType _txType = TransactionType.expense;
+  DateTime _selectedTime = DateTime.now();
+  final TextEditingController _noteController = TextEditingController();
+  final Map<TransactionType, Map<String, int>> _noteTagUsage = {};
+  int? _editingAccountId;
+  int? _editingToAccountId;
+  String? _editingParentKey;
+  String? _editingParentName;
+  String? _editingSubKey;
+  String? _editingSubName;
   List<JiveCategory> _parentCategories = [];
   List<JiveCategory> _subCategories = [];
   JiveCategory? _selectedParent;
   JiveCategory? _selectedSub;
   List<JiveAccount> _accounts = [];
+  Map<int, double> _accountBalances = {};
   JiveAccount? _selectedAccount;
   JiveAccount? _selectedToAccount;
+  List<JiveTag> _tags = [];
+  List<String> _selectedTagKeys = [];
+  List<JiveProject> _projects = [];
+  int? _selectedProjectId;
   List<CategorySearchResult> _searchItems = [];
   final Map<String, String> _searchKeyCache = {};
   final TextEditingController _inlineSearchController = TextEditingController();
   final FocusNode _inlineSearchFocus = FocusNode();
+  final DateFormat _dateTimeFormat = DateFormat('MM-dd HH:mm');
   String _searchQuery = "";
   final Map<String, List<String>> _searchTokenCache = {};
   final Map<String, List<String>> _systemTokenCache = {};
   bool _searchItemsLoaded = false;
+  CurrencyService? _currencyService;
 
   final List<String> _keys = [
-    '7', '8', '9', 'date',
-    '4', '5', '6', '+',
-    '1', '2', '3', '-',
-    '.', '0', 'DEL', 'OK'
+    '7',
+    '8',
+    '9',
+    'date',
+    '4',
+    '5',
+    '6',
+    '+',
+    '1',
+    '2',
+    '3',
+    '-',
+    '.',
+    '0',
+    'DEL',
+    'OK',
   ];
 
   @override
   void initState() {
     super.initState();
+    _initializeEditingState();
+    _loadNoteTagUsage();
     _initData();
   }
 
@@ -76,27 +149,85 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void dispose() {
     _inlineSearchController.dispose();
     _inlineSearchFocus.dispose();
+    _noteController.dispose();
+    _toAmountController.dispose();
     super.dispose();
+  }
+
+  void _initializeEditingState() {
+    final editing = widget.editingTransaction;
+    if (editing != null) {
+      _isEditing = true;
+      _amountStr = _formatAmountInput(editing.amount);
+      _selectedTime = editing.timestamp;
+      _txType = _parseTxType(editing.type);
+      _editingAccountId = editing.accountId;
+      _editingToAccountId = editing.toAccountId;
+      _editingParentKey = editing.categoryKey;
+      _editingParentName = editing.category;
+      _editingSubKey = editing.subCategoryKey;
+      _editingSubName = editing.subCategory;
+      _noteController.text = editing.note ?? '';
+      _selectedTagKeys = List<String>.from(editing.tagKeys);
+      _selectedProjectId = editing.projectId;
+      // 跨币种转账数据
+      if (editing.toAmount != null) {
+        _toAmountStr = _formatAmountInput(editing.toAmount!);
+        _toAmountController.text = _toAmountStr;
+        _isEditingToAmount = true; // 已有数据，不自动覆盖
+      }
+      _crossCurrencyRate = editing.exchangeRate;
+      return;
+    }
+
+    final prefill = widget.prefillTransaction;
+    if (prefill != null) {
+      _amountStr = _formatAmountInput(prefill.amount);
+      _selectedTime = prefill.timestamp;
+      _txType = _parseTxType(prefill.type);
+      _editingAccountId = prefill.accountId;
+      _editingToAccountId = prefill.toAccountId;
+      _editingParentKey = prefill.categoryKey;
+      _editingParentName = prefill.category;
+      _editingSubKey = prefill.subCategoryKey;
+      _editingSubName = prefill.subCategory;
+      _noteController.text = prefill.note ?? '';
+      _selectedTagKeys = List<String>.from(prefill.tagKeys);
+      _selectedProjectId = prefill.projectId;
+      // 跨币种转账数据
+      if (prefill.toAmount != null) {
+        _toAmountStr = _formatAmountInput(prefill.toAmount!);
+        _toAmountController.text = _toAmountStr;
+        _isEditingToAmount = true;
+      }
+      _crossCurrencyRate = prefill.exchangeRate;
+      return;
+    }
+
+    // 使用初始类型（如果提供）
+    if (widget.initialType != null) {
+      _txType = widget.initialType!;
+    }
   }
 
   Future<void> _initData() async {
     try {
       JiveLogger.d(">>> INIT DATA STARTED");
-      final dir = await getApplicationDocumentsDirectory();
-      
-      if (Isar.getInstance() != null) {
-        _isar = Isar.getInstance()!;
-      } else {
-        _isar = await Isar.open(
-          [JiveTransactionSchema, JiveCategorySchema, JiveAccountSchema, JiveAutoDraftSchema],
-          directory: dir.path,
-        );
-      }
-      
+      _isar = await DatabaseService.getInstance();
+
+      _currencyService = CurrencyService(_isar);
       await CategoryService(_isar).initDefaultCategories();
       await AccountService(_isar).initDefaultAccounts();
+      await TagService(_isar).initDefaultGroups();
       await _loadAccounts();
-      await _loadParentsForType();
+      await _loadTags();
+      await _loadProjects();
+      await _loadParentsForType(
+        selectParentKey: _editingParentKey,
+        selectParentName: _editingParentName,
+        selectSubKey: _editingSubKey,
+        selectSubName: _editingSubName,
+      );
     } catch (e, s) {
       JiveLogger.e("Error loading categories", e, s);
     } finally {
@@ -104,7 +235,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
-  Future<void> _loadParentsForType() async {
+  Future<void> _loadParentsForType({
+    String? selectParentKey,
+    String? selectParentName,
+    String? selectSubKey,
+    String? selectSubName,
+  }) async {
     if (_txType == TransactionType.transfer) {
       _isFallbackMode = false;
       if (mounted) {
@@ -119,7 +255,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     final showIncome = _txType == TransactionType.income;
-    var parents = await _isar.collection<JiveCategory>()
+    var parents = await _isar
+        .collection<JiveCategory>()
         .filter()
         .parentKeyIsNull()
         .isIncomeEqualTo(showIncome)
@@ -130,30 +267,60 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     // FALLBACK (only for expense)
     if (parents.isEmpty && !showIncome) {
       JiveLogger.w("!!! DB EMPTY, USING FALLBACK !!!");
-      final lib = CategoryService(_isar).getSystemLibrary(isIncome: showIncome);
-      parents = lib.keys.map((name) => JiveCategory()
-        ..key = "sys_$name"
-        ..name = name
-        ..iconName = lib[name]!['icon']
-        ..order = 0
-      ).toList();
+      final service = CategoryService(_isar);
+      final lib = service.getSystemLibrary(isIncome: showIncome);
+      parents = lib.keys
+          .map(
+            (name) => JiveCategory()
+              ..key = service.buildSystemParentKey(name, isIncome: showIncome)
+              ..name = name
+              ..iconName = lib[name]!['icon']
+              ..order = 0,
+          )
+          .toList();
       _isFallbackMode = true;
     } else {
       _isFallbackMode = false;
     }
 
     if (parents.isNotEmpty) {
+      JiveCategory? selected;
+      if (selectParentKey != null) {
+        for (final parent in parents) {
+          if (parent.key == selectParentKey) {
+            selected = parent;
+            break;
+          }
+        }
+      }
+      if (selected == null &&
+          selectParentName != null &&
+          selectParentName.isNotEmpty) {
+        for (final parent in parents) {
+          if (parent.name == selectParentName) {
+            selected = parent;
+            break;
+          }
+        }
+      }
+      if (selected == null &&
+          _selectedParent != null &&
+          parents.any((p) => p.key == _selectedParent!.key)) {
+        selected = _selectedParent;
+      }
+      selected ??= parents.first;
+
       if (mounted) {
         setState(() {
           _parentCategories = parents;
-          if (_selectedParent == null || !_parentCategories.any((p) => p.key == _selectedParent!.key)) {
-            _selectedParent = parents.first;
-            _loadSubCategories(_selectedParent!.key);
-          } else {
-            _loadSubCategories(_selectedParent!.key);
-          }
+          _selectedParent = selected;
         });
       }
+      await _loadSubCategories(
+        selected.key,
+        selectKey: selectSubKey,
+        selectName: selectSubName,
+      );
     } else if (mounted) {
       setState(() {
         _parentCategories = [];
@@ -167,30 +334,138 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _loadAccounts() async {
     final service = AccountService(_isar);
     final accounts = await service.getActiveAccounts();
+    final balances = await service.computeBalances(accounts: accounts);
     if (!mounted) return;
 
     JiveAccount? selectedAccount = _selectedAccount;
-    if (selectedAccount == null || !accounts.any((a) => a.id == selectedAccount!.id)) {
-      selectedAccount = accounts.isNotEmpty ? accounts.first : null;
+    if (accounts.isEmpty) {
+      selectedAccount = null;
+    } else if (_editingAccountId != null) {
+      selectedAccount = accounts.firstWhere(
+        (a) => a.id == _editingAccountId,
+        orElse: () => accounts.first,
+      );
+    } else if (selectedAccount == null ||
+        !accounts.any((a) => a.id == selectedAccount!.id)) {
+      selectedAccount = accounts.first;
     }
 
     JiveAccount? selectedTo = _selectedToAccount;
-    if (selectedTo == null || (selectedAccount != null && selectedTo.id == selectedAccount.id)) {
-      if (selectedAccount != null) {
-        selectedTo = accounts.firstWhere(
-          (a) => a.id != selectedAccount!.id,
-          orElse: () => selectedAccount!,
-        );
-      } else {
-        selectedTo = null;
-      }
+    if (_editingToAccountId != null && accounts.isNotEmpty) {
+      selectedTo = accounts.firstWhere(
+        (a) => a.id == _editingToAccountId,
+        orElse: () => selectedTo ?? accounts.first,
+      );
+    }
+    if (selectedTo == null ||
+        (selectedAccount != null && selectedTo.id == selectedAccount.id)) {
+      selectedTo = selectedAccount == null
+          ? null
+          : accounts.firstWhere(
+              (a) => a.id != selectedAccount!.id,
+              orElse: () => selectedAccount!,
+            );
     }
 
     setState(() {
       _accounts = accounts;
+      _accountBalances = balances;
       _selectedAccount = selectedAccount;
       _selectedToAccount = selectedTo;
     });
+  }
+
+  Future<void> _loadTags() async {
+    final tags = await TagService(_isar).getTags(includeArchived: false);
+    if (!mounted) return;
+    setState(() {
+      _tags = tags;
+      _selectedTagKeys = _selectedTagKeys
+          .where((key) => tags.any((t) => t.key == key))
+          .toList();
+    });
+  }
+
+  Future<void> _loadProjects() async {
+    final projects = await ProjectService(_isar).getActiveProjects();
+    if (!mounted) return;
+    setState(() {
+      _projects = projects;
+      // 验证选中的项目是否仍然存在
+      if (_selectedProjectId != null &&
+          !projects.any((p) => p.id == _selectedProjectId)) {
+        _selectedProjectId = null;
+      }
+    });
+  }
+
+  /// 加载跨币种转账的汇率
+  Future<void> _loadCrossCurrencyRate() async {
+    if (_currencyService == null) return;
+    if (_selectedAccount == null || _selectedToAccount == null) {
+      setState(() {
+        _crossCurrencyRate = null;
+        _crossCurrencyRateSource = null;
+        _toAmountStr = "";
+        _toAmountController.text = "";
+      });
+      return;
+    }
+
+    final fromCurrency = _selectedAccount!.currency;
+    final toCurrency = _selectedToAccount!.currency;
+
+    if (fromCurrency == toCurrency) {
+      setState(() {
+        _crossCurrencyRate = null;
+        _crossCurrencyRateSource = null;
+        _toAmountStr = "";
+        _toAmountController.text = "";
+      });
+      return;
+    }
+
+    // 获取汇率记录
+    final rateRecord = await _currencyService!.getRateRecord(fromCurrency, toCurrency);
+    double? rate;
+    String? source;
+
+    if (rateRecord != null) {
+      rate = rateRecord.rate;
+      source = rateRecord.source;
+    } else {
+      // 使用默认汇率
+      rate = CurrencyDefaults.getRate(fromCurrency, toCurrency);
+      source = 'default';
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _crossCurrencyRate = rate;
+      _crossCurrencyRateSource = source;
+      // 如果有输入金额且未手动编辑转入金额，自动计算
+      if (!_isEditingToAmount && _toAmountStr.isEmpty) {
+        _calculateToAmount();
+      }
+    });
+  }
+
+  /// 根据汇率计算转入金额
+  void _calculateToAmount() {
+    if (_crossCurrencyRate == null) return;
+    final amount = double.tryParse(_amountStr);
+    if (amount == null || amount <= 0) {
+      _toAmountStr = "";
+      _toAmountController.text = "";
+      return;
+    }
+    final toAmount = amount * _crossCurrencyRate!;
+    final toDecimals = CurrencyDefaults.getDecimalPlaces(
+      _selectedToAccount?.currency ?? 'CNY',
+    );
+    _toAmountStr = toAmount.toStringAsFixed(toDecimals);
+    _toAmountController.text = _toAmountStr;
   }
 
   String _typeValue(TransactionType type) {
@@ -200,7 +475,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       case TransactionType.transfer:
         return "transfer";
       case TransactionType.expense:
-      default:
         return "expense";
     }
   }
@@ -237,24 +511,48 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
-  Future<void> _loadSubCategories(String parentKey, {String? selectKey}) async {
-    var subs = await _isar.collection<JiveCategory>()
+  Future<void> _loadSubCategories(
+    String parentKey, {
+    String? selectKey,
+    String? selectName,
+  }) async {
+    var subs = await _isar
+        .collection<JiveCategory>()
         .filter()
         .parentKeyEqualTo(parentKey)
         .sortByOrder()
         .findAll();
-    
+
     // FALLBACK
     if (_isFallbackMode && subs.isEmpty) {
-      final parentName = parentKey.replaceAll("sys_", "");
-      final lib = CategoryService(_isar).getSystemLibrary(isIncome: false);
-      if (lib.containsKey(parentName)) {
-        final children = lib[parentName]!['children'] as List;
-        subs = children.map<JiveCategory>((c) => JiveCategory()
-          ..key = "${parentKey}_${c['name']}"
-          ..name = c['name']
-          ..iconName = c['icon']
-        ).toList();
+      final service = CategoryService(_isar);
+      final parentName = _parentCategories
+          .firstWhere(
+            (parent) => parent.key == parentKey,
+            orElse: () => JiveCategory()..name = "",
+          )
+          .name;
+      final resolvedName = parentName.isEmpty
+          ? service.resolveSystemParentName(parentKey)
+          : parentName;
+      if (resolvedName == null || resolvedName.isEmpty) {
+        return;
+      }
+      final lib = service.getSystemLibrary(isIncome: false);
+      if (lib.containsKey(resolvedName)) {
+        final children = lib[resolvedName]!['children'] as List;
+        subs = children
+            .map<JiveCategory>(
+              (c) => JiveCategory()
+                ..key = service.buildSystemChildKey(
+                  resolvedName,
+                  c['name'],
+                  isIncome: false,
+                )
+                ..name = c['name']
+                ..iconName = c['icon'],
+            )
+            .toList();
       }
     }
 
@@ -266,6 +564,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         if (subs.isNotEmpty) {
           if (preserveKey != null) {
             final match = subs.where((item) => item.key == preserveKey);
+            _selectedSub = match.isEmpty ? null : match.first;
+          } else if (selectName != null && selectName.isNotEmpty) {
+            final match = subs.where((item) => item.name == selectName);
             _selectedSub = match.isEmpty ? null : match.first;
           } else {
             _selectedSub = null;
@@ -300,7 +601,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _openCategoryManager() async {
     final changed = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const CategoryManagerScreen()),
+      MaterialPageRoute(
+        builder: (context) => CategoryManagerScreen(isar: _isar),
+      ),
     );
     if (changed == true) {
       _hasDataChanges = true;
@@ -329,14 +632,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (all.isEmpty) return [];
 
     final showIncome = _txType == TransactionType.income;
-    final parents = all.where((c) => c.parentKey == null && !c.isHidden && c.isIncome == showIncome).toList();
+    final parents = all
+        .where(
+          (c) => c.parentKey == null && !c.isHidden && c.isIncome == showIncome,
+        )
+        .toList();
     parents.sort((a, b) => a.order.compareTo(b.order));
     final parentByKey = {for (final p in parents) p.key: p};
     final items = <CategorySearchResult>[];
     for (final parent in parents) {
       items.add(CategorySearchResult(parent: parent));
     }
-    final children = all.where((c) => c.parentKey != null && !c.isHidden && c.isIncome == showIncome).toList();
+    final children = all
+        .where(
+          (c) => c.parentKey != null && !c.isHidden && c.isIncome == showIncome,
+        )
+        .toList();
     for (final child in children) {
       final parent = parentByKey[child.parentKey];
       if (parent == null) continue;
@@ -379,11 +690,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Future<void> _promptAddSubCategory(JiveCategory parent) async {
-    final existingNames = _subCategories.map((child) => child.name).toSet();
-    final systemLibrary = CategoryService(_isar).getSystemLibrary(
-      isIncome: parent.isIncome,
-      includeIncome: true,
-    );
+    final existingNames =
+        (await _isar
+                .collection<JiveCategory>()
+                .filter()
+                .parentKeyEqualTo(parent.key)
+                .findAll())
+            .map((child) => child.name)
+            .toSet();
+    final systemLibrary = CategoryService(
+      _isar,
+    ).getSystemLibrary(isIncome: parent.isIncome, includeIncome: true);
+    if (!mounted) return;
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
@@ -438,7 +756,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     } else {
       for (final name in result.names) {
         final iconName = result.autoMatchIcon
-            ? CategoryService(_isar).suggestIconName(name, fallback: result.iconName)
+            ? CategoryService(
+                _isar,
+              ).suggestIconName(name, fallback: result.iconName)
             : result.iconName;
         final created = await CategoryService(_isar).createSubCategory(
           parent: parent,
@@ -456,9 +776,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     if (!mounted) return;
     if (lastCreated == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("已存在同名子类")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("已存在同名子类")));
       return;
     }
 
@@ -469,12 +789,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _searchTokenCache.clear();
     setState(() => _selectedParent = parent);
     await _loadSubCategories(parent.key, selectKey: lastCreated.key);
+    if (!mounted) return;
     if (skipped.isNotEmpty) {
       final preview = skipped.take(3).join("、");
       final suffix = skipped.length > 3 ? "等" : "";
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("已忽略重复: $preview$suffix")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("已忽略重复: $preview$suffix")));
     }
   }
 
@@ -535,9 +856,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               title: Text("编辑 '${sub.name}'"),
               onTap: () async {
                 Navigator.pop(context);
-                final updated = await showDialog(
-                  context: context,
-                  builder: (context) => CategoryEditDialog(category: sub, isar: _isar),
+                final updated = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        CategoryEditDialog(category: sub, isar: _isar),
+                    fullscreenDialog: true,
+                  ),
                 );
                 if (updated == true) {
                   _hasDataChanges = true;
@@ -560,12 +885,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               title: const Text("删除分类", style: TextStyle(color: Colors.red)),
               onTap: () async {
                 Navigator.pop(context);
-                final deleted = await CategoryService(_isar).deleteCategory(sub);
+                final deleted = await CategoryService(
+                  _isar,
+                ).deleteCategory(sub);
                 if (!mounted) return;
                 if (!deleted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("请先处理子类后再删除")),
-                  );
+                  ScaffoldMessenger.of(
+                    this.context,
+                  ).showSnackBar(const SnackBar(content: Text("请先处理子类后再删除")));
                   return;
                 }
                 _hasDataChanges = true;
@@ -581,6 +908,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   void _onKeyPress(String key) {
+    if (key == 'date') {
+      _pickTransactionDate();
+      return;
+    }
     setState(() {
       if (key == 'DEL') {
         if (_amountStr.length > 1) {
@@ -600,6 +931,35 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           }
         }
       }
+      // 如果是跨币种转账且未手动编辑转入金额，自动计算
+      if (!_isEditingToAmount && _crossCurrencyRate != null) {
+        _calculateToAmount();
+      }
+    });
+  }
+
+  Future<void> _pickTransactionDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedTime,
+      firstDate: DateTime(2010),
+      lastDate: DateTime.now(),
+    );
+    if (date == null) return;
+    if (!mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_selectedTime),
+    );
+    if (time == null) return;
+    setState(() {
+      _selectedTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
     });
   }
 
@@ -608,37 +968,114 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (amount == null || amount <= 0) return;
     if (_txType != TransactionType.transfer && _selectedParent == null) return;
     if (_selectedAccount == null) return;
-    if (_txType == TransactionType.transfer && _selectedToAccount == null) return;
-    if (_txType == TransactionType.transfer && _selectedToAccount?.id == _selectedAccount?.id) return;
+    if (_txType == TransactionType.transfer && _selectedToAccount == null) {
+      return;
+    }
+    if (_txType == TransactionType.transfer &&
+        _selectedToAccount?.id == _selectedAccount?.id) {
+      return;
+    }
 
     final typeValue = _typeValue(_txType);
-    final parentName = _txType == TransactionType.transfer ? "转账" : _selectedParent!.name;
-    final subName = _txType == TransactionType.transfer ? "" : (_selectedSub?.name ?? "");
+    final parentName = _txType == TransactionType.transfer
+        ? "转账"
+        : _selectedParent!.name;
+    final subName = _txType == TransactionType.transfer
+        ? ""
+        : (_selectedSub?.name ?? "");
     final rawText = _txType == TransactionType.transfer
         ? "转账"
         : "${_selectedParent!.name} - ${_selectedSub?.name ?? ''}";
 
-    final newTx = JiveTransaction()
+    if (_selectedProjectId != null) {
+      final project = _projects.where((p) => p.id == _selectedProjectId).firstOrNull;
+      if (project != null && project.budget > 0) {
+        final service = ProjectService(_isar);
+        final currentSpent = await service.calculateProjectSpending(project.id);
+        final editingAmount = _isEditing && widget.editingTransaction?.projectId == project.id
+            ? widget.editingTransaction?.amount ?? 0
+            : 0;
+        final projected = currentSpent - editingAmount + amount;
+        if (projected > project.budget) {
+          final over = projected - project.budget;
+          if (!mounted) return;
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('预算将超支'),
+              content: Text('关联该交易后将超支 ¥${over.toStringAsFixed(0)}，是否继续？'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('继续')),
+              ],
+            ),
+          );
+          if (proceed != true) return;
+        }
+      }
+    }
+
+    final tx = widget.editingTransaction ?? JiveTransaction();
+    final source = _isEditing ? tx.source : "Manual";
+    final note = _noteController.text.trim();
+    final existingRawText = tx.rawText;
+    final useRawText =
+        _isEditing && source != "Manual" && existingRawText != null;
+    tx
       ..amount = amount
-      ..source = "Manual"
+      ..source = source
       ..type = typeValue
-      ..categoryKey = _txType == TransactionType.transfer ? null : _selectedParent!.key
-      ..subCategoryKey = _txType == TransactionType.transfer ? null : _selectedSub?.key
+      ..categoryKey = _txType == TransactionType.transfer
+          ? null
+          : _selectedParent!.key
+      ..subCategoryKey = _txType == TransactionType.transfer
+          ? null
+          : _selectedSub?.key
       ..category = parentName
       ..subCategory = subName
-      ..rawText = rawText
+      ..rawText = useRawText ? existingRawText : rawText
+      ..note = note.isEmpty ? null : note
       ..accountId = _selectedAccount?.id
-      ..toAccountId = _txType == TransactionType.transfer ? _selectedToAccount?.id : null
-      ..timestamp = DateTime.now();
+      ..toAccountId = _txType == TransactionType.transfer
+          ? _selectedToAccount?.id
+          : null
+      ..toAmount = _txType == TransactionType.transfer && _crossCurrencyRate != null
+          ? double.tryParse(_toAmountStr)
+          : null
+      ..exchangeRate = _txType == TransactionType.transfer
+          ? _crossCurrencyRate
+          : null
+      ..projectId = _selectedProjectId
+      ..tagKeys = List<String>.from(_selectedTagKeys)
+      ..smartTagKeys = List<String>.from(tx.smartTagKeys)
+      ..timestamp = _selectedTime;
+
+    if (!_isEditing) {
+      final matched = await TagRuleService(_isar).resolveMatchingTags(tx);
+      if (matched.isNotEmpty) {
+        final merged = <String>{...tx.tagKeys, ...matched}.toList();
+        tx.tagKeys = merged;
+        tx.smartTagKeys = matched;
+      } else {
+        tx.smartTagKeys = [];
+      }
+    } else {
+      // Keep smart tags only if the tag still exists on the transaction.
+      tx.smartTagKeys = tx.smartTagKeys.where(tx.tagKeys.contains).toList();
+    }
 
     await _isar.writeTxn(() async {
-      await _isar.jiveTransactions.put(newTx);
+      await _isar.jiveTransactions.put(tx);
     });
+    if (tx.tagKeys.isNotEmpty) {
+      await TagService(_isar).markTagsUsed(tx.tagKeys, tx.timestamp);
+    }
 
     JiveLogger.i("Manual Transaction Saved: $amount");
     _hasDataChanges = true;
 
     if (mounted) {
+      DataReloadBus.notify();
       Navigator.pop(context, true);
     }
   }
@@ -646,23 +1083,33 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(backgroundColor: Colors.white, body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
 
-    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
     final amountFontSize = isLandscape ? 48.0 : 72.0;
     final currencyFontSize = isLandscape ? 22.0 : 32.0;
     final labelSpacing = isLandscape ? 4.0 : 12.0;
     final parentTabHeight = isLandscape ? 44.0 : 68.0;
-    final subGridAspectRatio = isLandscape ? 1.2 : 0.8;
-    final subGridMainAxisSpacing = isLandscape ? 6.0 : 16.0;
+    final subGridAspectRatio = isLandscape ? 1.2 : 0.75;
+    final subGridMainAxisSpacing = isLandscape ? 6.0 : 12.0;
     final keyboardAspectRatio = isLandscape ? 3.4 : 1.6;
-    final keyboardPadding = EdgeInsets.fromLTRB(20, isLandscape ? 6 : 8, 20, isLandscape ? 6 : 30);
+    final keyboardPadding = EdgeInsets.fromLTRB(
+      20,
+      isLandscape ? 6 : 8,
+      20,
+      isLandscape ? 6 : 30,
+    );
     final keyboardMainAxisSpacing = isLandscape ? 8.0 : 12.0;
     final keyboardCrossAxisSpacing = isLandscape ? 8.0 : 12.0;
 
     final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
     final hideAmountInSearch = _isSearchMode && isKeyboardVisible;
+    final showCustomKeyboard = !_isSearchMode && !isKeyboardVisible;
 
     final amountHeader = Center(
       child: Column(
@@ -670,7 +1117,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         children: [
           Text(
             _currentCategoryLabel(),
-            style: GoogleFonts.lato(color: Colors.grey.shade500, fontSize: isLandscape ? 12 : 14),
+            style: GoogleFonts.lato(
+              color: Colors.grey.shade500,
+              fontSize: isLandscape ? 12 : 14,
+            ),
+          ),
+          SizedBox(height: isLandscape ? 4 : 8),
+          GestureDetector(
+            onTap: _pickTransactionDate,
+            child: Text(
+              _dateTimeFormat.format(_selectedTime),
+              style: GoogleFonts.lato(
+                color: Colors.grey.shade500,
+                fontSize: isLandscape ? 11 : 12,
+              ),
+            ),
           ),
           SizedBox(height: labelSpacing),
           Row(
@@ -678,7 +1139,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                "¥",
+                CurrencyDefaults.getSymbol(_selectedAccount?.currency ?? 'CNY'),
                 style: GoogleFonts.rubik(
                   color: Colors.black87,
                   fontSize: currencyFontSize,
@@ -700,7 +1161,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           if (_accounts.isNotEmpty) ...[
             SizedBox(height: isLandscape ? 6 : 10),
             _buildAccountSelector(isLandscape: isLandscape),
+            if (_selectedAccount != null &&
+                AccountService.isCreditAccount(_selectedAccount!))
+              Padding(
+                padding: EdgeInsets.only(top: isLandscape ? 4 : 6),
+                child: _buildSelectedCreditSummary(
+                  _selectedAccount!,
+                  isLandscape: isLandscape,
+                ),
+              ),
           ],
+          SizedBox(height: isLandscape ? 6 : 10),
+          _buildNoteField(isLandscape: isLandscape),
+          SizedBox(height: isLandscape ? 6 : 8),
+          _buildTagSelector(isLandscape: isLandscape),
+          SizedBox(height: isLandscape ? 6 : 8),
+          _buildProjectSelector(isLandscape: isLandscape),
         ],
       ),
     );
@@ -712,19 +1188,23 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             padding: const EdgeInsets.only(top: 8, bottom: 4),
             child: amountHeader,
           )
-        : Expanded(
-            flex: 1,
-            child: amountHeader,
+        : Flexible(
+            fit: FlexFit.loose,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: amountHeader,
+            ),
           );
 
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         if (_isSearchMode) {
           _exitSearchMode();
-          return false;
+          return;
         }
         Navigator.pop(context, _hasDataChanges);
-        return false;
       },
       child: Scaffold(
         backgroundColor: Colors.white,
@@ -738,7 +1218,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           actions: [
             if (_showCategories)
               IconButton(
-                icon: Icon(_isSearchMode ? Icons.close : Icons.search, color: Colors.black87),
+                icon: Icon(
+                  _isSearchMode ? Icons.close : Icons.search,
+                  color: Colors.black87,
+                ),
                 onPressed: _toggleInlineSearch,
               ),
           ],
@@ -746,123 +1229,149 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           title: _buildTypeSelector(),
         ),
         body: Column(
-        children: [
-          // 1. 金额显示区 (Flex 1)
-          amountSection,
+          children: [
+            // 1. 金额显示区 (Flex 1)
+            amountSection,
 
-          // 2. 分类与键盘容器 (Flex 2)
-          Expanded(
-            flex: 2,
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [BoxShadow(color: Colors.grey.shade100, blurRadius: 20, offset: const Offset(0, -5))],
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 8),
-                  
-                  if (_showCategories) ...[
-                    if (_isSearchMode) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                        child: _buildInlineSearchField(),
-                      ),
-                      const Divider(height: 1, color: Colors.black12),
-                    ] else ...[
-                      // A. 父分类 Tab
-                      SizedBox(
-                        height: parentTabHeight,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          itemCount: _parentCategories.length,
-                          itemBuilder: (context, index) {
-                            final cat = _parentCategories[index];
-                            final isSelected = cat.key == _selectedParent?.key;
-                            final customColor = CategoryService.parseColorHex(cat.colorHex);
-                            final activeColor = customColor ?? JiveTheme.primaryGreen;
-                            final inactiveColor = customColor?.withOpacity(0.7) ?? Colors.grey.shade500;
-                            final iconColor = isSelected ? activeColor : inactiveColor;
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _selectedParent = cat;
-                                  _selectedSub = null;
-                                });
-                                _loadSubCategories(cat.key);
-                              },
-                              onLongPress: () => _showParentActions(cat),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
-                                alignment: Alignment.center,
-                                decoration: isSelected
-                                    ? BoxDecoration(
-                                        border: Border(bottom: BorderSide(color: activeColor, width: 2)),
-                                      )
-                                    : null,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CategoryService.buildIcon(
-                                      cat.iconName,
-                                      size: isLandscape ? 16 : 18,
-                                      color: iconColor,
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      cat.name,
-                                      style: TextStyle(
-                                        fontSize: isLandscape ? 11 : 12,
+            // 2. 分类与键盘容器 (Flex 2)
+            Expanded(
+              flex: 2,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.shade100,
+                      blurRadius: 20,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 8),
+
+                    if (_showCategories) ...[
+                      if (_isSearchMode) ...[
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                          child: _buildInlineSearchField(),
+                        ),
+                        const Divider(height: 1, color: Colors.black12),
+                      ] else ...[
+                        // A. 父分类 Tab
+                        SizedBox(
+                          height: parentTabHeight,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            itemCount: _parentCategories.length,
+                            itemBuilder: (context, index) {
+                              final cat = _parentCategories[index];
+                              final isSelected =
+                                  cat.key == _selectedParent?.key;
+                              final customColor = CategoryService.parseColorHex(
+                                cat.colorHex,
+                              );
+                              final activeColor =
+                                  customColor ?? JiveTheme.primaryGreen;
+                              final inactiveColor =
+                                  JiveTheme.categoryIconInactive;
+                              final iconColor = isSelected
+                                  ? activeColor
+                                  : inactiveColor;
+                              return GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedParent = cat;
+                                    _selectedSub = null;
+                                  });
+                                  _loadSubCategories(cat.key);
+                                },
+                                onLongPress: () => _showParentActions(cat),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  alignment: Alignment.center,
+                                  decoration: isSelected
+                                      ? BoxDecoration(
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: activeColor,
+                                              width: 2,
+                                            ),
+                                          ),
+                                        )
+                                      : null,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CategoryService.buildIcon(
+                                        cat.iconName,
+                                        size: isLandscape ? 16 : 18,
                                         color: iconColor,
-                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        cat.name,
+                                        style: TextStyle(
+                                          fontSize: isLandscape ? 11 : 12,
+                                          color: iconColor,
+                                          fontWeight: isSelected
+                                              ? FontWeight.bold
+                                              : FontWeight.normal,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                              );
+                            },
+                          ),
+                        ),
+                        const Divider(height: 1, color: Colors.black12),
+                      ],
+                    ],
+
+                    // B. 子分类网格 (Expanded)
+                    Expanded(
+                      child: _showCategories
+                          ? _buildCategoryBody(
+                              subGridAspectRatio,
+                              subGridMainAxisSpacing,
+                            )
+                          : _buildTransferHint(),
+                    ),
+
+                    if (showCustomKeyboard) ...[
+                      const Divider(height: 1, color: Colors.black12),
+
+                      // C. 数字键盘
+                      Container(
+                        padding: keyboardPadding,
+                        child: GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 4,
+                                childAspectRatio: keyboardAspectRatio,
+                                crossAxisSpacing: keyboardCrossAxisSpacing,
+                                mainAxisSpacing: keyboardMainAxisSpacing,
                               ),
-                            );
+                          itemCount: _keys.length,
+                          itemBuilder: (context, index) {
+                            return _buildKey(_keys[index]);
                           },
                         ),
                       ),
-                      const Divider(height: 1, color: Colors.black12),
                     ],
                   ],
-
-                  // B. 子分类网格 (Expanded)
-                  Expanded(
-                    child: _showCategories
-                        ? _buildCategoryBody(subGridAspectRatio, subGridMainAxisSpacing)
-                        : _buildTransferHint(),
-                  ),
-
-                  if (!_isSearchMode) ...[
-                    const Divider(height: 1, color: Colors.black12),
-
-                    // C. 数字键盘
-                    Container(
-                      padding: keyboardPadding,
-                      child: GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          childAspectRatio: keyboardAspectRatio,
-                          crossAxisSpacing: keyboardCrossAxisSpacing,
-                          mainAxisSpacing: keyboardMainAxisSpacing,
-                        ),
-                        itemCount: _keys.length,
-                        itemBuilder: (context, index) {
-                          return _buildKey(_keys[index]);
-                        },
-                      ),
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -871,7 +1380,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Widget _buildTypeSelector() {
     return Container(
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(20),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -898,7 +1410,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: isSelected ? Colors.black87 : Colors.black38),
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? Colors.black87 : Colors.black38,
+            ),
             const SizedBox(width: 4),
             Text(
               label,
@@ -917,29 +1433,169 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Widget _buildAccountSelector({required bool isLandscape}) {
     final textSize = isLandscape ? 11.0 : 12.0;
     if (_txType == TransactionType.transfer) {
-      return Row(
+      // 检测是否为跨币种转账
+      final fromCurrency = _selectedAccount?.currency ?? 'CNY';
+      final toCurrency = _selectedToAccount?.currency ?? 'CNY';
+      final isCrossCurrency =
+          _selectedAccount != null &&
+          _selectedToAccount != null &&
+          fromCurrency != toCurrency;
+
+      return Column(
         children: [
-          Expanded(
-            child: _buildAccountChip(
-              label: "从",
-              account: _selectedAccount,
-              textSize: textSize,
-              expand: true,
-              onTap: () => _showAccountPicker(pickTo: false),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _buildAccountChip(
+                  label: "从",
+                  account: _selectedAccount,
+                  textSize: textSize,
+                  expand: true,
+                  onTap: () => _showAccountPicker(pickTo: false),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(Icons.arrow_forward, size: 14, color: Colors.grey.shade500),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildAccountChip(
+                  label: "到",
+                  account: _selectedToAccount,
+                  textSize: textSize,
+                  expand: true,
+                  onTap: () => _showAccountPicker(pickTo: true),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          Icon(Icons.arrow_forward, size: 14, color: Colors.grey.shade500),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildAccountChip(
-              label: "到",
-              account: _selectedToAccount,
-              textSize: textSize,
-              expand: true,
-              onTap: () => _showAccountPicker(pickTo: true),
+          if (isCrossCurrency) ...[
+            const SizedBox(height: 8),
+            // 跨币种转账信息卡片
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 标题行
+                  Row(
+                    children: [
+                      Icon(Icons.currency_exchange, size: 16, color: Colors.orange.shade700),
+                      const SizedBox(width: 6),
+                      Text(
+                        '跨币种转账',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange.shade800,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (_crossCurrencyRate != null) ...[
+                        _buildRateSourceBadge(_crossCurrencyRateSource ?? 'default'),
+                        const SizedBox(width: 6),
+                        Text(
+                          '1 $fromCurrency = ${_crossCurrencyRate!.toStringAsFixed(4)} $toCurrency',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.orange.shade600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  // 转入金额输入
+                  Row(
+                    children: [
+                      Text(
+                        '转入金额',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          height: 36,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade300),
+                          ),
+                          child: Row(
+                            children: [
+                              Text(
+                                CurrencyDefaults.getSymbol(toCurrency),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.orange.shade700,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: TextField(
+                                  controller: _toAmountController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.orange.shade800,
+                                  ),
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    hintText: '0.00',
+                                  ),
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _toAmountStr = value;
+                                      _isEditingToAmount = true;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // 重新计算按钮
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _isEditingToAmount = false;
+                            _calculateToAmount();
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(
+                            Icons.refresh,
+                            size: 16,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       );
     }
@@ -955,6 +1611,250 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
+  Widget _buildTagSelector({required bool isLandscape}) {
+    final textSize = isLandscape ? 10.0 : 12.0;
+    final selectedTags = _tags
+        .where((tag) => _selectedTagKeys.contains(tag.key))
+        .toList();
+    return Align(
+      alignment: Alignment.center,
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        alignment: WrapAlignment.center,
+        children: [
+          for (final tag in selectedTags) _buildSelectedTagChip(tag, textSize),
+          ActionChip(
+            label: Text(
+              selectedTags.isEmpty ? '添加标签' : '编辑标签',
+              style: TextStyle(fontSize: textSize),
+            ),
+            avatar: const Icon(
+              Icons.label_outline,
+              size: 14,
+              color: Colors.black54,
+            ),
+            onPressed: _showTagPicker,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectedTagChip(JiveTag tag, double textSize) {
+    final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+    return InputChip(
+      label: Text(
+        tagDisplayName(tag),
+        style: TextStyle(
+          fontSize: textSize,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      backgroundColor: color.withValues(alpha: 0.12),
+      side: BorderSide(color: color.withValues(alpha: 0.4)),
+      onDeleted: () => setState(() => _selectedTagKeys.remove(tag.key)),
+    );
+  }
+
+  Future<void> _showTagPicker() async {
+    final picked = await showModalBottomSheet<List<String>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return TagPickerSheet(
+          tags: _tags,
+          selectedKeys: _selectedTagKeys,
+          onCreateTag: (name) async {
+            final created = await TagService(_isar).createTag(name: name);
+            await _loadTags();
+            return created;
+          },
+        );
+      },
+    );
+    if (picked == null) return;
+    setState(() {
+      _selectedTagKeys = picked;
+    });
+  }
+
+  Widget _buildProjectSelector({required bool isLandscape}) {
+    final textSize = isLandscape ? 10.0 : 12.0;
+    final selectedProject = _selectedProjectId != null
+        ? _projects.where((p) => p.id == _selectedProjectId).firstOrNull
+        : null;
+
+    if (selectedProject != null) {
+      final color = selectedProject.colorHex != null
+          ? Color(int.parse(selectedProject.colorHex!.replaceFirst('#', '0xFF')))
+          : JiveTheme.primaryGreen;
+      return Align(
+        alignment: Alignment.center,
+        child: InputChip(
+          label: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              iconWidgetForName(selectedProject.iconName, size: 14, color: color),
+              const SizedBox(width: 4),
+              Text(
+                selectedProject.name,
+                style: TextStyle(
+                  fontSize: textSize,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: color.withValues(alpha: 0.12),
+          side: BorderSide(color: color.withValues(alpha: 0.4)),
+          onDeleted: () => setState(() => _selectedProjectId = null),
+          onPressed: _showProjectPicker,
+        ),
+      );
+    }
+
+    return Align(
+      alignment: Alignment.center,
+      child: ActionChip(
+        label: Text(
+          '关联项目',
+          style: TextStyle(fontSize: textSize),
+        ),
+        avatar: const Icon(
+          Icons.folder_outlined,
+          size: 14,
+          color: Colors.black54,
+        ),
+        onPressed: _showProjectPicker,
+      ),
+    );
+  }
+
+  Future<void> _showProjectPicker() async {
+    if (_projects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('暂无可用项目，请先创建项目')),
+      );
+      return;
+    }
+
+    final selected = await showModalBottomSheet<int?>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Text(
+                      '选择项目',
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (_selectedProjectId != null)
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, -1),
+                        child: const Text('取消关联'),
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: _projects.length,
+                  itemBuilder: (context, index) {
+                    final project = _projects[index];
+                    final color = project.colorHex != null
+                        ? Color(int.parse(project.colorHex!.replaceFirst('#', '0xFF')))
+                        : JiveTheme.primaryGreen;
+                    final isSelected = project.id == _selectedProjectId;
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: color.withValues(alpha: 0.15),
+                        child: iconWidgetForName(project.iconName, size: 18, color: color),
+                      ),
+                      title: Text(project.name),
+                      subtitle: project.budget > 0
+                          ? Text('预算 ¥${project.budget.toStringAsFixed(0)}')
+                          : null,
+                      trailing: isSelected
+                          ? Icon(Icons.check, color: color)
+                          : null,
+                      onTap: () => Navigator.pop(context, project.id),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected == null) return;
+    setState(() {
+      _selectedProjectId = selected == -1 ? null : selected;
+    });
+  }
+
+  Widget _buildRateSourceBadge(String source) {
+    Color color;
+    String label;
+    switch (source) {
+      case 'frankfurter':
+      case 'exchangerate.host':
+        color = Colors.green;
+        label = '在线';
+        break;
+      case 'manual':
+        color = Colors.orange;
+        label = '手动';
+        break;
+      case 'default':
+        color = Colors.grey;
+        label = '默认';
+        break;
+      default:
+        color = Colors.grey;
+        label = '默认';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 9,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
   Widget _buildAccountChip({
     required String label,
     required JiveAccount? account,
@@ -962,7 +1862,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     required bool expand,
     required VoidCallback onTap,
   }) {
-    final color = AccountService.parseColorHex(account?.colorHex) ?? JiveTheme.primaryGreen;
+    final color =
+        AccountService.parseColorHex(account?.colorHex) ??
+        JiveTheme.primaryGreen;
     final name = account?.name ?? "请选择";
     return Material(
       color: Colors.transparent,
@@ -972,7 +1874,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
@@ -1007,6 +1909,46 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
+  Widget _buildSelectedCreditSummary(
+    JiveAccount account, {
+    required bool isLandscape,
+  }) {
+    final limit = account.creditLimit ?? 0;
+    if (limit <= 0) {
+      return const SizedBox.shrink();
+    }
+    final balance = _accountBalances[account.id] ?? account.openingBalance;
+    final used = balance < 0 ? -balance : 0.0;
+    final available = (limit - used).clamp(0, double.infinity).toDouble();
+    final fontSize = isLandscape ? 10.0 : 11.0;
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: isLandscape ? 10 : 12,
+      runSpacing: 4,
+      children: [
+        _buildCreditMetaText("额度", limit, Colors.blueGrey, fontSize),
+        _buildCreditMetaText("已用", used, Colors.redAccent, fontSize),
+        _buildCreditMetaText("可用", available, JiveTheme.primaryGreen, fontSize),
+      ],
+    );
+  }
+
+  Widget _buildCreditMetaText(
+    String label,
+    double value,
+    Color color,
+    double fontSize,
+  ) {
+    return Text(
+      "$label ¥${_formatMoney(value)}",
+      style: GoogleFonts.lato(
+        fontSize: fontSize,
+        color: color,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
   Future<void> _showAccountPicker({required bool pickTo}) async {
     if (_accounts.isEmpty) return;
     final entries = _buildAccountPickerEntries();
@@ -1037,14 +1979,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 );
               }
               final account = entry.account!;
-              final color = AccountService.parseColorHex(account.colorHex) ?? JiveTheme.primaryGreen;
-              final currentId = pickTo ? _selectedToAccount?.id : _selectedAccount?.id;
+              final color =
+                  AccountService.parseColorHex(account.colorHex) ??
+                  JiveTheme.primaryGreen;
+              final currentId = pickTo
+                  ? _selectedToAccount?.id
+                  : _selectedAccount?.id;
               final isSelected = account.id == currentId;
               final subtitle = _accountSubtitle(account);
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: color.withOpacity(0.15),
-                  child: AccountService.buildIcon(account.iconName, size: 18, color: color),
+                  backgroundColor: color.withValues(alpha: 0.15),
+                  child: AccountService.buildIcon(
+                    account.iconName,
+                    size: 18,
+                    color: color,
+                  ),
                 ),
                 title: Text(account.name),
                 subtitle: Text(subtitle),
@@ -1062,9 +2012,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       final other = pickTo ? _selectedAccount : _selectedToAccount;
       if (other != null && other.id == selected.id) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("转出与转入账户不能相同")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("转出与转入账户不能相同")));
         return;
       }
     }
@@ -1077,6 +2027,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _selectedAccount = selected;
       }
     });
+
+    // 跨币种转账时加载汇率
+    if (_txType == TransactionType.transfer) {
+      await _loadCrossCurrencyRate();
+    }
   }
 
   List<_AccountPickerEntry> _buildAccountPickerEntries() {
@@ -1107,7 +2062,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ordered[group] = list;
       }
     }
-    final remaining = grouped.keys.where((key) => !ordered.containsKey(key)).toList()..sort();
+    final remaining =
+        grouped.keys.where((key) => !ordered.containsKey(key)).toList()..sort();
     for (final key in remaining) {
       ordered[key] = grouped[key] ?? [];
     }
@@ -1137,7 +2093,25 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   String _formatMoney(double value) {
     final rounded = value.roundToDouble();
-    return value == rounded ? value.toStringAsFixed(0) : value.toStringAsFixed(2);
+    return value == rounded
+        ? value.toStringAsFixed(0)
+        : value.toStringAsFixed(2);
+  }
+
+  String _formatAmountInput(double value) {
+    final text = value.toStringAsFixed(2);
+    return text.replaceAll(RegExp(r'\.?0+$'), '');
+  }
+
+  TransactionType _parseTxType(String? type) {
+    switch (type) {
+      case 'income':
+        return TransactionType.income;
+      case 'transfer':
+        return TransactionType.transfer;
+      default:
+        return TransactionType.expense;
+    }
   }
 
   Widget _buildInlineSearchField() {
@@ -1160,7 +2134,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         filled: true,
         isDense: true,
         fillColor: Colors.grey.shade100,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 10,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -1169,22 +2146,30 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
-  Widget _buildCategoryBody(double subGridAspectRatio, double subGridMainAxisSpacing) {
+  Widget _buildCategoryBody(
+    double subGridAspectRatio,
+    double subGridMainAxisSpacing,
+  ) {
     final hasQuery = _isSearchMode && _searchQuery.trim().isNotEmpty;
-    if (hasQuery && _searchItemsLoaded && _filterSearchResults(_searchQuery).isEmpty) {
+    if (hasQuery &&
+        _searchItemsLoaded &&
+        _filterSearchResults(_searchQuery).isEmpty) {
       return _buildSystemSuggestionPanel();
     }
     return _buildSubCategoryGrid(subGridAspectRatio, subGridMainAxisSpacing);
   }
 
-  Widget _buildSubCategoryGrid(double subGridAspectRatio, double subGridMainAxisSpacing) {
+  Widget _buildSubCategoryGrid(
+    double subGridAspectRatio,
+    double subGridMainAxisSpacing,
+  ) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
+        crossAxisCount: 6,
         childAspectRatio: subGridAspectRatio,
         mainAxisSpacing: subGridMainAxisSpacing,
-        crossAxisSpacing: 12,
+        crossAxisSpacing: 8,
       ),
       itemCount: _subCategories.length + 1,
       itemBuilder: (context, index) {
@@ -1199,17 +2184,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             child: Column(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: Colors.grey.shade100,
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.grey.shade300),
                   ),
-                  child: const Icon(Icons.add, color: Colors.grey, size: 24),
+                  child: const Icon(Icons.add, color: Colors.grey, size: 20),
                 ),
-                const SizedBox(height: 4),
-                const Text("自定义", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                const SizedBox(height: 3),
+                const Text(
+                  "自定义",
+                  style: TextStyle(fontSize: 9, color: Colors.grey),
+                ),
               ],
             ),
           );
@@ -1219,31 +2207,40 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         final isSelected = cat.key == _selectedSub?.key;
         final customColor = CategoryService.parseColorHex(cat.colorHex);
         final activeColor = customColor ?? JiveTheme.primaryGreen;
-        final inactiveColor = customColor?.withOpacity(0.7) ?? Colors.grey.shade400;
+        final inactiveColor = JiveTheme.categoryIconInactive;
         return GestureDetector(
           onTap: () => setState(() => _selectedSub = cat),
           onLongPress: () => _showSubCategoryActions(cat),
           child: Column(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: isSelected ? activeColor : Colors.grey.shade50,
+                  color: isSelected
+                      ? activeColor
+                      : JiveTheme.categoryIconInactiveBackground,
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected
+                        ? activeColor
+                        : JiveTheme.categoryIconInactiveBorder,
+                  ),
                 ),
                 child: CategoryService.buildIcon(
                   cat.iconName,
-                  size: 22,
+                  size: 18,
                   color: isSelected ? Colors.white : inactiveColor,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 cat.name,
                 style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected ? Colors.black87 : Colors.grey.shade400,
+                  fontSize: 9,
+                  color: isSelected
+                      ? Colors.black87
+                      : JiveTheme.categoryLabelInactive,
                   fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -1270,15 +2267,23 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Row(
               children: [
-                Text("系统库建议", style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                Text(
+                  "系统库建议",
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
                 const Spacer(),
-                Text("点击添加并选中", style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+                Text(
+                  "点击添加并选中",
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
+                ),
               ],
             ),
           );
         }
         final suggestion = suggestions[index - 1];
-        final title = suggestion.isSub ? suggestion.name : suggestion.parentName;
+        final title = suggestion.isSub
+            ? suggestion.name
+            : suggestion.parentName;
         final subtitle = suggestion.isSub ? suggestion.parentName : "一级分类";
         return ListTile(
           dense: true,
@@ -1288,11 +2293,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             child: CategoryService.buildIcon(
               suggestion.iconName,
               size: 18,
-              color: Colors.grey.shade500,
+              color: JiveTheme.categoryIconInactive,
             ),
           ),
           title: Text(title, style: TextStyle(color: Colors.grey.shade700)),
-          subtitle: Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+          subtitle: Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 11,
+              color: JiveTheme.categoryLabelInactive,
+            ),
+          ),
           trailing: const Icon(Icons.add, color: Colors.grey),
           onTap: () => _applySystemSuggestion(suggestion),
         );
@@ -1317,11 +2328,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final suggestions = <_SystemSuggestion>[];
     for (final entry in lib.entries) {
       final parentName = entry.key;
-      final parentIcon = (entry.value['icon'] as String?)?.trim().isNotEmpty == true
+      final parentIcon =
+          (entry.value['icon'] as String?)?.trim().isNotEmpty == true
           ? entry.value['icon'] as String
           : "category";
       if (!existingParents.contains(parentName) &&
-          _matchesSystemTokens(_tokensForSystem(parentName, "p::$parentName"), normalized)) {
+          _matchesSystemTokens(
+            _tokensForSystem(parentName, "p::$parentName"),
+            normalized,
+          )) {
         suggestions.add(_SystemSuggestion.parent(parentName, parentIcon));
       }
       final children = entry.value['children'] as List<dynamic>? ?? const [];
@@ -1338,7 +2353,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           ..._tokensForSystem(parentName, "cp::$parentName"),
         ];
         if (_matchesSystemTokens(tokens, normalized)) {
-          suggestions.add(_SystemSuggestion.child(parentName, childName, childIcon, parentIcon));
+          suggestions.add(
+            _SystemSuggestion.child(
+              parentName,
+              childName,
+              childIcon,
+              parentIcon,
+            ),
+          );
         }
       }
     }
@@ -1355,7 +2377,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _applySystemSuggestion(_SystemSuggestion suggestion) async {
     final service = CategoryService(_isar);
     final isIncome = _txType == TransactionType.income;
-    JiveCategory? parent = await _isar.collection<JiveCategory>()
+    JiveCategory? parent = await _isar
+        .collection<JiveCategory>()
         .filter()
         .parentKeyIsNull()
         .isIncomeEqualTo(isIncome)
@@ -1381,7 +2404,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         iconName: suggestion.iconName,
         isSystem: true,
       );
-      sub ??= await _isar.collection<JiveCategory>()
+      sub ??= await _isar
+          .collection<JiveCategory>()
           .filter()
           .parentKeyEqualTo(parent.key)
           .nameEqualTo(suggestion.name)
@@ -1399,9 +2423,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
-  Future<void> _reloadParentsAndSelect({required String parentKey, String? subKey}) async {
+  Future<void> _reloadParentsAndSelect({
+    required String parentKey,
+    String? subKey,
+  }) async {
     final showIncome = _txType == TransactionType.income;
-    var parents = await _isar.collection<JiveCategory>()
+    var parents = await _isar
+        .collection<JiveCategory>()
         .filter()
         .parentKeyIsNull()
         .isIncomeEqualTo(showIncome)
@@ -1410,13 +2438,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         .findAll();
 
     if (parents.isEmpty && !showIncome) {
-      final lib = CategoryService(_isar).getSystemLibrary(isIncome: showIncome);
-      parents = lib.keys.map((name) => JiveCategory()
-        ..key = "sys_$name"
-        ..name = name
-        ..iconName = lib[name]!['icon']
-        ..order = 0
-      ).toList();
+      final service = CategoryService(_isar);
+      final lib = service.getSystemLibrary(isIncome: showIncome);
+      parents = lib.keys
+          .map(
+            (name) => JiveCategory()
+              ..key = service.buildSystemParentKey(name, isIncome: showIncome)
+              ..name = name
+              ..iconName = lib[name]!['icon']
+              ..order = 0,
+          )
+          .toList();
       _isFallbackMode = true;
     } else {
       _isFallbackMode = false;
@@ -1473,7 +2505,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   List<String> _tokensForCategory(JiveCategory category) {
-    return _searchTokenCache[category.key] ??= _buildTokensForName(category.name);
+    return _searchTokenCache[category.key] ??= _buildTokensForName(
+      category.name,
+    );
   }
 
   List<String> _tokensForSystem(String name, String key) {
@@ -1498,12 +2532,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final results = _filterSearchResults(query);
     if (results.isEmpty) return;
     final normalized = _normalizeSearch(query);
-    final exactMatches = results.where((item) => _isExactMatch(item, normalized)).toList();
+    final exactMatches = results
+        .where((item) => _isExactMatch(item, normalized))
+        .toList();
     if (exactMatches.isNotEmpty) {
       await _selectSearchResult(exactMatches.first);
       return;
     }
-    final prefixMatches = results.where((item) => _isPrefixMatch(item, normalized)).toList();
+    final prefixMatches = results
+        .where((item) => _isPrefixMatch(item, normalized))
+        .toList();
     if (prefixMatches.length == 1) {
       await _selectSearchResult(prefixMatches.first);
     }
@@ -1532,6 +2570,89 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return false;
   }
 
+  Future<void> _loadNoteTagUsage() async {
+    final prefs = await SharedPreferences.getInstance();
+    final loaded = <TransactionType, Map<String, int>>{};
+    for (final type in TransactionType.values) {
+      final raw = prefs.getString('$_noteTagUsageKeyPrefix${type.name}');
+      if (raw == null) continue;
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(raw);
+      } catch (_) {
+        continue;
+      }
+      if (decoded is! Map) continue;
+      final map = <String, int>{};
+      decoded.forEach((key, value) {
+        if (key is String && value is num) {
+          map[key] = value.toInt();
+        }
+      });
+      if (map.isNotEmpty) {
+        loaded[type] = map;
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _noteTagUsage
+        ..clear()
+        ..addAll(loaded);
+    });
+  }
+
+  Future<void> _persistNoteTagUsage(TransactionType type) async {
+    final prefs = await SharedPreferences.getInstance();
+    final usage = _noteTagUsage[type];
+    final key = '$_noteTagUsageKeyPrefix${type.name}';
+    if (usage == null || usage.isEmpty) {
+      await prefs.remove(key);
+      return;
+    }
+    await prefs.setString(key, jsonEncode(usage));
+  }
+
+  void _trackNoteTagUsage(TransactionType type, String tag) {
+    final usage = _noteTagUsage.putIfAbsent(type, () => {});
+    usage[tag] = (usage[tag] ?? 0) + 1;
+    _persistNoteTagUsage(type);
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  List<String> _noteSuggestionsForType(TransactionType type) {
+    final base = switch (type) {
+      TransactionType.income => _incomeNoteSuggestions,
+      TransactionType.transfer => _transferNoteSuggestions,
+      _ => _expenseNoteSuggestions,
+    };
+    final usage = _noteTagUsage[type];
+    if (usage == null || usage.isEmpty) return base;
+    final order = <String, int>{
+      for (var i = 0; i < base.length; i++) base[i]: i,
+    };
+    final sorted = [...base];
+    sorted.sort((a, b) {
+      final countA = usage[a] ?? 0;
+      final countB = usage[b] ?? 0;
+      if (countA != countB) {
+        return countB.compareTo(countA);
+      }
+      return (order[a] ?? 0).compareTo(order[b] ?? 0);
+    });
+    return sorted;
+  }
+
+  Widget _buildNoteField({required bool isLandscape}) {
+    final currentType = _txType;
+    return NoteFieldWithChips(
+      controller: _noteController,
+      isLandscape: isLandscape,
+      suggestions: _noteSuggestionsForType(currentType),
+      onTagSelected: (tag) => _trackNoteTagUsage(currentType, tag),
+    );
+  }
 
   Widget _buildTransferHint() {
     return Center(
@@ -1549,7 +2670,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Widget _buildKey(String key) {
     bool isOk = key == 'OK';
     bool isDel = key == 'DEL';
-    
+
     if (isOk) {
       return InkWell(
         onTap: () => _onKeyPress(key),
@@ -1558,9 +2679,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           decoration: BoxDecoration(
             color: JiveTheme.primaryGreen,
             borderRadius: BorderRadius.circular(30),
-            boxShadow: [BoxShadow(color: JiveTheme.primaryGreen.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6))],
+            boxShadow: [
+              BoxShadow(
+                color: JiveTheme.primaryGreen.withValues(alpha: 0.3),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-          child: const Center(child: Icon(Icons.check, color: Colors.white, size: 28)),
+          child: const Center(
+            child: Icon(Icons.check, color: Colors.white, size: 28),
+          ),
         ),
       );
     }
@@ -1569,18 +2698,38 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       onTap: () => _onKeyPress(key),
       borderRadius: BorderRadius.circular(20),
       child: Center(
-        child: isDel 
-            ? const Icon(Icons.backspace_rounded, size: 22, color: Colors.black54)
+        child: isDel
+            ? const Icon(
+                Icons.backspace_rounded,
+                size: 22,
+                color: Colors.black54,
+              )
             : ['+', '-', 'date'].contains(key)
-                ? _buildOpIcon(key)
-                : Text(key, style: GoogleFonts.rubik(fontSize: 26, color: Colors.black87, fontWeight: FontWeight.w400)),
+            ? _buildOpIcon(key)
+            : Text(
+                key,
+                style: GoogleFonts.rubik(
+                  fontSize: 26,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
       ),
     );
   }
 
   Widget _buildOpIcon(String key) {
-    if (key == 'date') return const Icon(Icons.calendar_today_rounded, size: 20, color: Colors.black45);
-    return Text(key, style: const TextStyle(fontSize: 24, color: Colors.black45));
+    if (key == 'date') {
+      return const Icon(
+        Icons.calendar_today_rounded,
+        size: 20,
+        color: Colors.black45,
+      );
+    }
+    return Text(
+      key,
+      style: const TextStyle(fontSize: 24, color: Colors.black45),
+    );
   }
 }
 
@@ -1619,7 +2768,12 @@ class _SystemSuggestion {
     );
   }
 
-  factory _SystemSuggestion.child(String parentName, String name, String iconName, String parentIconName) {
+  factory _SystemSuggestion.child(
+    String parentName,
+    String name,
+    String iconName,
+    String parentIconName,
+  ) {
     return _SystemSuggestion._(
       parentName: parentName,
       name: name,

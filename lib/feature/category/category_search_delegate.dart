@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lpinyin/lpinyin.dart';
 import '../../core/database/category_model.dart';
+import '../../core/design_system/theme.dart';
 import '../../core/service/category_service.dart';
 
 class CategorySearchResult {
@@ -95,11 +96,11 @@ class CategorySearchDelegate extends SearchDelegate<CategorySearchResult?> {
         final iconColor = CategoryService.parseColorHex(item.sub?.colorHex ?? item.parent.colorHex);
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: iconColor?.withOpacity(0.12) ?? Colors.grey.shade100,
+            backgroundColor: iconColor?.withValues(alpha: 0.12) ?? Colors.grey.shade100,
             child: CategoryService.buildIcon(
               iconName,
               size: 18,
-              color: iconColor ?? Colors.grey.shade700,
+              color: iconColor ?? JiveTheme.categoryIconInactive,
             ),
           ),
           title: Text(item.primaryName),

@@ -6,13 +6,24 @@ class JiveTheme {
   static const Color accentLime = Color(0xFFDCE775);   // 嫩芽黄
   static const Color surfaceWhite = Color(0xFFF5F7FA); // 灰白背景
   static const Color cardWhite = Colors.white;
+  static const Color categoryIconInactive = Color(0xFF202020);
+  static const Color categoryLabelInactive = Color(0xFF8E8E8E);
+  static const Color categoryIconInactiveBackground = Color(0xFFF5F5F5);
+  static const Color categoryIconInactiveBorder = Color(0xFFBDBDBD);
+
+  // 深色模式专用颜色
+  static const Color darkSurface = Color(0xFF121212);
+  static const Color darkCard = Color(0xFF1E1E1E);
+  static const Color darkDivider = Color(0xFF2D2D2D);
 
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
+      brightness: Brightness.light,
       scaffoldBackgroundColor: surfaceWhite,
       colorScheme: ColorScheme.fromSeed(
         seedColor: primaryGreen,
+        brightness: Brightness.light,
         primary: primaryGreen,
         secondary: accentLime,
         surface: surfaceWhite,
@@ -32,5 +43,85 @@ class JiveTheme {
         shape: CircleBorder(), // 圆形按钮
       ),
     );
+  }
+
+  static ThemeData get darkTheme {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: darkSurface,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: primaryGreen,
+        brightness: Brightness.dark,
+        primary: primaryGreen,
+        secondary: accentLime,
+        surface: darkSurface,
+      ),
+      textTheme: GoogleFonts.latoTextTheme(ThemeData.dark().textTheme),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: darkSurface,
+        elevation: 0,
+        centerTitle: true,
+        scrolledUnderElevation: 0,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: primaryGreen,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        shape: CircleBorder(),
+      ),
+      cardTheme: const CardThemeData(
+        color: darkCard,
+      ),
+      dividerTheme: const DividerThemeData(
+        color: darkDivider,
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: darkCard,
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: darkCard,
+      ),
+    );
+  }
+
+  /// 获取适合当前主题的卡片背景色
+  static Color cardColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? darkCard
+        : cardWhite;
+  }
+
+  /// 获取适合当前主题的表面颜色
+  static Color surfaceColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? darkSurface
+        : surfaceWhite;
+  }
+
+  /// 获取适合当前主题的文本颜色
+  static Color textColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : Colors.black87;
+  }
+
+  /// 获取适合当前主题的次要文本颜色
+  static Color secondaryTextColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? Colors.white70
+        : Colors.grey.shade600;
+  }
+
+  /// 获取适合当前主题的分割线颜色
+  static Color dividerColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? darkDivider
+        : Colors.grey.shade200;
+  }
+
+  /// 检查当前是否为深色模式
+  static bool isDark(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark;
   }
 }
