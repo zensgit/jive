@@ -8,7 +8,12 @@ import 'category_icon_picker_screen.dart';
 
 enum _CategoryIconSource { system, emoji, gallery, text }
 
-Future<String?> pickCategoryIcon(BuildContext context, {required String initialIcon}) async {
+Future<String?> pickCategoryIcon(
+  BuildContext context, {
+  required String initialIcon,
+  bool? forSystemCategory,
+  bool forceTinted = false,
+}) async {
   final action = await showModalBottomSheet<_CategoryIconSource>(
     context: context,
     shape: const RoundedRectangleBorder(
@@ -52,6 +57,8 @@ Future<String?> pickCategoryIcon(BuildContext context, {required String initialI
           builder: (context) => CategoryIconPickerScreen(
             initialIcon: initialIcon,
             initialMode: CategoryIconPickerMode.category,
+            forSystemCategory: forSystemCategory,
+            forceTinted: forceTinted,
           ),
           fullscreenDialog: true,
         ),
@@ -63,6 +70,8 @@ Future<String?> pickCategoryIcon(BuildContext context, {required String initialI
           builder: (context) => CategoryIconPickerScreen(
             initialIcon: initialIcon,
             initialMode: CategoryIconPickerMode.emoji,
+            forSystemCategory: forSystemCategory,
+            forceTinted: forceTinted,
           ),
           fullscreenDialog: true,
         ),

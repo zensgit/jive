@@ -25,6 +25,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   String? _selectedColorHex;
   String? _selectedParentKey;
   late bool _isHidden;
+  late bool _iconForceTinted;
   bool _isSaving = false;
   List<JiveCategory> _parents = [];
 
@@ -36,6 +37,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     _selectedColorHex = widget.category.colorHex;
     _selectedParentKey = widget.category.parentKey;
     _isHidden = widget.category.isHidden;
+    _iconForceTinted = widget.category.iconForceTinted;
     _loadParents();
   }
 
@@ -81,6 +83,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                           _selectedIcon,
                           size: 28,
                           color: highlightColor,
+                          isSystemCategory: widget.category.isSystem,
+                          forceTinted: _iconForceTinted,
                         ),
                       ),
                     ),
@@ -99,6 +103,14 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                 ),
                 const SizedBox(height: 12),
                 _buildColorPicker(),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _iconForceTinted,
+                  title: const Text("图标强制单色"),
+                  subtitle: const Text("即使在彩色模式下也显示为单色（跟随分类颜色）"),
+                  onChanged: (value) => setState(() => _iconForceTinted = value),
+                ),
                 const SizedBox(height: 12),
                 _buildParentSelector(),
               ],
@@ -134,6 +146,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     final iconColor = hasParent
         ? (CategoryService.parseColorHex(selectedParent.colorHex) ?? Colors.grey.shade600)
         : Colors.grey.shade500;
+    final iconIsSystem = hasParent ? selectedParent.isSystem : null;
+    final iconForceTinted = hasParent ? selectedParent.iconForceTinted : false;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -146,7 +160,13 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         ),
         child: Row(
           children: [
-            CategoryService.buildIcon(iconName, size: 16, color: iconColor),
+            CategoryService.buildIcon(
+              iconName,
+              size: 16,
+              color: iconColor,
+              isSystemCategory: iconIsSystem,
+              forceTinted: iconForceTinted,
+            ),
             const SizedBox(width: 8),
             Expanded(child: Text(label)),
             Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade500),
@@ -200,6 +220,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                             iconColor: CategoryService.parseColorHex(parent.colorHex) ?? Colors.grey.shade600,
                             isSelected: isSelected,
                             onTap: () => setStateDialog(() => tempKey = parent.key),
+                            isSystemCategory: parent.isSystem,
+                            forceTinted: parent.iconForceTinted,
                           );
                         },
                       ),
@@ -239,6 +261,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     required bool isSelected,
     required VoidCallback onTap,
     Color? iconColor,
+    bool? isSystemCategory,
+    bool forceTinted = false,
   }) {
     final color = iconColor ?? Colors.grey.shade600;
     return InkWell(
@@ -255,7 +279,13 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CategoryService.buildIcon(iconName, size: 20, color: isSelected ? JiveTheme.primaryGreen : color),
+            CategoryService.buildIcon(
+              iconName,
+              size: 20,
+              color: isSelected ? JiveTheme.primaryGreen : color,
+              isSystemCategory: isSystemCategory,
+              forceTinted: forceTinted,
+            ),
             const SizedBox(height: 6),
             Text(
               label,
@@ -335,7 +365,12 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   }
 
   Future<void> _showIconPicker() async {
-    final selected = await pickCategoryIcon(context, initialIcon: _selectedIcon);
+    final selected = await pickCategoryIcon(
+      context,
+      initialIcon: _selectedIcon,
+      forSystemCategory: widget.category.isSystem,
+      forceTinted: _iconForceTinted,
+    );
     if (selected != null) {
       setState(() => _selectedIcon = selected);
     }
@@ -352,6 +387,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       _selectedIcon,
       _selectedParentKey,
       _selectedColorHex,
+      iconForceTinted: _iconForceTinted,
     );
     if (!mounted) return;
     Navigator.pop(context, true);
@@ -522,6 +558,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         child?.iconName ?? parent.iconName,
         size: 18,
         color: Colors.grey.shade700,
+        isSystemCategory: child?.isSystem ?? parent.isSystem,
+        forceTinted: child?.iconForceTinted ?? parent.iconForceTinted,
       ),
       title: Text(title, style: const TextStyle(fontSize: 14)),
       subtitle: child == null ? null : Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
@@ -538,6 +576,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       _selectedIcon,
       null,
       _selectedColorHex,
+      iconForceTinted: _iconForceTinted,
     );
     if (mounted) Navigator.pop(context, true);
   }

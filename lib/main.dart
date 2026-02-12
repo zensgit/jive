@@ -1464,6 +1464,19 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                                 () => selected = CategoryIconStyle.tinted,
                                               ),
                                             ),
+                                            ListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              leading: Icon(
+                                                selected == CategoryIconStyle.hybrid
+                                                    ? Icons.radio_button_checked
+                                                    : Icons.radio_button_unchecked,
+                                                color: JiveTheme.primaryGreen,
+                                              ),
+                                              title: Text(CategoryIconStyle.hybrid.label),
+                                              onTap: () => setDialogState(
+                                                () => selected = CategoryIconStyle.hybrid,
+                                              ),
+                                            ),
                                           ],
                                         ),
                                         actions: [

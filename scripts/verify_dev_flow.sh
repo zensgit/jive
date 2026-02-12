@@ -118,6 +118,24 @@ tap_text_with_scroll() {
   return 1
 }
 
+tap_text_with_scroll_small() {
+  local text="$1"
+  local base="$2"
+  local max_try="${3:-10}"
+  local i name
+  for ((i = 1; i <= max_try; i++)); do
+    name="${base}_${i}"
+    dump_ui "${name}"
+    if tap_text_once "${text}" "${OUT_DIR}/${name}.nodes.xml"; then
+      return 0
+    fi
+    # Smaller scroll step for bottom sheets: avoids skipping items near edges.
+    adb shell input swipe 540 2550 540 2200 250
+    sleep 1
+  done
+  return 1
+}
+
 tap_top_right_clickable() {
   local xml="$1"
   local best=""
@@ -179,10 +197,22 @@ sleep 2
 ensure_app_foreground 5
 cap "01_home"
 dump_ui "01_home"
-assert_text_exists "Recent Transactions" "01_home"
+if grep -q "自动记账权限未开启" "${OUT_DIR}/01_home.nodes.xml"; then
+  log "dismiss auto permission dialog"
+  if ! tap_text_once "稍后" "${OUT_DIR}/01_home.nodes.xml"; then
+    tap_text_once "关闭" "${OUT_DIR}/01_home.nodes.xml" || true
+  fi
+  sleep 1
+  cap "01_home_after_dialog"
+  dump_ui "01_home_after_dialog"
+  if grep -q "自动记账权限未开启" "${OUT_DIR}/01_home_after_dialog.nodes.xml"; then
+    fail "auto permission dialog still visible after dismiss"
+  fi
+fi
 
+dump_ui "01_home_for_menu"
 log "open debug sheet by tapping settings button"
-if ! tap_top_right_clickable "${OUT_DIR}/01_home.nodes.xml"; then
+if ! tap_top_right_clickable "${OUT_DIR}/01_home_for_menu.nodes.xml"; then
   tap_xy 1124 270
 fi
 sleep 1
@@ -201,6 +231,22 @@ if ! grep -q "分类管理" "${OUT_DIR}/02_debug_sheet.nodes.xml"; then
   fi
 fi
 assert_text_exists "分类管理" "02_debug_sheet"
+
+log "verify category icon style dialog + switch to hybrid"
+tap_text_with_scroll "分类图标风格" "02_debug_sheet_style_scrolled" 4 || fail "cannot open 分类图标风格"
+sleep 1
+cap "02_icon_style_dialog"
+dump_ui "02_icon_style_dialog"
+assert_text_exists "分类图标风格" "02_icon_style_dialog"
+assert_text_exists "彩色" "02_icon_style_dialog"
+assert_text_exists "单色" "02_icon_style_dialog"
+assert_text_exists "混合" "02_icon_style_dialog"
+tap_text "混合" "02_icon_style_dialog"
+tap_text "确定" "02_icon_style_dialog"
+sleep 1
+cap "02_debug_sheet_after_icon_style"
+dump_ui "02_debug_sheet_after_icon_style"
+assert_text_exists "混合" "02_debug_sheet_after_icon_style"
 
 log "open recurring page"
 tap_text_with_scroll "周期记账" "02_debug_sheet_scrolled" 8 || fail "cannot open 周期记账"
@@ -234,26 +280,37 @@ dump_ui "05_home_after_recurring"
 
 log "open debug sheet for budget"
 dump_ui "05_home_for_debug"
-if ! tap_top_right_clickable "${OUT_DIR}/05_home_for_debug.nodes.xml"; then
+HOME_DEBUG_XML="${OUT_DIR}/05_home_for_debug.nodes.xml"
+if grep -q "自动记账权限未开启" "${OUT_DIR}/05_home_for_debug.nodes.xml"; then
+  log "dismiss auto permission dialog (before budget)"
+  tap_text_once "稍后" "${OUT_DIR}/05_home_for_debug.nodes.xml" || tap_text_once "关闭" "${OUT_DIR}/05_home_for_debug.nodes.xml" || true
+  sleep 1
+  dump_ui "05_home_for_debug_after_dialog"
+  HOME_DEBUG_XML="${OUT_DIR}/05_home_for_debug_after_dialog.nodes.xml"
+fi
+if ! tap_top_right_clickable "${HOME_DEBUG_XML}"; then
   tap_xy 1124 270
 fi
 sleep 1
 ensure_app_foreground 3
 cap "06_debug_sheet_budget"
 dump_ui "06_debug_sheet_budget"
-if ! grep -q "预算管理" "${OUT_DIR}/06_debug_sheet_budget.nodes.xml"; then
+if ! grep -q "分类管理" "${OUT_DIR}/06_debug_sheet_budget.nodes.xml"; then
+  log "budget step: debug sheet not detected, retry opening"
   tap_xy 1124 270
   sleep 1
   cap "06_debug_sheet_budget_retry"
   dump_ui "06_debug_sheet_budget_retry"
-  if grep -q "预算管理" "${OUT_DIR}/06_debug_sheet_budget_retry.nodes.xml"; then
+  if grep -q "分类管理" "${OUT_DIR}/06_debug_sheet_budget_retry.nodes.xml"; then
     cp "${OUT_DIR}/06_debug_sheet_budget_retry.nodes.xml" "${OUT_DIR}/06_debug_sheet_budget.nodes.xml"
     cp "${OUT_DIR}/06_debug_sheet_budget_retry.xml" "${OUT_DIR}/06_debug_sheet_budget.xml"
     cp "${OUT_DIR}/06_debug_sheet_budget_retry.png" "${OUT_DIR}/06_debug_sheet_budget.png"
+  else
+    fail "budget step: cannot open debug sheet"
   fi
 fi
 
-tap_text_with_scroll "预算管理" "06_debug_sheet_budget_scrolled" 8 || fail "cannot open 预算管理"
+tap_text_with_scroll_small "预算管理" "06_debug_sheet_budget_scrolled" 12 || fail "cannot open 预算管理"
 sleep 2
 cap "07_budget_open"
 dump_ui "07_budget_open"

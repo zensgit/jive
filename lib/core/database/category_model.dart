@@ -13,6 +13,7 @@ class JiveCategory {
   late String name;         // 显示名称 (用户可修改)
   late String iconName;     // 图标名称 (例如: "restaurant")
   String? colorHex;         // 自定义颜色 (#RRGGBB)
+  bool iconForceTinted = false; // 强制单色图标(跟随分类颜色)，即使全局为彩色
 
   @Index()
   String? parentKey;        // 父分类 Key (空则为一级)

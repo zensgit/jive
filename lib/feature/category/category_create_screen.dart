@@ -274,7 +274,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   }
 
   Future<void> _pickCustomIcon() async {
-    final selected = await pickCategoryIcon(context, initialIcon: _selectedIcon);
+    final selected = await pickCategoryIcon(
+      context,
+      initialIcon: _selectedIcon,
+      forSystemCategory: false,
+    );
     if (selected != null) {
       _applyIconSelection(selected);
     }
@@ -460,6 +464,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                         _selectedIcon,
                         size: 22,
                         color: highlightColor,
+                        isSystemCategory: false,
                       ),
                     ),
                   ),
@@ -612,6 +617,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                       _selectedIcon,
                       size: 16,
                       color: highlightColor,
+                      isSystemCategory: false,
                     ),
                   ),
                 ),
@@ -996,6 +1002,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                                       : (isSelected
                                                           ? highlightColor
                                                           : JiveTheme.categoryIconInactive),
+                                                  isSystemCategory: true,
                                                 ),
                                               ),
                                             ),

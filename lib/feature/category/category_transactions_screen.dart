@@ -1081,6 +1081,8 @@ class _CategoryTransactionsScreenState
                   icon,
                   size: 20,
                   color: Colors.grey.shade700,
+                  isSystemCategory: category?.isSystem,
+                  forceTinted: category?.iconForceTinted ?? false,
                 ),
               ),
             ),
