@@ -143,6 +143,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _isLoading = true;
   double _totalAssets = 0;
   double _totalLiabilities = 0;
+  double _totalCreditLimit = 0;
+  double _totalCreditUsed = 0;
+  double _totalCreditAvailable = 0;
   int _currentIndex = 0;
   bool _demoSeedEnabled = true;
   bool _showSmartTagBadge = true;
@@ -944,6 +947,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final accountMap = {for (final a in accounts) a.id: a};
     final balances = await accountService.computeBalances(accounts: accounts);
     final totals = accountService.calculateTotals(accounts, balances);
+    final creditSummary = _computeCreditSummary(accounts, balances);
 
     // 加载基础货币
     _currencyService ??= CurrencyService(_isar);
@@ -957,6 +961,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         _accountById = accountMap;
         _totalAssets = totals.assets;
         _totalLiabilities = totals.liabilities;
+        _totalCreditLimit = creditSummary.limit;
+        _totalCreditUsed = creditSummary.used;
+        _totalCreditAvailable = creditSummary.available;
         _baseCurrency = baseCurrency;
         _isLoading = false;
       });
@@ -1763,6 +1770,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 _buildBalanceMeta("负债", _totalLiabilities),
               ],
             ),
+            if (_totalCreditLimit > 0) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 16,
+                runSpacing: 4,
+                children: [
+                  _buildBalanceMeta("信用额度", _totalCreditLimit),
+                  _buildBalanceMeta("已用", _totalCreditUsed),
+                  _buildBalanceMeta("可用", _totalCreditAvailable),
+                ],
+              ),
+            ],
           ],
           SizedBox(height: actionGap),
           Row(
@@ -1985,6 +2004,28 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  _CreditSummary _computeCreditSummary(List<JiveAccount> accounts, Map<int, double> balances) {
+    double limit = 0;
+    double used = 0;
+    double available = 0;
+
+    for (final account in accounts) {
+      if (!AccountService.isCreditAccount(account)) continue;
+      final accountLimit = account.creditLimit;
+      if (accountLimit == null || accountLimit <= 0) continue;
+      final balance = balances[account.id] ?? account.openingBalance;
+      final usedForAccount = balance < 0 ? -balance : 0;
+      limit += accountLimit;
+      used += usedForAccount;
+      final availableForAccount = accountLimit - usedForAccount;
+      if (availableForAccount > 0) {
+        available += availableForAccount;
+      }
+    }
+
+    return _CreditSummary(limit: limit, used: used, available: available);
+  }
+
   String _displayCategoryName(String? key, String? fallback) {
     if (key != null && _categoryByKey.containsKey(key)) {
       return _categoryByKey[key]!.name;
@@ -2186,4 +2227,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       child: badge,
     );
   }
+}
+
+class _CreditSummary {
+  final double limit;
+  final double used;
+  final double available;
+
+  const _CreditSummary({
+    required this.limit,
+    required this.used,
+    required this.available,
+  });
 }
