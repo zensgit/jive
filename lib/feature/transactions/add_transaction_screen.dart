@@ -14,6 +14,7 @@ import '../../core/database/tag_model.dart';
 import '../../core/database/project_model.dart';
 import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
+import '../../core/service/category_icon_style.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
@@ -2208,6 +2209,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         final customColor = CategoryService.parseColorHex(cat.colorHex);
         final activeColor = customColor ?? JiveTheme.primaryGreen;
         final inactiveColor = JiveTheme.categoryIconInactive;
+        final coloredIcons = CategoryIconStyleConfig.current == CategoryIconStyle.colored;
         return GestureDetector(
           onTap: () => setState(() => _selectedSub = cat),
           onLongPress: () => _showSubCategoryActions(cat),
@@ -2218,8 +2220,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 height: 36,
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? activeColor
-                      : JiveTheme.categoryIconInactiveBackground,
+                      ? (coloredIcons
+                          ? activeColor.withValues(alpha: 0.14)
+                          : activeColor)
+                      : (coloredIcons
+                          ? Colors.white
+                          : JiveTheme.categoryIconInactiveBackground),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: isSelected
@@ -2230,7 +2236,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 child: CategoryService.buildIcon(
                   cat.iconName,
                   size: 18,
-                  color: isSelected ? Colors.white : inactiveColor,
+                  color: coloredIcons ? null : (isSelected ? Colors.white : inactiveColor),
                 ),
               ),
               const SizedBox(height: 3),

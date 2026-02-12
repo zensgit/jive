@@ -7,6 +7,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'category_icon_style.dart';
 import '../database/category_model.dart';
 import '../database/transaction_model.dart';
 import '../data/system_category_library.dart';
@@ -1650,6 +1651,8 @@ class CategoryService {
     }
     if (_isAssetIcon(name)) {
       final path = _assetIconPath(name);
+      final isCategoryIcon = path.startsWith("assets/category_icons/");
+      final style = isCategoryIcon ? CategoryIconStyleConfig.current : CategoryIconStyle.tinted;
       if (path.endsWith(".svg")) {
         final svg = SvgPicture.asset(
           path,
@@ -1657,6 +1660,7 @@ class CategoryService {
           height: size,
           fit: BoxFit.contain,
         );
+        if (style == CategoryIconStyle.colored) return svg;
         return _applyDetailPreservingTint(
           svg,
           tonedColor,
@@ -1674,6 +1678,7 @@ class CategoryService {
         errorBuilder:
             (_, __, ___) => Icon(Icons.category, size: size, color: tonedColor),
       );
+      if (style == CategoryIconStyle.colored) return image;
       return _applyDetailPreservingTint(
         image,
         tonedColor,

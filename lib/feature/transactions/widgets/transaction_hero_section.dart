@@ -6,6 +6,7 @@ import '../../../core/database/account_model.dart';
 import '../../../core/database/category_model.dart';
 import '../../../core/database/transaction_model.dart';
 import '../../../core/design_system/theme.dart';
+import '../../../core/service/category_service.dart';
 
 class TransactionHeroSection extends StatelessWidget {
   final JiveTransaction transaction;
@@ -63,6 +64,8 @@ class TransactionHeroSection extends StatelessWidget {
 
   Widget _buildCategoryIcon(String type) {
     final iconName = category?.iconName;
+    final categoryColor =
+        CategoryService.parseColorHex(category?.colorHex) ?? JiveTheme.primaryGreen;
 
     return Container(
       width: 64,
@@ -84,11 +87,10 @@ class TransactionHeroSection extends StatelessWidget {
       ),
       child: Center(
         child: iconName != null
-            ? Image.asset(
-                'assets/category_icons/$iconName',
-                width: 36,
-                height: 36,
-                errorBuilder: (_, __, ___) => _buildFallbackIcon(type),
+            ? CategoryService.buildIcon(
+                iconName,
+                size: 36,
+                color: categoryColor,
               )
             : _buildFallbackIcon(type),
       ),
