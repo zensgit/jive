@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../core/database/account_model.dart';
 import '../../core/database/auto_draft_model.dart';
@@ -11,6 +10,7 @@ import '../../core/database/tag_model.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/database_service.dart';
 import '../../core/service/tag_rule_service.dart';
 import '../transactions/transaction_detail_screen.dart';
 import 'tag_icon_catalog.dart';
@@ -93,26 +93,7 @@ class _SmartTagRecentMatchesScreenState
       _isar = widget.isar!;
       return _isar!;
     }
-    final existing = Isar.getInstance();
-    if (existing != null) {
-      _isar = existing;
-      return _isar!;
-    }
-    final dir = await getApplicationDocumentsDirectory();
-    _isar = await Isar.open(
-      [
-        JiveTransactionSchema,
-        JiveCategorySchema,
-        JiveCategoryOverrideSchema,
-        JiveAccountSchema,
-        JiveAutoDraftSchema,
-        JiveTagSchema,
-        JiveTagGroupSchema,
-        JiveTagRuleSchema,
-        JiveTagConversionLogSchema,
-      ],
-      directory: dir.path,
-    );
+    _isar = await DatabaseService.getInstance();
     return _isar!;
   }
 
@@ -352,4 +333,3 @@ class _SmartTagRecentMatchesScreenState
     return '';
   }
 }
-

@@ -1,11 +1,15 @@
+import 'dart:async';
+
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../database/account_model.dart';
 import '../database/auto_draft_model.dart';
+import '../database/budget_model.dart';
 import '../database/category_model.dart';
 import '../database/currency_model.dart';
 import '../database/project_model.dart';
+import '../database/recurring_rule_model.dart';
 import '../database/tag_conversion_log.dart';
 import '../database/tag_model.dart';
 import '../database/tag_rule_model.dart';
@@ -15,6 +19,7 @@ import '../database/transaction_model.dart';
 /// 统一的数据库服务，确保所有地方使用相同的 schema 列表
 class DatabaseService {
   static Isar? _instance;
+  static const Duration _openTimeout = Duration(seconds: 10);
 
   /// 所有 schema 的完整列表（必须保持一致）
   static final List<CollectionSchema<dynamic>> schemas = [
@@ -23,6 +28,8 @@ class DatabaseService {
     JiveCategoryOverrideSchema,
     JiveAccountSchema,
     JiveAutoDraftSchema,
+    JiveBudgetSchema,
+    JiveBudgetUsageSchema,
     JiveTemplateSchema,
     JiveTagSchema,
     JiveTagGroupSchema,
@@ -31,7 +38,9 @@ class DatabaseService {
     JiveProjectSchema,
     JiveCurrencySchema,
     JiveExchangeRateSchema,
+    JiveExchangeRateHistorySchema,
     JiveCurrencyPreferenceSchema,
+    JiveRecurringRuleSchema,
   ];
 
   /// 获取或创建 Isar 实例
@@ -48,11 +57,14 @@ class DatabaseService {
     }
 
     // 创建新实例
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await getApplicationDocumentsDirectory().timeout(
+      _openTimeout,
+      onTimeout: () => throw TimeoutException('读取数据库目录超时'),
+    );
     _instance = await Isar.open(
       schemas,
       directory: dir.path,
-    );
+    ).timeout(_openTimeout, onTimeout: () => throw TimeoutException('打开数据库超时'));
     return _instance!;
   }
 

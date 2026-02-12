@@ -9,6 +9,7 @@ import '../database/account_model.dart';
 import '../database/auto_draft_model.dart';
 import '../database/category_model.dart';
 import '../database/currency_model.dart';
+import '../database/recurring_rule_model.dart';
 import '../database/tag_conversion_log.dart';
 import '../database/tag_model.dart';
 import '../database/tag_rule_model.dart';
@@ -27,6 +28,7 @@ class BackupImportSummary {
   final int tagRules;
   final int exchangeRates;
   final int currencyPreferences;
+  final int recurringRules;
 
   const BackupImportSummary({
     required this.accounts,
@@ -40,6 +42,7 @@ class BackupImportSummary {
     required this.tagRules,
     this.exchangeRates = 0,
     this.currencyPreferences = 0,
+    this.recurringRules = 0,
   });
 }
 
@@ -58,6 +61,7 @@ class JiveDataBackupService {
     final logs = await isar.collection<JiveTagConversionLog>().where().findAll();
     final exchangeRates = await isar.collection<JiveExchangeRate>().where().findAll();
     final currencyPrefs = await isar.collection<JiveCurrencyPreference>().where().findAll();
+    final recurringRules = await isar.collection<JiveRecurringRule>().where().findAll();
 
     final payload = <String, dynamic>{
       'schemaVersion': schemaVersion,
@@ -73,6 +77,7 @@ class JiveDataBackupService {
       'tagConversionLogs': logs.map(_tagConversionLogToMap).toList(),
       'exchangeRates': exchangeRates.map(_exchangeRateToMap).toList(),
       'currencyPreferences': currencyPrefs.map(_currencyPreferenceToMap).toList(),
+      'recurringRules': recurringRules.map(_recurringRuleToMap).toList(),
     };
 
     final dir = await getApplicationDocumentsDirectory();
@@ -101,6 +106,7 @@ class JiveDataBackupService {
     final logs = _decodeList(data['tagConversionLogs'], _tagConversionLogFromMap);
     final exchangeRates = _decodeList(data['exchangeRates'], _exchangeRateFromMap);
     final currencyPrefs = _decodeList(data['currencyPreferences'], _currencyPreferenceFromMap);
+    final recurringRules = _decodeList(data['recurringRules'], _recurringRuleFromMap);
 
     await isar.writeTxn(() async {
       if (clearBefore) {
@@ -114,6 +120,7 @@ class JiveDataBackupService {
         await isar.collection<JiveTagConversionLog>().clear();
         await isar.collection<JiveExchangeRate>().clear();
         await isar.collection<JiveCurrencyPreference>().clear();
+        await isar.collection<JiveRecurringRule>().clear();
       }
 
       if (accounts.isNotEmpty) {
@@ -149,6 +156,9 @@ class JiveDataBackupService {
       if (currencyPrefs.isNotEmpty) {
         await isar.collection<JiveCurrencyPreference>().putAll(currencyPrefs);
       }
+      if (recurringRules.isNotEmpty) {
+        await isar.collection<JiveRecurringRule>().putAll(recurringRules);
+      }
     });
 
     return BackupImportSummary(
@@ -163,6 +173,7 @@ class JiveDataBackupService {
       tagConversionLogs: logs.length,
       exchangeRates: exchangeRates.length,
       currencyPreferences: currencyPrefs.length,
+      recurringRules: recurringRules.length,
     );
   }
 
@@ -394,6 +405,8 @@ class JiveDataBackupService {
         'projectId': tx.projectId,
         'tagKeys': tx.tagKeys,
         'smartTagKeys': tx.smartTagKeys,
+        'recurringRuleId': tx.recurringRuleId,
+        'recurringKey': tx.recurringKey,
       };
 
   static JiveTransaction _transactionFromMap(Map<String, dynamic> map) {
@@ -415,7 +428,9 @@ class JiveDataBackupService {
       ..exchangeRate = _parseDouble(map['exchangeRate'])
       ..projectId = _parseInt(map['projectId'])
       ..tagKeys = List<String>.from(map['tagKeys'] ?? [])
-      ..smartTagKeys = List<String>.from(map['smartTagKeys'] ?? []);
+      ..smartTagKeys = List<String>.from(map['smartTagKeys'] ?? [])
+      ..recurringRuleId = _parseInt(map['recurringRuleId'])
+      ..recurringKey = map['recurringKey']?.toString();
     return tx;
   }
 
@@ -425,6 +440,7 @@ class JiveDataBackupService {
         'source': draft.source,
         'timestamp': draft.timestamp.toIso8601String(),
         'rawText': draft.rawText,
+        'metadataJson': draft.metadataJson,
         'type': draft.type,
         'category': draft.category,
         'subCategory': draft.subCategory,
@@ -435,6 +451,8 @@ class JiveDataBackupService {
         'dedupKey': draft.dedupKey,
         'createdAt': draft.createdAt.toIso8601String(),
         'tagKeys': draft.tagKeys,
+        'recurringRuleId': draft.recurringRuleId,
+        'recurringKey': draft.recurringKey,
       };
 
   static JiveAutoDraft _autoDraftFromMap(Map<String, dynamic> map) {
@@ -444,6 +462,7 @@ class JiveDataBackupService {
       ..source = map['source']?.toString() ?? ''
       ..timestamp = _parseDate(map['timestamp']) ?? DateTime.now()
       ..rawText = map['rawText']?.toString()
+      ..metadataJson = map['metadataJson']?.toString()
       ..type = map['type']?.toString()
       ..category = map['category']?.toString()
       ..subCategory = map['subCategory']?.toString()
@@ -453,7 +472,9 @@ class JiveDataBackupService {
       ..toAccountId = _parseInt(map['toAccountId'])
       ..dedupKey = map['dedupKey']?.toString()
       ..createdAt = _parseDate(map['createdAt']) ?? DateTime.now()
-      ..tagKeys = List<String>.from(map['tagKeys'] ?? []);
+      ..tagKeys = List<String>.from(map['tagKeys'] ?? [])
+      ..recurringRuleId = _parseInt(map['recurringRuleId'])
+      ..recurringKey = map['recurringKey']?.toString();
     return draft;
   }
 
@@ -501,11 +522,74 @@ class JiveDataBackupService {
     return log;
   }
 
+  static Map<String, dynamic> _recurringRuleToMap(JiveRecurringRule rule) => {
+        'id': rule.id,
+        'name': rule.name,
+        'type': rule.type,
+        'amount': rule.amount,
+        'accountId': rule.accountId,
+        'toAccountId': rule.toAccountId,
+        'categoryKey': rule.categoryKey,
+        'subCategoryKey': rule.subCategoryKey,
+        'note': rule.note,
+        'tagKeys': rule.tagKeys,
+        'projectId': rule.projectId,
+        'commitMode': rule.commitMode,
+        'startDate': rule.startDate.toIso8601String(),
+        'endDate': rule.endDate?.toIso8601String(),
+        'intervalType': rule.intervalType,
+        'intervalValue': rule.intervalValue,
+        'dayOfMonth': rule.dayOfMonth,
+        'dayOfWeek': rule.dayOfWeek,
+        'nextRunAt': rule.nextRunAt.toIso8601String(),
+        'lastRunAt': rule.lastRunAt?.toIso8601String(),
+        'isActive': rule.isActive,
+        'createdAt': rule.createdAt.toIso8601String(),
+        'updatedAt': rule.updatedAt.toIso8601String(),
+      };
+
+  static JiveRecurringRule _recurringRuleFromMap(Map<String, dynamic> map) {
+    final rule = JiveRecurringRule()
+      ..id = _parseInt(map['id']) ?? Isar.autoIncrement
+      ..name = map['name']?.toString() ?? ''
+      ..type = map['type']?.toString() ?? 'expense'
+      ..amount = _parseDouble(map['amount']) ?? 0
+      ..accountId = _parseInt(map['accountId'])
+      ..toAccountId = _parseInt(map['toAccountId'])
+      ..categoryKey = map['categoryKey']?.toString()
+      ..subCategoryKey = map['subCategoryKey']?.toString()
+      ..note = map['note']?.toString()
+      ..tagKeys = _parseStringList(map['tagKeys'])
+      ..projectId = _parseInt(map['projectId'])
+      ..commitMode = map['commitMode']?.toString() ?? 'draft'
+      ..startDate = _parseDate(map['startDate']) ?? DateTime.now()
+      ..endDate = _parseDate(map['endDate'])
+      ..intervalType = map['intervalType']?.toString() ?? 'month'
+      ..intervalValue = _parseInt(map['intervalValue']) ?? 1
+      ..dayOfMonth = _parseInt(map['dayOfMonth'])
+      ..dayOfWeek = _parseInt(map['dayOfWeek'])
+      ..nextRunAt = _parseDate(map['nextRunAt']) ?? DateTime.now()
+      ..lastRunAt = _parseDate(map['lastRunAt'])
+      ..isActive = map['isActive'] != false
+      ..createdAt = _parseDate(map['createdAt']) ?? DateTime.now()
+      ..updatedAt = _parseDate(map['updatedAt']) ?? DateTime.now();
+    return rule;
+  }
+
   static int? _parseInt(dynamic value) {
     if (value == null) return null;
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(value.toString());
+  }
+
+  static List<String> _parseStringList(dynamic value) {
+    if (value == null) return [];
+    if (value is List<String>) return value;
+    if (value is List) {
+      return value.map((entry) => entry.toString()).toList();
+    }
+    return [];
   }
 
   static double? _parseDouble(dynamic value) {

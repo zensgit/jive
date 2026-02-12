@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -39,6 +40,7 @@ import 'core/service/data_backup_service.dart';
 import 'core/service/ui_pref_service.dart';
 import 'core/service/database_service.dart';
 import 'core/service/project_service.dart';
+import 'core/service/recurring_service.dart';
 import 'feature/accounts/accounts_screen.dart';
 import 'feature/auto/auto_drafts_screen.dart';
 import 'feature/auto/auto_rule_tester_screen.dart';
@@ -53,6 +55,7 @@ import 'feature/template/template_list_screen.dart';
 import 'feature/tag/tag_management_screen.dart';
 import 'feature/tag/tag_icon_catalog.dart';
 import 'feature/project/project_list_screen.dart';
+import 'feature/recurring/recurring_rule_list_screen.dart';
 import 'feature/currency/currency_settings_screen.dart';
 import 'feature/currency/currency_converter_screen.dart';
 import 'feature/budget/budget_list_screen.dart';
@@ -159,6 +162,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _permissionDialogVisible = false;
   final ValueNotifier<int> _dataReloadSignal = ValueNotifier(0);
   final Random _random = Random();
+  bool _isProcessingRecurringRules = false;
 
   // 多币种支持
   String _baseCurrency = 'CNY';
@@ -188,6 +192,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkAutoPermissions();
+      unawaited(_processRecurringRules());
     }
   }
 
@@ -211,7 +216,27 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await _loadAutoDraftCount();
     _dbReady = true;
     await _flushPendingAutoEvents();
+    await _processRecurringRules();
     await _checkAutoPermissions();
+  }
+
+  Future<void> _processRecurringRules() async {
+    if (!_dbReady || _isProcessingRecurringRules) return;
+    _isProcessingRecurringRules = true;
+    try {
+      final result = await RecurringService(_isar).processDueRules();
+      if (result.generatedDrafts > 0) {
+        await _loadAutoDraftCount();
+      }
+      if (result.committedTransactions > 0) {
+        await _loadTransactions();
+        _notifyDataChanged();
+      }
+    } catch (e) {
+      debugPrint('Recurring processing failed: $e');
+    } finally {
+      _isProcessingRecurringRules = false;
+    }
   }
 
   Future<void> _checkAutoUpdateRates(CurrencyService currencyService) async {
@@ -631,8 +656,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final group = refreshedGroups.isEmpty
           ? null
           : refreshedGroups[_random.nextInt(refreshedGroups.length)];
-      final color = TagService.defaultColors[
-          _random.nextInt(TagService.defaultColors.length)];
+      final color = TagService
+          .defaultColors[_random.nextInt(TagService.defaultColors.length)];
       try {
         final tag = await tagService.createTag(
           name: name,
@@ -680,14 +705,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final transactions = <JiveTransaction>[];
     for (var i = 0; i < transactionCount; i++) {
       final roll = _random.nextInt(100);
-      final type = roll < 15
-          ? 'income'
-          : (roll < 25 ? 'transfer' : 'expense');
+      final type = roll < 15 ? 'income' : (roll < 25 ? 'transfer' : 'expense');
       final timestamp = now.subtract(
-        Duration(
-          days: _random.nextInt(120),
-          minutes: _random.nextInt(1440),
-        ),
+        Duration(days: _random.nextInt(120), minutes: _random.nextInt(1440)),
       );
       final account = accounts[_random.nextInt(accounts.length)];
       if (type == 'transfer') {
@@ -708,8 +728,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         continue;
       }
 
-      final parent =
-          type == 'income' ? pickParent(incomeParents) : pickParent(expenseParents);
+      final parent = type == 'income'
+          ? pickParent(incomeParents)
+          : pickParent(expenseParents);
       final child = parent == null ? null : pickChild(parent.key);
       final amount = type == 'income'
           ? 200 + _random.nextInt(12000)
@@ -869,10 +890,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Future<void> _exportBackup() async {
     try {
       final file = await JiveDataBackupService.exportToFile(_isar);
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        text: 'Jive 数据备份',
-      );
+      await Share.shareXFiles([XFile(file.path)], text: 'Jive 数据备份');
       _showMessage('已导出数据');
     } catch (e) {
       _showMessage('导出失败：$e');
@@ -917,9 +935,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       await _loadTransactions();
       await _loadAutoDraftCount();
       _notifyDataChanged();
-      _showMessage(
-        '导入完成：交易${summary.transactions}条，标签${summary.tags}个',
-      );
+      _showMessage('导入完成：交易${summary.transactions}条，标签${summary.tags}个');
     } catch (e) {
       _showMessage('导入失败：$e');
     }
@@ -1357,7 +1373,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               },
                             ),
                             ListTile(
-                              leading: const Icon(Icons.folder_special_outlined),
+                              leading: const Icon(
+                                Icons.folder_special_outlined,
+                              ),
                               title: const Text("生成项目测试数据（大量）"),
                               subtitle: Text(
                                 _demoSeedEnabled
@@ -1432,7 +1450,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               },
                             ),
                             ListTile(
-                              leading: const Icon(Icons.account_balance_wallet_outlined),
+                              leading: const Icon(
+                                Icons.account_balance_wallet_outlined,
+                              ),
                               title: const Text("预算管理"),
                               subtitle: const Text("设置和追踪预算"),
                               onTap: () async {
@@ -1444,6 +1464,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                         const BudgetListScreen(),
                                   ),
                                 );
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(Icons.repeat),
+                              title: const Text("周期记账"),
+                              subtitle: const Text("自动生成草稿或入账"),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        const RecurringRuleListScreen(),
+                                  ),
+                                );
+                                await _loadTransactions();
+                                await _loadAutoDraftCount();
                               },
                             ),
                             ListTile(
@@ -1712,12 +1749,20 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ],
           ),
           SizedBox(height: headerGap),
-          Text(
-            NumberFormat.currency(symbol: "¥").format(netAssets),
-            style: GoogleFonts.rubik(
-              color: Colors.white,
-              fontSize: amountSize,
-              fontWeight: FontWeight.w600,
+          SizedBox(
+            width: double.infinity,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                NumberFormat.currency(symbol: "¥").format(netAssets),
+                maxLines: 1,
+                style: GoogleFonts.rubik(
+                  color: Colors.white,
+                  fontSize: amountSize,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
           if (!tight) ...[
@@ -1988,15 +2033,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final subName = _displayCategoryName(item.subCategoryKey, item.subCategory);
     final note = (item.note ?? '').trim();
     final hasNote = note.isNotEmpty;
-    final showSmartBadge =
-        _showSmartTagBadge && item.smartTagKeys.isNotEmpty;
+    final showSmartBadge = _showSmartTagBadge && item.smartTagKeys.isNotEmpty;
     final tags = item.tagKeys
         .map((key) => _tagByKey[key])
         .whereType<JiveTag>()
         .toList();
 
     // 获取交易账户的货币信息
-    final account = item.accountId != null ? _accountById[item.accountId] : null;
+    final account = item.accountId != null
+        ? _accountById[item.accountId]
+        : null;
     final txCurrency = account?.currency ?? 'CNY';
     final txSymbol = CurrencyDefaults.getSymbol(txCurrency);
     final txDecimals = CurrencyDefaults.getDecimalPlaces(txCurrency);
@@ -2047,7 +2093,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           "$subName • ${DateFormat('MM-dd HH:mm').format(item.timestamp)}",
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.grey, fontSize: 12),
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                       if (showSmartBadge) ...[
@@ -2117,10 +2166,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 if (isMultiCurrency)
                   Text(
                     txCurrency,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade500,
-                    ),
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
                   ),
               ],
             ),
