@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../core/database/template_model.dart';
 import '../../../core/database/transaction_model.dart';
 import '../../../core/design_system/theme.dart';
 

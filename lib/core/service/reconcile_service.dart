@@ -102,9 +102,7 @@ class ReconcileService {
     if (minDate != null) {
       minDate = DateTime(minDate.year, minDate.month, minDate.day);
     }
-    if (maxDate != null) {
-      maxDate = DateTime(maxDate.year, maxDate.month, maxDate.day);
-    }
+    maxDate = DateTime(maxDate.year, maxDate.month, maxDate.day);
 
     var currentBalance = account.openingBalance;
     for (final tx in txs) {

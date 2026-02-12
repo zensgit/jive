@@ -207,7 +207,7 @@ class _CategoryIconPickerScreenState extends State<CategoryIconPickerScreen> {
           onTap: () => setState(() => _selectedIcon = entry.iconName),
           child: Container(
             decoration: BoxDecoration(
-              color: isSelected ? highlightColor.withOpacity(0.15) : Colors.white,
+              color: isSelected ? highlightColor.withValues(alpha: 0.15) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isSelected ? highlightColor : Colors.grey.shade200,
@@ -464,7 +464,7 @@ class _ModeSwitchIcon extends StatelessWidget {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: selected ? highlightColor.withOpacity(0.12) : Colors.white,
+          color: selected ? highlightColor.withValues(alpha: 0.12) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: selected ? highlightColor : Colors.grey.shade300,
@@ -525,7 +525,7 @@ class _EmojiGrid extends StatelessWidget {
           onTap: () => onSelect(iconName),
           child: Container(
             decoration: BoxDecoration(
-              color: isSelected ? highlightColor.withOpacity(0.15) : Colors.white,
+              color: isSelected ? highlightColor.withValues(alpha: 0.15) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isSelected ? highlightColor : Colors.grey.shade200,

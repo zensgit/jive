@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
@@ -234,7 +233,6 @@ class _ExchangeRateProfitScreenState extends State<ExchangeRateProfitScreen> {
 
   Widget _buildSummaryCard(String symbol) {
     final isProfit = _totalProfitLoss >= 0;
-    final color = isProfit ? JiveTheme.primaryGreen : Colors.red;
 
     return Container(
       padding: const EdgeInsets.all(20),

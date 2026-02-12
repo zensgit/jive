@@ -106,7 +106,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
               Container(
                 padding: const EdgeInsets.all(32),
                 decoration: BoxDecoration(
-                  color: JiveTheme.primaryGreen.withOpacity(0.08),
+                  color: JiveTheme.primaryGreen.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(Icons.rocket_launch_outlined, size: 56, color: JiveTheme.primaryGreen),
@@ -250,7 +250,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: JiveTheme.primaryGreen.withOpacity(0.25),
+                    color: JiveTheme.primaryGreen.withValues(alpha: 0.25),
                     blurRadius: 16,
                     offset: const Offset(0, 8),
                   ),
@@ -264,7 +264,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                       Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.18),
+                          color: Colors.white.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: const Icon(Icons.track_changes, color: Colors.white, size: 18),
@@ -272,7 +272,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                       const SizedBox(width: 10),
                       Text(
                         '进行中项目总支出',
-                        style: GoogleFonts.lato(fontSize: 13, color: Colors.white.withOpacity(0.85)),
+                        style: GoogleFonts.lato(fontSize: 13, color: Colors.white.withValues(alpha: 0.85)),
                       ),
                       const Spacer(),
                       if (hasBudget)
@@ -293,14 +293,14 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                     hasBudget
                         ? '总预算 ¥${_formatLargeAmount(_totalBudget)} · ${remaining < 0 ? "超支" : "剩余"} ¥${_formatLargeAmount(remaining.abs())}'
                         : '暂无预算限制',
-                    style: GoogleFonts.lato(fontSize: 12, color: Colors.white.withOpacity(0.8)),
+                    style: GoogleFonts.lato(fontSize: 12, color: Colors.white.withValues(alpha: 0.8)),
                   ),
                   if (hasBudget) ...[
                     const SizedBox(height: 14),
                     Container(
                       height: 6,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
+                        color: Colors.white.withValues(alpha: 0.25),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: FractionallySizedBox(
@@ -322,7 +322,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: JiveTheme.primaryGreen.withOpacity(0.08),
+                color: JiveTheme.primaryGreen.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -363,7 +363,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -451,7 +451,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                 ),
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -486,7 +486,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
+        color: Colors.white.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -515,7 +515,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 16,
             offset: const Offset(0, 6),
           ),
@@ -538,7 +538,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
+                        color: color.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: iconWidgetForName(project.iconName, size: 22, color: color),
@@ -608,7 +608,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isOverBudget ? Colors.red.shade50 : color.withOpacity(0.1),
+                          color: isOverBudget ? Colors.red.shade50 : color.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Column(
@@ -648,7 +648,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                           height: 8,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
-                              colors: [progressColor, progressColor.withOpacity(0.7)],
+                              colors: [progressColor, progressColor.withValues(alpha: 0.7)],
                             ),
                             borderRadius: BorderRadius.circular(4),
                           ),

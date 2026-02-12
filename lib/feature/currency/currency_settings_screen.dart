@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -733,6 +731,7 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
       return;
     }
 
+    if (!mounted) return;
     final selectedFile = await showModalBottomSheet<int>(
       context: context,
       backgroundColor: Colors.white,
@@ -886,6 +885,7 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                         icon: const Icon(Icons.delete_outline, size: 20),
                         onPressed: () async {
                           await file.delete();
+                          if (!ctx.mounted) return;
                           Navigator.pop(ctx);
                           _showBackupFiles();
                         },

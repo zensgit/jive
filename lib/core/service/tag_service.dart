@@ -472,8 +472,8 @@ class TagService {
         iconName: tag.iconName ?? categoryService.suggestIconName(targetName),
         colorHex: tag.colorHex,
       );
-    } else if (category == null) {
-      category = await categoryService.createParentCategory(
+    } else {
+      category ??= await categoryService.createParentCategory(
         name: targetName,
         iconName: tag.iconName ?? categoryService.suggestIconName(targetName),
         isIncome: isIncome,

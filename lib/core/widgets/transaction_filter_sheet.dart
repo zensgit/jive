@@ -250,7 +250,8 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
               const SizedBox(height: 10),
             ],
             DropdownButtonFormField<String?>(
-              value: _categoryKey,
+              key: ValueKey(_categoryKey),
+              initialValue: _categoryKey,
               decoration: InputDecoration(
                 labelText: widget.categoryLabel,
                 isDense: true,
@@ -290,7 +291,8 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<int?>(
-              value: _accountId,
+              key: ValueKey(_accountId),
+              initialValue: _accountId,
               decoration: InputDecoration(
                 labelText: widget.accountLabel,
                 isDense: true,

@@ -43,6 +43,7 @@ Future<String?> pickCategoryIcon(BuildContext context, {required String initialI
     ),
   );
   if (action == null) return null;
+  if (!context.mounted) return null;
   switch (action) {
     case _CategoryIconSource.system:
       return await Navigator.push<String>(
@@ -87,11 +88,10 @@ Future<String?> _pickImageIcon(BuildContext context) async {
     if (savedPath == null) return null;
     return "file:$savedPath";
   } catch (_) {
-    if (context is Element && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("无法读取图片，请稍后再试")),
-      );
-    }
+    if (!context.mounted) return null;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("无法读取图片，请稍后再试")),
+    );
     return null;
   }
 }

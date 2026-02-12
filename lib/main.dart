@@ -10,7 +10,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -19,11 +18,8 @@ import 'core/database/account_model.dart';
 import 'core/database/transaction_model.dart';
 import 'core/database/category_model.dart';
 import 'core/database/auto_draft_model.dart';
-import 'core/database/template_model.dart';
 import 'core/database/tag_model.dart';
-import 'core/database/tag_conversion_log.dart';
 import 'core/database/tag_rule_model.dart';
-import 'core/database/project_model.dart';
 import 'core/database/currency_model.dart';
 import 'core/service/account_service.dart';
 import 'core/service/category_service.dart';
@@ -51,7 +47,6 @@ import 'feature/transactions/transaction_detail_screen.dart';
 import 'feature/stats/stats_screen.dart';
 import 'feature/category/category_manager_screen.dart';
 import 'feature/category/category_transactions_screen.dart';
-import 'feature/template/template_list_screen.dart';
 import 'feature/tag/tag_management_screen.dart';
 import 'feature/tag/tag_icon_catalog.dart';
 import 'feature/project/project_list_screen.dart';
@@ -148,7 +143,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   bool _isLoading = true;
   double _totalAssets = 0;
   double _totalLiabilities = 0;
-  int? _defaultAccountId;
   int _currentIndex = 0;
   bool _demoSeedEnabled = true;
   bool _showSmartTagBadge = true;
@@ -211,7 +205,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await ProjectService(_isar).initTestProjectIfNeeded();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
     await TransactionService(_isar).migrateTransactionAccountIds();
-    _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
     await _loadTransactions();
     await _loadAutoDraftCount();
     _dbReady = true;
@@ -337,14 +330,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _demoSeedEnabled = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeyDemoSeedEnabled, enabled);
-  }
-
-  Future<void> _setSmartTagBadgeEnabled(bool enabled) async {
-    _showSmartTagBadge = enabled;
-    await UiPrefService.setShowSmartTagBadge(enabled);
-    if (mounted) {
-      setState(() {});
-    }
   }
 
   void _showMessage(String message) {
@@ -881,7 +866,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await TagService(_isar).initDefaultGroups();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
     await TransactionService(_isar).migrateTransactionAccountIds();
-    _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
     await _loadTransactions();
     await _loadAutoDraftCount();
     _notifyDataChanged();
@@ -890,7 +874,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Future<void> _exportBackup() async {
     try {
       final file = await JiveDataBackupService.exportToFile(_isar);
-      await Share.shareXFiles([XFile(file.path)], text: 'Jive 数据备份');
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text: 'Jive 数据备份',
+        ),
+      );
       _showMessage('已导出数据');
     } catch (e) {
       _showMessage('导出失败：$e');
@@ -904,6 +893,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
     if (result == null || result.files.single.path == null) return;
     final file = File(result.files.single.path!);
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -931,7 +921,6 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       await TagService(_isar).refreshUsageCounts();
       await TransactionService(_isar).migrateTransactionCategoryKeys();
       await TransactionService(_isar).migrateTransactionAccountIds();
-      _defaultAccountId = (await AccountService(_isar).getDefaultAccount())?.id;
       await _loadTransactions();
       await _loadAutoDraftCount();
       _notifyDataChanged();
@@ -1719,7 +1708,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         borderRadius: BorderRadius.circular(32),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF2E7D32).withOpacity(0.4),
+            color: const Color(0xFF2E7D32).withValues(alpha: 0.4),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -1939,7 +1928,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           Container(
             padding: EdgeInsets.all(padding),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Icon(icon, color: Colors.white, size: iconSize),
@@ -2132,9 +2121,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.12),
+                            color: color.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: color.withOpacity(0.4)),
+                            border: Border.all(color: color.withValues(alpha: 0.4)),
                           ),
                           child: Text(
                             tagDisplayName(tag),
@@ -2181,9 +2170,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       width: 18,
       height: 18,
       decoration: BoxDecoration(
-        color: JiveTheme.primaryGreen.withOpacity(0.12),
+        color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
         shape: BoxShape.circle,
-        border: Border.all(color: JiveTheme.primaryGreen.withOpacity(0.4)),
+        border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.4)),
       ),
       child: const Icon(
         Icons.auto_awesome,

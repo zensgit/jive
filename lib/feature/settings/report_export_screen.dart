@@ -96,20 +96,20 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
         format: _format,
       );
 
-      if (mounted) {
-        // 分享文件
-        await Share.shareXFiles(
-          [XFile(file.path)],
+      if (!mounted) return;
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
           subject: '交易报表导出',
-        );
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('报表已导出: ${file.path.split('/').last}'),
-            backgroundColor: JiveTheme.primaryGreen,
-          ),
-        );
-      }
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('报表已导出: ${file.path.split('/').last}'),
+          backgroundColor: JiveTheme.primaryGreen,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

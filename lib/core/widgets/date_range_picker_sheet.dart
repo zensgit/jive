@@ -161,7 +161,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
   }
 
   TextStyle _lunarTextStyle(TextStyle base) {
-    final color = base.color?.withOpacity(0.7) ?? Colors.grey.shade600;
+    final color = base.color?.withValues(alpha: 0.7) ?? Colors.grey.shade600;
     return base.copyWith(
       fontSize: 9,
       fontWeight: FontWeight.w500,
@@ -307,7 +307,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
-                      value: selectedYear,
+                      initialValue: selectedYear,
                       items: years
                           .map(
                             (year) => DropdownMenuItem<int>(
@@ -322,10 +322,12 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                           selectedYear = value;
                           final minMonth = _minMonthForYear(selectedYear);
                           final maxMonth = _maxMonthForYear(selectedYear);
-                          if (selectedMonth < minMonth)
+                          if (selectedMonth < minMonth) {
                             selectedMonth = minMonth;
-                          if (selectedMonth > maxMonth)
+                          }
+                          if (selectedMonth > maxMonth) {
                             selectedMonth = maxMonth;
+                          }
                         });
                       },
                       decoration: InputDecoration(
@@ -354,7 +356,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                             : Colors.grey.shade500;
                         return ChoiceChip(
                           label: Text(
-                            '${_two(month)}',
+                            _two(month),
                             style: TextStyle(color: color),
                           ),
                           selected: selectedMonth == month,
@@ -467,7 +469,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                           ? widget.enabledYears
                           : null;
                       final calendarStyle = CalendarStyle(
-                        rangeHighlightColor: Colors.green.withOpacity(0.12),
+                        rangeHighlightColor: Colors.green.withValues(alpha: 0.12),
                         rangeStartDecoration: const BoxDecoration(
                           color: Colors.green,
                           shape: BoxShape.circle,
@@ -686,7 +688,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                                 setState(() => _showLunar = value);
                                 _saveLunarPrefs();
                               },
-                              selectedColor: Colors.green.withOpacity(0.12),
+                              selectedColor: Colors.green.withValues(alpha: 0.12),
                               checkmarkColor: Colors.green.shade700,
                             ),
                             FilterChip(
@@ -696,7 +698,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                                 setState(() => _showJieQi = value);
                                 _saveLunarPrefs();
                               },
-                              selectedColor: Colors.green.withOpacity(0.12),
+                              selectedColor: Colors.green.withValues(alpha: 0.12),
                               checkmarkColor: Colors.green.shade700,
                             ),
                             FilterChip(
@@ -706,7 +708,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                                 setState(() => _showFestival = value);
                                 _saveLunarPrefs();
                               },
-                              selectedColor: Colors.green.withOpacity(0.12),
+                              selectedColor: Colors.green.withValues(alpha: 0.12),
                               checkmarkColor: Colors.green.shade700,
                             ),
                           ],

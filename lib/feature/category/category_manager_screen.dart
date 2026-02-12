@@ -2,17 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
 import '../../core/design_system/theme.dart';
-import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
-import '../../core/database/auto_draft_model.dart';
-import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/utils/logger_util.dart';
@@ -55,9 +49,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   Map<String, List<JiveCategory>> _childrenByParentKey = {};
   final Set<String> _collapsedParents = {};
   final Set<String> _knownParentKeys = {};
-  final NumberFormat _moneyFormat = NumberFormat.compactCurrency(symbol: "¥", decimalDigits: 0);
   Map<String, double> _parentTotals = {};
-  Map<String, double> _subTotals = {};
   List<_RecommendationGroup> _recommendationGroups = [];
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
@@ -162,17 +154,12 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           .findAll();
 
       final Map<String, double> parentTotals = {};
-      final Map<String, double> subTotals = {};
       for (final tx in txs) {
         if (!_includeTxForTotals(tx)) continue;
         if (tx.amount <= 0) continue;
         final parentKey = tx.categoryKey;
         if (parentKey != null && parentKey.isNotEmpty) {
           parentTotals[parentKey] = (parentTotals[parentKey] ?? 0) + tx.amount;
-        }
-        final subKey = tx.subCategoryKey;
-        if (subKey != null && subKey.isNotEmpty) {
-          subTotals[subKey] = (subTotals[subKey] ?? 0) + tx.amount;
         }
       }
 
@@ -187,7 +174,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           _parents = parents;
           _childrenByParentKey = byParent;
           _parentTotals = parentTotals;
-          _subTotals = subTotals;
           _recommendationGroups = recommendations;
           _searchKeyCache.clear();
         });
@@ -434,57 +420,13 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     _hasChanges = true;
   }
 
-  String _formatAmount(double value) {
-    return _moneyFormat.format(value);
-  }
-
   Color _resolveCategoryColor(JiveCategory category, {required Color fallback}) {
     return CategoryService.parseColorHex(category.colorHex) ?? fallback;
   }
 
   Color _resolveCategoryBackground(JiveCategory category) {
     final color = CategoryService.parseColorHex(category.colorHex);
-    return color?.withOpacity(0.12) ?? Colors.grey.shade100;
-  }
-
-  Widget _buildSubStatsRow(JiveCategory parent, List<JiveCategory> children) {
-    final entries = children
-        .map((child) => MapEntry(child, _subTotals[child.key] ?? 0))
-        .where((entry) => entry.value > 0)
-        .toList();
-    if (entries.isEmpty) {
-      return Text("本月暂无子类支出", style: TextStyle(fontSize: 11, color: Colors.grey.shade500));
-    }
-    entries.sort((a, b) => b.value.compareTo(a.value));
-    final top = entries.take(3).toList();
-    final total = _parentTotals[parent.key] ?? 0;
-    return Wrap(
-      spacing: 12,
-      runSpacing: 4,
-      children: top.map((entry) {
-        final percent = total > 0 ? (entry.value / total * 100).round() : 0;
-        return Text(
-          "${entry.key.name} ${_formatAmount(entry.value)} ${percent}%",
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _dragProxyDecorator(Widget child, int index, Animation<double> animation) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        return Transform.scale(
-          scale: 1.02,
-          child: Material(
-            color: Colors.transparent,
-            elevation: 6,
-            child: child,
-          ),
-        );
-      },
-    );
+    return color?.withValues(alpha: 0.12) ?? Colors.grey.shade100;
   }
 
   void _switchType(bool showIncome) {
@@ -604,6 +546,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         .map((child) => child.name)
         .toSet();
     final systemLibrary = _service.getSystemLibrary(isIncome: parent.isIncome, includeIncome: true);
+    if (!mounted) return;
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
@@ -683,6 +626,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       return;
     }
     await _reloadAndMarkChanged();
+    if (!mounted) return;
     if (skipped.isNotEmpty) {
       final preview = skipped.take(3).join("、");
       final suffix = skipped.length > 3 ? "等" : "";
@@ -976,6 +920,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         .map((parent) => parent.name)
         .toSet();
     final systemLibrary = _mergeSystemLibraries();
+    if (!mounted) return;
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
@@ -1050,6 +995,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       return;
     }
     await _reloadAndMarkChanged();
+    if (!mounted) return;
     if (skipped.isNotEmpty) {
       final preview = skipped.take(3).join("、");
       final suffix = skipped.length > 3 ? "等" : "";
@@ -1192,6 +1138,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     );
     if (targetParent == null) return;
 
+    if (!mounted) return;
     final children = List<JiveCategory>.from(_childrenByParentKey[parent.key] ?? const []);
     if (children.isNotEmpty) {
       final proceed = await showDialog<bool>(
@@ -1245,6 +1192,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         : <JiveCategory>[];
     final totalTxCount = await _countTransactionsForCategories([category, ...children]);
 
+    if (!mounted) return;
     if (children.isNotEmpty) {
       final cascade = await showDialog<bool>(
         context: context,
@@ -1291,6 +1239,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       }
     }
 
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -1377,36 +1326,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       total += await _uncategorizeTransactions(category);
     }
     return total;
-  }
-
-  Future<int?> _confirmAndTransferTransactions(
-    JiveCategory category,
-    _TransferTarget target,
-  ) async {
-    final targetName = target.child == null
-        ? target.parent.name
-        : "${target.parent.name} · ${target.child!.name}";
-    final sourceName = category.name;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("确认转移账单"),
-        content: Text("将 $sourceName 的账单转移到 $targetName？"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("转移"),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return null;
-    return _applyTransactionTransfer(category, target);
   }
 
   Future<int?> _confirmAndTransferTransactionsForCategories(
@@ -1511,6 +1430,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       list.sort((a, b) => a.order.compareTo(b.order));
     }
 
+    if (!mounted) return null;
     return showModalBottomSheet<_TransferTarget>(
       context: context,
       backgroundColor: Colors.white,
@@ -1546,7 +1466,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
               }
               tiles.add(const Divider(height: 16));
               return tiles;
-            }).toList(),
+            }),
           ],
         ),
       ),
@@ -2018,10 +1938,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
         Navigator.pop(context, _hasChanges);
-        return false;
       },
       child: Scaffold(
         backgroundColor: Colors.grey.shade100,
@@ -2071,8 +1992,8 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         : _resolveCategoryColor(parent, fallback: JiveTheme.categoryIconInactive);
 
     return DragTarget<JiveCategory>(
-      onWillAccept: (incoming) => incoming != null && incoming.parentKey != parent.key,
-      onAccept: (incoming) => _moveSubCategoryToParent(incoming, parent),
+      onWillAcceptWithDetails: (details) => details.data.parentKey != parent.key,
+      onAcceptWithDetails: (details) => _moveSubCategoryToParent(details.data, parent),
       builder: (context, candidateData, _) {
         final isTarget = candidateData.isNotEmpty;
         return Container(
@@ -2081,7 +2002,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           decoration: BoxDecoration(
             color: Colors.grey.shade50,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: isTarget ? JiveTheme.primaryGreen.withOpacity(0.4) : Colors.grey.shade200),
+            border: Border.all(color: isTarget ? JiveTheme.primaryGreen.withValues(alpha: 0.4) : Colors.grey.shade200),
           ),
           child: Opacity(
             opacity: isHidden ? 0.6 : 1,
@@ -2189,15 +2110,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         const columns = 5;
         final items = _buildSubGridItems(children, showAddChip: showAddChip);
         return DragTarget<JiveCategory>(
-          onWillAccept: (incoming) => incoming != null && incoming.parentKey != parent.key,
-          onAccept: (incoming) => _moveSubCategoryToParent(incoming, parent),
+          onWillAcceptWithDetails: (details) => details.data.parentKey != parent.key,
+          onAcceptWithDetails: (details) => _moveSubCategoryToParent(details.data, parent),
           builder: (context, candidateData, _) {
             final isTarget = candidateData.isNotEmpty;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
-                border: isTarget ? Border.all(color: JiveTheme.primaryGreen.withOpacity(0.35)) : null,
+                border: isTarget ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35)) : null,
               ),
               padding: const EdgeInsets.all(2),
               child: GridView.builder(
@@ -2260,10 +2181,12 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       );
     }
     return DragTarget<JiveCategory>(
-      onWillAccept: (incoming) {
-        return incoming != null && incoming.key != sub.key && incoming.parentKey != null;
+      onWillAcceptWithDetails: (details) {
+        final incoming = details.data;
+        return incoming.key != sub.key && incoming.parentKey != null;
       },
-      onAccept: (incoming) {
+      onAcceptWithDetails: (details) {
+        final incoming = details.data;
         if (incoming.parentKey == parent.key) {
           _reorderSubCategory(parent, incoming, sub);
         } else {
@@ -2317,7 +2240,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           border: isTarget
-              ? Border.all(color: JiveTheme.primaryGreen.withOpacity(0.35))
+              ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35))
               : Border.all(color: Colors.transparent),
         ),
         child: Column(

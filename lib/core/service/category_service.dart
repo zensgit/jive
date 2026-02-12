@@ -662,7 +662,7 @@ class CategoryService {
       for (final child in children) {
         final childName = (child['name'] as String? ?? "").trim();
         if (childName.isEmpty) continue;
-        final childKey = "${parentKey}|${_normalizeMatchName(childName)}";
+        final childKey = "$parentKey|${_normalizeMatchName(childName)}";
         final childIcon = _normalizeIconName(
           child['icon'] as String?,
           childName,
@@ -701,7 +701,7 @@ class CategoryService {
         final parentName = parentNameByKey[cat.parentKey];
         if (parentName == null) continue;
         final parentKey = _normalizeMatchName(_systemParentAliases[parentName] ?? parentName);
-        final childKey = "${parentKey}|${_normalizeMatchName(cat.name)}";
+        final childKey = "$parentKey|${_normalizeMatchName(cat.name)}";
         desired = childIconByName[childKey];
       }
 
@@ -1334,17 +1334,6 @@ class CategoryService {
     await _syncSystemOverridesForCategories(updated, includeOrder: true);
   }
 
-  Future<void> _reorderParentsByName({required bool isIncome}) async {
-    final parents = await isar.collection<JiveCategory>()
-        .filter()
-        .parentKeyIsNull()
-        .isIncomeEqualTo(isIncome)
-        .isSystemEqualTo(true)
-        .findAll();
-    parents.sort((a, b) => compareCategoryName(a.name, b.name));
-    await reorderParents(parents);
-  }
-
   Future<void> reorderChildren(String parentKey, List<JiveCategory> children) async {
     final updated = <JiveCategory>[];
     for (var i = 0; i < children.length; i++) {
@@ -1361,16 +1350,6 @@ class CategoryService {
       await isar.collection<JiveCategory>().putAll(updated);
     });
     await _syncSystemOverridesForCategories(updated, includeOrder: true);
-  }
-
-  Future<void> _reorderChildrenByName(String parentKey) async {
-    final children = await isar.collection<JiveCategory>()
-        .filter()
-        .parentKeyEqualTo(parentKey)
-        .isSystemEqualTo(true)
-        .findAll();
-    children.sort((a, b) => compareCategoryName(a.name, b.name));
-    await reorderChildren(parentKey, children);
   }
 
   Future<bool> deleteCategory(JiveCategory category) async {
@@ -1553,9 +1532,9 @@ class CategoryService {
   }
 
   static bool _isNeutralGray(Color color) {
-    final r = color.red;
-    final g = color.green;
-    final b = color.blue;
+    final r = (color.r * 255.0).round() & 0xff;
+    final g = (color.g * 255.0).round() & 0xff;
+    final b = (color.b * 255.0).round() & 0xff;
     final maxChannel = r > g ? (r > b ? r : b) : (g > b ? g : b);
     final minChannel = r < g ? (r < b ? r : b) : (g < b ? g : b);
     return (maxChannel - minChannel) <= 4;
@@ -2230,7 +2209,9 @@ class CategoryService {
       "coco",
       "1点点",
       "茶",
-    ])) return "local_cafe";
+    ])) {
+      return "local_cafe";
+    }
     if (containsAny(["冰淇淋", "雪糕", "甜品", "icecream"])) return "icecream";
     if (containsAny(["火锅", "烧烤", "烤肉", "麻辣烫", "麻辣香锅", "串串", "张亮", "杨国福", "小龙坎", "海底捞", "巴奴"])) return "local_dining";
     if (containsAny(["面条", "面食", "面粉", "拉面", "饺子", "馄饨", "米粉", "米线", "米饭", "沙县", "真功夫", "老乡鸡"])) {
@@ -2284,7 +2265,9 @@ class CategoryService {
       "打扫",
       "垃圾袋",
       "垃圾费",
-    ])) return "cleaning_services";
+    ])) {
+      return "cleaning_services";
+    }
     if (containsAny([
       "服饰", "衣服", "clothes", "内衣", "外套", "冲锋衣", "羽绒", "裤", "裙", "袜", "帽",
       "优衣库", "ZARA", "HM", "UR", "GAP", "ONLY", "Vero Moda", "Ochirly", "Adidas", "Nike", "Puma", "LiNing", "Anta", "Fila", "Under Armour", "NewBalance", "Skechers", "Converse", "Vans", "HOKA", "Timberland", "UGG", "ECCO",
@@ -2354,7 +2337,9 @@ class CategoryService {
       "潜水",
       "漂流",
       "卡丁车",
-    ])) return "sports_basketball";
+    ])) {
+      return "sports_basketball";
+    }
     if (containsAny(["旅行", "旅游", "travel", "景点", "门票"])) return "landscape";
     if (containsAny(["会员", "member"])) return "card_membership";
     if (containsAny(["充值", "续费", "缴费"])) return "payments";

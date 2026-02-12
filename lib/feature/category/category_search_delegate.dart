@@ -96,7 +96,7 @@ class CategorySearchDelegate extends SearchDelegate<CategorySearchResult?> {
         final iconColor = CategoryService.parseColorHex(item.sub?.colorHex ?? item.parent.colorHex);
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: iconColor?.withOpacity(0.12) ?? Colors.grey.shade100,
+            backgroundColor: iconColor?.withValues(alpha: 0.12) ?? Colors.grey.shade100,
             child: CategoryService.buildIcon(
               iconName,
               size: 18,

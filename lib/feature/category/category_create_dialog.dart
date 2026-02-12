@@ -92,7 +92,7 @@ class _CategoryCreateDialogState extends State<CategoryCreateDialog> {
               onTap: _showIconPicker,
               child: CircleAvatar(
                 radius: 32,
-                backgroundColor: highlightColor.withOpacity(0.1),
+                backgroundColor: highlightColor.withValues(alpha: 0.1),
                 child: CategoryService.buildIcon(
                   _selectedIcon,
                   size: 32,
@@ -261,7 +261,7 @@ class _CategoryCreateDialogState extends State<CategoryCreateDialog> {
   }
 
   String _colorHexFromColor(Color color) {
-    final value = color.value.toRadixString(16).padLeft(8, '0');
+    final value = color.toARGB32().toRadixString(16).padLeft(8, '0');
     return "#${value.substring(2).toUpperCase()}";
   }
 

@@ -82,6 +82,9 @@ class AccountService {
       groupName: groupCredit,
       iconName: 'credit_card',
       colorHex: '#EF5350',
+      billingDay: null,
+      repaymentDay: null,
+      creditLimit: null,
     ),
     _AccountPreset(
       key: 'acct_loan',

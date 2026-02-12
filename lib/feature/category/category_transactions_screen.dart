@@ -5,10 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../../core/service/category_service.dart';
@@ -233,7 +230,7 @@ class _CategoryTransactionsScreenState
               setState(() => _includeSubCategories = value);
               _reloadTransactions(showLoading: true);
             },
-            activeColor: Colors.green.shade600,
+            activeThumbColor: Colors.green.shade600,
           ),
         ],
       ),
@@ -305,9 +302,7 @@ class _CategoryTransactionsScreenState
     if (minDate != null) {
       minDate = DateTime(minDate.year, minDate.month, minDate.day);
     }
-    if (maxDate != null) {
-      maxDate = DateTime(maxDate.year, maxDate.month, maxDate.day);
-    }
+    maxDate = DateTime(maxDate.year, maxDate.month, maxDate.day);
 
     if (mounted) {
       setState(() {
@@ -329,7 +324,7 @@ class _CategoryTransactionsScreenState
         _searchDateRange != null;
     return Material(
       elevation: 6,
-      shadowColor: Colors.black.withOpacity(0.08),
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(18),
       color: Colors.white,
       child: SizedBox(
@@ -676,7 +671,7 @@ class _CategoryTransactionsScreenState
                         ChoiceChip(
                           label: const Text('账单模式'),
                           selected: groupByDate,
-                          selectedColor: Colors.green.shade600.withOpacity(
+                          selectedColor: Colors.green.shade600.withValues(alpha: 
                             0.18,
                           ),
                           onSelected: (_) =>
@@ -685,7 +680,7 @@ class _CategoryTransactionsScreenState
                         ChoiceChip(
                           label: const Text('列表模式'),
                           selected: !groupByDate,
-                          selectedColor: Colors.green.shade600.withOpacity(
+                          selectedColor: Colors.green.shade600.withValues(alpha: 
                             0.18,
                           ),
                           onSelected: (_) {
@@ -706,7 +701,7 @@ class _CategoryTransactionsScreenState
                         return ChoiceChip(
                           label: Text(label),
                           selected: field == value,
-                          selectedColor: Colors.green.shade600.withOpacity(
+                          selectedColor: Colors.green.shade600.withValues(alpha: 
                             0.18,
                           ),
                           onSelected: (_) => setModalState(() => field = value),
@@ -730,7 +725,7 @@ class _CategoryTransactionsScreenState
                         return ChoiceChip(
                           label: Text(label),
                           selected: direction == value,
-                          selectedColor: Colors.green.shade600.withOpacity(
+                          selectedColor: Colors.green.shade600.withValues(alpha: 
                             0.18,
                           ),
                           onSelected: (_) =>
@@ -1148,9 +1143,9 @@ class _CategoryTransactionsScreenState
       width: 18,
       height: 18,
       decoration: BoxDecoration(
-        color: JiveTheme.primaryGreen.withOpacity(0.12),
+        color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
         shape: BoxShape.circle,
-        border: Border.all(color: JiveTheme.primaryGreen.withOpacity(0.4)),
+        border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.4)),
       ),
       child: const Icon(
         Icons.auto_awesome,

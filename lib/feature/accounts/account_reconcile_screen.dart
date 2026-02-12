@@ -6,12 +6,8 @@ import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
-import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/reconcile_service.dart';
@@ -238,6 +234,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     }
 
     final existingCount = _result?.entries.length ?? 0;
+    if (!mounted) return;
     final proceed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -428,59 +425,6 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     );
   }
 
-  Widget _buildRangeHeader() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '日期范围',
-                  style: GoogleFonts.lato(
-                    color: Colors.grey.shade600,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${_formatDate(_startDate)} - ${_formatDate(_endDate)}',
-                  style: GoogleFonts.lato(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          TextButton.icon(
-            onPressed: _pickDateRange,
-            icon: const Icon(Icons.tune),
-            label: const Text('修改'),
-            style: TextButton.styleFrom(
-              foregroundColor: JiveTheme.primaryGreen,
-              textStyle: GoogleFonts.lato(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildQuickRanges() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -561,7 +505,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w600),
       ),
       selected: selected,
-      selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+      selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
       onSelected: (_) {
         setState(() => _summaryMode = mode);
         _persistViewPrefs();
@@ -577,7 +521,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w600),
       ),
       selected: selected,
-      selectedColor: JiveTheme.primaryGreen.withOpacity(0.18),
+      selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.18),
       onSelected: (_) {
         setState(() => _filter = value);
         _persistViewPrefs();
@@ -594,7 +538,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 14,
             offset: const Offset(0, 8),
           ),
@@ -710,7 +654,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
@@ -729,7 +673,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
@@ -767,7 +711,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     final rangeLabel = '${_formatDate(_startDate)} - ${_formatDate(_endDate)}';
     return Material(
       elevation: 6,
-      shadowColor: Colors.black.withOpacity(0.08),
+      shadowColor: Colors.black.withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(18),
       color: Colors.white,
       child: SizedBox(
@@ -995,7 +939,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                         return ChoiceChip(
                           label: Text(label),
                           selected: field == value,
-                          selectedColor: JiveTheme.primaryGreen.withOpacity(
+                          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 
                             0.18,
                           ),
                           onSelected: (_) => setModalState(() => field = value),
@@ -1019,7 +963,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                         return ChoiceChip(
                           label: Text(label),
                           selected: direction == value,
-                          selectedColor: JiveTheme.primaryGreen.withOpacity(
+                          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 
                             0.18,
                           ),
                           onSelected: (_) =>
@@ -1126,27 +1070,6 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         _searchDateRange != null;
   }
 
-  String _searchSummary() {
-    final parts = <String>[];
-    if (_searchQuery.trim().isNotEmpty) parts.add(_searchQuery.trim());
-    if (_searchCategoryKey != null) {
-      final name = _categoryByKey[_searchCategoryKey!]?.name;
-      if (name != null) parts.add(name);
-    }
-    if (_searchAccountId != null) {
-      final name = _accountById[_searchAccountId!]?.name;
-      if (name != null) parts.add(name);
-    }
-    if (_searchTag != null && _searchTag!.isNotEmpty) {
-      parts.add('#${_searchTag!}');
-    }
-    if (_searchDateRange != null) {
-      parts.add(_formatRange(_searchDateRange!));
-    }
-    if (parts.isEmpty) return '查找账单';
-    return parts.join(' · ');
-  }
-
   String _sortSummary() {
     final field = _sortFieldLabel(_sortField);
     final direction = _sortDirectionLabel(_sortDirection, _sortField);
@@ -1164,7 +1087,6 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       case _ReconcileSortField.tag:
         return '标签';
       case _ReconcileSortField.date:
-      default:
         return '日期';
     }
   }
@@ -1197,7 +1119,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
             : EdgeInsets.zero,
         decoration: highlighted
             ? BoxDecoration(
-                color: Colors.orange.withOpacity(0.15),
+                color: Colors.orange.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
               )
             : null,
@@ -1321,7 +1243,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1585,14 +1507,6 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     return !timestamp.isBefore(start) && !timestamp.isAfter(end);
   }
 
-  String _formatRange(DateTimeRange range) {
-    final start =
-        '${range.start.year}-${_two(range.start.month)}-${_two(range.start.day)}';
-    final end =
-        '${range.end.year}-${_two(range.end.month)}-${_two(range.end.day)}';
-    return '$start - $end';
-  }
-
   List<ReconcileEntry> _sortEntries(List<ReconcileEntry> entries) {
     final sorted = [...entries];
     sorted.sort((a, b) {
@@ -1611,7 +1525,6 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
           compare = _tagGroupLabel(a).compareTo(_tagGroupLabel(b));
           break;
         case _ReconcileSortField.date:
-        default:
           compare = a.transaction.timestamp.compareTo(b.transaction.timestamp);
           break;
       }
@@ -1657,7 +1570,6 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         return _tagGroupLabel(entry);
       case _ReconcileSortField.date:
       case _ReconcileSortField.amount:
-      default:
         return '';
     }
   }

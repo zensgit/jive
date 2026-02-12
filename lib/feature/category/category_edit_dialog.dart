@@ -76,7 +76,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                       onTap: _showIconPicker,
                       child: CircleAvatar(
                         radius: 28,
-                        backgroundColor: highlightColor.withOpacity(0.12),
+                        backgroundColor: highlightColor.withValues(alpha: 0.12),
                         child: CategoryService.buildIcon(
                           _selectedIcon,
                           size: 28,
@@ -246,7 +246,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? JiveTheme.primaryGreen.withOpacity(0.12) : Colors.grey.shade100,
+          color: isSelected ? JiveTheme.primaryGreen.withValues(alpha: 0.12) : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? JiveTheme.primaryGreen : Colors.transparent,
@@ -394,6 +394,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         : "${target.parent.name} · ${target.child!.name}";
     final sourceName = widget.category.name;
 
+    if (!mounted) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -464,6 +465,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       list.sort((a, b) => a.order.compareTo(b.order));
     }
 
+    if (!mounted) return null;
     return showModalBottomSheet<_TransferTarget>(
       context: context,
       backgroundColor: Colors.white,
@@ -499,7 +501,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
               }
               tiles.add(const Divider(height: 16));
               return tiles;
-            }).toList(),
+            }),
           ],
         ),
       ),
@@ -613,6 +615,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       }
     }
 
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -660,7 +663,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                     padding: const EdgeInsets.only(right: 8),
                     child: _buildColorDot(color),
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
@@ -696,7 +699,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   }
 
   String _colorHexFromColor(Color color) {
-    final value = color.value.toRadixString(16).padLeft(8, '0');
+    final value = color.toARGB32().toRadixString(16).padLeft(8, '0');
     return "#${value.substring(2).toUpperCase()}";
   }
 }

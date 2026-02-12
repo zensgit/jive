@@ -12,12 +12,6 @@ import '../../core/data/bank_catalog.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
-import '../../core/database/category_model.dart';
-import '../../core/database/transaction_model.dart';
-import '../../core/database/auto_draft_model.dart';
-import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
@@ -282,7 +276,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     if (editing != null) {
       if (selectedType.requiresBank) {
         iconCustomized =
-            selectedBank == null || editing.iconName != selectedBank!.icon;
+            selectedBank == null || editing.iconName != selectedBank.icon;
       } else {
         iconCustomized = editing.iconName != selectedType.icon;
       }
@@ -291,10 +285,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
           editing.colorHex != defaultColor;
     }
 
-    Future<void> ensureBankSelected(StateSetter setSheetState) async {
-      if (!selectedType!.requiresBank) return;
-      final bank = await _showBankPicker(selectedBank);
-      if (bank == null) return;
+	    Future<void> ensureBankSelected(StateSetter setSheetState) async {
+	      if (!selectedType!.requiresBank) return;
+	      final bank = await _showBankPicker(selectedBank);
+	      if (bank == null) return;
       setSheetState(() {
         selectedBank = bank;
         iconName = bank.icon.isEmpty ? iconName : bank.icon;
@@ -308,13 +302,14 @@ class _AccountsScreenState extends State<AccountsScreen> {
             selectedBank,
           );
         }
-      });
-    }
+	      });
+	    }
 
-    return showModalBottomSheet<_AccountDraft>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
+	    if (!mounted) return null;
+	    return showModalBottomSheet<_AccountDraft>(
+	      context: context,
+	      isScrollControlled: true,
+	      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -479,14 +474,16 @@ class _AccountsScreenState extends State<AccountsScreen> {
                         } else if (action == _IconSourceAction.camera) {
                           selection = await _pickCustomIcon(ImageSource.camera);
                         }
-                        if (selection == null) return;
+                        final picked = selection;
+                        if (picked == null) return;
                         setSheetState(() {
-                          iconName = selection!.iconName;
+                          iconName = picked.iconName;
                           iconCustomized = true;
+                          final pickedColorHex = picked.colorHex;
                           if (!colorCustomized &&
-                              selection!.colorHex != null &&
-                              selection!.colorHex!.trim().isNotEmpty) {
-                            colorHex = selection!.colorHex!;
+                              pickedColorHex != null &&
+                              pickedColorHex.trim().isNotEmpty) {
+                            colorHex = pickedColorHex;
                           }
                         });
                       },
@@ -831,7 +828,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
+                        color: Colors.black.withValues(alpha: 0.04),
                         blurRadius: 10,
                         offset: const Offset(0, 6),
                       ),
@@ -913,14 +910,14 @@ class _AccountsScreenState extends State<AccountsScreen> {
         );
       },
     );
-  }
+	  }
 
-  double _accountTypeTileHeight(BuildContext context, int columns) {
-    final scale = MediaQuery.textScaleFactorOf(context);
-    final base = columns >= 6
-        ? 64.0
-        : columns >= 5
-            ? 68.0
+	  double _accountTypeTileHeight(BuildContext context, int columns) {
+	    final scale = MediaQuery.textScalerOf(context).scale(14.0) / 14.0;
+	    final base = columns >= 6
+	        ? 64.0
+	        : columns >= 5
+	            ? 68.0
             : 74.0;
     if (scale >= 1.2) return base + 6;
     if (scale >= 1.1) return base + 4;
@@ -929,14 +926,15 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
   Future<BankEntry?> _showBankPicker(
     BankEntry? current, {
-    String title = '选择银行',
-    String hintText = '搜索银行',
-  }) async {
-    final banks = await BankCatalog.load();
-    final controller = TextEditingController();
-    var filtered = banks;
+	    String title = '选择银行',
+	    String hintText = '搜索银行',
+	  }) async {
+	    final banks = await BankCatalog.load();
+	    if (!mounted) return null;
+	    final controller = TextEditingController();
+	    var filtered = banks;
 
-    return showModalBottomSheet<BankEntry>(
+	    return showModalBottomSheet<BankEntry>(
       context: context,
       isScrollControlled: true,
       backgroundColor: JiveTheme.surfaceWhite,
@@ -1001,7 +999,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
+                              color: Colors.black.withValues(alpha: 0.04),
                               blurRadius: 10,
                               offset: const Offset(0, 6),
                             ),
@@ -1016,7 +1014,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                               onTap: () => Navigator.pop(sheetContext, bank),
                               child: Container(
                                 color: isSelected
-                                    ? JiveTheme.primaryGreen.withOpacity(0.06)
+                                    ? JiveTheme.primaryGreen.withValues(alpha: 0.06)
                                     : Colors.transparent,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
@@ -1184,7 +1182,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             color: selected
-                ? JiveTheme.primaryGreen.withOpacity(0.12)
+                ? JiveTheme.primaryGreen.withValues(alpha: 0.12)
                 : Colors.grey.shade100,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
@@ -1466,7 +1464,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.03),
+              color: Colors.black.withValues(alpha: 0.03),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1808,7 +1806,7 @@ class _CurrencyPickerSheetState extends State<_CurrencyPickerSheet> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? JiveTheme.primaryGreen.withOpacity(0.1)
+                            ? JiveTheme.primaryGreen.withValues(alpha: 0.1)
                             : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(8),
                       ),
