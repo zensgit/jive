@@ -491,8 +491,6 @@ class _RateWidgetConfigScreenState extends State<RateWidgetConfigScreen> {
             final to = parts[1];
             final fromData = CurrencyDefaults.getAllCurrencies()
                 .firstWhere((c) => c['code'] == from, orElse: () => {'flag': from, 'symbol': from});
-            final toData = CurrencyDefaults.getAllCurrencies()
-                .firstWhere((c) => c['code'] == to, orElse: () => {'flag': to, 'symbol': to});
 
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),

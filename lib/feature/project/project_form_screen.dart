@@ -207,7 +207,7 @@ class _ProjectFormScreenState extends State<ProjectFormScreen> {
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: showCustom ? _colorFromHex(customHex!) : null,
+          color: showCustom ? _colorFromHex(customHex) : null,
           gradient: showCustom
               ? null
               : const LinearGradient(

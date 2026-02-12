@@ -2,17 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
 import '../../core/design_system/theme.dart';
-import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
-import '../../core/database/auto_draft_model.dart';
-import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/utils/logger_util.dart';
@@ -55,9 +49,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   Map<String, List<JiveCategory>> _childrenByParentKey = {};
   final Set<String> _collapsedParents = {};
   final Set<String> _knownParentKeys = {};
-  final NumberFormat _moneyFormat = NumberFormat.compactCurrency(symbol: "¥", decimalDigits: 0);
   Map<String, double> _parentTotals = {};
-  Map<String, double> _subTotals = {};
   List<_RecommendationGroup> _recommendationGroups = [];
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
@@ -162,17 +154,12 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           .findAll();
 
       final Map<String, double> parentTotals = {};
-      final Map<String, double> subTotals = {};
       for (final tx in txs) {
         if (!_includeTxForTotals(tx)) continue;
         if (tx.amount <= 0) continue;
         final parentKey = tx.categoryKey;
         if (parentKey != null && parentKey.isNotEmpty) {
           parentTotals[parentKey] = (parentTotals[parentKey] ?? 0) + tx.amount;
-        }
-        final subKey = tx.subCategoryKey;
-        if (subKey != null && subKey.isNotEmpty) {
-          subTotals[subKey] = (subTotals[subKey] ?? 0) + tx.amount;
         }
       }
 
@@ -187,7 +174,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           _parents = parents;
           _childrenByParentKey = byParent;
           _parentTotals = parentTotals;
-          _subTotals = subTotals;
           _recommendationGroups = recommendations;
           _searchKeyCache.clear();
         });
@@ -434,10 +420,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     _hasChanges = true;
   }
 
-  String _formatAmount(double value) {
-    return _moneyFormat.format(value);
-  }
-
   Color _resolveCategoryColor(JiveCategory category, {required Color fallback}) {
     return CategoryService.parseColorHex(category.colorHex) ?? fallback;
   }
@@ -445,46 +427,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   Color _resolveCategoryBackground(JiveCategory category) {
     final color = CategoryService.parseColorHex(category.colorHex);
     return color?.withOpacity(0.12) ?? Colors.grey.shade100;
-  }
-
-  Widget _buildSubStatsRow(JiveCategory parent, List<JiveCategory> children) {
-    final entries = children
-        .map((child) => MapEntry(child, _subTotals[child.key] ?? 0))
-        .where((entry) => entry.value > 0)
-        .toList();
-    if (entries.isEmpty) {
-      return Text("本月暂无子类支出", style: TextStyle(fontSize: 11, color: Colors.grey.shade500));
-    }
-    entries.sort((a, b) => b.value.compareTo(a.value));
-    final top = entries.take(3).toList();
-    final total = _parentTotals[parent.key] ?? 0;
-    return Wrap(
-      spacing: 12,
-      runSpacing: 4,
-      children: top.map((entry) {
-        final percent = total > 0 ? (entry.value / total * 100).round() : 0;
-        return Text(
-          "${entry.key.name} ${_formatAmount(entry.value)} ${percent}%",
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _dragProxyDecorator(Widget child, int index, Animation<double> animation) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, _) {
-        return Transform.scale(
-          scale: 1.02,
-          child: Material(
-            color: Colors.transparent,
-            elevation: 6,
-            child: child,
-          ),
-        );
-      },
-    );
   }
 
   void _switchType(bool showIncome) {
@@ -1377,36 +1319,6 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       total += await _uncategorizeTransactions(category);
     }
     return total;
-  }
-
-  Future<int?> _confirmAndTransferTransactions(
-    JiveCategory category,
-    _TransferTarget target,
-  ) async {
-    final targetName = target.child == null
-        ? target.parent.name
-        : "${target.parent.name} · ${target.child!.name}";
-    final sourceName = category.name;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("确认转移账单"),
-        content: Text("将 $sourceName 的账单转移到 $targetName？"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("取消"),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text("转移"),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return null;
-    return _applyTransactionTransfer(category, target);
   }
 
   Future<int?> _confirmAndTransferTransactionsForCategories(

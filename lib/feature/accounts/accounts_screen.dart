@@ -12,12 +12,6 @@ import '../../core/data/bank_catalog.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
-import '../../core/database/category_model.dart';
-import '../../core/database/transaction_model.dart';
-import '../../core/database/auto_draft_model.dart';
-import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
@@ -282,7 +276,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     if (editing != null) {
       if (selectedType.requiresBank) {
         iconCustomized =
-            selectedBank == null || editing.iconName != selectedBank!.icon;
+            selectedBank == null || editing.iconName != selectedBank.icon;
       } else {
         iconCustomized = editing.iconName != selectedType.icon;
       }
@@ -479,14 +473,16 @@ class _AccountsScreenState extends State<AccountsScreen> {
                         } else if (action == _IconSourceAction.camera) {
                           selection = await _pickCustomIcon(ImageSource.camera);
                         }
-                        if (selection == null) return;
+                        final picked = selection;
+                        if (picked == null) return;
                         setSheetState(() {
-                          iconName = selection!.iconName;
+                          iconName = picked.iconName;
                           iconCustomized = true;
+                          final pickedColorHex = picked.colorHex;
                           if (!colorCustomized &&
-                              selection!.colorHex != null &&
-                              selection!.colorHex!.trim().isNotEmpty) {
-                            colorHex = selection!.colorHex!;
+                              pickedColorHex != null &&
+                              pickedColorHex.trim().isNotEmpty) {
+                            colorHex = pickedColorHex;
                           }
                         });
                       },

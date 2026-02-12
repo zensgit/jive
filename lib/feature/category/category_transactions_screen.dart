@@ -5,10 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
-import '../../core/database/tag_conversion_log.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../../core/service/category_service.dart';
@@ -305,9 +302,7 @@ class _CategoryTransactionsScreenState
     if (minDate != null) {
       minDate = DateTime(minDate.year, minDate.month, minDate.day);
     }
-    if (maxDate != null) {
-      maxDate = DateTime(maxDate.year, maxDate.month, maxDate.day);
-    }
+    maxDate = DateTime(maxDate.year, maxDate.month, maxDate.day);
 
     if (mounted) {
       setState(() {

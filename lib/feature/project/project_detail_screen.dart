@@ -185,15 +185,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     }
   }
 
-  Future<void> _reloadAndScrollTop() async {
-    await _loadData(showLoading: false);
-    if (!mounted) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_contentScrollController.hasClients) return;
-      _contentScrollController.jumpTo(0);
-    });
-  }
-
   Future<Isar> _ensureIsar() async {
     if (_isar != null) return _isar!;
     _isar = await DatabaseService.getInstance();
@@ -759,16 +750,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     return amount.toStringAsFixed(0);
   }
 
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: Colors.grey.shade700),
-        const SizedBox(width: 8),
-        Text(title, style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
-
   Widget _buildInfoCard(JiveProject project, Color color) {
     final dateFormat = DateFormat('yyyy/MM/dd');
     return Container(
@@ -1040,32 +1021,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         const Spacer(),
         Text(value, style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.w600)),
       ],
-    );
-  }
-
-  Widget _buildHeaderActionChip({
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.lato(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
-        ),
-      ),
     );
   }
 
@@ -2730,7 +2685,6 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
         _filterAccountId != null ||
         (_filterTag != null && _filterTag!.isNotEmpty) ||
         _filterDateRange != null;
-    final hasSearch = _searchQuery.isNotEmpty || hasFilter;
     final bottomPadding = 120 + (_batchMode ? 64 : 0) + (hasFilter ? 28 : 0);
 
     return WillPopScope(

@@ -1334,17 +1334,6 @@ class CategoryService {
     await _syncSystemOverridesForCategories(updated, includeOrder: true);
   }
 
-  Future<void> _reorderParentsByName({required bool isIncome}) async {
-    final parents = await isar.collection<JiveCategory>()
-        .filter()
-        .parentKeyIsNull()
-        .isIncomeEqualTo(isIncome)
-        .isSystemEqualTo(true)
-        .findAll();
-    parents.sort((a, b) => compareCategoryName(a.name, b.name));
-    await reorderParents(parents);
-  }
-
   Future<void> reorderChildren(String parentKey, List<JiveCategory> children) async {
     final updated = <JiveCategory>[];
     for (var i = 0; i < children.length; i++) {
@@ -1361,16 +1350,6 @@ class CategoryService {
       await isar.collection<JiveCategory>().putAll(updated);
     });
     await _syncSystemOverridesForCategories(updated, includeOrder: true);
-  }
-
-  Future<void> _reorderChildrenByName(String parentKey) async {
-    final children = await isar.collection<JiveCategory>()
-        .filter()
-        .parentKeyEqualTo(parentKey)
-        .isSystemEqualTo(true)
-        .findAll();
-    children.sort((a, b) => compareCategoryName(a.name, b.name));
-    await reorderChildren(parentKey, children);
   }
 
   Future<bool> deleteCategory(JiveCategory category) async {

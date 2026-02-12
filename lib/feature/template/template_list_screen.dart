@@ -3,10 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
 
 import '../../core/database/template_model.dart';
-import '../../core/database/transaction_model.dart';
-import '../../core/database/category_model.dart';
-import '../../core/database/account_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/service/template_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/design_system/theme.dart';

@@ -1183,7 +1183,6 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   }
 
   Future<void> _applySuggestion(SystemCategorySuggestion suggestion) async {
-    final isParentCreate = _isParentCreateMode();
     if (_isBatch && _existingNames.contains(suggestion.name)) return;
     if (_isBatch && widget.autoBatchAdd && widget.onBatchAdd != null) {
       await _applyBatchAdd(suggestion);
@@ -1687,27 +1686,6 @@ const Map<String, List<String>> _groupAliasReverseMap = {
   '金融': ['理财', '股票', '基金', '利息'],
   '其它': ['其他'],
 };
-
-const List<String> _preferredGroupOrder = [
-  '薪酬',
-  '投资',
-  '租金',
-  '二手',
-  '补偿',
-  '餐饮',
-  '交通',
-  '住房居家',
-  '日用杂货',
-  '服饰鞋包',
-  '数码电器',
-  '娱乐休闲',
-  '教育学习',
-  '医疗',
-  '人情往来',
-  '宠物',
-  '税费',
-  '其他',
-];
 
 const List<Color> _categoryColorOptions = [
   Color(0xFFF44336),
