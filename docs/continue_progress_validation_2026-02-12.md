@@ -104,3 +104,34 @@
 - `lib/feature/tag`：`No issues found!`（`--no-fatal-infos`）
 - `lib/feature/transactions`：`No issues found!`（`--no-fatal-infos`）
 - 回归测试：通过（`flutter test`）
+
+## 10. 继续推进（Auto 模块 + PR #8 验证补充）
+### 10.1 本轮新增修复（`lib/feature/auto/*`）
+- `auto_account_mapping_screen.dart`
+  - `DropdownButtonFormField.value` 迁移为 `initialValue`
+- `auto_rule_tester_screen.dart`
+  - `DropdownButtonFormField.value` 迁移为 `initialValue`
+  - `withOpacity(...)` 迁移为 `withValues(alpha: ...)`
+- `auto_drafts_screen.dart`
+  - 移除未使用导入（`transaction_model.dart`、`tag_conversion_log.dart`、`tag_rule_model.dart`）
+  - 批量迁移 `DropdownButtonFormField.value` -> `initialValue`
+  - `WillPopScope` -> `PopScope`（`canPop: false` + `onPopInvokedWithResult`）
+  - `withOpacity(...)` -> `withValues(alpha: ...)`
+  - 修正两处恒真判空分支（账户快速创建逻辑）
+  - 增加 async 后 `mounted/context.mounted` 防护，消除 `use_build_context_synchronously`
+
+### 10.2 定向静态检查（Auto）
+- 命令：`flutter analyze --no-fatal-infos lib/feature/auto`
+- 结果：`No issues found!`
+
+### 10.3 PR #8 本地 CI 等效验证（2026-02-12 13:46 CST）
+- 环境：`Flutter 3.35.5` / `Dart 3.9.2`
+- 命令：`flutter analyze --no-fatal-infos lib/feature/tag lib/feature/transactions lib/feature/auto`
+  - 结果：`No issues found!`
+- 命令：`flutter test`
+  - 结果：`All tests passed!`
+
+### 10.4 PR #8 当前结论
+- `tag + transactions + auto` 三个目标模块在 `--no-fatal-infos` 口径下均已清零。
+- 本轮改动未引入测试回归（全量测试通过）。
+- PR #8 可附带本节作为“持续推进 + 验证闭环”证据。

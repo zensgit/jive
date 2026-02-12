@@ -128,7 +128,7 @@ class _AutoRuleTesterScreenState extends State<AutoRuleTesterScreen> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String?>(
-            value: _typeOverride,
+            initialValue: _typeOverride,
             decoration: const InputDecoration(
               labelText: '类型覆盖（可选）',
               border: OutlineInputBorder(),
@@ -182,7 +182,7 @@ class _AutoRuleTesterScreenState extends State<AutoRuleTesterScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
