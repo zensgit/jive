@@ -231,6 +231,9 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
       MaterialPageRoute(
         builder: (context) => CategoryPickerScreen(
           isIncome: _type == 'income',
+          // Recurring rules are meant to use user-managed categories (same as
+          // the Category Manager entry in the debug sheet).
+          onlyUserCategories: true,
           isar: isar,
         ),
       ),
@@ -479,18 +482,23 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                   FormField<_CategoryOption>(
                     validator: (_) {
                       if (_type == 'transfer') return null;
-                      final option = _categoryOptionByKey(_subCategoryKey ?? _categoryKey);
+                      final option = _categoryOptionByKey(
+                        _subCategoryKey ?? _categoryKey,
+                      );
                       if (option == null) return '请选择分类';
                       final shouldBeIncome = _type == 'income';
                       if (option.isIncome != shouldBeIncome) return '分类与类型不一致';
                       return null;
                     },
                     builder: (field) {
-                      final selected = _categoryOptionByKey(_subCategoryKey ?? _categoryKey);
+                      final selected = _categoryOptionByKey(
+                        _subCategoryKey ?? _categoryKey,
+                      );
                       final label = selected?.displayName() ?? '请选择分类';
                       final resolvedColor = selected == null
                           ? null
-                          : (CategoryService.parseColorHex(selected.colorHex) ?? JiveTheme.categoryIconInactive);
+                          : (CategoryService.parseColorHex(selected.colorHex) ??
+                                JiveTheme.categoryIconInactive);
                       final leading = selected == null
                           ? CircleAvatar(
                               radius: 14,
@@ -503,8 +511,9 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                             )
                           : CircleAvatar(
                               radius: 14,
-                              backgroundColor:
-                                  resolvedColor!.withValues(alpha: 0.12),
+                              backgroundColor: resolvedColor!.withValues(
+                                alpha: 0.12,
+                              ),
                               child: CategoryService.buildIcon(
                                 selected.iconName,
                                 size: 18,
@@ -517,7 +526,11 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                         onTap: () async {
                           await _pickCategory();
                           if (!mounted) return;
-                          field.didChange(_categoryOptionByKey(_subCategoryKey ?? _categoryKey));
+                          field.didChange(
+                            _categoryOptionByKey(
+                              _subCategoryKey ?? _categoryKey,
+                            ),
+                          );
                           field.validate();
                         },
                         child: InputDecorator(
@@ -535,11 +548,17 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: selected == null ? Colors.black38 : Colors.black87,
+                                    color: selected == null
+                                        ? Colors.black38
+                                        : Colors.black87,
                                   ),
                                 ),
                               ),
-                              Icon(Icons.chevron_right, color: Colors.grey.shade500, size: 18),
+                              Icon(
+                                Icons.chevron_right,
+                                color: Colors.grey.shade500,
+                                size: 18,
+                              ),
                             ],
                           ),
                         ),
