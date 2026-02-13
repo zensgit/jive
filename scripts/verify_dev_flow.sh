@@ -100,10 +100,34 @@ tap_text_once() {
   return 0
 }
 
+dismiss_auto_permission_dialog_if_present() {
+  local xml="$1"
+  if ! grep -q "自动记账权限未开启" "${xml}"; then
+    return 1
+  fi
+  log "dismiss auto permission dialog (overlay)"
+  if tap_text_once "稍后" "${xml}"; then
+    sleep 1
+    return 0
+  fi
+  if tap_text_once "关闭" "${xml}"; then
+    sleep 1
+    return 0
+  fi
+  if tap_text_once "取消" "${xml}"; then
+    sleep 1
+    return 0
+  fi
+  fail "auto permission dialog present but cannot dismiss"
+}
+
 tap_text() {
   local text="$1"
   local name="$2"
   dump_ui "${name}"
+  if dismiss_auto_permission_dialog_if_present "${OUT_DIR}/${name}.nodes.xml"; then
+    dump_ui "${name}"
+  fi
   if ! tap_text_once "${text}" "${OUT_DIR}/${name}.nodes.xml"; then
     fail "cannot find text '${text}' in ${name}"
   fi
@@ -117,6 +141,9 @@ tap_text_with_scroll() {
   for ((i = 1; i <= max_try; i++)); do
     name="${base}_${i}"
     dump_ui "${name}"
+    if dismiss_auto_permission_dialog_if_present "${OUT_DIR}/${name}.nodes.xml"; then
+      continue
+    fi
     if tap_text_once "${text}" "${OUT_DIR}/${name}.nodes.xml"; then
       return 0
     fi
@@ -134,6 +161,9 @@ tap_text_with_scroll_small() {
   for ((i = 1; i <= max_try; i++)); do
     name="${base}_${i}"
     dump_ui "${name}"
+    if dismiss_auto_permission_dialog_if_present "${OUT_DIR}/${name}.nodes.xml"; then
+      continue
+    fi
     if tap_text_once "${text}" "${OUT_DIR}/${name}.nodes.xml"; then
       return 0
     fi
@@ -289,6 +319,9 @@ wait_for_text() {
   for ((i = 1; i <= max_try; i++)); do
     name="${base}_${i}"
     dump_ui "${name}"
+    if dismiss_auto_permission_dialog_if_present "${OUT_DIR}/${name}.nodes.xml"; then
+      continue
+    fi
     if grep -q "${text}" "${OUT_DIR}/${name}.nodes.xml"; then
       return 0
     fi

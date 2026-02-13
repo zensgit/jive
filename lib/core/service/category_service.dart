@@ -18,9 +18,6 @@ class CategoryService {
   static const String _systemCategorySeedKey = 'system_category_seed_version';
   static const String _noParentOverrideKey = '__no_parent__';
   static const Color _defaultIconColor = Color(0xFF202020);
-  static const double _lumR = 0.2126;
-  static const double _lumG = 0.7152;
-  static const double _lumB = 0.0722;
   static const Set<String> _softIconKeys = {
     '装修__搬家__Renovation__Moving.png',
     '餐饮__请客__Catering__Treat.png',
@@ -45,29 +42,6 @@ class CategoryService {
     0, _contrastFactor, 0, 0, _contrastOffset,
     0, 0, _contrastFactor, 0, _contrastOffset,
     0, 0, 0, 1, 0,
-  ];
-  static const double _mutedSaturation = 0.25;
-  static const List<double> _mutedSaturationMatrix = [
-    _lumR * (1 - _mutedSaturation) + _mutedSaturation,
-    _lumG * (1 - _mutedSaturation),
-    _lumB * (1 - _mutedSaturation),
-    0,
-    0,
-    _lumR * (1 - _mutedSaturation),
-    _lumG * (1 - _mutedSaturation) + _mutedSaturation,
-    _lumB * (1 - _mutedSaturation),
-    0,
-    0,
-    _lumR * (1 - _mutedSaturation),
-    _lumG * (1 - _mutedSaturation),
-    _lumB * (1 - _mutedSaturation) + _mutedSaturation,
-    0,
-    0,
-    0,
-    0,
-    0,
-    1,
-    0,
   ];
   static const double _defaultLiftTarget = 0.40;
   static const double _softLiftTarget = 0.95;
@@ -1519,6 +1493,15 @@ class CategoryService {
     return name;
   }
 
+  static bool _isNeutralGray(Color color) {
+    final r = (color.r * 255.0).round() & 0xff;
+    final g = (color.g * 255.0).round() & 0xff;
+    final b = (color.b * 255.0).round() & 0xff;
+    final maxChannel = r > g ? (r > b ? r : b) : (g > b ? g : b);
+    final minChannel = r < g ? (r < b ? r : b) : (g < b ? g : b);
+    return (maxChannel - minChannel) <= 4;
+  }
+
   static Color _resolveIconTone(String name, Color base) {
     if (!_isNeutralGray(base)) return base;
     final key = _assetIconKey(name);
@@ -1560,29 +1543,6 @@ class CategoryService {
         ),
       ),
     );
-  }
-
-  static Widget _applyColoredMuteIfNeeded(Widget child, {required Color? explicitColor}) {
-    if (explicitColor == null) return child;
-    if (!_isNeutralGray(explicitColor)) return child;
-    // White is usually used as an active/icon-foreground color. Do not mute.
-    if (explicitColor.computeLuminance() >= 0.85) return child;
-    return Opacity(
-      opacity: 0.68,
-      child: ColorFiltered(
-        colorFilter: const ColorFilter.matrix(_mutedSaturationMatrix),
-        child: child,
-      ),
-    );
-  }
-
-  static bool _isNeutralGray(Color color) {
-    final r = (color.r * 255.0).round() & 0xff;
-    final g = (color.g * 255.0).round() & 0xff;
-    final b = (color.b * 255.0).round() & 0xff;
-    final maxChannel = r > g ? (r > b ? r : b) : (g > b ? g : b);
-    final minChannel = r < g ? (r < b ? r : b) : (g < b ? g : b);
-    return (maxChannel - minChannel) <= 4;
   }
 
   static Color _liftGray(Color color, {double targetLuminance = _defaultLiftTarget}) {
@@ -1710,7 +1670,8 @@ class CategoryService {
           fit: BoxFit.contain,
         );
         if (!shouldTint) {
-          return _applyColoredMuteIfNeeded(svg, explicitColor: color);
+          // In colored mode, keep original icon colors.
+          return svg;
         }
         return _applyDetailPreservingTint(
           svg,
@@ -1730,7 +1691,8 @@ class CategoryService {
             (_, __, ___) => Icon(Icons.category, size: size, color: tonedColor),
       );
       if (!shouldTint) {
-        return _applyColoredMuteIfNeeded(image, explicitColor: color);
+        // In colored mode, keep original icon colors.
+        return image;
       }
       return _applyDetailPreservingTint(
         image,
