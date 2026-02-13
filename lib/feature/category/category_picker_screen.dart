@@ -281,7 +281,7 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
         final parentColor =
             CategoryService.parseColorHex(parent.colorHex) ??
             JiveTheme.categoryIconInactive;
-        final baseAvatar = CircleAvatar(
+        final leading = CircleAvatar(
           backgroundColor: parentColor.withValues(alpha: 0.12),
           child: CategoryService.buildIcon(
             parent.iconName,
@@ -291,42 +291,15 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
             forceTinted: parent.iconForceTinted,
           ),
         );
-        final avatar = canExpand
-            ? Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  baseAvatar,
-                  Positioned(
-                    right: -2,
-                    bottom: -2,
-                    child: Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                      child: Icon(
-                        isExpanded ? Icons.expand_less : Icons.expand_more,
-                        size: 14,
-                        color: Colors.black54,
-                      ),
-                    ),
-                  ),
-                ],
-              )
-            : baseAvatar;
-        final parentLeading = Semantics(
-          button: canExpand,
-          label: children.isEmpty
-              ? parent.name
-              : (isExpanded ? '收起 ${parent.name}' : '展开 ${parent.name}'),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(18),
-            onTap: !canExpand
-                ? null
-                : () {
+        final expandToggle = canExpand
+            ? Semantics(
+                button: true,
+                label: isExpanded ? '收起 ${parent.name}' : '展开 ${parent.name}',
+                child: IconButton(
+                  tooltip: isExpanded ? '收起' : '展开',
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 20,
+                  onPressed: () {
                     setState(() {
                       if (isExpanded) {
                         _expandedParents.remove(parent.key);
@@ -335,31 +308,46 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
                       }
                     });
                   },
-            child: avatar,
-          ),
-        );
+                  icon: AnimatedRotation(
+                    duration: const Duration(milliseconds: 160),
+                    turns: isExpanded ? 0.25 : 0,
+                    child: const Icon(
+                      Icons.chevron_right,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ),
+              )
+            : null;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             ListTile(
-              leading: parentLeading,
+              leading: leading,
               title: Text(parent.name),
               subtitle: children.isEmpty
                   ? const Text('一级分类')
-                  : Text('点图标展开 · ${children.length} 个子类'),
-              trailing: const Icon(Icons.chevron_right, color: Colors.black38),
+                  : Text('${children.length} 个子类'),
+              trailing: expandToggle,
               onTap: () =>
                   Navigator.pop(context, CategorySearchResult(parent: parent)),
             ),
             if (children.isNotEmpty && isExpanded)
               Padding(
-                padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
-                child: Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: children
-                      .map((child) => _buildChildItem(parent, child))
-                      .toList(),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 5,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 0.9,
+                  ),
+                  itemCount: children.length,
+                  itemBuilder: (context, childIndex) =>
+                      _buildChildItem(parent, children[childIndex]),
                 ),
               ),
           ],
@@ -372,40 +360,37 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
     final childColor =
         CategoryService.parseColorHex(child.colorHex) ??
         JiveTheme.categoryIconInactive;
-    return SizedBox(
-      width: 74,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => Navigator.pop(
-          context,
-          CategorySearchResult(parent: parent, sub: child),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: childColor.withValues(alpha: 0.12),
-                child: CategoryService.buildIcon(
-                  child.iconName,
-                  size: 18,
-                  color: childColor,
-                  isSystemCategory: child.isSystem,
-                  forceTinted: child.iconForceTinted,
-                ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => Navigator.pop(
+        context,
+        CategorySearchResult(parent: parent, sub: child),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: childColor.withValues(alpha: 0.12),
+              child: CategoryService.buildIcon(
+                child.iconName,
+                size: 18,
+                color: childColor,
+                isSystemCategory: child.isSystem,
+                forceTinted: child.iconForceTinted,
               ),
-              const SizedBox(height: 4),
-              Text(
-                child.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 12),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              child.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 11),
+            ),
+          ],
         ),
       ),
     );
