@@ -136,12 +136,12 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
                 },
               ),
             ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: _currencyService == null || _budgetService == null
             ? null
             : _createBudget,
-        icon: const Icon(Icons.add),
-        label: const Text('创建预算'),
+        tooltip: '创建预算',
+        child: const Icon(Icons.add),
       ),
     );
   }
