@@ -141,7 +141,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
             ? null
             : _createBudget,
         icon: const Icon(Icons.add),
-        label: const Text('新建预算'),
+        label: const Text('创建预算'),
       ),
     );
   }
@@ -557,7 +557,7 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
                   const Icon(Icons.pie_chart, color: JiveTheme.primaryGreen),
                   const SizedBox(width: 8),
                   Text(
-                    '新建预算',
+                    '创建预算',
                     style: GoogleFonts.lato(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
