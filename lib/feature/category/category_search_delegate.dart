@@ -101,6 +101,8 @@ class CategorySearchDelegate extends SearchDelegate<CategorySearchResult?> {
               iconName,
               size: 18,
               color: iconColor ?? JiveTheme.categoryIconInactive,
+              isSystemCategory: item.sub?.isSystem ?? item.parent.isSystem,
+              forceTinted: item.sub?.iconForceTinted ?? item.parent.iconForceTinted,
             ),
           ),
           title: Text(item.primaryName),

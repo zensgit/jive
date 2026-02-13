@@ -238,6 +238,7 @@ class JiveDataBackupService {
         'name': category.name,
         'iconName': category.iconName,
         'colorHex': category.colorHex,
+        'iconForceTinted': category.iconForceTinted,
         'parentKey': category.parentKey,
         'sourceTagKey': category.sourceTagKey,
         'order': category.order,
@@ -254,6 +255,7 @@ class JiveDataBackupService {
       ..name = map['name']?.toString() ?? ''
       ..iconName = map['iconName']?.toString() ?? ''
       ..colorHex = map['colorHex']?.toString()
+      ..iconForceTinted = map['iconForceTinted'] == true
       ..parentKey = map['parentKey']?.toString()
       ..sourceTagKey = map['sourceTagKey']?.toString()
       ..order = _parseInt(map['order']) ?? 0

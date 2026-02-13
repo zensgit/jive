@@ -22,53 +22,58 @@ const JiveCategorySchema = CollectionSchema(
       name: r'colorHex',
       type: IsarType.string,
     ),
-    r'iconName': PropertySchema(
+    r'iconForceTinted': PropertySchema(
       id: 1,
+      name: r'iconForceTinted',
+      type: IsarType.bool,
+    ),
+    r'iconName': PropertySchema(
+      id: 2,
       name: r'iconName',
       type: IsarType.string,
     ),
     r'isHidden': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'isHidden',
       type: IsarType.bool,
     ),
     r'isIncome': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'isIncome',
       type: IsarType.bool,
     ),
     r'isSystem': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'isSystem',
       type: IsarType.bool,
     ),
     r'key': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'key',
       type: IsarType.string,
     ),
     r'name': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'name',
       type: IsarType.string,
     ),
     r'order': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'order',
       type: IsarType.long,
     ),
     r'parentKey': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'parentKey',
       type: IsarType.string,
     ),
     r'sourceTagKey': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'sourceTagKey',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -164,16 +169,17 @@ void _jiveCategorySerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeString(offsets[0], object.colorHex);
-  writer.writeString(offsets[1], object.iconName);
-  writer.writeBool(offsets[2], object.isHidden);
-  writer.writeBool(offsets[3], object.isIncome);
-  writer.writeBool(offsets[4], object.isSystem);
-  writer.writeString(offsets[5], object.key);
-  writer.writeString(offsets[6], object.name);
-  writer.writeLong(offsets[7], object.order);
-  writer.writeString(offsets[8], object.parentKey);
-  writer.writeString(offsets[9], object.sourceTagKey);
-  writer.writeDateTime(offsets[10], object.updatedAt);
+  writer.writeBool(offsets[1], object.iconForceTinted);
+  writer.writeString(offsets[2], object.iconName);
+  writer.writeBool(offsets[3], object.isHidden);
+  writer.writeBool(offsets[4], object.isIncome);
+  writer.writeBool(offsets[5], object.isSystem);
+  writer.writeString(offsets[6], object.key);
+  writer.writeString(offsets[7], object.name);
+  writer.writeLong(offsets[8], object.order);
+  writer.writeString(offsets[9], object.parentKey);
+  writer.writeString(offsets[10], object.sourceTagKey);
+  writer.writeDateTime(offsets[11], object.updatedAt);
 }
 
 JiveCategory _jiveCategoryDeserialize(
@@ -184,17 +190,18 @@ JiveCategory _jiveCategoryDeserialize(
 ) {
   final object = JiveCategory();
   object.colorHex = reader.readStringOrNull(offsets[0]);
-  object.iconName = reader.readString(offsets[1]);
+  object.iconForceTinted = reader.readBool(offsets[1]);
+  object.iconName = reader.readString(offsets[2]);
   object.id = id;
-  object.isHidden = reader.readBool(offsets[2]);
-  object.isIncome = reader.readBool(offsets[3]);
-  object.isSystem = reader.readBool(offsets[4]);
-  object.key = reader.readString(offsets[5]);
-  object.name = reader.readString(offsets[6]);
-  object.order = reader.readLong(offsets[7]);
-  object.parentKey = reader.readStringOrNull(offsets[8]);
-  object.sourceTagKey = reader.readStringOrNull(offsets[9]);
-  object.updatedAt = reader.readDateTime(offsets[10]);
+  object.isHidden = reader.readBool(offsets[3]);
+  object.isIncome = reader.readBool(offsets[4]);
+  object.isSystem = reader.readBool(offsets[5]);
+  object.key = reader.readString(offsets[6]);
+  object.name = reader.readString(offsets[7]);
+  object.order = reader.readLong(offsets[8]);
+  object.parentKey = reader.readStringOrNull(offsets[9]);
+  object.sourceTagKey = reader.readStringOrNull(offsets[10]);
+  object.updatedAt = reader.readDateTime(offsets[11]);
   return object;
 }
 
@@ -208,24 +215,26 @@ P _jiveCategoryDeserializeProp<P>(
     case 0:
       return (reader.readStringOrNull(offset)) as P;
     case 1:
-      return (reader.readString(offset)) as P;
-    case 2:
       return (reader.readBool(offset)) as P;
+    case 2:
+      return (reader.readString(offset)) as P;
     case 3:
       return (reader.readBool(offset)) as P;
     case 4:
       return (reader.readBool(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 6:
       return (reader.readString(offset)) as P;
     case 7:
-      return (reader.readLong(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 8:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 9:
       return (reader.readStringOrNull(offset)) as P;
     case 10:
+      return (reader.readStringOrNull(offset)) as P;
+    case 11:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -710,6 +719,16 @@ extension JiveCategoryQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'colorHex',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterFilterCondition>
+      iconForceTintedEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'iconForceTinted',
+        value: value,
       ));
     });
   }
@@ -1638,6 +1657,20 @@ extension JiveCategoryQuerySortBy
     });
   }
 
+  QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy>
+      sortByIconForceTinted() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'iconForceTinted', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy>
+      sortByIconForceTintedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'iconForceTinted', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy> sortByIconName() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'iconName', Sort.asc);
@@ -1771,6 +1804,20 @@ extension JiveCategoryQuerySortThenBy
   QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy> thenByColorHexDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'colorHex', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy>
+      thenByIconForceTinted() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'iconForceTinted', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveCategory, JiveCategory, QAfterSortBy>
+      thenByIconForceTintedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'iconForceTinted', Sort.desc);
     });
   }
 
@@ -1917,6 +1964,13 @@ extension JiveCategoryQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveCategory, JiveCategory, QDistinct>
+      distinctByIconForceTinted() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'iconForceTinted');
+    });
+  }
+
   QueryBuilder<JiveCategory, JiveCategory, QDistinct> distinctByIconName(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1994,6 +2048,12 @@ extension JiveCategoryQueryProperty
   QueryBuilder<JiveCategory, String?, QQueryOperations> colorHexProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'colorHex');
+    });
+  }
+
+  QueryBuilder<JiveCategory, bool, QQueryOperations> iconForceTintedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'iconForceTinted');
     });
   }
 

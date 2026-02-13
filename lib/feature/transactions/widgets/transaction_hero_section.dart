@@ -91,6 +91,8 @@ class TransactionHeroSection extends StatelessWidget {
                 iconName,
                 size: 36,
                 color: categoryColor,
+                isSystemCategory: category?.isSystem,
+                forceTinted: category?.iconForceTinted ?? false,
               )
             : _buildFallbackIcon(type),
       ),

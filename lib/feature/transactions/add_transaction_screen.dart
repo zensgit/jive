@@ -716,13 +716,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           existingNames: existingNames,
           initialGroupName: parent.name,
           autoBatchAdd: true,
-          onBatchAdd: (suggestion, colorHex) async {
+          onBatchAdd: (suggestion, colorHex, iconForceTinted) async {
             final created = await CategoryService(_isar).createSubCategory(
               parent: parent,
               name: suggestion.name,
               iconName: suggestion.iconName,
               colorHex: colorHex,
               isSystem: true,
+              iconForceTinted: iconForceTinted,
             );
             return created != null;
           },
@@ -747,6 +748,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           iconName: item.iconName,
           colorHex: result.colorHex,
           isSystem: true,
+          iconForceTinted: result.iconForceTinted,
         );
         if (created == null) {
           skipped.add(item.name);
@@ -766,6 +768,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           name: name,
           iconName: iconName,
           colorHex: result.colorHex,
+          iconForceTinted: result.iconForceTinted,
         );
         if (created == null) {
           skipped.add(name);
@@ -1312,6 +1315,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                         cat.iconName,
                                         size: isLandscape ? 16 : 18,
                                         color: iconColor,
+                                        isSystemCategory: cat.isSystem,
+                                        forceTinted: cat.iconForceTinted,
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
@@ -2209,7 +2214,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         final customColor = CategoryService.parseColorHex(cat.colorHex);
         final activeColor = customColor ?? JiveTheme.primaryGreen;
         final inactiveColor = JiveTheme.categoryIconInactive;
-        final coloredIcons = CategoryIconStyleConfig.current == CategoryIconStyle.colored;
+        final isCategoryAssetIcon =
+            (cat.iconName.endsWith(".png") || cat.iconName.endsWith(".svg")) &&
+            (!cat.iconName.startsWith("assets/") ||
+                cat.iconName.startsWith("assets/category_icons/"));
+        final shouldTintIcon = isCategoryAssetIcon
+            ? (cat.iconForceTinted ||
+                CategoryIconStyleConfig.current.shouldTintForCategory(
+                  isSystemCategory: cat.isSystem,
+                ))
+            : true;
+        final coloredIcons = !shouldTintIcon;
         return GestureDetector(
           onTap: () => setState(() => _selectedSub = cat),
           onLongPress: () => _showSubCategoryActions(cat),
@@ -2236,7 +2251,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 child: CategoryService.buildIcon(
                   cat.iconName,
                   size: 18,
-                  color: coloredIcons ? null : (isSelected ? Colors.white : inactiveColor),
+                  color: coloredIcons
+                      ? (isSelected ? null : inactiveColor)
+                      : (isSelected ? Colors.white : inactiveColor),
+                  isSystemCategory: cat.isSystem,
+                  forceTinted: cat.iconForceTinted,
                 ),
               ),
               const SizedBox(height: 3),
@@ -2300,6 +2319,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               suggestion.iconName,
               size: 18,
               color: JiveTheme.categoryIconInactive,
+              isSystemCategory: true,
             ),
           ),
           title: Text(title, style: TextStyle(color: Colors.grey.shade700)),

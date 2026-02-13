@@ -34,11 +34,15 @@ enum CategoryIconPickerMode { category, emoji }
 class CategoryIconPickerScreen extends StatefulWidget {
   final String initialIcon;
   final CategoryIconPickerMode? initialMode;
+  final bool? forSystemCategory;
+  final bool forceTinted;
 
   const CategoryIconPickerScreen({
     super.key,
     required this.initialIcon,
     this.initialMode,
+    this.forSystemCategory,
+    this.forceTinted = false,
   });
 
   @override
@@ -220,6 +224,8 @@ class _CategoryIconPickerScreenState extends State<CategoryIconPickerScreen> {
                   entry.iconName,
                   size: 22,
                   color: isSelected ? highlightColor : Colors.grey.shade700,
+                  isSystemCategory: widget.forSystemCategory,
+                  forceTinted: widget.forceTinted,
                 ),
                 const SizedBox(height: 4),
                 Padding(

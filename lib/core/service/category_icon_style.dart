@@ -4,15 +4,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum CategoryIconStyle {
   colored,
   tinted,
+  /// Hybrid mode:
+  /// - system categories: tinted (follow category color)
+  /// - user categories: keep original colored assets
+  hybrid,
 }
 
 extension CategoryIconStyleLabel on CategoryIconStyle {
   String get label {
     switch (this) {
       case CategoryIconStyle.colored:
-        return '彩色';
+        return '彩色（默认）';
       case CategoryIconStyle.tinted:
-        return '单色 (跟随分类颜色)';
+        return '单色（全部跟随分类颜色）';
+      case CategoryIconStyle.hybrid:
+        return '混合（系统单色/自定义彩色）';
     }
   }
 
@@ -22,6 +28,25 @@ extension CategoryIconStyleLabel on CategoryIconStyle {
         return 'colored';
       case CategoryIconStyle.tinted:
         return 'tinted';
+      case CategoryIconStyle.hybrid:
+        return 'hybrid';
+    }
+  }
+}
+
+extension CategoryIconStyleBehavior on CategoryIconStyle {
+  /// Whether `assets/category_icons/*` should be tinted for a given category.
+  ///
+  /// If [isSystemCategory] is unknown, we default to `false` in hybrid mode to
+  /// avoid unexpectedly turning unrelated icons monochrome.
+  bool shouldTintForCategory({required bool? isSystemCategory}) {
+    switch (this) {
+      case CategoryIconStyle.colored:
+        return false;
+      case CategoryIconStyle.tinted:
+        return true;
+      case CategoryIconStyle.hybrid:
+        return isSystemCategory == true;
     }
   }
 }
@@ -41,6 +66,8 @@ class CategoryIconStyleStore {
         return CategoryIconStyle.tinted;
       case 'colored':
         return CategoryIconStyle.colored;
+      case 'hybrid':
+        return CategoryIconStyle.hybrid;
       default:
         return fallback;
     }
@@ -64,4 +91,3 @@ class CategoryIconStyleConfig {
     notifier.value = value;
   }
 }
-

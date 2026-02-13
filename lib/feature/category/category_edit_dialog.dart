@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/service/category_icon_style.dart';
 import '../../core/service/category_service.dart';
 import '../../core/design_system/theme.dart';
 import '../stats/stats_screen.dart';
@@ -25,6 +26,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   String? _selectedColorHex;
   String? _selectedParentKey;
   late bool _isHidden;
+  late bool _iconForceTinted;
   bool _isSaving = false;
   List<JiveCategory> _parents = [];
 
@@ -36,6 +38,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     _selectedColorHex = widget.category.colorHex;
     _selectedParentKey = widget.category.parentKey;
     _isHidden = widget.category.isHidden;
+    _iconForceTinted = widget.category.iconForceTinted;
     _loadParents();
   }
 
@@ -81,6 +84,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                           _selectedIcon,
                           size: 28,
                           color: highlightColor,
+                          isSystemCategory: widget.category.isSystem,
+                          forceTinted: _iconForceTinted,
                         ),
                       ),
                     ),
@@ -99,6 +104,15 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                 ),
                 const SizedBox(height: 12),
                 _buildColorPicker(),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _iconForceTinted,
+                  title: const Text("图标强制单色"),
+                  subtitle: const Text("即使在彩色模式下也显示为单色（跟随分类颜色）"),
+                  onChanged: (value) => setState(() => _iconForceTinted = value),
+                ),
+                _buildForceTintedPreview(),
                 const SizedBox(height: 12),
                 _buildParentSelector(),
               ],
@@ -134,6 +148,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     final iconColor = hasParent
         ? (CategoryService.parseColorHex(selectedParent.colorHex) ?? Colors.grey.shade600)
         : Colors.grey.shade500;
+    final iconIsSystem = hasParent ? selectedParent.isSystem : null;
+    final iconForceTinted = hasParent ? selectedParent.iconForceTinted : false;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -146,7 +162,13 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         ),
         child: Row(
           children: [
-            CategoryService.buildIcon(iconName, size: 16, color: iconColor),
+            CategoryService.buildIcon(
+              iconName,
+              size: 16,
+              color: iconColor,
+              isSystemCategory: iconIsSystem,
+              forceTinted: iconForceTinted,
+            ),
             const SizedBox(width: 8),
             Expanded(child: Text(label)),
             Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade500),
@@ -200,6 +222,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                             iconColor: CategoryService.parseColorHex(parent.colorHex) ?? Colors.grey.shade600,
                             isSelected: isSelected,
                             onTap: () => setStateDialog(() => tempKey = parent.key),
+                            isSystemCategory: parent.isSystem,
+                            forceTinted: parent.iconForceTinted,
                           );
                         },
                       ),
@@ -239,6 +263,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     required bool isSelected,
     required VoidCallback onTap,
     Color? iconColor,
+    bool? isSystemCategory,
+    bool forceTinted = false,
   }) {
     final color = iconColor ?? Colors.grey.shade600;
     return InkWell(
@@ -255,7 +281,13 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CategoryService.buildIcon(iconName, size: 20, color: isSelected ? JiveTheme.primaryGreen : color),
+            CategoryService.buildIcon(
+              iconName,
+              size: 20,
+              color: isSelected ? JiveTheme.primaryGreen : color,
+              isSystemCategory: isSystemCategory,
+              forceTinted: forceTinted,
+            ),
             const SizedBox(height: 6),
             Text(
               label,
@@ -335,7 +367,12 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   }
 
   Future<void> _showIconPicker() async {
-    final selected = await pickCategoryIcon(context, initialIcon: _selectedIcon);
+    final selected = await pickCategoryIcon(
+      context,
+      initialIcon: _selectedIcon,
+      forSystemCategory: widget.category.isSystem,
+      forceTinted: _iconForceTinted,
+    );
     if (selected != null) {
       setState(() => _selectedIcon = selected);
     }
@@ -352,6 +389,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       _selectedIcon,
       _selectedParentKey,
       _selectedColorHex,
+      iconForceTinted: _iconForceTinted,
     );
     if (!mounted) return;
     Navigator.pop(context, true);
@@ -458,7 +496,9 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
 
     final Map<String, List<JiveCategory>> childrenByParent = {};
     for (final cat in all) {
-      if (cat.parentKey == null || cat.isIncome != widget.category.isIncome) continue;
+      if (cat.parentKey == null || cat.isIncome != widget.category.isIncome) {
+        continue;
+      }
       childrenByParent.putIfAbsent(cat.parentKey!, () => []).add(cat);
     }
     for (final list in childrenByParent.values) {
@@ -522,6 +562,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         child?.iconName ?? parent.iconName,
         size: 18,
         color: Colors.grey.shade700,
+        isSystemCategory: child?.isSystem ?? parent.isSystem,
+        forceTinted: child?.iconForceTinted ?? parent.iconForceTinted,
       ),
       title: Text(title, style: const TextStyle(fontSize: 14)),
       subtitle: child == null ? null : Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
@@ -538,6 +580,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       _selectedIcon,
       null,
       _selectedColorHex,
+      iconForceTinted: _iconForceTinted,
     );
     if (mounted) Navigator.pop(context, true);
   }
@@ -669,6 +712,126 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildForceTintedPreview() {
+    final highlightColor = _resolveSelectedColor() ?? JiveTheme.primaryGreen;
+    final globalStyleLabel = CategoryIconStyleConfig.current.label;
+    return Semantics(
+      container: true,
+      label: "效果预览",
+      child: Container(
+        margin: const EdgeInsets.only(top: 2),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "效果预览（当前全局：$globalStyleLabel）",
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildForceTintedPreviewTile(
+                    title: "跟随全局",
+                    subtitle: "保持当前风格",
+                    active: !_iconForceTinted,
+                    forceTinted: false,
+                    color: highlightColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildForceTintedPreviewTile(
+                    title: "强制单色",
+                    subtitle: "始终跟随分类色",
+                    active: _iconForceTinted,
+                    forceTinted: true,
+                    color: highlightColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildForceTintedPreviewTile({
+    required String title,
+    required String subtitle,
+    required bool active,
+    required bool forceTinted,
+    required Color color,
+  }) {
+    final borderColor = active ? JiveTheme.primaryGreen.withValues(alpha: 0.45) : Colors.grey.shade300;
+    final backgroundColor = active ? JiveTheme.primaryGreen.withValues(alpha: 0.08) : Colors.white;
+    return Semantics(
+      container: true,
+      label: title,
+      selected: active,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: CategoryService.buildIcon(
+                  _selectedIcon,
+                  size: 14,
+                  color: color,
+                  isSystemCategory: widget.category.isSystem,
+                  forceTinted: forceTinted,
+                ),
+              ),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: active ? JiveTheme.primaryGreen : Colors.grey.shade700,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

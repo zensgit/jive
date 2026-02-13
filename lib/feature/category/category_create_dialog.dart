@@ -20,6 +20,7 @@ class CategoryCreateResult {
   final List<String> names;
   final String iconName;
   final String? colorHex;
+  final bool iconForceTinted;
   final bool autoMatchIcon;
   final List<SystemCategorySuggestion> systemSelections;
   final bool hasChanges;
@@ -28,6 +29,7 @@ class CategoryCreateResult {
     required this.names,
     required this.iconName,
     this.colorHex,
+    this.iconForceTinted = false,
     this.autoMatchIcon = false,
     this.systemSelections = const [],
     this.hasChanges = false,
