@@ -8,6 +8,7 @@ import '../../core/database/recurring_rule_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/recurring_service.dart';
 import '../../core/service/tag_service.dart';
@@ -111,6 +112,16 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
     });
   }
 
+  Future<void> _reloadCategories() async {
+    final isar = await _ensureIsar();
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    final options = _buildCategoryOptions(categories);
+    if (!mounted) return;
+    setState(() {
+      _categories = options;
+    });
+  }
+
   Future<Isar> _ensureIsar() async {
     if (_isar != null) return _isar!;
     _isar = await DatabaseService.getInstance();
@@ -131,6 +142,10 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
           key: parent.key,
           name: parent.name,
           isIncome: parent.isIncome,
+          iconName: parent.iconName,
+          colorHex: parent.colorHex,
+          isSystem: parent.isSystem,
+          iconForceTinted: parent.iconForceTinted,
         ),
       );
       for (final child in children.where((c) => c.parentKey == parent.key)) {
@@ -139,6 +154,10 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
             key: child.key,
             name: child.name,
             isIncome: child.isIncome,
+            iconName: child.iconName,
+            colorHex: child.colorHex,
+            isSystem: child.isSystem,
+            iconForceTinted: child.iconForceTinted,
             parentKey: parent.key,
             parentName: parent.name,
           ),
@@ -221,6 +240,7 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
       _categoryKey = picked.parent.key;
       _subCategoryKey = picked.sub?.key;
     });
+    await _reloadCategories();
   }
 
   Future<void> _save() async {
@@ -468,6 +488,31 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                     builder: (field) {
                       final selected = _categoryOptionByKey(_subCategoryKey ?? _categoryKey);
                       final label = selected?.displayName() ?? '请选择分类';
+                      final resolvedColor = selected == null
+                          ? null
+                          : (CategoryService.parseColorHex(selected.colorHex) ?? JiveTheme.categoryIconInactive);
+                      final leading = selected == null
+                          ? CircleAvatar(
+                              radius: 14,
+                              backgroundColor: Colors.grey.shade100,
+                              child: Icon(
+                                Icons.category_outlined,
+                                size: 18,
+                                color: Colors.grey.shade500,
+                              ),
+                            )
+                          : CircleAvatar(
+                              radius: 14,
+                              backgroundColor:
+                                  resolvedColor!.withValues(alpha: 0.12),
+                              child: CategoryService.buildIcon(
+                                selected.iconName,
+                                size: 18,
+                                color: resolvedColor,
+                                isSystemCategory: selected.isSystem,
+                                forceTinted: selected.iconForceTinted,
+                              ),
+                            );
                       return InkWell(
                         onTap: () async {
                           await _pickCategory();
@@ -482,9 +527,13 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                           ),
                           child: Row(
                             children: [
+                              leading,
+                              const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
                                   label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: selected == null ? Colors.black38 : Colors.black87,
                                   ),
@@ -659,6 +708,10 @@ class _CategoryOption {
   final String key;
   final String name;
   final bool isIncome;
+  final String iconName;
+  final String? colorHex;
+  final bool isSystem;
+  final bool iconForceTinted;
   final String? parentKey;
   final String? parentName;
 
@@ -666,6 +719,10 @@ class _CategoryOption {
     required this.key,
     required this.name,
     required this.isIncome,
+    required this.iconName,
+    required this.colorHex,
+    required this.isSystem,
+    required this.iconForceTinted,
     this.parentKey,
     this.parentName,
   });
