@@ -26,11 +26,13 @@ class _UserCategorySeed {
 class CategoryManagerScreen extends StatefulWidget {
   final Isar? isar;
   final bool onlyUserCategories;
+  final bool initialShowIncome;
 
   const CategoryManagerScreen({
     super.key,
     this.isar,
     this.onlyUserCategories = false,
+    this.initialShowIncome = false,
   });
 
   @override
@@ -72,6 +74,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   @override
   void initState() {
     super.initState();
+    _showIncome = widget.initialShowIncome;
     _initData();
   }
 
