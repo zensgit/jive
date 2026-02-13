@@ -41,6 +41,20 @@
 7. 真机脚本验证：`scripts/verify_dev_flow.sh`
 8. 输出文档（本文件 + 两份过程记录）
 
+## 本轮补充（2026-02-13，交互增强）
+
+在不改变“默认彩色、可按分类强制单色”逻辑的前提下，补了两项可见性增强：
+
+1. 创建/编辑分类页新增“图标强制单色”效果预览  
+   - 位置：`图标强制单色` 开关下方
+   - 内容：并排展示 `跟随全局` 与 `强制单色` 两种图标效果
+   - 会显示当前全局风格文案（彩色/单色/混合），降低理解成本
+
+2. 分类管理列表新增“单色”状态标记  
+   - 一级分类行：名称右侧展示 `单色` 徽标（当 `iconForceTinted == true`）
+   - 二级分类 chip：右上角展示紧凑 `单色` 徽标
+   - 目的：不用点进编辑页，也能快速识别哪些分类启用了强制单色
+
 ## 实现要点（关键改动点）
 
 ### 1) 数据库字段（Isar）
@@ -84,6 +98,10 @@
 - 创建分类：`lib/feature/category/category_create_screen.dart`
   - 新增开关：`图标强制单色`
   - 创建时直接写入 `iconForceTinted`，避免创建后再编辑
+  - 开关下新增“效果预览”，直观看到开/关差异
+
+- 编辑分类：`lib/feature/category/category_edit_dialog.dart`
+  - 开关下新增“效果预览”，与创建页保持一致
 
 ### 5) 关键页面透传（保证一致性）
 
@@ -100,6 +118,12 @@
 - `lib/feature/category/category_search_delegate.dart`
 - `lib/feature/category/category_transactions_screen.dart`
 - `lib/feature/category/category_edit_dialog.dart`
+
+并补充状态可视化：
+
+- `lib/feature/category/category_manager_screen.dart`
+  - 一级分类行：`单色` 徽标
+  - 二级分类 chip：右上角紧凑 `单色` 徽标
 
 ## 验证结果
 
@@ -126,6 +150,10 @@ bash scripts/verify_dev_flow.sh com.jivemoney.app.dev
 最新一次验证通过（PASS），产物目录：
 
 - `/tmp/jive-verify-20260213-015925`
+
+本轮交互增强后的最新一次验证同样通过（PASS），产物目录：
+
+- `/tmp/jive-verify-20260213-102600`
 
 ### 3) 备份/恢复兼容
 

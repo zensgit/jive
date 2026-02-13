@@ -521,6 +521,26 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     );
   }
 
+  Widget _buildForceTintedBadge({bool compact = false}) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 7, vertical: compact ? 1.5 : 2),
+      decoration: BoxDecoration(
+        color: JiveTheme.primaryGreen.withValues(alpha: compact ? 0.16 : 0.14),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        "单色",
+        style: TextStyle(
+          fontSize: compact ? 8 : 10,
+          color: JiveTheme.primaryGreen,
+          fontWeight: FontWeight.w700,
+          height: 1.1,
+        ),
+      ),
+    );
+  }
+
   Future<void> _editCategory(JiveCategory category) async {
     final updated = await Navigator.push(
       context,
@@ -2061,20 +2081,24 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                     Expanded(
                       child: Row(
                         children: [
-                      Flexible(
-                        child: _buildHighlightedText(
-                          parent.name,
-                          const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          highlightQuery,
-                          maxLines: 1,
-                        ),
+                          Flexible(
+                            child: _buildHighlightedText(
+                              parent.name,
+                              const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              highlightQuery,
+                              maxLines: 1,
+                            ),
+                          ),
+                          if (parent.iconForceTinted) ...[
+                            const SizedBox(width: 6),
+                            _buildForceTintedBadge(),
+                          ],
+                          if (parent.isHidden) ...[
+                            const SizedBox(width: 6),
+                            _buildHiddenBadge(),
+                          ],
+                        ],
                       ),
-                      if (parent.isHidden) ...[
-                        const SizedBox(width: 6),
-                        _buildHiddenBadge(),
-                      ],
-                    ],
-                  ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.more_horiz),
@@ -2249,7 +2273,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         ? Colors.grey.shade400
         : _resolveCategoryColor(sub, fallback: Colors.grey.shade700);
     final labelColor = isHidden ? Colors.grey.shade400 : Colors.grey.shade600;
-    final tile = Opacity(
+    return Opacity(
       opacity: isHidden ? 0.6 : 1,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 2),
@@ -2259,29 +2283,39 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
               ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35))
               : Border.all(color: Colors.transparent),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
           children: [
-            CategoryService.buildIcon(
-              sub.iconName,
-              size: 26,
-              color: iconColor,
-              isSystemCategory: sub.isSystem,
-              forceTinted: sub.iconForceTinted,
+            Positioned.fill(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CategoryService.buildIcon(
+                    sub.iconName,
+                    size: 26,
+                    color: iconColor,
+                    isSystemCategory: sub.isSystem,
+                    forceTinted: sub.iconForceTinted,
+                  ),
+                  const SizedBox(height: 4),
+                  _buildHighlightedText(
+                    sub.name,
+                    TextStyle(fontSize: 10, height: 1.0, color: labelColor, fontWeight: FontWeight.w500),
+                    highlightQuery,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 4),
-            _buildHighlightedText(
-              sub.name,
-              TextStyle(fontSize: 10, height: 1.0, color: labelColor, fontWeight: FontWeight.w500),
-              highlightQuery,
-              maxLines: 1,
-            ),
+            if (sub.iconForceTinted)
+              Positioned(
+                top: 1,
+                right: 1,
+                child: _buildForceTintedBadge(compact: true),
+              ),
           ],
         ),
       ),
     );
-
-    return tile;
   }
 
   Widget _buildAddSubChip(JiveCategory parent) {
