@@ -11,6 +11,8 @@ import '../../core/service/account_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/recurring_service.dart';
 import '../../core/service/tag_service.dart';
+import '../category/category_picker_screen.dart';
+import '../category/category_search_delegate.dart';
 import '../tag/tag_picker_sheet.dart';
 
 class RecurringRuleSaveResult {
@@ -196,6 +198,29 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
     );
     if (date == null) return;
     setState(() => _endDate = date);
+  }
+
+  Future<void> _pickCategory() async {
+    if (_type == 'transfer') return;
+    if (_categories.isEmpty) {
+      await _loadData();
+    }
+    final isar = await _ensureIsar();
+    if (!mounted) return;
+    final picked = await Navigator.push<CategorySearchResult>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryPickerScreen(
+          isIncome: _type == 'income',
+          isar: isar,
+        ),
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      _categoryKey = picked.parent.key;
+      _subCategoryKey = picked.sub?.key;
+    });
   }
 
   Future<void> _save() async {
@@ -431,35 +456,45 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                     },
                   ),
                 if (_type != 'transfer')
-                  DropdownButtonFormField<_CategoryOption>(
-                    initialValue: _selectedCategoryOption(),
-                    decoration: const InputDecoration(labelText: '分类'),
-                    items: _visibleCategories
-                        .map(
-                          (option) => DropdownMenuItem(
-                            value: option,
-                            child: Text(option.displayName()),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (option) {
-                      if (option == null) return;
-                      setState(() {
-                        if (option.parentKey != null) {
-                          _categoryKey = option.parentKey;
-                          _subCategoryKey = option.key;
-                        } else {
-                          _categoryKey = option.key;
-                          _subCategoryKey = null;
-                        }
-                      });
-                    },
-                    validator: (option) {
+                  FormField<_CategoryOption>(
+                    validator: (_) {
                       if (_type == 'transfer') return null;
+                      final option = _categoryOptionByKey(_subCategoryKey ?? _categoryKey);
                       if (option == null) return '请选择分类';
                       final shouldBeIncome = _type == 'income';
                       if (option.isIncome != shouldBeIncome) return '分类与类型不一致';
                       return null;
+                    },
+                    builder: (field) {
+                      final selected = _categoryOptionByKey(_subCategoryKey ?? _categoryKey);
+                      final label = selected?.displayName() ?? '请选择分类';
+                      return InkWell(
+                        onTap: () async {
+                          await _pickCategory();
+                          if (!mounted) return;
+                          field.didChange(_categoryOptionByKey(_subCategoryKey ?? _categoryKey));
+                          field.validate();
+                        },
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: '分类',
+                            errorText: field.errorText,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  label,
+                                  style: TextStyle(
+                                    color: selected == null ? Colors.black38 : Colors.black87,
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.chevron_right, color: Colors.grey.shade500, size: 18),
+                            ],
+                          ),
+                        ),
+                      );
                     },
                   ),
                 const SizedBox(height: 12),
@@ -598,34 +633,6 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
         ),
       ),
     );
-  }
-
-  _CategoryOption? _selectedCategoryOption() {
-    final visible = _visibleCategories;
-    if (visible.isEmpty) return null;
-    if (_subCategoryKey != null && _subCategoryKey!.isNotEmpty) {
-      return visible.firstWhere(
-        (option) => option.key == _subCategoryKey,
-        orElse: () => visible.first,
-      );
-    }
-    if (_categoryKey != null && _categoryKey!.isNotEmpty) {
-      return visible.firstWhere(
-        (option) => option.key == _categoryKey,
-        orElse: () => visible.first,
-      );
-    }
-    return null;
-  }
-
-  List<_CategoryOption> get _visibleCategories {
-    if (_type == 'income') {
-      return _categories.where((option) => option.isIncome).toList();
-    }
-    if (_type == 'expense') {
-      return _categories.where((option) => !option.isIncome).toList();
-    }
-    return const [];
   }
 
   _CategoryOption? _categoryOptionByKey(String? key) {

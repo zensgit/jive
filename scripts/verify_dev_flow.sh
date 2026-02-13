@@ -624,6 +624,17 @@ if ! grep -q "新建周期规则" "${OUT_DIR}/06_recurring_form.nodes.xml" \
   fail "cannot open recurring form from recurring list"
 fi
 
+log "open category picker from recurring form"
+if ! tap_text_once "分类" "${OUT_DIR}/06_recurring_form.nodes.xml"; then
+  fail "cannot open category picker from recurring form"
+fi
+sleep 1
+cap "06_recurring_category_picker"
+dump_ui "06_recurring_category_picker"
+assert_text_exists "选择分类" "06_recurring_category_picker"
+adb shell input keyevent 4
+sleep 1
+
 log "return to home"
 adb shell input keyevent 4
 sleep 1
