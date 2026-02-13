@@ -280,6 +280,23 @@ assert_text_exists() {
   fi
 }
 
+wait_for_text() {
+  # Wait until a text appears in UI dump (useful to avoid capturing transition scrims).
+  local text="$1"
+  local base="$2"
+  local max_try="${3:-8}"
+  local i name
+  for ((i = 1; i <= max_try; i++)); do
+    name="${base}_${i}"
+    dump_ui "${name}"
+    if grep -q "${text}" "${OUT_DIR}/${name}.nodes.xml"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
 restore_rotation() {
   if [[ -n "${ORIG_ACCELEROMETER_ROTATION}" ]]; then
     adb shell settings put system accelerometer_rotation "${ORIG_ACCELEROMETER_ROTATION}" >/dev/null 2>&1 || true
@@ -344,7 +361,11 @@ assert_text_exists "分类管理" "02_debug_sheet"
 
 log "open settings and verify category icon style dialog + switch to hybrid"
 tap_text_with_scroll_small "设置" "02_debug_sheet_settings_scrolled" 10 || fail "cannot open 设置"
-sleep 1
+if ! wait_for_text "分类图标风格" "02_settings_wait" 8; then
+  cap "02_settings_timeout"
+  dump_ui "02_settings_timeout"
+  fail "settings screen did not appear in time"
+fi
 cap "02_settings"
 dump_ui "02_settings"
 assert_text_exists "设置" "02_settings"
@@ -445,8 +466,88 @@ cap "04_category_edit"
 dump_ui "04_category_edit"
 assert_text_exists "编辑分类" "04_category_edit"
 assert_text_exists "图标强制单色" "04_category_edit"
-adb shell input keyevent 4
-sleep 1
+
+FORCE_TINTED_ORIG="$(
+  grep 'android.widget.Switch' "${OUT_DIR}/04_category_edit.nodes.xml" 2>/dev/null \
+    | grep '图标强制单色' \
+    | sed -E -n 's/.*checked="([^"]+)".*/\\1/p' \
+    | head -n 1 \
+    | tr -d '\r' \
+    || true
+)"
+FORCE_TINTED_ORIG="$(echo "${FORCE_TINTED_ORIG}" | tr -d '\n' | xargs || true)"
+if [[ "${FORCE_TINTED_ORIG}" != "true" && "${FORCE_TINTED_ORIG}" != "false" ]]; then
+  FORCE_TINTED_ORIG="false"
+fi
+log "force-tinted original checked=${FORCE_TINTED_ORIG}"
+
+if [[ "${FORCE_TINTED_ORIG}" != "true" ]]; then
+  log "toggle force-tinted on and verify '单色' badge appears"
+  if ! tap_text_once "图标强制单色" "${OUT_DIR}/04_category_edit.nodes.xml"; then
+    fail "cannot toggle 图标强制单色 in category edit"
+  fi
+  sleep 1
+  if ! tap_text_once "保存" "${OUT_DIR}/04_category_edit.nodes.xml"; then
+    fail "cannot tap 保存 in category edit"
+  fi
+  sleep 2
+else
+  log "force-tinted already enabled, return to category manager"
+  adb shell input keyevent 4
+  sleep 1
+fi
+
+cap "04_category_manager_after_force_tinted"
+dump_ui "04_category_manager_after_force_tinted"
+if grep -q "单色" "${OUT_DIR}/04_category_manager_after_force_tinted.nodes.xml"; then
+  log "badge '单色' detected in category manager UI dump"
+else
+  log "badge '单色' not found in uiautomator dump; fallback to verify switch checked state"
+  dump_ui "04_category_manager_for_badge_fallback"
+  if ! tap_first_parent_more_button "${OUT_DIR}/04_category_manager_for_badge_fallback.nodes.xml"; then
+    tap_xy 1030 868
+  fi
+  sleep 1
+  dump_ui "04_parent_actions_menu_badge_fallback"
+  tap_text_with_scroll_small "修改" "04_parent_actions_edit_badge_fallback" 6 || fail "cannot find 修改 action (badge fallback)"
+  sleep 1
+  dump_ui "04_category_edit_badge_fallback"
+  FORCE_TINTED_NOW="$(
+    grep 'android.widget.Switch' "${OUT_DIR}/04_category_edit_badge_fallback.nodes.xml" 2>/dev/null \
+      | grep '图标强制单色' \
+      | sed -E -n 's/.*checked="([^"]+)".*/\\1/p' \
+      | head -n 1 \
+      | tr -d '\r' \
+      || true
+  )"
+  FORCE_TINTED_NOW="$(echo "${FORCE_TINTED_NOW}" | tr -d '\n' | xargs || true)"
+  if [[ "${FORCE_TINTED_NOW}" != "true" ]]; then
+    fail "force-tinted switch not enabled after save (checked=${FORCE_TINTED_NOW:-unknown})"
+  fi
+  adb shell input keyevent 4
+  sleep 1
+fi
+
+if [[ "${FORCE_TINTED_ORIG}" != "true" ]]; then
+  log "restore force-tinted to off"
+  dump_ui "04_category_manager_for_restore"
+  if ! tap_first_parent_more_button "${OUT_DIR}/04_category_manager_for_restore.nodes.xml"; then
+    tap_xy 1030 868
+  fi
+  sleep 1
+  dump_ui "04_parent_actions_menu_restore"
+  tap_text_with_scroll_small "修改" "04_parent_actions_edit_restore" 6 || fail "cannot find 修改 action (restore)"
+  sleep 1
+  dump_ui "04_category_edit_restore"
+  if ! tap_text_once "图标强制单色" "${OUT_DIR}/04_category_edit_restore.nodes.xml"; then
+    fail "cannot toggle 图标强制单色 off during restore"
+  fi
+  sleep 1
+  if ! tap_text_once "保存" "${OUT_DIR}/04_category_edit_restore.nodes.xml"; then
+    fail "cannot tap 保存 during restore"
+  fi
+  sleep 2
+fi
 
 log "return to home from category manager"
 adb shell input keyevent 4

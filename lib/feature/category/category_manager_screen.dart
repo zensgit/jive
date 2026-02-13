@@ -508,34 +508,46 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   }
 
   Widget _buildHiddenBadge({bool compact = false}) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        "已隐藏",
-        style: TextStyle(fontSize: compact ? 9 : 10, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+    return Semantics(
+      label: "已隐藏",
+      container: true,
+      child: ExcludeSemantics(
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            "已隐藏",
+            style: TextStyle(fontSize: compact ? 9 : 10, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildForceTintedBadge({bool compact = false}) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 7, vertical: compact ? 1.5 : 2),
-      decoration: BoxDecoration(
-        color: JiveTheme.primaryGreen.withValues(alpha: compact ? 0.16 : 0.14),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.28)),
-      ),
-      child: Text(
-        "单色",
-        style: TextStyle(
-          fontSize: compact ? 8 : 10,
-          color: JiveTheme.primaryGreen,
-          fontWeight: FontWeight.w700,
-          height: 1.1,
+    return Semantics(
+      label: "单色",
+      container: true,
+      child: ExcludeSemantics(
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 7, vertical: compact ? 1.5 : 2),
+          decoration: BoxDecoration(
+            color: JiveTheme.primaryGreen.withValues(alpha: compact ? 0.16 : 0.14),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.28)),
+          ),
+          child: Text(
+            "单色",
+            style: TextStyle(
+              fontSize: compact ? 8 : 10,
+              color: JiveTheme.primaryGreen,
+              fontWeight: FontWeight.w700,
+              height: 1.1,
+            ),
+          ),
         ),
       ),
     );

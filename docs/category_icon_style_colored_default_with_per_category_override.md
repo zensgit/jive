@@ -155,6 +155,18 @@ bash scripts/verify_dev_flow.sh com.jivemoney.app.dev
 
 - `/tmp/jive-verify-20260213-113652`
 
+## 本轮新增（2026-02-13，交互/验证增强）
+
+1. 设置页“分类图标风格”由 `AlertDialog` 改为 **从底部弹出的 BottomSheet**，更符合移动端习惯。
+2. 为 `单色/已隐藏` 徽标补了 `Semantics(label=...)`，使 ADB/uiautomator dump 可稳定识别文本节点，避免脚本断言抖动。
+3. `scripts/verify_dev_flow.sh` 对“强制单色”校验逻辑增强：
+   - 更稳健地解析 switch `checked` 状态
+   - 当无法直接在列表 dump 中找到徽标时，会回到编辑页做二次确认（兜底）
+
+最新一次验证通过（PASS），产物目录：
+
+- `/tmp/jive-verify-20260213-123606`
+
 ### 3) 备份/恢复兼容
 
 - `JiveDataBackupService` 的分类导入/导出已包含 `iconForceTinted` 字段（未包含时默认 `false`），用于保证“按分类强制单色”在备份恢复后不丢失。

@@ -11,39 +11,65 @@ class SettingsScreen extends StatelessWidget {
     required CategoryIconStyle current,
   }) async {
     var selected = current;
-    final picked = await showDialog<CategoryIconStyle>(
+    final picked = await showModalBottomSheet<CategoryIconStyle>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, setStateDialog) {
-          return AlertDialog(
-            title: const Text("分类图标风格"),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: CategoryIconStyle.values.map((style) {
-                final isSelected = selected == style;
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    isSelected
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_unchecked,
-                    color: JiveTheme.primaryGreen,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setStateSheet) {
+          return SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                  title: Text(style.label),
-                  onTap: () => setStateDialog(() => selected = style),
-                );
-              }).toList(),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          "分类图标风格",
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(sheetContext),
+                        child: const Text("取消"),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(sheetContext, selected),
+                        child: const Text("确定"),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ...CategoryIconStyle.values.map((style) {
+                    final isSelected = selected == style;
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                        color: JiveTheme.primaryGreen,
+                      ),
+                      title: Text(style.label),
+                      onTap: () => setStateSheet(() => selected = style),
+                    );
+                  }),
+                ],
+              ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
-                child: const Text("取消"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, selected),
-                child: const Text("确定"),
-              ),
-            ],
           );
         },
       ),
@@ -111,4 +137,3 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
-
