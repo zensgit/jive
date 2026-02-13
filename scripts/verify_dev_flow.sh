@@ -406,18 +406,21 @@ assert_text_exists "分类图标风格" "02_settings"
 
 tap_text_with_scroll_small "分类图标风格" "02_settings_style_scrolled" 6 || fail "cannot open 分类图标风格"
 sleep 1
-cap "02_icon_style_dialog"
-dump_ui "02_icon_style_dialog"
-assert_text_exists "分类图标风格" "02_icon_style_dialog"
-assert_text_exists "彩色" "02_icon_style_dialog"
-assert_text_exists "单色" "02_icon_style_dialog"
-assert_text_exists "混合" "02_icon_style_dialog"
-tap_text "混合" "02_icon_style_dialog"
-tap_text "确定" "02_icon_style_dialog"
-sleep 1
-cap "02_settings_after_icon_style"
-dump_ui "02_settings_after_icon_style"
-assert_text_exists "混合" "02_settings_after_icon_style"
+  cap "02_icon_style_dialog"
+  dump_ui "02_icon_style_dialog"
+  assert_text_exists "分类图标风格" "02_icon_style_dialog"
+  assert_text_exists "彩色" "02_icon_style_dialog"
+  assert_text_exists "单色" "02_icon_style_dialog"
+  assert_text_exists "混合" "02_icon_style_dialog"
+  tap_text "混合" "02_icon_style_dialog"
+  if ! wait_for_text "混合" "02_settings_after_icon_style_wait" 8; then
+    cap "02_settings_after_icon_style_timeout"
+    dump_ui "02_settings_after_icon_style_timeout"
+    fail "icon style did not switch to hybrid"
+  fi
+  cap "02_settings_after_icon_style"
+  dump_ui "02_settings_after_icon_style"
+  assert_text_exists "混合" "02_settings_after_icon_style"
 
 log "return to home from settings"
 adb shell input keyevent 4
