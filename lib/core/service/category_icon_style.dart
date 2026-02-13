@@ -14,11 +14,11 @@ extension CategoryIconStyleLabel on CategoryIconStyle {
   String get label {
     switch (this) {
       case CategoryIconStyle.colored:
-        return '彩色';
+        return '彩色（默认）';
       case CategoryIconStyle.tinted:
-        return '单色 (跟随分类颜色)';
+        return '单色（全部跟随分类颜色）';
       case CategoryIconStyle.hybrid:
-        return '混合 (系统单色/自定义彩色)';
+        return '混合（系统单色/自定义彩色）';
     }
   }
 
