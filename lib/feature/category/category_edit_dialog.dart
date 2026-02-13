@@ -718,46 +718,50 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   Widget _buildForceTintedPreview() {
     final highlightColor = _resolveSelectedColor() ?? JiveTheme.primaryGreen;
     final globalStyleLabel = CategoryIconStyleConfig.current.label;
-    return Container(
-      margin: const EdgeInsets.only(top: 2),
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "效果预览（当前全局：$globalStyleLabel）",
-            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: _buildForceTintedPreviewTile(
-                  title: "跟随全局",
-                  subtitle: "保持当前风格",
-                  active: !_iconForceTinted,
-                  forceTinted: false,
-                  color: highlightColor,
+    return Semantics(
+      container: true,
+      label: "效果预览",
+      child: Container(
+        margin: const EdgeInsets.only(top: 2),
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "效果预览（当前全局：$globalStyleLabel）",
+              style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildForceTintedPreviewTile(
+                    title: "跟随全局",
+                    subtitle: "保持当前风格",
+                    active: !_iconForceTinted,
+                    forceTinted: false,
+                    color: highlightColor,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildForceTintedPreviewTile(
-                  title: "强制单色",
-                  subtitle: "始终跟随分类色",
-                  active: _iconForceTinted,
-                  forceTinted: true,
-                  color: highlightColor,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildForceTintedPreviewTile(
+                    title: "强制单色",
+                    subtitle: "始终跟随分类色",
+                    active: _iconForceTinted,
+                    forceTinted: true,
+                    color: highlightColor,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -771,57 +775,62 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   }) {
     final borderColor = active ? JiveTheme.primaryGreen.withValues(alpha: 0.45) : Colors.grey.shade300;
     final backgroundColor = active ? JiveTheme.primaryGreen.withValues(alpha: 0.08) : Colors.white;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 140),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: CategoryService.buildIcon(
-                _selectedIcon,
-                size: 14,
-                color: color,
-                isSystemCategory: widget.category.isSystem,
-                forceTinted: forceTinted,
+    return Semantics(
+      container: true,
+      label: title,
+      selected: active,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 140),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: CategoryService.buildIcon(
+                  _selectedIcon,
+                  size: 14,
+                  color: color,
+                  isSystemCategory: widget.category.isSystem,
+                  forceTinted: forceTinted,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: active ? JiveTheme.primaryGreen : Colors.grey.shade700,
+            const SizedBox(width: 7),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: active ? JiveTheme.primaryGreen : Colors.grey.shade700,
+                    ),
                   ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 9, color: Colors.grey.shade600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

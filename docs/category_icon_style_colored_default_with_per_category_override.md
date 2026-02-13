@@ -153,7 +153,7 @@ bash scripts/verify_dev_flow.sh com.jivemoney.app.dev
 
 本轮交互增强后的最新一次验证同样通过（PASS），产物目录：
 
-- `/tmp/jive-verify-20260213-102600`
+- `/tmp/jive-verify-20260213-113652`
 
 ### 3) 备份/恢复兼容
 
