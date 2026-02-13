@@ -14,6 +14,7 @@ import '../../core/service/recurring_service.dart';
 import '../../core/service/tag_service.dart';
 import '../category/category_picker_screen.dart';
 import '../category/category_search_delegate.dart';
+import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
 
 class RecurringRuleSaveResult {
@@ -195,6 +196,62 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
     setState(() {
       _tagKeys = selected;
     });
+  }
+
+  List<JiveTag> _selectedTags() {
+    final keys = _tagKeys;
+    if (keys.isEmpty) return const [];
+    final selected = _tags.where((tag) => keys.contains(tag.key)).toList();
+    selected.sort((a, b) => a.order.compareTo(b.order));
+    return selected;
+  }
+
+  Widget _buildTagSubtitle() {
+    if (_tagKeys.isEmpty) return const Text('无');
+    final selected = _selectedTags();
+    if (selected.isEmpty) {
+      return Text('已选择 ${_tagKeys.length} 个标签');
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: IgnorePointer(
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: selected.map(_buildTagPill).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTagPill(JiveTag tag) {
+    final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+    final showIcon = hasTagIcon(tag);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showIcon) ...[
+            tagIconWidget(tag, size: 12, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            tagDisplayName(tag),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _pickStartDate() async {
@@ -569,9 +626,7 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('标签'),
-                  subtitle: Text(
-                    _tagKeys.isEmpty ? '无' : '已选择 ${_tagKeys.length} 个标签',
-                  ),
+                  subtitle: _buildTagSubtitle(),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: _pickTags,
                 ),
