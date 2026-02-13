@@ -5,6 +5,7 @@ import 'package:isar/isar.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/widgets/date_range_picker_sheet.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/data_backup_service.dart';
 import '../../core/service/database_service.dart';
@@ -41,7 +42,8 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
 
     final pref = await _currencyService.getPreference();
     final baseCurrency = pref?.baseCurrency ?? 'CNY';
-    final enabled = pref?.enabledCurrencies ?? ['CNY', 'USD', 'EUR', 'JPY', 'HKD'];
+    final enabled =
+        pref?.enabledCurrencies ?? ['CNY', 'USD', 'EUR', 'JPY', 'HKD'];
 
     // 默认导出本月
     final now = DateTime.now();
@@ -58,30 +60,25 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
 
   Future<void> _selectDateRange() async {
     final now = DateTime.now();
-    final picked = await showDateRangePicker(
+    await showModalBottomSheet<void>(
       context: context,
-      firstDate: DateTime(2020),
-      lastDate: now,
-      initialDateRange: _dateRange,
-      locale: const Locale('zh', 'CN'),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: JiveTheme.primaryGreen,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black,
-            ),
-          ),
-          child: child!,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DateRangePickerSheet(
+          initialRange: _dateRange,
+          firstDay: DateTime(2020),
+          lastDay: now,
+          minSelectableDay: DateTime(2020),
+          maxSelectableDay: now,
+          bottomLabel: '选择日期范围',
+          onChanged: (range) {
+            if (range == null) return;
+            setState(() => _dateRange = range);
+          },
         );
       },
     );
-
-    if (picked != null) {
-      setState(() => _dateRange = picked);
-    }
   }
 
   Future<void> _export() async {
@@ -98,10 +95,7 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
 
       if (!mounted) return;
       await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          subject: '交易报表导出',
-        ),
+        ShareParams(files: [XFile(file.path)], subject: '交易报表导出'),
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -112,9 +106,9 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导出失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('导出失败: $e')));
       }
     } finally {
       if (mounted) {
@@ -133,9 +127,7 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('导出报表'),
-      ),
+      appBar: AppBar(title: const Text('导出报表')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -150,10 +142,7 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.info_outline,
-                    color: JiveTheme.primaryGreen,
-                  ),
+                  Icon(Icons.info_outline, color: JiveTheme.primaryGreen),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -248,7 +237,12 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
       children: _enabledCurrencies.map((code) {
         final data = CurrencyDefaults.getAllCurrencies().firstWhere(
           (c) => c['code'] == code,
-          orElse: () => {'code': code, 'symbol': code, 'flag': null, 'nameZh': code},
+          orElse: () => {
+            'code': code,
+            'symbol': code,
+            'flag': null,
+            'nameZh': code,
+          },
         );
         final flag = data['flag'] as String?;
         final symbol = data['symbol'] as String;
@@ -297,10 +291,7 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
             Icon(Icons.date_range, color: Colors.grey.shade600),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                rangeText,
-                style: GoogleFonts.lato(fontSize: 15),
-              ),
+              child: Text(rangeText, style: GoogleFonts.lato(fontSize: 15)),
             ),
             Icon(Icons.chevron_right, color: Colors.grey.shade400),
           ],
@@ -322,12 +313,7 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _buildFormatOption(
-            'json',
-            'JSON',
-            '适合程序处理',
-            Icons.code,
-          ),
+          child: _buildFormatOption('json', 'JSON', '适合程序处理', Icons.code),
         ),
       ],
     );
@@ -351,7 +337,9 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
             width: isSelected ? 2 : 1,
           ),
           borderRadius: BorderRadius.circular(12),
-          color: isSelected ? JiveTheme.primaryGreen.withValues(alpha: 0.05) : null,
+          color: isSelected
+              ? JiveTheme.primaryGreen.withValues(alpha: 0.05)
+              : null,
         ),
         child: Column(
           children: [
@@ -372,10 +360,7 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey.shade600,
-              ),
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               textAlign: TextAlign.center,
             ),
           ],
@@ -389,58 +374,46 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
 
     return Column(
       children: [
-        _buildQuickExportItem(
-          '本月报表',
-          Icons.calendar_month,
-          () async {
-            setState(() {
-              _dateRange = DateTimeRange(
-                start: DateTime(now.year, now.month, 1),
-                end: DateTime(now.year, now.month + 1, 0),
-              );
-            });
-            await _export();
-          },
-        ),
-        _buildQuickExportItem(
-          '本季度报表',
-          Icons.calendar_view_month,
-          () async {
-            final quarter = ((now.month - 1) ~/ 3);
-            final quarterStart = DateTime(now.year, quarter * 3 + 1, 1);
-            final quarterEnd = DateTime(now.year, (quarter + 1) * 3 + 1, 0);
-            setState(() {
-              _dateRange = DateTimeRange(start: quarterStart, end: quarterEnd);
-            });
-            await _export();
-          },
-        ),
-        _buildQuickExportItem(
-          '本年报表',
-          Icons.calendar_today,
-          () async {
-            setState(() {
-              _dateRange = DateTimeRange(
-                start: DateTime(now.year, 1, 1),
-                end: DateTime(now.year, 12, 31),
-              );
-            });
-            await _export();
-          },
-        ),
-        _buildQuickExportItem(
-          '全部数据',
-          Icons.all_inclusive,
-          () async {
-            setState(() => _dateRange = null);
-            await _export();
-          },
-        ),
+        _buildQuickExportItem('本月报表', Icons.calendar_month, () async {
+          setState(() {
+            _dateRange = DateTimeRange(
+              start: DateTime(now.year, now.month, 1),
+              end: DateTime(now.year, now.month + 1, 0),
+            );
+          });
+          await _export();
+        }),
+        _buildQuickExportItem('本季度报表', Icons.calendar_view_month, () async {
+          final quarter = ((now.month - 1) ~/ 3);
+          final quarterStart = DateTime(now.year, quarter * 3 + 1, 1);
+          final quarterEnd = DateTime(now.year, (quarter + 1) * 3 + 1, 0);
+          setState(() {
+            _dateRange = DateTimeRange(start: quarterStart, end: quarterEnd);
+          });
+          await _export();
+        }),
+        _buildQuickExportItem('本年报表', Icons.calendar_today, () async {
+          setState(() {
+            _dateRange = DateTimeRange(
+              start: DateTime(now.year, 1, 1),
+              end: DateTime(now.year, 12, 31),
+            );
+          });
+          await _export();
+        }),
+        _buildQuickExportItem('全部数据', Icons.all_inclusive, () async {
+          setState(() => _dateRange = null);
+          await _export();
+        }),
       ],
     );
   }
 
-  Widget _buildQuickExportItem(String title, IconData icon, VoidCallback onTap) {
+  Widget _buildQuickExportItem(
+    String title,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
     return ListTile(
       leading: Icon(icon, color: Colors.grey.shade600),
       title: Text(title),

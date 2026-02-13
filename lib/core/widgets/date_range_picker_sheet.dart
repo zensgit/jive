@@ -4,6 +4,8 @@ import 'package:lunar/lunar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import 'jive_calendar/jive_calendar_day_cell.dart';
+
 class DateRangePickerSheet extends StatefulWidget {
   final DateTimeRange? initialRange;
   final DateTime firstDay;
@@ -40,6 +42,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
   bool _showLunar = true;
   bool _showJieQi = false;
   bool _showFestival = false;
+  bool _showHoliday = false;
 
   @override
   void initState() {
@@ -96,6 +99,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
       _showLunar = prefs.getBool('calendar_show_lunar') ?? true;
       _showJieQi = prefs.getBool('calendar_show_jieqi') ?? false;
       _showFestival = prefs.getBool('calendar_show_festival') ?? false;
+      _showHoliday = prefs.getBool('calendar_show_holiday') ?? false;
     });
   }
 
@@ -104,6 +108,7 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
     await prefs.setBool('calendar_show_lunar', _showLunar);
     await prefs.setBool('calendar_show_jieqi', _showJieQi);
     await prefs.setBool('calendar_show_festival', _showFestival);
+    await prefs.setBool('calendar_show_holiday', _showHoliday);
   }
 
   bool _isChineseLocale(BuildContext context) {
@@ -160,55 +165,14 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
     return null;
   }
 
-  TextStyle _lunarTextStyle(TextStyle base) {
-    final color = base.color?.withValues(alpha: 0.7) ?? Colors.grey.shade600;
-    return base.copyWith(
-      fontSize: 9,
-      fontWeight: FontWeight.w500,
-      color: color,
-    );
-  }
-
-  Widget _buildLunarCell({
-    required DateTime day,
-    required CalendarStyle style,
-    required Decoration decoration,
-    required TextStyle textStyle,
-    required String? lunarLabel,
-    required bool showTodayLabel,
-  }) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      margin: style.cellMargin,
-      padding: style.cellPadding,
-      decoration: decoration,
-      alignment: style.cellAlignment,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Align(
-            alignment: const Alignment(0, 0.1),
-            child: Text('${day.day}', style: textStyle),
-          ),
-          if (showTodayLabel)
-            Align(
-              alignment: const Alignment(0, -0.75),
-              child: Text(
-                '今日',
-                style: GoogleFonts.lato(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-            ),
-          if (lunarLabel != null && lunarLabel.isNotEmpty)
-            Align(
-              alignment: const Alignment(0, 0.85),
-              child: Text(lunarLabel, style: _lunarTextStyle(textStyle)),
-            ),
-        ],
-      ),
+  JiveHolidayCornerMark? _holidayCornerMarkFor(DateTime day, bool isChinese) {
+    if (!isChinese || !_showHoliday) return null;
+    final holiday = HolidayUtil.getHolidayByYmd(day.year, day.month, day.day);
+    if (holiday == null) return null;
+    return JiveHolidayCornerMark(
+      holiday.isWork()
+          ? JiveHolidayCornerType.work
+          : JiveHolidayCornerType.rest,
     );
   }
 
@@ -469,7 +433,9 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                           ? widget.enabledYears
                           : null;
                       final calendarStyle = CalendarStyle(
-                        rangeHighlightColor: Colors.green.withValues(alpha: 0.12),
+                        rangeHighlightColor: Colors.green.withValues(
+                          alpha: 0.12,
+                        ),
                         rangeStartDecoration: const BoxDecoration(
                           color: Colors.green,
                           shape: BoxShape.circle,
@@ -546,114 +512,154 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                           },
                           defaultBuilder: (context, day, focusedDay) {
                             final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final holidayMark = _holidayCornerMarkFor(
+                              day,
+                              isChinese,
+                            );
                             final showTodayLabel = _shouldShowTodayLabel(
                               day,
                               enabledYears,
                             );
-                            return _buildLunarCell(
+                            return JiveCalendarDayCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.defaultDecoration,
                               textStyle: calendarStyle.defaultTextStyle,
                               lunarLabel: lunarLabel,
                               showTodayLabel: showTodayLabel,
+                              holidayCornerMark: holidayMark,
                             );
                           },
                           outsideBuilder: (context, day, focusedDay) {
                             final lunarLabel = _lunarLabelFor(day, isChinese);
-                            return _buildLunarCell(
+                            final holidayMark = _holidayCornerMarkFor(
+                              day,
+                              isChinese,
+                            );
+                            return JiveCalendarDayCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.outsideDecoration,
                               textStyle: calendarStyle.outsideTextStyle,
                               lunarLabel: lunarLabel,
                               showTodayLabel: false,
+                              holidayCornerMark: holidayMark,
                             );
                           },
                           disabledBuilder: (context, day, focusedDay) {
                             final lunarLabel = _lunarLabelFor(day, isChinese);
-                            return _buildLunarCell(
+                            final holidayMark = _holidayCornerMarkFor(
+                              day,
+                              isChinese,
+                            );
+                            return JiveCalendarDayCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.disabledDecoration,
                               textStyle: calendarStyle.disabledTextStyle,
                               lunarLabel: lunarLabel,
                               showTodayLabel: false,
+                              holidayCornerMark: holidayMark,
                             );
                           },
                           todayBuilder: (context, day, focusedDay) {
                             final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final holidayMark = _holidayCornerMarkFor(
+                              day,
+                              isChinese,
+                            );
                             final showTodayLabel = _shouldShowTodayLabel(
                               day,
                               enabledYears,
                             );
-                            return _buildLunarCell(
+                            return JiveCalendarDayCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.todayDecoration,
                               textStyle: calendarStyle.todayTextStyle,
                               lunarLabel: lunarLabel,
                               showTodayLabel: showTodayLabel,
+                              holidayCornerMark: holidayMark,
                             );
                           },
                           selectedBuilder: (context, day, focusedDay) {
                             final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final holidayMark = _holidayCornerMarkFor(
+                              day,
+                              isChinese,
+                            );
                             final showTodayLabel = _shouldShowTodayLabel(
                               day,
                               enabledYears,
                             );
-                            return _buildLunarCell(
+                            return JiveCalendarDayCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.selectedDecoration,
                               textStyle: calendarStyle.selectedTextStyle,
                               lunarLabel: lunarLabel,
                               showTodayLabel: showTodayLabel,
+                              holidayCornerMark: holidayMark,
                             );
                           },
                           rangeStartBuilder: (context, day, focusedDay) {
                             final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final holidayMark = _holidayCornerMarkFor(
+                              day,
+                              isChinese,
+                            );
                             final showTodayLabel = _shouldShowTodayLabel(
                               day,
                               enabledYears,
                             );
-                            return _buildLunarCell(
+                            return JiveCalendarDayCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.rangeStartDecoration,
                               textStyle: calendarStyle.rangeStartTextStyle,
                               lunarLabel: lunarLabel,
                               showTodayLabel: showTodayLabel,
+                              holidayCornerMark: holidayMark,
                             );
                           },
                           rangeEndBuilder: (context, day, focusedDay) {
                             final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final holidayMark = _holidayCornerMarkFor(
+                              day,
+                              isChinese,
+                            );
                             final showTodayLabel = _shouldShowTodayLabel(
                               day,
                               enabledYears,
                             );
-                            return _buildLunarCell(
+                            return JiveCalendarDayCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.rangeEndDecoration,
                               textStyle: calendarStyle.rangeEndTextStyle,
                               lunarLabel: lunarLabel,
                               showTodayLabel: showTodayLabel,
+                              holidayCornerMark: holidayMark,
                             );
                           },
                           withinRangeBuilder: (context, day, focusedDay) {
                             final lunarLabel = _lunarLabelFor(day, isChinese);
+                            final holidayMark = _holidayCornerMarkFor(
+                              day,
+                              isChinese,
+                            );
                             final showTodayLabel = _shouldShowTodayLabel(
                               day,
                               enabledYears,
                             );
-                            return _buildLunarCell(
+                            return JiveCalendarDayCell(
                               day: day,
                               style: calendarStyle,
                               decoration: calendarStyle.withinRangeDecoration,
                               textStyle: calendarStyle.withinRangeTextStyle,
                               lunarLabel: lunarLabel,
                               showTodayLabel: showTodayLabel,
+                              holidayCornerMark: holidayMark,
                             );
                           },
                         ),
@@ -688,7 +694,9 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                                 setState(() => _showLunar = value);
                                 _saveLunarPrefs();
                               },
-                              selectedColor: Colors.green.withValues(alpha: 0.12),
+                              selectedColor: Colors.green.withValues(
+                                alpha: 0.12,
+                              ),
                               checkmarkColor: Colors.green.shade700,
                             ),
                             FilterChip(
@@ -698,7 +706,9 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                                 setState(() => _showJieQi = value);
                                 _saveLunarPrefs();
                               },
-                              selectedColor: Colors.green.withValues(alpha: 0.12),
+                              selectedColor: Colors.green.withValues(
+                                alpha: 0.12,
+                              ),
                               checkmarkColor: Colors.green.shade700,
                             ),
                             FilterChip(
@@ -708,7 +718,21 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
                                 setState(() => _showFestival = value);
                                 _saveLunarPrefs();
                               },
-                              selectedColor: Colors.green.withValues(alpha: 0.12),
+                              selectedColor: Colors.green.withValues(
+                                alpha: 0.12,
+                              ),
+                              checkmarkColor: Colors.green.shade700,
+                            ),
+                            FilterChip(
+                              label: const Text('节假日'),
+                              selected: _showHoliday,
+                              onSelected: (value) {
+                                setState(() => _showHoliday = value);
+                                _saveLunarPrefs();
+                              },
+                              selectedColor: Colors.green.withValues(
+                                alpha: 0.12,
+                              ),
                               checkmarkColor: Colors.green.shade700,
                             ),
                           ],
