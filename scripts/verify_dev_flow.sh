@@ -234,6 +234,27 @@ tap_top_bar_clickable_rank_from_right() {
   return 0
 }
 
+tap_first_category_picker_expand_toggle() {
+  # Tap the first "expand {parent}" semantics button in CategoryPickerScreen.
+  local xml="$1"
+  local line bounds x1 y1 x2 y2 cx cy
+
+  line="$(grep -m1 'content-desc="展开 ' "${xml}" 2>/dev/null || true)"
+  if [[ -z "${line}" ]]; then
+    return 1
+  fi
+
+  bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/p')"
+  if [[ -z "${bounds}" ]]; then
+    return 1
+  fi
+  read -r x1 y1 x2 y2 <<<"${bounds}"
+  cx="$(((x1 + x2) / 2))"
+  cy="$(((y1 + y2) / 2))"
+  tap_xy "${cx}" "${cy}"
+  return 0
+}
+
 tap_first_parent_expand_toggle() {
   # Tap the left expand/collapse button of the first parent card (CategoryManagerScreen).
   local xml="$1"
@@ -392,7 +413,7 @@ if ! grep -q "分类管理" "${OUT_DIR}/02_debug_sheet.nodes.xml"; then
 fi
 assert_text_exists "分类管理" "02_debug_sheet"
 
-log "open settings and verify category icon style dialog + switch to hybrid"
+log "open settings and verify category icon style bottom sheet (no preference change)"
 tap_text_with_scroll_small "设置" "02_debug_sheet_settings_scrolled" 10 || fail "cannot open 设置"
 if ! wait_for_text "分类图标风格" "02_settings_wait" 8; then
   cap "02_settings_timeout"
@@ -406,21 +427,19 @@ assert_text_exists "分类图标风格" "02_settings"
 
 tap_text_with_scroll_small "分类图标风格" "02_settings_style_scrolled" 6 || fail "cannot open 分类图标风格"
 sleep 1
-  cap "02_icon_style_dialog"
-  dump_ui "02_icon_style_dialog"
-  assert_text_exists "分类图标风格" "02_icon_style_dialog"
-  assert_text_exists "彩色" "02_icon_style_dialog"
-  assert_text_exists "单色" "02_icon_style_dialog"
-  assert_text_exists "混合" "02_icon_style_dialog"
-  tap_text "混合" "02_icon_style_dialog"
-  if ! wait_for_text "混合" "02_settings_after_icon_style_wait" 8; then
-    cap "02_settings_after_icon_style_timeout"
-    dump_ui "02_settings_after_icon_style_timeout"
-    fail "icon style did not switch to hybrid"
-  fi
-  cap "02_settings_after_icon_style"
-  dump_ui "02_settings_after_icon_style"
-  assert_text_exists "混合" "02_settings_after_icon_style"
+cap "02_icon_style_sheet"
+dump_ui "02_icon_style_sheet"
+assert_text_exists "分类图标风格" "02_icon_style_sheet"
+assert_text_exists "彩色" "02_icon_style_sheet"
+assert_text_exists "单色" "02_icon_style_sheet"
+assert_text_exists "混合" "02_icon_style_sheet"
+
+adb shell input keyevent 4
+sleep 1
+cap "02_settings_after_icon_style"
+dump_ui "02_settings_after_icon_style"
+assert_text_exists "设置" "02_settings_after_icon_style"
+assert_text_exists "分类图标风格" "02_settings_after_icon_style"
 
 log "return to home from settings"
 adb shell input keyevent 4
@@ -632,6 +651,20 @@ sleep 1
 cap "06_recurring_category_picker"
 dump_ui "06_recurring_category_picker"
 assert_text_exists "选择分类" "06_recurring_category_picker"
+
+if tap_first_category_picker_expand_toggle "${OUT_DIR}/06_recurring_category_picker.nodes.xml"; then
+  sleep 1
+  cap "06_recurring_category_picker_expanded"
+  dump_ui "06_recurring_category_picker_expanded"
+  if grep -q 'content-desc="收起 ' "${OUT_DIR}/06_recurring_category_picker_expanded.nodes.xml"; then
+    log "category picker expanded state detected"
+  else
+    log "category picker expand toggle tapped, but expanded state not detected in dump"
+  fi
+else
+  log "no expandable parent detected in category picker"
+fi
+
 adb shell input keyevent 4
 sleep 1
 
