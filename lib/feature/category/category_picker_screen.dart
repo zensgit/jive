@@ -277,17 +277,54 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
         final children =
             _childrenByParentKey[parent.key] ?? const <JiveCategory>[];
         final isExpanded = _expandedParents.contains(parent.key);
+        final canExpand = children.isNotEmpty;
         final parentColor =
             CategoryService.parseColorHex(parent.colorHex) ??
             JiveTheme.categoryIconInactive;
+        final baseAvatar = CircleAvatar(
+          backgroundColor: parentColor.withValues(alpha: 0.12),
+          child: CategoryService.buildIcon(
+            parent.iconName,
+            size: 18,
+            color: parentColor,
+            isSystemCategory: parent.isSystem,
+            forceTinted: parent.iconForceTinted,
+          ),
+        );
+        final avatar = canExpand
+            ? Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  baseAvatar,
+                  Positioned(
+                    right: -2,
+                    bottom: -2,
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.black12),
+                      ),
+                      child: Icon(
+                        isExpanded ? Icons.expand_less : Icons.expand_more,
+                        size: 14,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : baseAvatar;
         final parentLeading = Semantics(
-          button: children.isNotEmpty,
+          button: canExpand,
           label: children.isEmpty
               ? parent.name
               : (isExpanded ? '收起 ${parent.name}' : '展开 ${parent.name}'),
           child: InkWell(
             borderRadius: BorderRadius.circular(18),
-            onTap: children.isEmpty
+            onTap: !canExpand
                 ? null
                 : () {
                     setState(() {
@@ -298,16 +335,7 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
                       }
                     });
                   },
-            child: CircleAvatar(
-              backgroundColor: parentColor.withValues(alpha: 0.12),
-              child: CategoryService.buildIcon(
-                parent.iconName,
-                size: 18,
-                color: parentColor,
-                isSystemCategory: parent.isSystem,
-                forceTinted: parent.iconForceTinted,
-              ),
-            ),
+            child: avatar,
           ),
         );
         return Column(
@@ -318,7 +346,7 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
               title: Text(parent.name),
               subtitle: children.isEmpty
                   ? const Text('一级分类')
-                  : Text('${children.length} 个子类'),
+                  : Text('点图标展开 · ${children.length} 个子类'),
               trailing: const Icon(Icons.chevron_right, color: Colors.black38),
               onTap: () =>
                   Navigator.pop(context, CategorySearchResult(parent: parent)),
