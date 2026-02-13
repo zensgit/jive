@@ -34,7 +34,10 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
   Isar? _isar;
   bool _isLoading = true;
   String? _loadError;
+  List<JiveCategory> _parents = [];
+  Map<String, List<JiveCategory>> _childrenByParentKey = {};
   List<CategorySearchResult> _items = [];
+  final Set<String> _expandedParents = {};
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
   final Map<String, String> _searchKeyCache = {};
@@ -101,6 +104,8 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
 
       if (!mounted) return;
       setState(() {
+        _parents = parents;
+        _childrenByParentKey = childrenByParent;
         _items = items;
         _searchKeyCache.clear();
         _isLoading = false;
@@ -108,6 +113,8 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
+        _parents = [];
+        _childrenByParentKey = {};
         _items = [];
         _loadError = e.toString();
         _isLoading = false;
@@ -180,44 +187,46 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _loadError != null
-                ? _buildErrorState()
-                : Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: InputDecoration(
-                            hintText: _searchHint,
-                            prefixIcon: const Icon(Icons.search, size: 18),
-                            suffixIcon: _query.trim().isEmpty
-                                ? null
-                                : IconButton(
-                                    icon: const Icon(Icons.close, size: 18),
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      FocusScope.of(context).unfocus();
-                                    },
-                                  ),
-                            filled: true,
-                            isDense: true,
-                            fillColor: Colors.grey.shade100,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
+            ? _buildErrorState()
+            : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: _searchHint,
+                        prefixIcon: const Icon(Icons.search, size: 18),
+                        suffixIcon: _query.trim().isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  FocusScope.of(context).unfocus();
+                                },
+                              ),
+                        filled: true,
+                        isDense: true,
+                        fillColor: Colors.grey.shade100,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
                         ),
                       ),
-                      Expanded(
-                        child: _buildList(_filter(_query)),
-                      ),
-                    ],
+                    ),
                   ),
+                  Expanded(
+                    child: _query.trim().isEmpty
+                        ? _buildHierarchicalList()
+                        : _buildSearchList(_filter(_query)),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -233,7 +242,10 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
             const SizedBox(height: 12),
             Text(
               '分类加载失败',
-              style: GoogleFonts.lato(fontSize: 17, fontWeight: FontWeight.w700),
+              style: GoogleFonts.lato(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -253,7 +265,125 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
     );
   }
 
-  Widget _buildList(List<CategorySearchResult> results) {
+  Widget _buildHierarchicalList() {
+    if (_parents.isEmpty) {
+      return const Center(child: Text('暂无分类'));
+    }
+    return ListView.separated(
+      itemCount: _parents.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final parent = _parents[index];
+        final children =
+            _childrenByParentKey[parent.key] ?? const <JiveCategory>[];
+        final isExpanded = _expandedParents.contains(parent.key);
+        final parentColor =
+            CategoryService.parseColorHex(parent.colorHex) ??
+            JiveTheme.categoryIconInactive;
+        final parentLeading = Semantics(
+          button: children.isNotEmpty,
+          label: children.isEmpty
+              ? parent.name
+              : (isExpanded ? '收起 ${parent.name}' : '展开 ${parent.name}'),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: children.isEmpty
+                ? null
+                : () {
+                    setState(() {
+                      if (isExpanded) {
+                        _expandedParents.remove(parent.key);
+                      } else {
+                        _expandedParents.add(parent.key);
+                      }
+                    });
+                  },
+            child: CircleAvatar(
+              backgroundColor: parentColor.withValues(alpha: 0.12),
+              child: CategoryService.buildIcon(
+                parent.iconName,
+                size: 18,
+                color: parentColor,
+                isSystemCategory: parent.isSystem,
+                forceTinted: parent.iconForceTinted,
+              ),
+            ),
+          ),
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: parentLeading,
+              title: Text(parent.name),
+              subtitle: children.isEmpty
+                  ? const Text('一级分类')
+                  : Text('${children.length} 个子类'),
+              trailing: const Icon(Icons.chevron_right, color: Colors.black38),
+              onTap: () =>
+                  Navigator.pop(context, CategorySearchResult(parent: parent)),
+            ),
+            if (children.isNotEmpty && isExpanded)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(72, 0, 16, 12),
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: children
+                      .map((child) => _buildChildItem(parent, child))
+                      .toList(),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildChildItem(JiveCategory parent, JiveCategory child) {
+    final childColor =
+        CategoryService.parseColorHex(child.colorHex) ??
+        JiveTheme.categoryIconInactive;
+    return SizedBox(
+      width: 74,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.pop(
+          context,
+          CategorySearchResult(parent: parent, sub: child),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: childColor.withValues(alpha: 0.12),
+                child: CategoryService.buildIcon(
+                  child.iconName,
+                  size: 18,
+                  color: childColor,
+                  isSystemCategory: child.isSystem,
+                  forceTinted: child.iconForceTinted,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                child.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchList(List<CategorySearchResult> results) {
     if (results.isEmpty) {
       return const Center(child: Text('未找到匹配分类'));
     }
@@ -288,4 +418,3 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
     );
   }
 }
-
