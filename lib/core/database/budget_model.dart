@@ -11,6 +11,12 @@ class JiveBudget {
   late double amount; // 预算金额
   late String currency; // 货币代码
 
+  /// 结转调整（多余预算累加/超额支出扣除），会叠加到 [amount] 上作为本期有效预算。
+  ///
+  /// - 正数：增加本期预算
+  /// - 负数：扣减本期预算
+  double carryoverAmount = 0;
+
   @Index()
   String? categoryKey; // 关联的分类（可选，null 表示总预算）
 
@@ -21,6 +27,9 @@ class JiveBudget {
   String period = 'monthly'; // 周期: daily, weekly, monthly, yearly, custom
   bool isActive = true; // 是否启用
   bool rollover = false; // 是否将未用完的额度滚动到下一周期
+
+  /// 排序权重（主要用于“分类预算”列表拖拽排序）。数值越大越靠前。
+  int positionWeight = 0;
 
   double? alertThreshold; // 预警阈值（百分比，如 80 表示 80%）
   bool alertEnabled = false; // 是否启用预警
@@ -78,6 +87,8 @@ enum BudgetStatus {
 /// 预算摘要数据
 class BudgetSummary {
   final JiveBudget budget;
+  /// 本期有效预算金额（包含结转调整，以及总预算的 yimu 口径修正）。
+  final double effectiveAmount;
   final double usedAmount;
   final double remainingAmount;
   final double usedPercent;
@@ -86,6 +97,7 @@ class BudgetSummary {
 
   BudgetSummary({
     required this.budget,
+    required this.effectiveAmount,
     required this.usedAmount,
     required this.remainingAmount,
     required this.usedPercent,
@@ -93,7 +105,7 @@ class BudgetSummary {
     required this.daysRemaining,
   });
 
-  bool get isOverBudget => usedAmount > budget.amount;
+  bool get isOverBudget => usedAmount > effectiveAmount;
   bool get isWarning => budget.alertEnabled &&
       budget.alertThreshold != null &&
       usedPercent >= budget.alertThreshold!;

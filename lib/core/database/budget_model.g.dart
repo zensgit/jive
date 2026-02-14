@@ -32,53 +32,63 @@ const JiveBudgetSchema = CollectionSchema(
       name: r'amount',
       type: IsarType.double,
     ),
-    r'categoryKey': PropertySchema(
+    r'carryoverAmount': PropertySchema(
       id: 3,
+      name: r'carryoverAmount',
+      type: IsarType.double,
+    ),
+    r'categoryKey': PropertySchema(
+      id: 4,
       name: r'categoryKey',
       type: IsarType.string,
     ),
     r'createdAt': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'createdAt',
       type: IsarType.dateTime,
     ),
     r'currency': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'currency',
       type: IsarType.string,
     ),
     r'endDate': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'endDate',
       type: IsarType.dateTime,
     ),
     r'isActive': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'isActive',
       type: IsarType.bool,
     ),
     r'name': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'name',
       type: IsarType.string,
     ),
     r'period': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'period',
       type: IsarType.string,
     ),
+    r'positionWeight': PropertySchema(
+      id: 11,
+      name: r'positionWeight',
+      type: IsarType.long,
+    ),
     r'rollover': PropertySchema(
-      id: 10,
+      id: 12,
       name: r'rollover',
       type: IsarType.bool,
     ),
     r'startDate': PropertySchema(
-      id: 11,
+      id: 13,
       name: r'startDate',
       type: IsarType.dateTime,
     ),
     r'updatedAt': PropertySchema(
-      id: 12,
+      id: 14,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -151,16 +161,18 @@ void _jiveBudgetSerialize(
   writer.writeBool(offsets[0], object.alertEnabled);
   writer.writeDouble(offsets[1], object.alertThreshold);
   writer.writeDouble(offsets[2], object.amount);
-  writer.writeString(offsets[3], object.categoryKey);
-  writer.writeDateTime(offsets[4], object.createdAt);
-  writer.writeString(offsets[5], object.currency);
-  writer.writeDateTime(offsets[6], object.endDate);
-  writer.writeBool(offsets[7], object.isActive);
-  writer.writeString(offsets[8], object.name);
-  writer.writeString(offsets[9], object.period);
-  writer.writeBool(offsets[10], object.rollover);
-  writer.writeDateTime(offsets[11], object.startDate);
-  writer.writeDateTime(offsets[12], object.updatedAt);
+  writer.writeDouble(offsets[3], object.carryoverAmount);
+  writer.writeString(offsets[4], object.categoryKey);
+  writer.writeDateTime(offsets[5], object.createdAt);
+  writer.writeString(offsets[6], object.currency);
+  writer.writeDateTime(offsets[7], object.endDate);
+  writer.writeBool(offsets[8], object.isActive);
+  writer.writeString(offsets[9], object.name);
+  writer.writeString(offsets[10], object.period);
+  writer.writeLong(offsets[11], object.positionWeight);
+  writer.writeBool(offsets[12], object.rollover);
+  writer.writeDateTime(offsets[13], object.startDate);
+  writer.writeDateTime(offsets[14], object.updatedAt);
 }
 
 JiveBudget _jiveBudgetDeserialize(
@@ -173,17 +185,19 @@ JiveBudget _jiveBudgetDeserialize(
   object.alertEnabled = reader.readBool(offsets[0]);
   object.alertThreshold = reader.readDoubleOrNull(offsets[1]);
   object.amount = reader.readDouble(offsets[2]);
-  object.categoryKey = reader.readStringOrNull(offsets[3]);
-  object.createdAt = reader.readDateTime(offsets[4]);
-  object.currency = reader.readString(offsets[5]);
-  object.endDate = reader.readDateTime(offsets[6]);
+  object.carryoverAmount = reader.readDouble(offsets[3]);
+  object.categoryKey = reader.readStringOrNull(offsets[4]);
+  object.createdAt = reader.readDateTime(offsets[5]);
+  object.currency = reader.readString(offsets[6]);
+  object.endDate = reader.readDateTime(offsets[7]);
   object.id = id;
-  object.isActive = reader.readBool(offsets[7]);
-  object.name = reader.readString(offsets[8]);
-  object.period = reader.readString(offsets[9]);
-  object.rollover = reader.readBool(offsets[10]);
-  object.startDate = reader.readDateTime(offsets[11]);
-  object.updatedAt = reader.readDateTime(offsets[12]);
+  object.isActive = reader.readBool(offsets[8]);
+  object.name = reader.readString(offsets[9]);
+  object.period = reader.readString(offsets[10]);
+  object.positionWeight = reader.readLong(offsets[11]);
+  object.rollover = reader.readBool(offsets[12]);
+  object.startDate = reader.readDateTime(offsets[13]);
+  object.updatedAt = reader.readDateTime(offsets[14]);
   return object;
 }
 
@@ -201,24 +215,28 @@ P _jiveBudgetDeserializeProp<P>(
     case 2:
       return (reader.readDouble(offset)) as P;
     case 3:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 4:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 5:
-      return (reader.readString(offset)) as P;
-    case 6:
       return (reader.readDateTime(offset)) as P;
-    case 7:
-      return (reader.readBool(offset)) as P;
-    case 8:
+    case 6:
       return (reader.readString(offset)) as P;
+    case 7:
+      return (reader.readDateTime(offset)) as P;
+    case 8:
+      return (reader.readBool(offset)) as P;
     case 9:
       return (reader.readString(offset)) as P;
     case 10:
-      return (reader.readBool(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 11:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 12:
+      return (reader.readBool(offset)) as P;
+    case 13:
+      return (reader.readDateTime(offset)) as P;
+    case 14:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -627,6 +645,72 @@ extension JiveBudgetQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'amount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      carryoverAmountEqualTo(
+    double value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'carryoverAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      carryoverAmountGreaterThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'carryoverAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      carryoverAmountLessThan(
+    double value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'carryoverAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      carryoverAmountBetween(
+    double lower,
+    double upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'carryoverAmount',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -1356,6 +1440,62 @@ extension JiveBudgetQueryFilter
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      positionWeightEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'positionWeight',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      positionWeightGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'positionWeight',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      positionWeightLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'positionWeight',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      positionWeightBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'positionWeight',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> rolloverEqualTo(
       bool value) {
     return QueryBuilder.apply(this, (query) {
@@ -1520,6 +1660,19 @@ extension JiveBudgetQuerySortBy
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortByCarryoverAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'carryoverAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy>
+      sortByCarryoverAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'carryoverAmount', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortByCategoryKey() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'categoryKey', Sort.asc);
@@ -1604,6 +1757,19 @@ extension JiveBudgetQuerySortBy
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortByPositionWeight() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'positionWeight', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy>
+      sortByPositionWeightDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'positionWeight', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortByRollover() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rollover', Sort.asc);
@@ -1677,6 +1843,19 @@ extension JiveBudgetQuerySortThenBy
   QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenByAmountDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'amount', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenByCarryoverAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'carryoverAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy>
+      thenByCarryoverAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'carryoverAmount', Sort.desc);
     });
   }
 
@@ -1776,6 +1955,19 @@ extension JiveBudgetQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenByPositionWeight() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'positionWeight', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy>
+      thenByPositionWeightDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'positionWeight', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenByRollover() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rollover', Sort.asc);
@@ -1833,6 +2025,12 @@ extension JiveBudgetQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QDistinct> distinctByCarryoverAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'carryoverAmount');
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QDistinct> distinctByCategoryKey(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -1876,6 +2074,12 @@ extension JiveBudgetQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'period', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QDistinct> distinctByPositionWeight() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'positionWeight');
     });
   }
 
@@ -1924,6 +2128,12 @@ extension JiveBudgetQueryProperty
     });
   }
 
+  QueryBuilder<JiveBudget, double, QQueryOperations> carryoverAmountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'carryoverAmount');
+    });
+  }
+
   QueryBuilder<JiveBudget, String?, QQueryOperations> categoryKeyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'categoryKey');
@@ -1963,6 +2173,12 @@ extension JiveBudgetQueryProperty
   QueryBuilder<JiveBudget, String, QQueryOperations> periodProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'period');
+    });
+  }
+
+  QueryBuilder<JiveBudget, int, QQueryOperations> positionWeightProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'positionWeight');
     });
   }
 

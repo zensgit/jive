@@ -7,8 +7,10 @@ import 'package:jive/core/database/budget_model.dart';
 import 'package:jive/core/database/category_model.dart';
 import 'package:jive/core/database/currency_model.dart';
 import 'package:jive/core/database/transaction_model.dart';
+import 'package:jive/core/service/budget_pref_service.dart';
 import 'package:jive/core/service/budget_service.dart';
 import 'package:jive/core/service/currency_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   late Isar isar;
@@ -39,6 +41,7 @@ void main() {
   });
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
     dir = await Directory.systemTemp.createTemp('jive_budget_test_');
     isar = await Isar.open([
       JiveBudgetSchema,
@@ -550,6 +553,172 @@ void main() {
       expect(trend[1].amount, 10);
       expect(trend[2].day, DateTime(2024, 5, 6));
       expect(trend[2].amount, 20);
+    },
+  );
+
+  test(
+    'calculateBudgetUsage uses carryoverAmount as part of effectiveAmount',
+    () async {
+      final budget = await budgetService.createBudget(
+        name: '月度预算',
+        amount: 100,
+        carryoverAmount: 20,
+        currency: 'CNY',
+        startDate: DateTime(2024, 3, 1),
+        endDate: DateTime(2024, 3, 31, 23, 59, 59, 999),
+        period: 'monthly',
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().put(
+              JiveTransaction()
+                ..amount = 10
+                ..source = 'Seed'
+                ..timestamp = DateTime(2024, 3, 2, 9)
+                ..type = 'expense',
+            );
+      });
+
+      final summary = await budgetService.calculateBudgetUsage(budget);
+      expect(summary.effectiveAmount, 120);
+      expect(summary.usedAmount, 10);
+      expect(summary.remainingAmount, 110);
+    },
+  );
+
+  test(
+    'overall budget effectiveAmount uses max(total amount, category budget sum) and only counts budgeted categories when derived from category budgets',
+    () async {
+      await isar.writeTxn(() async {
+        await isar.collection<JiveCategory>().putAll([
+          JiveCategory()
+            ..key = 'food'
+            ..name = '餐饮'
+            ..iconName = 'food'
+            ..order = 0
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..excludeFromBudget = false
+            ..updatedAt = DateTime(2024, 3, 1),
+          JiveCategory()
+            ..key = 'travel'
+            ..name = '旅行'
+            ..iconName = 'travel'
+            ..order = 1
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..excludeFromBudget = false
+            ..updatedAt = DateTime(2024, 3, 1),
+        ]);
+      });
+
+      final total = await budgetService.createBudget(
+        name: '总预算',
+        amount: 100,
+        currency: 'CNY',
+        startDate: DateTime(2024, 3, 1),
+        endDate: DateTime(2024, 3, 31, 23, 59, 59, 999),
+        period: 'monthly',
+      );
+      await budgetService.createBudget(
+        name: '餐饮预算',
+        amount: 600,
+        currency: 'CNY',
+        categoryKey: 'food',
+        startDate: total.startDate,
+        endDate: total.endDate,
+        period: 'monthly',
+      );
+      await budgetService.createBudget(
+        name: '旅行预算',
+        amount: 700,
+        currency: 'CNY',
+        categoryKey: 'travel',
+        startDate: total.startDate,
+        endDate: total.endDate,
+        period: 'monthly',
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().putAll([
+          JiveTransaction()
+            ..amount = 10
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 3, 5, 9)
+            ..type = 'expense'
+            ..categoryKey = 'food',
+          JiveTransaction()
+            ..amount = 20
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 3, 6, 9)
+            ..type = 'expense'
+            ..categoryKey = 'travel',
+          JiveTransaction()
+            ..amount = 30
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 3, 7, 9)
+            ..type = 'expense'
+            ..categoryKey = 'other',
+        ]);
+      });
+
+      final summary = await budgetService.calculateBudgetUsage(total);
+      expect(summary.effectiveAmount, 1300);
+      expect(summary.usedAmount, 30);
+      expect(summary.remainingAmount, 1270);
+    },
+  );
+
+  test(
+    'autoCopyMonthlyBudgetsIfNeeded copies last month monthly budgets and applies carryover settings',
+    () async {
+      await BudgetPrefService.setBudgetMonthlyAutoCopyEnabled(true);
+      await BudgetPrefService.setBudgetCarryoverAddEnabled(true);
+      await BudgetPrefService.setBudgetCarryoverReduceEnabled(false);
+
+      final (prevStart, prevEnd) = BudgetService.getPeriodDateRange(
+        BudgetPeriod.monthly,
+        referenceDate: DateTime(2024, 2, 15),
+      );
+      await budgetService.createBudget(
+        name: '月度预算',
+        amount: 100,
+        currency: 'CNY',
+        startDate: prevStart,
+        endDate: prevEnd,
+        period: 'monthly',
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().put(
+              JiveTransaction()
+                ..amount = 60
+                ..source = 'Seed'
+                ..timestamp = DateTime(2024, 2, 20, 9)
+                ..type = 'expense',
+            );
+      });
+
+      final created = await budgetService.autoCopyMonthlyBudgetsIfNeeded(
+        referenceDate: DateTime(2024, 3, 5),
+      );
+      expect(created, 1);
+
+      final (curStart, curEnd) = BudgetService.getPeriodDateRange(
+        BudgetPeriod.monthly,
+        referenceDate: DateTime(2024, 3, 5),
+      );
+      final copied = await isar.jiveBudgets
+          .filter()
+          .periodEqualTo(BudgetPeriod.monthly.value)
+          .startDateEqualTo(curStart)
+          .endDateEqualTo(curEnd)
+          .findAll();
+      expect(copied.length, 1);
+      expect(copied.first.amount, 100);
+      expect(copied.first.carryoverAmount, 40);
     },
   );
 

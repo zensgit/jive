@@ -1257,7 +1257,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final color = isExceeded ? Colors.red.shade700 : Colors.orange.shade700;
     final icon = isExceeded ? Icons.warning_amber_rounded : Icons.info_outline;
     final message = isExceeded
-        ? '将超支 $symbol ${(impact.projectedUsedAmount - budget.amount).abs().toStringAsFixed(0)}'
+        ? '将超支 $symbol ${(impact.projectedUsedAmount - impact.effectiveAmount).abs().toStringAsFixed(0)}'
         : '将达到预警 ${budget.alertThreshold?.toStringAsFixed(0) ?? '--'}%（${impact.projectedUsedPercent.toStringAsFixed(1)}%）';
 
     return Padding(

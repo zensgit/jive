@@ -98,6 +98,8 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
     final isar = await DatabaseService.getInstance();
     final currencyService = CurrencyService(isar);
     final budgetService = BudgetService(isar, currencyService);
+    // Auto-copy monthly budgets from last month if enabled and missing.
+    await budgetService.autoCopyMonthlyBudgetsIfNeeded();
     final summaries = await budgetService.getAllBudgetSummaries();
     final categories = await isar.collection<JiveCategory>().where().findAll();
     final categoryByKey = {for (final c in categories) c.key: c};
@@ -506,7 +508,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
                         ),
                       ),
                       Text(
-                        '$symbol ${_formatAmount(budget.amount)}',
+                        '$symbol ${_formatAmount(summary.effectiveAmount)}',
                         style: GoogleFonts.rubik(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -1234,7 +1236,7 @@ class _BudgetDetailSheet extends StatelessWidget {
     final symbol = currencyData['symbol'] as String;
     final scope = _budgetScopeText(budget);
     final totalDays = _totalDaysInclusive(budget.startDate, budget.endDate);
-    final dailyBudget = budget.amount / totalDays;
+    final dailyBudget = summary.effectiveAmount / totalDays;
     final dailyRemaining = summary.daysRemaining > 0
         ? summary.remainingAmount / summary.daysRemaining
         : summary.remainingAmount;
@@ -1328,7 +1330,7 @@ class _BudgetDetailSheet extends StatelessWidget {
                   ),
                   child: Text(
                     summary.status == BudgetStatus.exceeded
-                        ? '已超支 $symbol ${_formatAmount((summary.usedAmount - budget.amount).abs())}'
+                        ? '已超支 $symbol ${_formatAmount((summary.usedAmount - summary.effectiveAmount).abs())}'
                         : '已达到预警阈值 ${budget.alertThreshold?.toStringAsFixed(0) ?? '--'}%',
                     style: GoogleFonts.lato(
                       fontSize: 13,
@@ -1385,14 +1387,20 @@ class _BudgetDetailSheet extends StatelessWidget {
                 budgetService: budgetService,
                 symbol: symbol,
                 themeColor: themeColor,
+                effectiveAmount: summary.effectiveAmount,
               ),
 
               // 详细信息
               _buildDetailRow('预算分类', scope),
               _buildDetailRow(
                 '预算金额',
-                '$symbol ${_formatAmount(budget.amount)}',
+                '$symbol ${_formatAmount(summary.effectiveAmount)}',
               ),
+              if (budget.carryoverAmount != 0)
+                _buildDetailRow(
+                  '结转调整',
+                  '${budget.carryoverAmount > 0 ? '+' : ''}$symbol ${_formatAmount(budget.carryoverAmount)}',
+                ),
               _buildDetailRow(
                 '已使用',
                 '$symbol ${_formatAmount(summary.usedAmount)}',
@@ -1538,12 +1546,14 @@ class _BudgetTrendChartSection extends StatefulWidget {
   final BudgetService budgetService;
   final String symbol;
   final Color themeColor;
+  final double effectiveAmount;
 
   const _BudgetTrendChartSection({
     required this.budget,
     required this.budgetService,
     required this.symbol,
     required this.themeColor,
+    required this.effectiveAmount,
   });
 
   @override
@@ -1703,23 +1713,23 @@ class _BudgetTrendChartSectionState extends State<_BudgetTrendChartSection> {
     final series = _showCumulative ? cumulative : daily;
     final remaining = _showCumulative
         ? cumulative
-              .map(
-                (e) => BudgetDailySpending(
-                  day: e.day,
-                  amount: (widget.budget.amount - e.amount) < 0
-                      ? 0
-                      : (widget.budget.amount - e.amount),
-                ),
-              )
-              .toList()
+            .map(
+              (e) => BudgetDailySpending(
+                day: e.day,
+                amount: (widget.effectiveAmount - e.amount) < 0
+                    ? 0
+                    : (widget.effectiveAmount - e.amount),
+              ),
+            )
+            .toList()
         : const <BudgetDailySpending>[];
 
     double maxY = 0;
     for (final e in series) {
       if (e.amount > maxY) maxY = e.amount;
     }
-    if (_showCumulative && widget.budget.amount > maxY) {
-      maxY = widget.budget.amount;
+    if (_showCumulative && widget.effectiveAmount > maxY) {
+      maxY = widget.effectiveAmount;
     }
     final yInterval = maxY > 0 ? (maxY / 4).ceilToDouble() : 100.0;
 
