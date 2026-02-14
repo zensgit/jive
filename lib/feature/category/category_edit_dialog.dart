@@ -27,6 +27,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   String? _selectedParentKey;
   late bool _isHidden;
   late bool _iconForceTinted;
+  late bool _excludeFromBudget;
   bool _isSaving = false;
   List<JiveCategory> _parents = [];
 
@@ -39,6 +40,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     _selectedParentKey = widget.category.parentKey;
     _isHidden = widget.category.isHidden;
     _iconForceTinted = widget.category.iconForceTinted;
+    _excludeFromBudget = widget.category.excludeFromBudget;
     _loadParents();
   }
 
@@ -52,6 +54,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   @override
   Widget build(BuildContext context) {
     final highlightColor = _resolveSelectedColor() ?? JiveTheme.primaryGreen;
+    final isSubCategory = _selectedParentKey != null;
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
@@ -112,6 +115,19 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                   subtitle: const Text("即使在彩色模式下也显示为单色（跟随分类颜色）"),
                   onChanged: (value) => setState(() => _iconForceTinted = value),
                 ),
+                if (!widget.category.isIncome) ...[
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _excludeFromBudget,
+                    title: const Text("不计入预算"),
+                    subtitle: Text(
+                      isSubCategory
+                          ? "该二级分类相关支出将不计入总预算"
+                          : "该一级分类及其子类相关支出将不计入总预算",
+                    ),
+                    onChanged: (value) => setState(() => _excludeFromBudget = value),
+                  ),
+                ],
                 _buildForceTintedPreview(),
                 const SizedBox(height: 12),
                 _buildParentSelector(),
@@ -390,6 +406,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       _selectedParentKey,
       _selectedColorHex,
       iconForceTinted: _iconForceTinted,
+      excludeFromBudget: _excludeFromBudget,
     );
     if (!mounted) return;
     Navigator.pop(context, true);
@@ -581,6 +598,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       null,
       _selectedColorHex,
       iconForceTinted: _iconForceTinted,
+      excludeFromBudget: _excludeFromBudget,
     );
     if (mounted) Navigator.pop(context, true);
   }
