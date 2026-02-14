@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -8,12 +9,14 @@ import '../../core/database/budget_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/budget_pref_service.dart';
 import '../../core/service/budget_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/widgets/date_range_picker_sheet.dart';
 import 'budget_exclude_screen.dart';
+import 'budget_settings_screen.dart';
 import '../category/category_picker_screen.dart';
 import '../category/category_search_delegate.dart';
 import '../category/category_transactions_screen.dart';
@@ -34,11 +37,19 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
   String? _loadErrorMessage;
   BudgetService? _budgetService;
   CurrencyService? _currencyService;
+  bool _pullToExcludeEnabled = true;
 
   @override
   void initState() {
     super.initState();
+    _loadPrefs();
     _loadData();
+  }
+
+  Future<void> _loadPrefs() async {
+    final pullEnabled = await BudgetPrefService.getBudgetPullToExcludeEnabled();
+    if (!mounted) return;
+    setState(() => _pullToExcludeEnabled = pullEnabled);
   }
 
   Future<void> _loadData() async {
@@ -155,6 +166,19 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
             icon: const Icon(Icons.refresh),
           ),
           IconButton(
+            tooltip: '预算设置',
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BudgetSettingsScreen(),
+                ),
+              );
+              await _loadPrefs();
+            },
+            icon: const Icon(Icons.settings_outlined),
+          ),
+          IconButton(
             tooltip: '预算排除',
             onPressed: _openBudgetExclude,
             icon: const Icon(Icons.block),
@@ -165,21 +189,30 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _loadErrorMessage != null
           ? _buildLoadErrorState()
-          : RefreshIndicator(
-              onRefresh: _pullToOpenBudgetExclude,
-              child: _summaries.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.builder(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      itemCount: _summaries.length + 1,
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return _buildPullHintCard();
-                        }
-                        return _buildBudgetCard(_summaries[index - 1]);
-                      },
-                    ),
+          : Builder(
+              builder: (context) {
+                final list = _summaries.isEmpty
+                    ? _buildEmptyState(showPullHint: _pullToExcludeEnabled)
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(16),
+                        itemCount:
+                            _summaries.length + (_pullToExcludeEnabled ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (_pullToExcludeEnabled && index == 0) {
+                            return _buildPullHintCard();
+                          }
+                          final offset = _pullToExcludeEnabled ? 1 : 0;
+                          return _buildBudgetCard(_summaries[index - offset]);
+                        },
+                      );
+
+                if (!_pullToExcludeEnabled) return list;
+                return RefreshIndicator(
+                  onRefresh: _pullToOpenBudgetExclude,
+                  child: list,
+                );
+              },
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _currencyService == null || _budgetService == null
@@ -225,18 +258,22 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState({required bool showPullHint}) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       children: [
-        _buildPullHintCard(),
+        if (showPullHint) _buildPullHintCard(),
         const SizedBox(height: 24),
         Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.pie_chart_outline, size: 64, color: Colors.grey.shade300),
+              Icon(
+                Icons.pie_chart_outline,
+                size: 64,
+                color: Colors.grey.shade300,
+              ),
               const SizedBox(height: 16),
               Text(
                 '暂无预算',
@@ -281,10 +318,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
               style: TextStyle(color: Colors.grey.shade700),
             ),
           ),
-          TextButton(
-            onPressed: _openBudgetExclude,
-            child: const Text('打开'),
-          ),
+          TextButton(onPressed: _openBudgetExclude, child: const Text('打开')),
         ],
       ),
     );
@@ -505,6 +539,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
       builder: (ctx) => _BudgetDetailSheet(
         summary: summary,
         currencyService: _currencyService!,
+        budgetService: _budgetService!,
         categoryByKey: _categoryByKey,
         onEdit: () {
           Navigator.of(ctx).pop();
@@ -628,7 +663,9 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
   void initState() {
     super.initState();
     _categoryByKey = {for (final c in widget.categories) c.key: c};
-    _preferUserCategories = widget.categories.any((c) => !c.isIncome && !c.isSystem);
+    _preferUserCategories = widget.categories.any(
+      (c) => !c.isIncome && !c.isSystem,
+    );
     final budget = widget.initialBudget;
     if (budget == null) {
       _loadCurrency();
@@ -637,15 +674,25 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
     _initialPeriod = BudgetPeriod.fromValue(budget.period);
     _period = _initialPeriod!;
     _currency = budget.currency;
-    _categoryKey = budget.categoryKey?.isNotEmpty == true ? budget.categoryKey : null;
+    _categoryKey = budget.categoryKey?.isNotEmpty == true
+        ? budget.categoryKey
+        : null;
     _alertEnabled = budget.alertEnabled;
     _alertThreshold = budget.alertThreshold ?? _alertThreshold;
     _nameController.text = budget.name;
     _amountController.text = _formatAmountForInput(budget.amount);
     if (_period == BudgetPeriod.custom) {
       _customRange = DateTimeRange(
-        start: DateTime(budget.startDate.year, budget.startDate.month, budget.startDate.day),
-        end: DateTime(budget.endDate.year, budget.endDate.month, budget.endDate.day),
+        start: DateTime(
+          budget.startDate.year,
+          budget.startDate.month,
+          budget.startDate.day,
+        ),
+        end: DateTime(
+          budget.endDate.year,
+          budget.endDate.month,
+          budget.endDate.day,
+        ),
       );
     }
   }
@@ -722,7 +769,9 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存失败：$e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败：$e')));
       return;
     }
 
@@ -802,8 +851,13 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          _categoryKey == null ? '全部分类' : _categoryLabel(_categoryKey!),
-                          style: GoogleFonts.lato(fontSize: 13, fontWeight: FontWeight.w600),
+                          _categoryKey == null
+                              ? '全部分类'
+                              : _categoryLabel(_categoryKey!),
+                          style: GoogleFonts.lato(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -811,12 +865,23 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
                         IconButton(
                           tooltip: '清除',
                           onPressed: () => setState(() => _categoryKey = null),
-                          icon: Icon(Icons.close, size: 16, color: Colors.grey.shade700),
+                          icon: Icon(
+                            Icons.close,
+                            size: 16,
+                            color: Colors.grey.shade700,
+                          ),
                           padding: EdgeInsets.zero,
                           splashRadius: 16,
-                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                          constraints: const BoxConstraints(
+                            minWidth: 28,
+                            minHeight: 28,
+                          ),
                         ),
-                      Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade600),
+                      Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: Colors.grey.shade600,
+                      ),
                     ],
                   ),
                 ),
@@ -870,22 +935,20 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: BudgetPeriod.values
-                    .map((p) {
-                      final isSelected = _period == p;
-                      return ChoiceChip(
-                        label: Text(p.label),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (!selected) return;
-                          setState(() => _period = p);
-                        },
-                        selectedColor: JiveTheme.primaryGreen.withValues(
-                          alpha: 0.2,
-                        ),
-                      );
-                    })
-                    .toList(),
+                children: BudgetPeriod.values.map((p) {
+                  final isSelected = _period == p;
+                  return ChoiceChip(
+                    label: Text(p.label),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      if (!selected) return;
+                      setState(() => _period = p);
+                    },
+                    selectedColor: JiveTheme.primaryGreen.withValues(
+                      alpha: 0.2,
+                    ),
+                  );
+                }).toList(),
               ),
               const SizedBox(height: 12),
 
@@ -946,8 +1009,20 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
   (DateTime, DateTime) _resolveBudgetDateRange() {
     if (_period == BudgetPeriod.custom) {
       final range = _customRange!;
-      final start = DateTime(range.start.year, range.start.month, range.start.day);
-      final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+      final start = DateTime(
+        range.start.year,
+        range.start.month,
+        range.start.day,
+      );
+      final end = DateTime(
+        range.end.year,
+        range.end.month,
+        range.end.day,
+        23,
+        59,
+        59,
+        999,
+      );
       return (start, end);
     }
 
@@ -986,7 +1061,10 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
           Expanded(
             child: Text(
               rangeText,
-              style: GoogleFonts.lato(fontSize: 13, fontWeight: FontWeight.w600),
+              style: GoogleFonts.lato(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -999,7 +1077,8 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
               splashRadius: 16,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),
-          if (isCustom) Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade600),
+          if (isCustom)
+            Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade600),
         ],
       ),
     );
@@ -1075,7 +1154,9 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
         child: Icon(Icons.category, size: 16, color: Colors.grey.shade700),
       );
     }
-    final color = CategoryService.parseColorHex(category.colorHex) ?? JiveTheme.categoryIconInactive;
+    final color =
+        CategoryService.parseColorHex(category.colorHex) ??
+        JiveTheme.categoryIconInactive;
     return CircleAvatar(
       radius: 14,
       backgroundColor: color.withValues(alpha: 0.12),
@@ -1129,6 +1210,7 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
 class _BudgetDetailSheet extends StatelessWidget {
   final BudgetSummary summary;
   final CurrencyService currencyService;
+  final BudgetService budgetService;
   final Map<String, JiveCategory> categoryByKey;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -1136,6 +1218,7 @@ class _BudgetDetailSheet extends StatelessWidget {
   const _BudgetDetailSheet({
     required this.summary,
     required this.currencyService,
+    required this.budgetService,
     required this.categoryByKey,
     required this.onEdit,
     required this.onDelete,
@@ -1155,192 +1238,210 @@ class _BudgetDetailSheet extends StatelessWidget {
     final dailyRemaining = summary.daysRemaining > 0
         ? summary.remainingAmount / summary.daysRemaining
         : summary.remainingAmount;
+    final themeColor = _budgetThemeColor(budget);
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  budget.name,
-                  style: GoogleFonts.lato(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      budget.name,
+                      style: GoogleFonts.lato(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '编辑',
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: onEdit,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('删除预算'),
+                          content: Text('确定要删除"${budget.name}"预算吗？'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('取消'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                onDelete();
+                              },
+                              child: const Text(
+                                '删除',
+                                style: TextStyle(color: Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const Divider(),
+              const SizedBox(height: 12),
+
+              if (summary.status != BudgetStatus.normal) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:
+                        (summary.status == BudgetStatus.exceeded
+                                ? Colors.red
+                                : Colors.orange)
+                            .withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color:
+                          (summary.status == BudgetStatus.exceeded
+                                  ? Colors.red
+                                  : Colors.orange)
+                              .withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Text(
+                    summary.status == BudgetStatus.exceeded
+                        ? '已超支 $symbol ${_formatAmount((summary.usedAmount - budget.amount).abs())}'
+                        : '已达到预警阈值 ${budget.alertThreshold?.toStringAsFixed(0) ?? '--'}%',
+                    style: GoogleFonts.lato(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: summary.status == BudgetStatus.exceeded
+                          ? Colors.red.shade700
+                          : Colors.orange.shade700,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                IconButton(
-                  tooltip: '编辑',
-                  icon: const Icon(Icons.edit_outlined),
-                  onPressed: onEdit,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: const Text('删除预算'),
-                        content: Text('确定要删除"${budget.name}"预算吗？'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('取消'),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(ctx);
-                              onDelete();
-                            },
-                            child: const Text(
-                              '删除',
-                              style: TextStyle(color: Colors.red),
+                const SizedBox(height: 12),
+              ],
+
+              // 进度圆环
+              Center(
+                child: SizedBox(
+                  width: 150,
+                  height: 150,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircularProgressIndicator(
+                        value: (summary.usedPercent / 100).clamp(0.0, 1.0),
+                        strokeWidth: 12,
+                        backgroundColor: Colors.grey.shade200,
+                        valueColor: AlwaysStoppedAnimation(
+                          summary.status == BudgetStatus.exceeded
+                              ? Colors.red
+                              : summary.status == BudgetStatus.warning
+                              ? Colors.orange
+                              : themeColor,
+                        ),
+                      ),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '${summary.usedPercent.toStringAsFixed(1)}%',
+                            style: GoogleFonts.rubik(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
+                          const Text('已使用', style: TextStyle(fontSize: 12)),
                         ],
                       ),
-                    );
-                  },
+                    ],
+                  ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            const Divider(),
-            const SizedBox(height: 12),
+              ),
+              const SizedBox(height: 24),
+              _BudgetTrendChartSection(
+                budget: budget,
+                budgetService: budgetService,
+                symbol: symbol,
+                themeColor: themeColor,
+              ),
 
-            if (summary.status != BudgetStatus.normal) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: (summary.status == BudgetStatus.exceeded
-                          ? Colors.red
-                          : Colors.orange)
-                      .withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: (summary.status == BudgetStatus.exceeded
-                            ? Colors.red
-                            : Colors.orange)
-                        .withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Text(
-                  summary.status == BudgetStatus.exceeded
-                      ? '已超支 $symbol ${_formatAmount((summary.usedAmount - budget.amount).abs())}'
-                      : '已达到预警阈值 ${budget.alertThreshold?.toStringAsFixed(0) ?? '--'}%',
-                  style: GoogleFonts.lato(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: summary.status == BudgetStatus.exceeded
-                        ? Colors.red.shade700
-                        : Colors.orange.shade700,
-                  ),
-                ),
+              // 详细信息
+              _buildDetailRow('预算分类', scope),
+              _buildDetailRow(
+                '预算金额',
+                '$symbol ${_formatAmount(budget.amount)}',
+              ),
+              _buildDetailRow(
+                '已使用',
+                '$symbol ${_formatAmount(summary.usedAmount)}',
+              ),
+              _buildDetailRow(
+                '剩余',
+                '$symbol ${_formatAmount(summary.remainingAmount)}',
+                valueColor: summary.remainingAmount < 0 ? Colors.red : null,
+              ),
+              _buildDetailRow('日均预算', '$symbol ${_formatAmount(dailyBudget)}'),
+              _buildDetailRow(
+                '剩余日预算',
+                '$symbol ${_formatAmount(dailyRemaining)}',
+                valueColor: dailyRemaining < 0 ? Colors.red : null,
+              ),
+              _buildDetailRow(
+                '开始日期',
+                DateFormat('yyyy-MM-dd').format(budget.startDate),
+              ),
+              _buildDetailRow(
+                '结束日期',
+                DateFormat('yyyy-MM-dd').format(budget.endDate),
+              ),
+              _buildDetailRow('剩余天数', '${summary.daysRemaining} 天'),
+              _buildDetailRow(
+                '预算预警',
+                budget.alertEnabled && budget.alertThreshold != null
+                    ? '已启用（${budget.alertThreshold!.toStringAsFixed(0)}%）'
+                    : '未启用',
               ),
               const SizedBox(height: 12),
-            ],
-
-            // 进度圆环
-            Center(
-              child: SizedBox(
-                width: 150,
-                height: 150,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    CircularProgressIndicator(
-                      value: (summary.usedPercent / 100).clamp(0.0, 1.0),
-                      strokeWidth: 12,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation(
-                        summary.status == BudgetStatus.exceeded
-                            ? Colors.red
-                            : summary.status == BudgetStatus.warning
-                            ? Colors.orange
-                            : JiveTheme.primaryGreen,
-                      ),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => _openTransactions(context),
+                  icon: const Icon(Icons.receipt_long),
+                  label: const Text('查看账单'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: JiveTheme.primaryGreen,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '${summary.usedPercent.toStringAsFixed(1)}%',
-                          style: GoogleFonts.rubik(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const Text('已使用', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // 详细信息
-            _buildDetailRow('预算分类', scope),
-            _buildDetailRow('预算金额', '$symbol ${_formatAmount(budget.amount)}'),
-            _buildDetailRow(
-              '已使用',
-              '$symbol ${_formatAmount(summary.usedAmount)}',
-            ),
-            _buildDetailRow(
-              '剩余',
-              '$symbol ${_formatAmount(summary.remainingAmount)}',
-              valueColor: summary.remainingAmount < 0 ? Colors.red : null,
-            ),
-            _buildDetailRow(
-              '日均预算',
-              '$symbol ${_formatAmount(dailyBudget)}',
-            ),
-            _buildDetailRow(
-              '剩余日预算',
-              '$symbol ${_formatAmount(dailyRemaining)}',
-              valueColor: dailyRemaining < 0 ? Colors.red : null,
-            ),
-            _buildDetailRow(
-              '开始日期',
-              DateFormat('yyyy-MM-dd').format(budget.startDate),
-            ),
-            _buildDetailRow(
-              '结束日期',
-              DateFormat('yyyy-MM-dd').format(budget.endDate),
-            ),
-            _buildDetailRow('剩余天数', '${summary.daysRemaining} 天'),
-            _buildDetailRow(
-              '预算预警',
-              budget.alertEnabled && budget.alertThreshold != null
-                  ? '已启用（${budget.alertThreshold!.toStringAsFixed(0)}%）'
-                  : '未启用',
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _openTransactions(context),
-                icon: const Icon(Icons.receipt_long),
-                label: const Text('查看账单'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: JiveTheme.primaryGreen,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1352,7 +1453,9 @@ class _BudgetDetailSheet extends StatelessWidget {
     String? filterSubCategoryKey;
     if (budget.categoryKey != null && budget.categoryKey!.isNotEmpty) {
       final selected = categoryByKey[budget.categoryKey!];
-      if (selected != null && selected.parentKey != null && selected.parentKey!.isNotEmpty) {
+      if (selected != null &&
+          selected.parentKey != null &&
+          selected.parentKey!.isNotEmpty) {
         filterSubCategoryKey = selected.key;
       } else {
         filterCategoryKey = budget.categoryKey;
@@ -1384,6 +1487,16 @@ class _BudgetDetailSheet extends StatelessWidget {
     return category.name;
   }
 
+  Color _budgetThemeColor(JiveBudget budget) {
+    final key = budget.categoryKey;
+    if (key == null || key.isEmpty) return JiveTheme.primaryGreen;
+    final category = categoryByKey[key];
+    final color = category == null
+        ? null
+        : CategoryService.parseColorHex(category.colorHex);
+    return color ?? JiveTheme.primaryGreen;
+  }
+
   int _totalDaysInclusive(DateTime start, DateTime end) {
     final startDay = DateTime(start.year, start.month, start.day);
     final endDay = DateTime(end.year, end.month, end.day);
@@ -1408,6 +1521,386 @@ class _BudgetDetailSheet extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatAmount(double amount) {
+    return amount
+        .toStringAsFixed(2)
+        .replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+\.)'),
+          (match) => '${match[1]},',
+        );
+  }
+}
+
+class _BudgetTrendChartSection extends StatefulWidget {
+  final JiveBudget budget;
+  final BudgetService budgetService;
+  final String symbol;
+  final Color themeColor;
+
+  const _BudgetTrendChartSection({
+    required this.budget,
+    required this.budgetService,
+    required this.symbol,
+    required this.themeColor,
+  });
+
+  @override
+  State<_BudgetTrendChartSection> createState() =>
+      _BudgetTrendChartSectionState();
+}
+
+class _BudgetTrendChartSectionState extends State<_BudgetTrendChartSection> {
+  bool _enabled = true;
+  bool _isLoading = true;
+  String? _error;
+  List<BudgetDailySpending> _daily = [];
+  bool _showCumulative = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final enabled = await BudgetPrefService.getBudgetTrendChartEnabled();
+    if (!mounted) return;
+    if (!enabled) {
+      setState(() {
+        _enabled = false;
+        _isLoading = false;
+        _error = null;
+        _daily = const [];
+      });
+      return;
+    }
+
+    setState(() {
+      _enabled = true;
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final daily = await widget.budgetService.getBudgetDailySpendingTrend(
+        widget.budget,
+        days: 14,
+      );
+      if (!mounted) return;
+      setState(() {
+        _daily = daily;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _daily = const [];
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_enabled) return const SizedBox.shrink();
+
+    Widget content;
+    if (_isLoading) {
+      content = _buildLoading();
+    } else if (_error != null) {
+      content = _buildError();
+    } else if (_daily.isEmpty || !_daily.any((e) => e.amount > 0)) {
+      content = _buildEmpty();
+    } else {
+      content = _buildChart();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [content, const SizedBox(height: 18)],
+    );
+  }
+
+  Widget _buildLoading() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '正在生成支出趋势…',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.red.shade100),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 18, color: Colors.red.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '趋势图生成失败：$_error',
+              style: TextStyle(color: Colors.red.shade700),
+            ),
+          ),
+          TextButton(onPressed: _load, child: const Text('重试')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmpty() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.show_chart, size: 18, color: Colors.grey.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '近14天无支出',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChart() {
+    final source = _showCumulative ? _toCumulative(_daily) : _daily;
+    final maxY = source.map((e) => e.amount).reduce((a, b) => a > b ? a : b);
+    final yInterval = maxY > 0 ? (maxY / 4).ceilToDouble() : 100.0;
+
+    final spots = <FlSpot>[];
+    for (var i = 0; i < source.length; i++) {
+      spots.add(FlSpot(i.toDouble(), source[i].amount));
+    }
+
+    final dateFormat = DateFormat('M/d');
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '支出趋势',
+                  style: GoogleFonts.lato(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Row(
+                  children: [
+                    _buildChartToggle('每日', !_showCumulative, () {
+                      setState(() => _showCumulative = false);
+                    }),
+                    const SizedBox(width: 8),
+                    _buildChartToggle('累计', _showCumulative, () {
+                      setState(() => _showCumulative = true);
+                    }),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _showCumulative ? '近14天累计支出' : '近14天每日支出',
+              style: GoogleFonts.lato(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 160,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: yInterval > 0 ? yInterval : 100,
+                    getDrawingHorizontalLine: (value) =>
+                        FlLine(color: Colors.grey.shade200, strokeWidth: 1),
+                  ),
+                  titlesData: FlTitlesData(
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 42,
+                        interval: yInterval > 0 ? yInterval : 100,
+                        getTitlesWidget: (value, meta) {
+                          if (value == 0) return const SizedBox.shrink();
+                          final display = value >= 1000
+                              ? '${(value / 1000).toStringAsFixed(1)}k'
+                              : value.toInt().toString();
+                          return Text(
+                            display,
+                            style: GoogleFonts.lato(
+                              fontSize: 10,
+                              color: Colors.grey,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 24,
+                        interval: source.length > 10 ? 3 : 1,
+                        getTitlesWidget: (value, meta) {
+                          final index = value.toInt();
+                          if (index < 0 || index >= source.length) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              dateFormat.format(source[index].day),
+                              style: GoogleFonts.lato(
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  minX: 0,
+                  maxX: (source.length - 1).toDouble(),
+                  minY: 0,
+                  maxY: maxY > 0 ? maxY * 1.1 : 100,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      curveSmoothness: 0.3,
+                      color: widget.themeColor,
+                      barWidth: 2.5,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          return FlDotCirclePainter(
+                            radius: 3,
+                            color: Colors.white,
+                            strokeWidth: 2,
+                            strokeColor: widget.themeColor,
+                          );
+                        },
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: widget.themeColor.withValues(alpha: 0.10),
+                      ),
+                    ),
+                  ],
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          final index = spot.x.toInt();
+                          if (index < 0 || index >= source.length) return null;
+                          final item = source[index];
+                          return LineTooltipItem(
+                            '${dateFormat.format(item.day)}\n${widget.symbol} ${_formatAmount(item.amount)}',
+                            GoogleFonts.lato(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          );
+                        }).toList();
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChartToggle(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? JiveTheme.primaryGreen.withValues(alpha: 0.10)
+              : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected ? JiveTheme.primaryGreen : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.lato(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: selected ? JiveTheme.primaryGreen : Colors.grey.shade600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<BudgetDailySpending> _toCumulative(List<BudgetDailySpending> input) {
+    var sum = 0.0;
+    return input.map((e) {
+      sum += e.amount;
+      return BudgetDailySpending(day: e.day, amount: sum);
+    }).toList();
   }
 
   String _formatAmount(double amount) {

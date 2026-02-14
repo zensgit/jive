@@ -217,65 +217,62 @@ void main() {
     },
   );
 
-  test(
-    'overall budget ignores transactions in excluded categories',
-    () async {
-      await budgetService.createBudget(
-        name: '月度预算',
-        amount: 1000,
-        currency: 'CNY',
-        startDate: DateTime(2024, 3, 1),
-        endDate: DateTime(2024, 3, 31, 23, 59, 59),
-        period: 'monthly',
-      );
+  test('overall budget ignores transactions in excluded categories', () async {
+    await budgetService.createBudget(
+      name: '月度预算',
+      amount: 1000,
+      currency: 'CNY',
+      startDate: DateTime(2024, 3, 1),
+      endDate: DateTime(2024, 3, 31, 23, 59, 59),
+      period: 'monthly',
+    );
 
-      await isar.writeTxn(() async {
-        await isar.collection<JiveCategory>().putAll([
-          JiveCategory()
-            ..key = 'food'
-            ..name = '餐饮'
-            ..iconName = 'food'
-            ..order = 0
-            ..isSystem = false
-            ..isHidden = false
-            ..isIncome = false
-            ..excludeFromBudget = true
-            ..updatedAt = DateTime(2024, 3, 1),
-          JiveCategory()
-            ..key = 'transport'
-            ..name = '交通'
-            ..iconName = 'transport'
-            ..order = 1
-            ..isSystem = false
-            ..isHidden = false
-            ..isIncome = false
-            ..excludeFromBudget = false
-            ..updatedAt = DateTime(2024, 3, 1),
-        ]);
+    await isar.writeTxn(() async {
+      await isar.collection<JiveCategory>().putAll([
+        JiveCategory()
+          ..key = 'food'
+          ..name = '餐饮'
+          ..iconName = 'food'
+          ..order = 0
+          ..isSystem = false
+          ..isHidden = false
+          ..isIncome = false
+          ..excludeFromBudget = true
+          ..updatedAt = DateTime(2024, 3, 1),
+        JiveCategory()
+          ..key = 'transport'
+          ..name = '交通'
+          ..iconName = 'transport'
+          ..order = 1
+          ..isSystem = false
+          ..isHidden = false
+          ..isIncome = false
+          ..excludeFromBudget = false
+          ..updatedAt = DateTime(2024, 3, 1),
+      ]);
 
-        await isar.collection<JiveTransaction>().putAll([
-          JiveTransaction()
-            ..amount = 200
-            ..source = 'Seed'
-            ..timestamp = DateTime(2024, 3, 10, 9)
-            ..type = 'expense'
-            ..categoryKey = 'food',
-          JiveTransaction()
-            ..amount = 50
-            ..source = 'Seed'
-            ..timestamp = DateTime(2024, 3, 11, 9)
-            ..type = 'expense'
-            ..categoryKey = 'transport',
-        ]);
-      });
+      await isar.collection<JiveTransaction>().putAll([
+        JiveTransaction()
+          ..amount = 200
+          ..source = 'Seed'
+          ..timestamp = DateTime(2024, 3, 10, 9)
+          ..type = 'expense'
+          ..categoryKey = 'food',
+        JiveTransaction()
+          ..amount = 50
+          ..source = 'Seed'
+          ..timestamp = DateTime(2024, 3, 11, 9)
+          ..type = 'expense'
+          ..categoryKey = 'transport',
+      ]);
+    });
 
-      final summaries = await budgetService.getAllBudgetSummaries();
+    final summaries = await budgetService.getAllBudgetSummaries();
 
-      expect(summaries.length, 1);
-      expect(summaries.first.usedAmount, 50);
-      expect(summaries.first.remainingAmount, 950);
-    },
-  );
+    expect(summaries.length, 1);
+    expect(summaries.first.usedAmount, 50);
+    expect(summaries.first.remainingAmount, 950);
+  });
 
   test(
     'overall budget ignores transactions in excluded subcategories only',
@@ -348,6 +345,211 @@ void main() {
       expect(summaries.length, 1);
       expect(summaries.first.usedAmount, 50);
       expect(summaries.first.remainingAmount, 950);
+    },
+  );
+
+  test(
+    'evaluateBudgetImpactsForTransaction returns warning when an expense crosses alert threshold',
+    () async {
+      await budgetService.createBudget(
+        name: '月度预算',
+        amount: 100,
+        currency: 'CNY',
+        startDate: DateTime(2024, 5, 1),
+        endDate: DateTime(2024, 5, 31, 23, 59, 59, 999),
+        period: 'monthly',
+        alertEnabled: true,
+        alertThreshold: 80,
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().put(
+          JiveTransaction()
+            ..amount = 70
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 5, 5, 10)
+            ..type = 'expense',
+        );
+      });
+
+      final newTx = JiveTransaction()
+        ..amount = 15
+        ..source = 'Preview'
+        ..timestamp = DateTime(2024, 5, 6, 10)
+        ..type = 'expense';
+
+      final impacts = await budgetService.evaluateBudgetImpactsForTransaction(
+        newTransaction: newTx,
+      );
+
+      expect(impacts.length, 1);
+      expect(impacts.first.currentStatus, BudgetStatus.normal);
+      expect(impacts.first.projectedStatus, BudgetStatus.warning);
+    },
+  );
+
+  test(
+    'evaluateBudgetImpactsForTransaction does not return when budget stays warning',
+    () async {
+      await budgetService.createBudget(
+        name: '月度预算',
+        amount: 100,
+        currency: 'CNY',
+        startDate: DateTime(2024, 5, 1),
+        endDate: DateTime(2024, 5, 31, 23, 59, 59, 999),
+        period: 'monthly',
+        alertEnabled: true,
+        alertThreshold: 80,
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().put(
+          JiveTransaction()
+            ..amount = 85
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 5, 5, 10)
+            ..type = 'expense',
+        );
+      });
+
+      final newTx = JiveTransaction()
+        ..amount = 5
+        ..source = 'Preview'
+        ..timestamp = DateTime(2024, 5, 6, 10)
+        ..type = 'expense';
+
+      final impacts = await budgetService.evaluateBudgetImpactsForTransaction(
+        newTransaction: newTx,
+      );
+
+      expect(impacts, isEmpty);
+    },
+  );
+
+  test(
+    'evaluateBudgetImpactsForTransaction returns exceeded when warning budget crosses amount',
+    () async {
+      await budgetService.createBudget(
+        name: '月度预算',
+        amount: 100,
+        currency: 'CNY',
+        startDate: DateTime(2024, 5, 1),
+        endDate: DateTime(2024, 5, 31, 23, 59, 59, 999),
+        period: 'monthly',
+        alertEnabled: true,
+        alertThreshold: 80,
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().put(
+          JiveTransaction()
+            ..amount = 85
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 5, 5, 10)
+            ..type = 'expense',
+        );
+      });
+
+      final newTx = JiveTransaction()
+        ..amount = 20
+        ..source = 'Preview'
+        ..timestamp = DateTime(2024, 5, 6, 10)
+        ..type = 'expense';
+
+      final impacts = await budgetService.evaluateBudgetImpactsForTransaction(
+        newTransaction: newTx,
+      );
+
+      expect(impacts.length, 1);
+      expect(impacts.first.currentStatus, BudgetStatus.warning);
+      expect(impacts.first.projectedStatus, BudgetStatus.exceeded);
+    },
+  );
+
+  test(
+    'evaluateBudgetImpactsForTransaction ignores expenses in excluded categories for total budgets',
+    () async {
+      await budgetService.createBudget(
+        name: '总预算',
+        amount: 100,
+        currency: 'CNY',
+        startDate: DateTime(2024, 6, 1),
+        endDate: DateTime(2024, 6, 30, 23, 59, 59, 999),
+        period: 'monthly',
+        alertEnabled: true,
+        alertThreshold: 80,
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveCategory>().put(
+          JiveCategory()
+            ..key = 'coffee'
+            ..name = '咖啡'
+            ..iconName = 'coffee'
+            ..order = 0
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..excludeFromBudget = true
+            ..updatedAt = DateTime(2024, 6, 1),
+        );
+      });
+
+      final newTx = JiveTransaction()
+        ..amount = 90
+        ..source = 'Preview'
+        ..timestamp = DateTime(2024, 6, 6, 10)
+        ..type = 'expense'
+        ..categoryKey = 'coffee';
+
+      final impacts = await budgetService.evaluateBudgetImpactsForTransaction(
+        newTransaction: newTx,
+      );
+
+      expect(impacts, isEmpty);
+    },
+  );
+
+  test(
+    'getBudgetDailySpendingTrend returns daily sums (including zeros) for recent days',
+    () async {
+      final budget = await budgetService.createBudget(
+        name: '月度预算',
+        amount: 1000,
+        currency: 'CNY',
+        startDate: DateTime(2024, 5, 1),
+        endDate: DateTime(2024, 5, 31, 23, 59, 59, 999),
+        period: 'monthly',
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().putAll([
+          JiveTransaction()
+            ..amount = 10
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 5, 5, 9)
+            ..type = 'expense',
+          JiveTransaction()
+            ..amount = 20
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 5, 6, 9)
+            ..type = 'expense',
+        ]);
+      });
+
+      final trend = await budgetService.getBudgetDailySpendingTrend(
+        budget,
+        days: 3,
+        referenceDate: DateTime(2024, 5, 6, 12),
+      );
+
+      expect(trend.length, 3);
+      expect(trend[0].day, DateTime(2024, 5, 4));
+      expect(trend[0].amount, 0);
+      expect(trend[1].day, DateTime(2024, 5, 5));
+      expect(trend[1].amount, 10);
+      expect(trend[2].day, DateTime(2024, 5, 6));
+      expect(trend[2].amount, 20);
     },
   );
 
