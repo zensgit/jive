@@ -1742,6 +1742,18 @@ class CategoryService {
     await _syncSystemOverridesForCategories([cat]);
   }
 
+  Future<void> setCategoryExcludeFromBudget(int id, bool excludeFromBudget) async {
+    final cat = await isar.collection<JiveCategory>().get(id);
+    if (cat == null) return;
+    if (cat.excludeFromBudget == excludeFromBudget) return;
+    cat.excludeFromBudget = excludeFromBudget;
+    cat.updatedAt = DateTime.now();
+    await isar.writeTxn(() async {
+      await isar.collection<JiveCategory>().put(cat);
+    });
+    await _syncSystemOverridesForCategories([cat]);
+  }
+
   // 更新分类 (核心逻辑: 改名、改图标、改爸爸)
   Future<void> updateCategory(
     int id,
