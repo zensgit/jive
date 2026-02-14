@@ -54,7 +54,7 @@ import 'feature/project/project_list_screen.dart';
 import 'feature/recurring/recurring_rule_list_screen.dart';
 import 'feature/currency/currency_settings_screen.dart';
 import 'feature/currency/currency_converter_screen.dart';
-import 'feature/budget/budget_manager_screen.dart';
+import 'feature/budget/budget_list_screen.dart';
 import 'feature/settings/settings_screen.dart';
 import 'core/utils/logger_util.dart';
 
@@ -1480,7 +1480,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) =>
-                                        const BudgetManagerScreen(),
+                                        const BudgetListScreen(),
                                   ),
                                 );
                               },

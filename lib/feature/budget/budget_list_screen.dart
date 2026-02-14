@@ -21,7 +21,7 @@ import '../category/category_picker_screen.dart';
 import '../category/category_search_delegate.dart';
 import '../category/category_transactions_screen.dart';
 
-/// 全部预算列表（历史/自定义预算等）
+/// 预算管理界面
 class BudgetListScreen extends StatefulWidget {
   const BudgetListScreen({super.key});
 
@@ -160,7 +160,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('全部预算'),
+        title: const Text('预算管理'),
         actions: [
           IconButton(
             tooltip: '刷新',
