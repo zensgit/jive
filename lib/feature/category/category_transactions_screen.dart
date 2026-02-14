@@ -49,6 +49,7 @@ class _CategoryTransactionsScreenState
   int? _searchAccountId;
   String? _searchTag;
   DateTimeRange? _searchDateRange;
+  BudgetInclusionFilter _searchBudgetFilter = BudgetInclusionFilter.all;
   DateTime? _minTransactionDate;
   DateTime? _maxTransactionDate;
   Set<int> _transactionYears = {};
@@ -321,7 +322,8 @@ class _CategoryTransactionsScreenState
         _searchCategoryKey != null ||
         _searchAccountId != null ||
         (_searchTag?.isNotEmpty ?? false) ||
-        _searchDateRange != null;
+        _searchDateRange != null ||
+        _searchBudgetFilter != BudgetInclusionFilter.all;
     return Material(
       elevation: 6,
       shadowColor: Colors.black.withValues(alpha: 0.08),
@@ -602,6 +604,10 @@ class _CategoryTransactionsScreenState
           initialAccountId: _searchAccountId,
           initialTag: _searchTag,
           initialDateRange: _searchDateRange,
+          initialBudgetFilter: _searchBudgetFilter,
+          onBudgetFilterChanged: (mode) {
+            _updateSearchFilters(budgetFilter: mode);
+          },
           minDate: _minTransactionDate,
           maxDate: _maxTransactionDate,
           enabledYears: enabledYears,
@@ -786,6 +792,7 @@ class _CategoryTransactionsScreenState
     int? accountId,
     String? tag,
     DateTimeRange? dateRange,
+    BudgetInclusionFilter? budgetFilter,
   }) {
     final normalizedTag = tag?.trim();
     setState(() {
@@ -795,6 +802,9 @@ class _CategoryTransactionsScreenState
           ? null
           : normalizedTag;
       _searchDateRange = dateRange;
+      if (budgetFilter != null) {
+        _searchBudgetFilter = budgetFilter;
+      }
     });
   }
 
@@ -804,6 +814,7 @@ class _CategoryTransactionsScreenState
       _searchAccountId = null;
       _searchTag = null;
       _searchDateRange = null;
+      _searchBudgetFilter = BudgetInclusionFilter.all;
     });
   }
 
@@ -814,6 +825,7 @@ class _CategoryTransactionsScreenState
       _searchAccountId = null;
       _searchTag = null;
       _searchDateRange = null;
+      _searchBudgetFilter = BudgetInclusionFilter.all;
     });
     _searchController.clear();
     _searchFocus.unfocus();
@@ -824,7 +836,8 @@ class _CategoryTransactionsScreenState
         _searchCategoryKey != null ||
         _searchAccountId != null ||
         (_searchTag?.isNotEmpty ?? false) ||
-        _searchDateRange != null;
+        _searchDateRange != null ||
+        _searchBudgetFilter != BudgetInclusionFilter.all;
   }
 
   List<JiveTransaction> _applySearch(List<JiveTransaction> entries) {
@@ -833,6 +846,23 @@ class _CategoryTransactionsScreenState
     final amountQuery = double.tryParse(query);
 
     return entries.where((tx) {
+      if (_searchBudgetFilter != BudgetInclusionFilter.all) {
+        // Budget only applies to expenses; when filtering by budget inclusion,
+        // keep the result focused on expense transactions.
+        if (tx.type != 'expense') return false;
+        final categoryExcluded = tx.categoryKey != null &&
+            (_categoryByKey[tx.categoryKey!]?.excludeFromBudget == true);
+        final subExcluded = tx.subCategoryKey != null &&
+            (_categoryByKey[tx.subCategoryKey!]?.excludeFromBudget == true);
+        final isExcluded = tx.excludeFromBudget || categoryExcluded || subExcluded;
+        if (_searchBudgetFilter == BudgetInclusionFilter.excludedOnly && !isExcluded) {
+          return false;
+        }
+        if (_searchBudgetFilter == BudgetInclusionFilter.includedOnly && isExcluded) {
+          return false;
+        }
+      }
+
       if (_searchCategoryKey != null) {
         final key = _searchCategoryKey;
         final categoryName = _categoryByKey[key!]?.name;
