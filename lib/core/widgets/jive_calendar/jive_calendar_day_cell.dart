@@ -53,6 +53,7 @@ class JiveCalendarDayCell extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = lunarLabel?.trim();
     final showLunar = label != null && label.isNotEmpty;
+    final reserveRight = holidayCornerMark != null ? 10.0 : 2.0;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       margin: style.cellMargin,
@@ -63,7 +64,9 @@ class JiveCalendarDayCell extends StatelessWidget {
         children: [
           Positioned.fill(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+              // When holiday corner marks are shown, reserve space so they do
+              // not visually collide with 2-digit day numbers on narrow cells.
+              padding: EdgeInsets.fromLTRB(2, 2, reserveRight, 2),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   // When the calendar shows 6 rows, the cell can be quite
@@ -124,7 +127,7 @@ class JiveCalendarDayCell extends StatelessWidget {
               top: 1,
               right: 1,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
                 decoration: BoxDecoration(
                   color: holidayCornerMark!.backgroundColor,
                   borderRadius: BorderRadius.circular(6),
@@ -132,7 +135,7 @@ class JiveCalendarDayCell extends StatelessWidget {
                 child: Text(
                   holidayCornerMark!.label,
                   style: GoogleFonts.lato(
-                    fontSize: 8,
+                    fontSize: 7,
                     fontWeight: FontWeight.w800,
                     color: holidayCornerMark!.foregroundColor,
                   ),

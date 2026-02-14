@@ -13,7 +13,7 @@ import '../../core/service/database_service.dart';
 import '../../core/service/smart_tag_log_service.dart';
 import '../../core/service/tag_rule_service.dart';
 import '../../core/service/ui_pref_service.dart';
-import '../../core/widgets/date_range_picker_sheet.dart';
+import '../../core/widgets/jive_calendar/jive_calendar.dart';
 import 'smart_tag_recent_matches_screen.dart';
 import 'tag_icon_catalog.dart';
 

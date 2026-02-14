@@ -35,5 +35,52 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('休'), findsOneWidget);
   });
-}
 
+  testWidgets('Holiday corner mark does not overlap the day number', (tester) async {
+    final style = const CalendarStyle();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 42,
+              height: 42,
+              child: JiveCalendarDayCell(
+                day: DateTime(2026, 2, 15),
+                style: style,
+                decoration: const BoxDecoration(color: Colors.white),
+                textStyle: const TextStyle(fontSize: 14, color: Colors.black),
+                lunarLabel: '初八',
+                showTodayLabel: false,
+                holidayCornerMark: const JiveHolidayCornerMark(
+                  JiveHolidayCornerType.rest,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+
+    final dayBox = find.ancestor(
+      of: find.text('15'),
+      matching: find.byType(FittedBox),
+    );
+    final holidayBox = find.ancestor(
+      of: find.text('休'),
+      matching: find.byWidgetPredicate((widget) {
+        if (widget is! Container) return false;
+        return widget.padding ==
+            const EdgeInsets.symmetric(horizontal: 2, vertical: 1);
+      }),
+    );
+    expect(dayBox, findsOneWidget);
+    expect(holidayBox, findsOneWidget);
+
+    final dayRect = tester.getRect(dayBox);
+    final holidayRect = tester.getRect(holidayBox);
+    expect(dayRect.overlaps(holidayRect), isFalse);
+  });
+}
