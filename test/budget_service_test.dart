@@ -155,6 +155,69 @@ void main() {
   );
 
   test(
+    'budget subcategory filter counts matching expense transactions by subCategoryKey',
+    () async {
+      await budgetService.createBudget(
+        name: '咖啡预算',
+        amount: 500,
+        currency: 'CNY',
+        categoryKey: 'coffee',
+        startDate: DateTime(2024, 5, 1),
+        endDate: DateTime(2024, 5, 31, 23, 59, 59, 999),
+        period: 'monthly',
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().putAll([
+          JiveTransaction()
+            ..amount = 30
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 5, 5, 10)
+            ..type = 'expense'
+            ..categoryKey = 'food'
+            ..subCategoryKey = 'coffee',
+          JiveTransaction()
+            ..amount = 80
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 5, 6, 10)
+            ..type = 'expense'
+            ..categoryKey = 'food'
+            ..subCategoryKey = 'lunch',
+        ]);
+      });
+
+      final summaries = await budgetService.getAllBudgetSummaries();
+
+      expect(summaries.length, 1);
+      expect(summaries.first.usedAmount, 30);
+      expect(summaries.first.remainingAmount, 470);
+    },
+  );
+
+  test(
+    'calculateBudgetUsage returns inclusive daysRemaining when endDate is today',
+    () async {
+      final now = DateTime.now();
+      final start = DateTime(now.year, now.month, now.day);
+      final end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+      final budget = JiveBudget()
+        ..name = '日预算'
+        ..amount = 100
+        ..currency = 'CNY'
+        ..categoryKey = null
+        ..startDate = start
+        ..endDate = end
+        ..period = 'daily'
+        ..alertEnabled = false
+        ..createdAt = now
+        ..updatedAt = now;
+
+      final summary = await budgetService.calculateBudgetUsage(budget);
+      expect(summary.daysRemaining, 1);
+    },
+  );
+
+  test(
     'overall budget ignores transactions in excluded categories',
     () async {
       await budgetService.createBudget(
@@ -295,6 +358,6 @@ void main() {
     );
 
     expect(start, DateTime(2025, 2, 1));
-    expect(end, DateTime(2025, 2, 28, 23, 59, 59));
+    expect(end, DateTime(2025, 2, 28, 23, 59, 59, 999));
   });
 }

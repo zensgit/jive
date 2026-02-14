@@ -12,6 +12,7 @@ import '../../core/service/budget_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/widgets/date_range_picker_sheet.dart';
 import 'budget_exclude_screen.dart';
 import '../category/category_picker_screen.dart';
 import '../category/category_search_delegate.dart';
@@ -98,6 +99,10 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
   }
 
   Future<void> _createBudget() async {
+    await _openBudgetEditor();
+  }
+
+  Future<void> _openBudgetEditor({JiveBudget? budget}) async {
     if (_currencyService == null || _budgetService == null) {
       ScaffoldMessenger.of(
         context,
@@ -112,10 +117,11 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => _CreateBudgetSheet(
+      builder: (ctx) => _BudgetEditorSheet(
         currencyService: _currencyService!,
         budgetService: _budgetService!,
         categories: _categoryByKey.values.toList(),
+        initialBudget: budget,
       ),
     );
 
@@ -500,6 +506,15 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
         summary: summary,
         currencyService: _currencyService!,
         categoryByKey: _categoryByKey,
+        onEdit: () {
+          Navigator.of(ctx).pop();
+          unawaited(
+            Future<void>.delayed(
+              const Duration(milliseconds: 150),
+              () => _openBudgetEditor(budget: summary.budget),
+            ),
+          );
+        },
         onDelete: () async {
           try {
             await _budgetService!.deleteBudget(summary.budget.id);
@@ -578,22 +593,24 @@ class _BudgetLoadResult {
 }
 
 /// 创建预算底部弹窗
-class _CreateBudgetSheet extends StatefulWidget {
+class _BudgetEditorSheet extends StatefulWidget {
   final CurrencyService currencyService;
   final BudgetService budgetService;
   final List<JiveCategory> categories;
+  final JiveBudget? initialBudget;
 
-  const _CreateBudgetSheet({
+  const _BudgetEditorSheet({
     required this.currencyService,
     required this.budgetService,
     required this.categories,
+    this.initialBudget,
   });
 
   @override
-  State<_CreateBudgetSheet> createState() => _CreateBudgetSheetState();
+  State<_BudgetEditorSheet> createState() => _BudgetEditorSheetState();
 }
 
-class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
+class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
   final _nameController = TextEditingController();
   final _amountController = TextEditingController();
   String _currency = 'CNY';
@@ -601,16 +618,36 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
   bool _alertEnabled = true;
   double _alertThreshold = 80;
   String? _categoryKey;
+  DateTimeRange? _customRange;
   late final Map<String, JiveCategory> _categoryByKey;
   late final bool _preferUserCategories;
-  bool _isCreating = false;
+  late final BudgetPeriod? _initialPeriod;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
     _categoryByKey = {for (final c in widget.categories) c.key: c};
     _preferUserCategories = widget.categories.any((c) => !c.isIncome && !c.isSystem);
-    _loadCurrency();
+    final budget = widget.initialBudget;
+    if (budget == null) {
+      _loadCurrency();
+      return;
+    }
+    _initialPeriod = BudgetPeriod.fromValue(budget.period);
+    _period = _initialPeriod!;
+    _currency = budget.currency;
+    _categoryKey = budget.categoryKey?.isNotEmpty == true ? budget.categoryKey : null;
+    _alertEnabled = budget.alertEnabled;
+    _alertThreshold = budget.alertThreshold ?? _alertThreshold;
+    _nameController.text = budget.name;
+    _amountController.text = _formatAmountForInput(budget.amount);
+    if (_period == BudgetPeriod.custom) {
+      _customRange = DateTimeRange(
+        start: DateTime(budget.startDate.year, budget.startDate.month, budget.startDate.day),
+        end: DateTime(budget.endDate.year, budget.endDate.month, budget.endDate.day),
+      );
+    }
   }
 
   Future<void> _loadCurrency() async {
@@ -625,7 +662,7 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
     super.dispose();
   }
 
-  Future<void> _create() async {
+  Future<void> _save() async {
     final name = _nameController.text.trim();
     final amount = double.tryParse(_amountController.text) ?? 0;
 
@@ -643,21 +680,51 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
       return;
     }
 
-    setState(() => _isCreating = true);
+    if (_period == BudgetPeriod.custom && _customRange == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请选择预算日期范围')));
+      return;
+    }
 
-    final (startDate, endDate) = BudgetService.getPeriodDateRange(_period);
+    setState(() => _isSaving = true);
 
-    await widget.budgetService.createBudget(
-      name: name,
-      amount: amount,
-      currency: _currency,
-      categoryKey: _categoryKey,
-      startDate: startDate,
-      endDate: endDate,
-      period: _period.value,
-      alertEnabled: _alertEnabled,
-      alertThreshold: _alertThreshold,
-    );
+    try {
+      final (startDate, endDate) = _resolveBudgetDateRange();
+      final alertThreshold = _alertEnabled ? _alertThreshold : null;
+
+      final budget = widget.initialBudget;
+      if (budget == null) {
+        await widget.budgetService.createBudget(
+          name: name,
+          amount: amount,
+          currency: _currency,
+          categoryKey: _categoryKey,
+          startDate: startDate,
+          endDate: endDate,
+          period: _period.value,
+          alertEnabled: _alertEnabled,
+          alertThreshold: alertThreshold,
+        );
+      } else {
+        budget
+          ..name = name
+          ..amount = amount
+          ..currency = _currency
+          ..categoryKey = _categoryKey
+          ..startDate = startDate
+          ..endDate = endDate
+          ..period = _period.value
+          ..alertEnabled = _alertEnabled
+          ..alertThreshold = alertThreshold;
+        await widget.budgetService.updateBudget(budget);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存失败：$e')));
+      return;
+    }
 
     if (mounted) {
       Navigator.pop(context, true);
@@ -666,6 +733,7 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isEditing = widget.initialBudget != null;
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -684,7 +752,7 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
                   const Icon(Icons.pie_chart, color: JiveTheme.primaryGreen),
                   const SizedBox(width: 8),
                   Text(
-                    '创建预算',
+                    isEditing ? '编辑预算' : '创建预算',
                     style: GoogleFonts.lato(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -803,14 +871,14 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
               Wrap(
                 spacing: 8,
                 children: BudgetPeriod.values
-                    .where((p) => p != BudgetPeriod.custom)
                     .map((p) {
                       final isSelected = _period == p;
                       return ChoiceChip(
                         label: Text(p.label),
                         selected: isSelected,
                         onSelected: (selected) {
-                          if (selected) setState(() => _period = p);
+                          if (!selected) return;
+                          setState(() => _period = p);
                         },
                         selectedColor: JiveTheme.primaryGreen.withValues(
                           alpha: 0.2,
@@ -819,6 +887,10 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
                     })
                     .toList(),
               ),
+              const SizedBox(height: 12),
+
+              // 日期范围（自定义预算可选）
+              _buildDateRangePicker(context),
               const SizedBox(height: 16),
 
               // 预警设置
@@ -843,7 +915,7 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isCreating ? null : _create,
+                  onPressed: _isSaving ? null : _save,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: JiveTheme.primaryGreen,
                     foregroundColor: Colors.white,
@@ -852,7 +924,7 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: _isCreating
+                  child: _isSaving
                       ? const SizedBox(
                           width: 20,
                           height: 20,
@@ -861,13 +933,129 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text('创建预算'),
+                      : Text(isEditing ? '保存' : '创建预算'),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  (DateTime, DateTime) _resolveBudgetDateRange() {
+    if (_period == BudgetPeriod.custom) {
+      final range = _customRange!;
+      final start = DateTime(range.start.year, range.start.month, range.start.day);
+      final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+      return (start, end);
+    }
+
+    final budget = widget.initialBudget;
+    if (budget != null) {
+      final initial = _initialPeriod ?? BudgetPeriod.fromValue(budget.period);
+      if (initial == _period) return (budget.startDate, budget.endDate);
+      return BudgetService.getPeriodDateRange(_period);
+    }
+
+    return BudgetService.getPeriodDateRange(_period);
+  }
+
+  Widget _buildDateRangePicker(BuildContext context) {
+    final isCustom = _period == BudgetPeriod.custom;
+    final range = _previewDateRange();
+    final rangeText = range == null
+        ? '请选择日期范围'
+        : '${_formatYmd(range.$1)} - ${_formatYmd(range.$2)}';
+
+    final decorator = InputDecorator(
+      decoration: InputDecoration(
+        labelText: '预算范围',
+        isDense: true,
+        filled: true,
+        fillColor: Colors.grey.shade100,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.date_range, size: 18, color: Colors.grey.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              rangeText,
+              style: GoogleFonts.lato(fontSize: 13, fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (isCustom && _customRange != null)
+            IconButton(
+              tooltip: '清除',
+              onPressed: () => setState(() => _customRange = null),
+              icon: Icon(Icons.close, size: 16, color: Colors.grey.shade700),
+              padding: EdgeInsets.zero,
+              splashRadius: 16,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            ),
+          if (isCustom) Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade600),
+        ],
+      ),
+    );
+
+    if (!isCustom) return decorator;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: _pickCustomDateRange,
+      child: decorator,
+    );
+  }
+
+  (DateTime, DateTime)? _previewDateRange() {
+    if (_period == BudgetPeriod.custom) {
+      final range = _customRange;
+      if (range == null) return null;
+      return (range.start, range.end);
+    }
+
+    final (start, end) = _resolveBudgetDateRange();
+    return (start, end);
+  }
+
+  String _formatYmd(DateTime date) {
+    final y = date.year.toString();
+    final m = date.month.toString().padLeft(2, '0');
+    final d = date.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  String _formatAmountForInput(double value) {
+    if (value == value.truncateToDouble()) {
+      return value.toInt().toString();
+    }
+    final fixed = value.toStringAsFixed(2);
+    return fixed.replaceAll(RegExp(r'0+$'), '').replaceAll(RegExp(r'\.$'), '');
+  }
+
+  Future<void> _pickCustomDateRange() async {
+    final now = DateTime.now();
+    final initial = _customRange;
+    final viewStart = DateTime((initial?.start.year ?? now.year) - 1, 1, 1);
+    final viewEnd = DateTime((initial?.end.year ?? now.year) + 1, 12, 31);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DateRangePickerSheet(
+          initialRange: initial,
+          firstDay: viewStart,
+          lastDay: viewEnd,
+          onChanged: (range) => setState(() => _customRange = range),
+        );
+      },
     );
   }
 
@@ -942,12 +1130,14 @@ class _BudgetDetailSheet extends StatelessWidget {
   final BudgetSummary summary;
   final CurrencyService currencyService;
   final Map<String, JiveCategory> categoryByKey;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _BudgetDetailSheet({
     required this.summary,
     required this.currencyService,
     required this.categoryByKey,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -983,6 +1173,11 @@ class _BudgetDetailSheet extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
+                IconButton(
+                  tooltip: '编辑',
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: onEdit,
+                ),
                 IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
                   onPressed: () {
