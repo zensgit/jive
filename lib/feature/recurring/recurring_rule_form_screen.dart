@@ -12,6 +12,7 @@ import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/recurring_service.dart';
 import '../../core/service/tag_service.dart';
+import '../../core/widgets/jive_calendar/jive_calendar.dart';
 import '../category/category_picker_screen.dart';
 import '../category/category_search_delegate.dart';
 import '../tag/tag_icon_catalog.dart';
@@ -255,25 +256,60 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
   }
 
   Future<void> _pickStartDate() async {
-    final date = await showDatePicker(
+    DateTime? picked;
+    var didChange = false;
+    await showModalBottomSheet<void>(
       context: context,
-      initialDate: _startDate,
-      firstDate: DateTime(2010),
-      lastDate: DateTime(2100),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DatePickerSheet(
+          initialDay: _startDate,
+          firstDay: DateTime(2010),
+          lastDay: DateTime(2100),
+          maxSelectableDay: _endDate,
+          bottomLabel: '选择开始日期',
+          onChanged: (day) {
+            didChange = true;
+            picked = day;
+          },
+        );
+      },
     );
-    if (date == null) return;
-    setState(() => _startDate = date);
+    if (!didChange || picked == null) return;
+    setState(() {
+      _startDate = picked!;
+      if (_endDate != null && _endDate!.isBefore(_startDate)) {
+        _endDate = null;
+      }
+    });
   }
 
   Future<void> _pickEndDate() async {
-    final date = await showDatePicker(
+    DateTime? picked;
+    var didChange = false;
+    await showModalBottomSheet<void>(
       context: context,
-      initialDate: _endDate ?? _startDate,
-      firstDate: DateTime(2010),
-      lastDate: DateTime(2100),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DatePickerSheet(
+          initialDay: _endDate ?? _startDate,
+          firstDay: DateTime(2010),
+          lastDay: DateTime(2100),
+          minSelectableDay: _startDate,
+          bottomLabel: '选择结束日期',
+          allowClear: true,
+          clearLabel: '无',
+          onChanged: (day) {
+            didChange = true;
+            picked = day;
+          },
+        );
+      },
     );
-    if (date == null) return;
-    setState(() => _endDate = date);
+    if (!didChange) return;
+    setState(() => _endDate = picked);
   }
 
   Future<void> _pickCategory() async {

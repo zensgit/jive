@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../database/account_model.dart';
 import '../database/category_model.dart';
-import 'date_range_picker_sheet.dart';
+import 'jive_calendar/jive_calendar.dart';
 
 enum BudgetInclusionFilter {
   all,
@@ -170,25 +170,21 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     final maxSelectable = widget.maxDate;
     final viewStart = DateTime((minSelectable?.year ?? now.year) - 1, 1, 1);
     final viewEnd = DateTime((maxSelectable?.year ?? now.year) + 1, 12, 31);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DateRangePickerSheet(
-          initialRange: _dateRange,
-          firstDay: viewStart,
-          lastDay: viewEnd,
-          minSelectableDay: minSelectable,
-          maxSelectableDay: maxSelectable,
-          enabledYears: widget.enabledYears,
-          onChanged: (range) {
-            setState(() => _dateRange = range);
-            _notifyChange();
-          },
-        );
-      },
+    final previous = _dateRange;
+    final range = await JiveDatePicker.pickDateRange(
+      context,
+      initialRange: _dateRange,
+      firstDay: viewStart,
+      lastDay: viewEnd,
+      minSelectableDay: minSelectable,
+      maxSelectableDay: maxSelectable,
+      enabledYears: widget.enabledYears,
+      bottomLabel: '选择日历范围',
     );
+    if (!mounted) return;
+    if (range == previous) return;
+    setState(() => _dateRange = range);
+    _notifyChange();
   }
 
   @override

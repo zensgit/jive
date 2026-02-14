@@ -24,6 +24,7 @@ import '../../core/service/database_service.dart';
 import '../../core/service/tag_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_rule_service.dart';
+import '../../core/widgets/jive_calendar/jive_calendar.dart';
 import '../../core/database/category_model.dart';
 import '../../core/utils/logger_util.dart';
 import '../category/category_create_dialog.dart';
@@ -957,13 +958,28 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Future<void> _pickTransactionDate() async {
-    final date = await showDatePicker(
+    final now = DateTime.now();
+    final lastDay = DateTime(now.year, now.month, now.day);
+    DateTime? pickedDay;
+    var didChange = false;
+    await showModalBottomSheet<void>(
       context: context,
-      initialDate: _selectedTime,
-      firstDate: DateTime(2010),
-      lastDate: DateTime.now(),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DatePickerSheet(
+          initialDay: _selectedTime,
+          firstDay: DateTime(2010),
+          lastDay: lastDay,
+          bottomLabel: '选择日期',
+          onChanged: (day) {
+            didChange = true;
+            pickedDay = day;
+          },
+        );
+      },
     );
-    if (date == null) return;
+    if (!didChange || pickedDay == null) return;
     if (!mounted) return;
     final time = await showTimePicker(
       context: context,
@@ -972,9 +988,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (time == null) return;
     setState(() {
       _selectedTime = DateTime(
-        date.year,
-        date.month,
-        date.day,
+        pickedDay!.year,
+        pickedDay!.month,
+        pickedDay!.day,
         time.hour,
         time.minute,
       );
