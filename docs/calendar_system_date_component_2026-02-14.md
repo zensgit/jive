@@ -30,7 +30,17 @@
 - Path: `app/lib/core/widgets/jive_calendar/jive_calendar_day_cell.dart`
 - Reason:
   - Prevents "中文标签与数字重叠" by allocating vertical slices (day / label / today) and scaling down when cells are small.
-  - Supports holiday corner marks.
+  - Supports holiday corner marks (and reserves space so `班/休` won't collide with 2-digit day numbers).
+
+### JiveDatePicker (system entry point)
+
+- Path: `app/lib/core/widgets/jive_calendar/jive_date_picker.dart`
+- Reason:
+  - Provides a stable, reusable API for opening the sheet pickers across the app.
+  - Avoids duplicating `showModalBottomSheet` glue code in every feature screen.
+- APIs:
+  - `JiveDatePicker.pickDate(...)` -> `Future<DateTime?>`
+  - `JiveDatePicker.pickDateRange(...)` -> `Future<DateTimeRange?>`
 
 ### Barrel Export
 
@@ -38,6 +48,7 @@
 - Exports:
   - `DatePickerSheet`
   - `DateRangePickerSheet`
+  - `JiveDatePicker`
   - `JiveCalendarDayCell` + holiday mark types
 
 ## Preferences (Shared)
@@ -57,9 +68,14 @@ Replaced remaining system dialogs with the shared sheet components:
   - `app/lib/feature/recurring/recurring_rule_form_screen.dart`
   - `app/lib/feature/transactions/add_transaction_screen.dart`
 
-- `showDateRangePicker` -> `DateRangePickerSheet`
-  - `app/lib/feature/tag/tag_rule_screen.dart`
+- `showDateRangePicker` / custom sheets -> `DateRangePickerSheet` (prefer calling via `JiveDatePicker.pickDateRange`)
+  - `app/lib/core/widgets/transaction_filter_sheet.dart` (via `JiveDatePicker`)
+  - `app/lib/feature/accounts/account_reconcile_screen.dart`
+  - `app/lib/feature/budget/budget_list_screen.dart`
+  - `app/lib/feature/settings/report_export_screen.dart`
   - `app/lib/feature/tag/tag_management_screen.dart`
+  - `app/lib/feature/tag/tag_rule_screen.dart`
+  - `app/lib/feature/tag/tag_statistics_screen.dart`
 
 ## Verification
 
