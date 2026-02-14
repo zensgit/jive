@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_icon_style.dart';
+import '../budget/budget_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -39,7 +40,10 @@ class SettingsScreen extends StatelessWidget {
                     const Expanded(
                       child: Text(
                         "分类图标风格",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     IconButton(
@@ -55,7 +59,9 @@ class SettingsScreen extends StatelessWidget {
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: Icon(
-                      isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      isSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
                       color: JiveTheme.primaryGreen,
                     ),
                     title: Text(style.label),
@@ -116,9 +122,36 @@ class SettingsScreen extends StatelessWidget {
                         size: 18,
                         color: Colors.grey.shade500,
                       ),
-                      onTap: () => _pickCategoryIconStyle(
-                        context,
-                        current: style,
+                      onTap: () =>
+                          _pickCategoryIconStyle(context, current: style),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _sectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("预算", style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.account_balance_wallet_outlined),
+                  title: const Text("预算设置"),
+                  subtitle: const Text("预算提醒与展示偏好"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const BudgetSettingsScreen(),
                       ),
                     );
                   },

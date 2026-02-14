@@ -8,6 +8,7 @@ import 'package:lpinyin/lpinyin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
+import '../../core/database/budget_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/tag_model.dart';
@@ -16,6 +17,8 @@ import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/category_icon_style.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/budget_pref_service.dart';
+import '../../core/service/budget_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/tag_service.dart';
@@ -432,7 +435,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     // 获取汇率记录
-    final rateRecord = await _currencyService!.getRateRecord(fromCurrency, toCurrency);
+    final rateRecord = await _currencyService!.getRateRecord(
+      fromCurrency,
+      toCurrency,
+    );
     double? rate;
     String? source;
 
@@ -1000,11 +1006,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         : "${_selectedParent!.name} - ${_selectedSub?.name ?? ''}";
 
     if (_selectedProjectId != null) {
-      final project = _projects.where((p) => p.id == _selectedProjectId).firstOrNull;
+      final project = _projects
+          .where((p) => p.id == _selectedProjectId)
+          .firstOrNull;
       if (project != null && project.budget > 0) {
         final service = ProjectService(_isar);
         final currentSpent = await service.calculateProjectSpending(project.id);
-        final editingAmount = _isEditing && widget.editingTransaction?.projectId == project.id
+        final editingAmount =
+            _isEditing && widget.editingTransaction?.projectId == project.id
             ? widget.editingTransaction?.amount ?? 0
             : 0;
         final projected = currentSpent - editingAmount + amount;
@@ -1017,13 +1026,58 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               title: const Text('预算将超支'),
               content: Text('关联该交易后将超支 ¥${over.toStringAsFixed(0)}，是否继续？'),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('继续')),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('继续'),
+                ),
               ],
             ),
           );
           if (proceed != true) return;
         }
+      }
+    }
+
+    final budgetSaveAlertEnabled =
+        await BudgetPrefService.getBudgetSaveAlertEnabled();
+    if (budgetSaveAlertEnabled &&
+        _txType == TransactionType.expense &&
+        !_excludeFromBudget) {
+      final service = BudgetService(_isar, CurrencyService(_isar));
+
+      final newTx = JiveTransaction()
+        ..amount = amount
+        ..source = 'Manual'
+        ..timestamp = _selectedTime
+        ..type = 'expense'
+        ..categoryKey = _selectedParent!.key
+        ..subCategoryKey = _selectedSub?.key
+        ..excludeFromBudget = false;
+
+      JiveTransaction? oldTx;
+      if (_isEditing && widget.editingTransaction != null) {
+        final editing = widget.editingTransaction!;
+        oldTx = JiveTransaction()
+          ..amount = editing.amount
+          ..source = editing.source
+          ..timestamp = editing.timestamp
+          ..type = editing.type
+          ..categoryKey = editing.categoryKey
+          ..subCategoryKey = editing.subCategoryKey
+          ..excludeFromBudget = editing.excludeFromBudget;
+      }
+
+      final impacts = await service.evaluateBudgetImpactsForTransaction(
+        newTransaction: newTx,
+        oldTransaction: oldTx,
+      );
+      if (impacts.isNotEmpty) {
+        final proceed = await _confirmBudgetImpact(impacts);
+        if (proceed != true) return;
       }
     }
 
@@ -1051,7 +1105,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ..toAccountId = _txType == TransactionType.transfer
           ? _selectedToAccount?.id
           : null
-      ..toAmount = _txType == TransactionType.transfer && _crossCurrencyRate != null
+      ..toAmount =
+          _txType == TransactionType.transfer && _crossCurrencyRate != null
           ? double.tryParse(_toAmountStr)
           : null
       ..exchangeRate = _txType == TransactionType.transfer
@@ -1092,6 +1147,129 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       DataReloadBus.notify();
       Navigator.pop(context, true);
     }
+  }
+
+  Future<bool?> _confirmBudgetImpact(
+    List<BudgetTransactionImpact> impacts,
+  ) async {
+    if (impacts.isEmpty) return true;
+    final hasExceeded = impacts.any(
+      (i) => i.projectedStatus == BudgetStatus.exceeded,
+    );
+
+    var dontShowAgain = false;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final maxItems = 4;
+        final shown = impacts.take(maxItems).toList();
+        final more = impacts.length - shown.length;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text(hasExceeded ? '预算将超支' : '预算预警'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('本次保存将触发以下预算提醒：'),
+                    const SizedBox(height: 12),
+                    ...shown.map((impact) => _buildBudgetImpactRow(impact)),
+                    if (more > 0) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '另有 $more 个预算…',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () =>
+                          setState(() => dontShowAgain = !dontShowAgain),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: dontShowAgain,
+                              onChanged: (value) => setState(
+                                () => dontShowAgain = value ?? false,
+                              ),
+                            ),
+                            const Expanded(child: Text('不再提示预算提醒')),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      '你也可以在「设置 → 预算设置」中调整该偏好。',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('继续保存'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (proceed == true && dontShowAgain) {
+      await BudgetPrefService.setBudgetSaveAlertEnabled(false);
+    }
+    return proceed;
+  }
+
+  Widget _buildBudgetImpactRow(BudgetTransactionImpact impact) {
+    final budget = impact.budget;
+    final symbol = CurrencyDefaults.getSymbol(budget.currency);
+    final isExceeded = impact.projectedStatus == BudgetStatus.exceeded;
+    final color = isExceeded ? Colors.red.shade700 : Colors.orange.shade700;
+    final icon = isExceeded ? Icons.warning_amber_rounded : Icons.info_outline;
+    final message = isExceeded
+        ? '将超支 $symbol ${(impact.projectedUsedAmount - budget.amount).abs().toStringAsFixed(0)}'
+        : '将达到预警 ${budget.alertThreshold?.toStringAsFixed(0) ?? '--'}%（${impact.projectedUsedPercent.toStringAsFixed(1)}%）';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  budget.name,
+                  style: TextStyle(fontWeight: FontWeight.w700, color: color),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  message,
+                  style: TextStyle(color: color.withValues(alpha: 0.9)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1504,7 +1682,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   // 标题行
                   Row(
                     children: [
-                      Icon(Icons.currency_exchange, size: 16, color: Colors.orange.shade700),
+                      Icon(
+                        Icons.currency_exchange,
+                        size: 16,
+                        color: Colors.orange.shade700,
+                      ),
                       const SizedBox(width: 6),
                       Text(
                         '跨币种转账',
@@ -1516,7 +1698,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       ),
                       const Spacer(),
                       if (_crossCurrencyRate != null) ...[
-                        _buildRateSourceBadge(_crossCurrencyRateSource ?? 'default'),
+                        _buildRateSourceBadge(
+                          _crossCurrencyRateSource ?? 'default',
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           '1 $fromCurrency = ${_crossCurrencyRate!.toStringAsFixed(4)} $toCurrency',
@@ -1563,7 +1747,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                               Expanded(
                                 child: TextField(
                                   controller: _toAmountController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -1740,7 +1927,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     if (selectedProject != null) {
       final color = selectedProject.colorHex != null
-          ? Color(int.parse(selectedProject.colorHex!.replaceFirst('#', '0xFF')))
+          ? Color(
+              int.parse(selectedProject.colorHex!.replaceFirst('#', '0xFF')),
+            )
           : JiveTheme.primaryGreen;
       return Align(
         alignment: Alignment.center,
@@ -1748,7 +1937,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           label: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              iconWidgetForName(selectedProject.iconName, size: 14, color: color),
+              iconWidgetForName(
+                selectedProject.iconName,
+                size: 14,
+                color: color,
+              ),
               const SizedBox(width: 4),
               Text(
                 selectedProject.name,
@@ -1771,10 +1964,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return Align(
       alignment: Alignment.center,
       child: ActionChip(
-        label: Text(
-          '关联项目',
-          style: TextStyle(fontSize: textSize),
-        ),
+        label: Text('关联项目', style: TextStyle(fontSize: textSize)),
         avatar: const Icon(
           Icons.folder_outlined,
           size: 14,
@@ -1787,9 +1977,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Future<void> _showProjectPicker() async {
     if (_projects.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('暂无可用项目，请先创建项目')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂无可用项目，请先创建项目')));
       return;
     }
 
@@ -1833,13 +2023,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   itemBuilder: (context, index) {
                     final project = _projects[index];
                     final color = project.colorHex != null
-                        ? Color(int.parse(project.colorHex!.replaceFirst('#', '0xFF')))
+                        ? Color(
+                            int.parse(
+                              project.colorHex!.replaceFirst('#', '0xFF'),
+                            ),
+                          )
                         : JiveTheme.primaryGreen;
                     final isSelected = project.id == _selectedProjectId;
                     return ListTile(
                       leading: CircleAvatar(
                         backgroundColor: color.withValues(alpha: 0.15),
-                        child: iconWidgetForName(project.iconName, size: 18, color: color),
+                        child: iconWidgetForName(
+                          project.iconName,
+                          size: 18,
+                          color: color,
+                        ),
                       ),
                       title: Text(project.name),
                       subtitle: project.budget > 0
@@ -2262,9 +2460,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 cat.iconName.startsWith("assets/category_icons/"));
         final shouldTintIcon = isCategoryAssetIcon
             ? (cat.iconForceTinted ||
-                CategoryIconStyleConfig.current.shouldTintForCategory(
-                  isSystemCategory: cat.isSystem,
-                ))
+                  CategoryIconStyleConfig.current.shouldTintForCategory(
+                    isSystemCategory: cat.isSystem,
+                  ))
             : true;
         final coloredIcons = !shouldTintIcon;
         return GestureDetector(
@@ -2278,11 +2476,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? (coloredIcons
-                          ? activeColor.withValues(alpha: 0.14)
-                          : activeColor)
+                            ? activeColor.withValues(alpha: 0.14)
+                            : activeColor)
                       : (coloredIcons
-                          ? Colors.white
-                          : JiveTheme.categoryIconInactiveBackground),
+                            ? Colors.white
+                            : JiveTheme.categoryIconInactiveBackground),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: isSelected
