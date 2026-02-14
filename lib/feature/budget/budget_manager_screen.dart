@@ -945,7 +945,7 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
               style: TextStyle(color: Colors.grey.shade700),
             ),
           ),
-          TextButton(onPressed: _addCategoryBudget, child: const Text('创建')),
+          TextButton(onPressed: _addCategoryBudget, child: const Text('创建预算')),
         ],
       ),
     );
