@@ -234,6 +234,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
             const SizedBox(height: 12),
             if (widget.showDateRange) ...[
               InkWell(
+                key: const Key('transaction_filter_date_range_tile'),
                 onTap: _pickDateRange,
                 borderRadius: BorderRadius.circular(12),
                 child: InputDecorator(

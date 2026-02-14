@@ -370,6 +370,7 @@ class _CategoryTransactionsScreenState
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
+                          key: const Key('transaction_filter_open_button'),
                           onPressed: _openSearchSheet,
                           icon: Stack(
                             clipBehavior: Clip.none,
