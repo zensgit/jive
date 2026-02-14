@@ -212,7 +212,7 @@ class BudgetService {
         final start = DateTime(ref.year, ref.month, ref.day);
         final end = start
             .add(const Duration(days: 1))
-            .subtract(const Duration(seconds: 1));
+            .subtract(const Duration(milliseconds: 1));
         return (start, end);
 
       case BudgetPeriod.weekly:
@@ -224,21 +224,23 @@ class BudgetService {
         ).subtract(Duration(days: weekday - 1));
         final end = start
             .add(const Duration(days: 7))
-            .subtract(const Duration(seconds: 1));
+            .subtract(const Duration(milliseconds: 1));
         return (start, end);
 
       case BudgetPeriod.monthly:
         final start = DateTime(ref.year, ref.month, 1);
-        final end = DateTime(ref.year, ref.month + 1, 0, 23, 59, 59);
+        final end = DateTime(ref.year, ref.month + 1, 0, 23, 59, 59, 999);
         return (start, end);
 
       case BudgetPeriod.yearly:
         final start = DateTime(ref.year, 1, 1);
-        final end = DateTime(ref.year, 12, 31, 23, 59, 59);
+        final end = DateTime(ref.year, 12, 31, 23, 59, 59, 999);
         return (start, end);
 
       case BudgetPeriod.custom:
-        return (ref, ref);
+        final start = DateTime(ref.year, ref.month, ref.day);
+        final end = DateTime(ref.year, ref.month, ref.day, 23, 59, 59, 999);
+        return (start, end);
     }
   }
 
