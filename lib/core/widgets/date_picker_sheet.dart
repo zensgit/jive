@@ -445,6 +445,7 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
                         calendarBuilders: CalendarBuilders(
                           headerTitleBuilder: (context, day) {
                             return InkWell(
+                              key: const Key('jive_calendar_month_picker'),
                               onTap: () => _openMonthYearPicker(day),
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
@@ -622,6 +623,7 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
                             ),
                             FilterChip(
                               label: const Text('节假日'),
+                              key: const Key('jive_calendar_filter_holiday'),
                               selected: _showHoliday,
                               onSelected: (value) {
                                 setState(() => _showHoliday = value);
@@ -678,4 +680,3 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
     );
   }
 }
-

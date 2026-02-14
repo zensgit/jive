@@ -143,6 +143,13 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   static const eventChannel = EventChannel('com.jive.app/stream');
   static const _prefKeyDemoSeedEnabled = 'demo_seed_enabled';
+  static const _prefKeyAutoPermissionSnoozeUntilMs =
+      'auto_permission_prompt_snooze_until_ms';
+  static const _autoPermissionSnoozeDuration = Duration(hours: 24);
+  static const _kE2eMode = bool.fromEnvironment(
+    'JIVE_E2E',
+    defaultValue: false,
+  );
 
   late Isar _isar;
   List<JiveTransaction> _transactions = [];
@@ -296,19 +303,49 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   Future<void> _setAutoSettings(AutoSettings settings) async {
     if (!mounted) return;
+    final wasEnabled = _autoSettings.enabled;
     setState(() {
       _autoSettings = settings;
     });
     await AutoSettingsStore.save(settings);
+    if (!wasEnabled && settings.enabled) {
+      await _clearAutoPermissionPromptSnooze();
+    }
     await _checkAutoPermissions();
   }
 
+  Future<bool> _isAutoPermissionPromptSnoozed() async {
+    final prefs = await SharedPreferences.getInstance();
+    final untilMs = prefs.getInt(_prefKeyAutoPermissionSnoozeUntilMs);
+    if (untilMs == null) return false;
+    final until = DateTime.fromMillisecondsSinceEpoch(untilMs);
+    if (DateTime.now().isBefore(until)) return true;
+    await prefs.remove(_prefKeyAutoPermissionSnoozeUntilMs);
+    return false;
+  }
+
+  Future<void> _snoozeAutoPermissionPrompt() async {
+    final prefs = await SharedPreferences.getInstance();
+    final until = DateTime.now().add(_autoPermissionSnoozeDuration);
+    await prefs.setInt(_prefKeyAutoPermissionSnoozeUntilMs, until.millisecondsSinceEpoch);
+  }
+
+  Future<void> _clearAutoPermissionPromptSnooze() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefKeyAutoPermissionSnoozeUntilMs);
+  }
+
   Future<void> _checkAutoPermissions() async {
+    if (_kE2eMode) return;
     if (!_dbReady) return;
     if (!_autoSettings.enabled) return;
+    if (await _isAutoPermissionPromptSnoozed()) return;
     final status = await AutoPermissionService.getStatus();
     if (!mounted) return;
-    if (status.allRequired) return;
+    if (status.allRequired) {
+      await _clearAutoPermissionPromptSnooze();
+      return;
+    }
     if (_permissionDialogVisible) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _permissionDialogVisible) return;
@@ -321,7 +358,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           content: Text('未开启：${missing.join('、')}'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () async {
+                await _snoozeAutoPermissionPrompt();
+                if (context.mounted) Navigator.pop(context);
+              },
               child: const Text('稍后'),
             ),
             TextButton(
