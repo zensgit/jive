@@ -85,7 +85,8 @@ class BudgetService {
     var query = _isar.jiveTransactions
         .filter()
         .timestampBetween(budget.startDate, budget.endDate)
-        .typeEqualTo('expense');
+        .typeEqualTo('expense')
+        .excludeFromBudgetEqualTo(false);
 
     if (budget.categoryKey != null) {
       query = query.categoryKeyEqualTo(budget.categoryKey!);

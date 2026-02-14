@@ -86,6 +86,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   bool _isFallbackMode = false;
   bool _isSearchMode = false;
   bool _isEditing = false;
+  bool _excludeFromBudget = false; // 不计入预算（仅对支出有效）
   TransactionType _txType = TransactionType.expense;
   DateTime _selectedTime = DateTime.now();
   final TextEditingController _noteController = TextEditingController();
@@ -171,6 +172,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _noteController.text = editing.note ?? '';
       _selectedTagKeys = List<String>.from(editing.tagKeys);
       _selectedProjectId = editing.projectId;
+      _excludeFromBudget =
+          _txType == TransactionType.expense && editing.excludeFromBudget;
       // 跨币种转账数据
       if (editing.toAmount != null) {
         _toAmountStr = _formatAmountInput(editing.toAmount!);
@@ -195,6 +198,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _noteController.text = prefill.note ?? '';
       _selectedTagKeys = List<String>.from(prefill.tagKeys);
       _selectedProjectId = prefill.projectId;
+      _excludeFromBudget =
+          _txType == TransactionType.expense && prefill.excludeFromBudget;
       // 跨币种转账数据
       if (prefill.toAmount != null) {
         _toAmountStr = _formatAmountInput(prefill.toAmount!);
@@ -495,6 +500,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (_txType == type) return;
     setState(() {
       _txType = type;
+      if (type != TransactionType.expense) {
+        _excludeFromBudget = false;
+      }
       _selectedParent = null;
       _selectedSub = null;
       _parentCategories = [];
@@ -1051,6 +1059,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           : null
       ..projectId = _selectedProjectId
       ..tagKeys = List<String>.from(_selectedTagKeys)
+      ..excludeFromBudget =
+          _txType == TransactionType.expense && _excludeFromBudget
       ..smartTagKeys = List<String>.from(tx.smartTagKeys)
       ..timestamp = _selectedTime;
 
@@ -1179,6 +1189,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           _buildNoteField(isLandscape: isLandscape),
           SizedBox(height: isLandscape ? 6 : 8),
           _buildTagSelector(isLandscape: isLandscape),
+          if (_txType == TransactionType.expense) ...[
+            SizedBox(height: isLandscape ? 6 : 8),
+            _buildBudgetFlags(isLandscape: isLandscape),
+          ],
           SizedBox(height: isLandscape ? 6 : 8),
           _buildProjectSelector(isLandscape: isLandscape),
         ],
@@ -1661,6 +1675,34 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       backgroundColor: color.withValues(alpha: 0.12),
       side: BorderSide(color: color.withValues(alpha: 0.4)),
       onDeleted: () => setState(() => _selectedTagKeys.remove(tag.key)),
+    );
+  }
+
+  Widget _buildBudgetFlags({required bool isLandscape}) {
+    if (_txType != TransactionType.expense) return const SizedBox.shrink();
+    final textSize = isLandscape ? 10.0 : 12.0;
+    final color = _excludeFromBudget
+        ? Colors.orange.shade700
+        : Colors.grey.shade700;
+    return Align(
+      alignment: Alignment.center,
+      child: FilterChip(
+        label: Text(
+          '不计入预算',
+          style: TextStyle(
+            fontSize: textSize,
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+        avatar: Icon(Icons.pie_chart_outline, size: 14, color: color),
+        selected: _excludeFromBudget,
+        onSelected: (value) => setState(() => _excludeFromBudget = value),
+        showCheckmark: true,
+        selectedColor: Colors.orange.withValues(alpha: 0.12),
+        checkmarkColor: Colors.orange.shade700,
+        side: BorderSide(color: color.withValues(alpha: 0.4)),
+      ),
     );
   }
 

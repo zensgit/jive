@@ -79,6 +79,12 @@ void main() {
             ..timestamp = DateTime(2024, 1, 10, 9)
             ..type = 'expense',
           JiveTransaction()
+            ..amount = 100
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 1, 15, 9)
+            ..type = 'expense'
+            ..excludeFromBudget = true,
+          JiveTransaction()
             ..amount = 50
             ..source = 'Seed'
             ..timestamp = DateTime(2024, 1, 20, 9)
@@ -121,6 +127,13 @@ void main() {
             ..timestamp = DateTime(2024, 2, 5, 10)
             ..type = 'expense'
             ..categoryKey = 'food',
+          JiveTransaction()
+            ..amount = 60
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 2, 5, 12)
+            ..type = 'expense'
+            ..categoryKey = 'food'
+            ..excludeFromBudget = true,
           JiveTransaction()
             ..amount = 80
             ..source = 'Seed'
