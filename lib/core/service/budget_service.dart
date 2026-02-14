@@ -58,6 +58,7 @@ class BudgetService {
         .filter()
         .isActiveEqualTo(true)
         .sortByStartDateDesc()
+        .thenByPositionWeightDesc()
         .findAll();
   }
 

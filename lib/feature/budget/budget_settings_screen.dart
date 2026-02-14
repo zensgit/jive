@@ -140,7 +140,7 @@ class _BudgetSettingsScreenState extends State<BudgetSettingsScreen> {
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
                         title: const Text('每月自动复制预算'),
-                        subtitle: const Text('进入新月份时，自动复制上月的月度预算配置（名称/分类/金额/预警）。'),
+                        subtitle: const Text('进入新月份且当月预算为空时，自动复制上月的总预算与分类预算。'),
                         value: _monthlyAutoCopyEnabled,
                         activeThumbColor: JiveTheme.primaryGreen,
                         onChanged: (value) async {
@@ -153,45 +153,29 @@ class _BudgetSettingsScreenState extends State<BudgetSettingsScreen> {
                       const Divider(height: 1),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('结转正余额'),
-                        subtitle: const Text('上期未用完的预算，会增加到下期预算金额。'),
+                        title: const Text('多余预算累加'),
+                        subtitle: const Text('未使用的预算会加入下一月（随复制动作生效）。'),
                         value: _carryoverAddEnabled,
                         activeThumbColor: JiveTheme.primaryGreen,
                         onChanged: (value) async {
-                          setState(() {
-                            _carryoverAddEnabled = value;
-                            if (!value) _carryoverReduceEnabled = false;
-                          });
+                          setState(() => _carryoverAddEnabled = value);
                           await BudgetPrefService.setBudgetCarryoverAddEnabled(
                             value,
                           );
-                          if (!value) {
-                            await BudgetPrefService.setBudgetCarryoverReduceEnabled(
-                              false,
-                            );
-                          }
                         },
                       ),
                       const Divider(height: 1),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('结转负余额'),
-                        subtitle: const Text('上期超支的金额，会从下期预算中扣减。'),
+                        title: const Text('超额支出扣除'),
+                        subtitle: const Text('支出大于预算的部分会从下月扣除（最低扣至 0）。'),
                         value: _carryoverReduceEnabled,
                         activeThumbColor: JiveTheme.primaryGreen,
                         onChanged: (value) async {
-                          setState(() {
-                            _carryoverReduceEnabled = value;
-                            if (value) _carryoverAddEnabled = true;
-                          });
+                          setState(() => _carryoverReduceEnabled = value);
                           await BudgetPrefService.setBudgetCarryoverReduceEnabled(
                             value,
                           );
-                          if (value) {
-                            await BudgetPrefService.setBudgetCarryoverAddEnabled(
-                              true,
-                            );
-                          }
                         },
                       ),
                     ],
