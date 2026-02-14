@@ -90,7 +90,13 @@ class BudgetService {
         .excludeFromBudgetEqualTo(false);
 
     if (budget.categoryKey != null) {
-      query = query.categoryKeyEqualTo(budget.categoryKey!);
+      final key = budget.categoryKey!;
+      // Support both parent & sub category budgets. For parent categories,
+      // transactions are stored on `categoryKey`; for sub categories, they are
+      // stored on `subCategoryKey`.
+      query = query.group(
+        (q) => q.categoryKeyEqualTo(key).or().subCategoryKeyEqualTo(key),
+      );
     }
 
     var transactions = await query.findAll();
@@ -149,8 +155,15 @@ class BudgetService {
       status = BudgetStatus.normal;
     }
 
-    // 计算剩余天数
-    final daysRemaining = budget.endDate.difference(now).inDays;
+    // Remaining days should be inclusive (same-day budgets still have 1 day).
+    final today = DateTime(now.year, now.month, now.day);
+    final endDay = DateTime(
+      budget.endDate.year,
+      budget.endDate.month,
+      budget.endDate.day,
+    );
+    final dayDiff = endDay.difference(today).inDays;
+    final daysRemaining = dayDiff >= 0 ? dayDiff + 1 : 0;
 
     return BudgetSummary(
       budget: budget,
@@ -158,7 +171,7 @@ class BudgetService {
       remainingAmount: remainingAmount,
       usedPercent: usedPercent.toDouble(),
       status: status,
-      daysRemaining: daysRemaining > 0 ? daysRemaining : 0,
+      daysRemaining: daysRemaining,
     );
   }
 

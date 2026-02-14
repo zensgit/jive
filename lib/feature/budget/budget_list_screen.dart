@@ -3,13 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:isar/isar.dart';
 import '../../core/database/budget_model.dart';
+import '../../core/database/category_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/budget_service.dart';
+import '../../core/service/category_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import 'budget_exclude_screen.dart';
+import '../category/category_picker_screen.dart';
+import '../category/category_search_delegate.dart';
+import '../category/category_transactions_screen.dart';
 
 /// 预算管理界面
 class BudgetListScreen extends StatefulWidget {
@@ -23,6 +29,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
   static const Duration _loadTimeout = Duration(seconds: 12);
   bool _isLoading = true;
   List<BudgetSummary> _summaries = [];
+  Map<String, JiveCategory> _categoryByKey = {};
   String? _loadErrorMessage;
   BudgetService? _budgetService;
   CurrencyService? _currencyService;
@@ -52,6 +59,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
         _currencyService = loaded.currencyService;
         _budgetService = loaded.budgetService;
         _summaries = loaded.summaries;
+        _categoryByKey = loaded.categoryByKey;
       });
     } on TimeoutException {
       if (!mounted) return;
@@ -79,10 +87,13 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
     final currencyService = CurrencyService(isar);
     final budgetService = BudgetService(isar, currencyService);
     final summaries = await budgetService.getAllBudgetSummaries();
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    final categoryByKey = {for (final c in categories) c.key: c};
     return _BudgetLoadResult(
       currencyService: currencyService,
       budgetService: budgetService,
       summaries: summaries,
+      categoryByKey: categoryByKey,
     );
   }
 
@@ -104,6 +115,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
       builder: (ctx) => _CreateBudgetSheet(
         currencyService: _currencyService!,
         budgetService: _budgetService!,
+        categories: _categoryByKey.values.toList(),
       ),
     );
 
@@ -120,6 +132,11 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
     _loadData();
   }
 
+  Future<void> _pullToOpenBudgetExclude() async {
+    // Keep the refresh indicator short; open the screen without waiting.
+    unawaited(_openBudgetExclude());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -127,28 +144,36 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
         title: const Text('预算管理'),
         actions: [
           IconButton(
+            tooltip: '刷新',
+            onPressed: _loadData,
+            icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
             tooltip: '预算排除',
             onPressed: _openBudgetExclude,
             icon: const Icon(Icons.block),
           ),
-          IconButton(icon: const Icon(Icons.add), onPressed: _createBudget),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _loadErrorMessage != null
           ? _buildLoadErrorState()
-          : _summaries.isEmpty
-          ? _buildEmptyState()
           : RefreshIndicator(
-              onRefresh: _loadData,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _summaries.length,
-                itemBuilder: (context, index) {
-                  return _buildBudgetCard(_summaries[index]);
-                },
-              ),
+              onRefresh: _pullToOpenBudgetExclude,
+              child: _summaries.isEmpty
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _summaries.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return _buildPullHintCard();
+                        }
+                        return _buildBudgetCard(_summaries[index - 1]);
+                      },
+                    ),
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: _currencyService == null || _budgetService == null
@@ -195,29 +220,64 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildPullHintCard(),
+        const SizedBox(height: 24),
+        Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.pie_chart_outline, size: 64, color: Colors.grey.shade300),
+              const SizedBox(height: 16),
+              Text(
+                '暂无预算',
+                style: GoogleFonts.lato(
+                  fontSize: 18,
+                  color: JiveTheme.secondaryTextColor(context),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '创建预算来追踪您的支出',
+                style: TextStyle(color: JiveTheme.secondaryTextColor(context)),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _createBudget,
+                icon: const Icon(Icons.add),
+                label: const Text('创建预算'),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPullHintCard() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
         children: [
-          Icon(Icons.pie_chart_outline, size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text(
-            '暂无预算',
-            style: GoogleFonts.lato(
-              fontSize: 18,
-              color: JiveTheme.secondaryTextColor(context),
+          Icon(Icons.swipe_down, size: 18, color: Colors.grey.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '下拉设置不计入预算的分类',
+              style: TextStyle(color: Colors.grey.shade700),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            '创建预算来追踪您的支出',
-            style: TextStyle(color: JiveTheme.secondaryTextColor(context)),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _createBudget,
-            icon: const Icon(Icons.add),
-            label: const Text('创建预算'),
+          TextButton(
+            onPressed: _openBudgetExclude,
+            child: const Text('打开'),
           ),
         ],
       ),
@@ -283,11 +343,13 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
                           ),
                         ),
                         Text(
-                          '${_getPeriodText(budget.period)} • 剩余${summary.daysRemaining}天',
+                          '${_getPeriodText(budget.period)} • ${_budgetScopeText(budget)} • 剩余${summary.daysRemaining}天',
                           style: TextStyle(
                             fontSize: 12,
                             color: JiveTheme.secondaryTextColor(context),
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -322,6 +384,33 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
                   valueColor: AlwaysStoppedAnimation(statusColor),
                   minHeight: 8,
                 ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Text(
+                    '剩余 $symbol ${_formatAmount(summary.remainingAmount)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: summary.remainingAmount < 0
+                          ? Colors.red
+                          : JiveTheme.secondaryTextColor(context),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (summary.daysRemaining > 0)
+                    Text(
+                      '日均可用 $symbol ${_formatAmount(summary.remainingAmount / summary.daysRemaining)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: summary.remainingAmount < 0
+                            ? Colors.red
+                            : JiveTheme.secondaryTextColor(context),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
               Row(
@@ -410,6 +499,7 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
       builder: (ctx) => _BudgetDetailSheet(
         summary: summary,
         currencyService: _currencyService!,
+        categoryByKey: _categoryByKey,
         onDelete: () async {
           try {
             await _budgetService!.deleteBudget(summary.budget.id);
@@ -458,17 +548,32 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
           (match) => '${match[1]},',
         );
   }
+
+  String _budgetScopeText(JiveBudget budget) {
+    final key = budget.categoryKey;
+    if (key == null || key.isEmpty) return '全部分类';
+    final category = _categoryByKey[key];
+    if (category == null) return key;
+    final parentKey = category.parentKey;
+    if (parentKey != null && parentKey.isNotEmpty) {
+      final parent = _categoryByKey[parentKey];
+      if (parent != null) return '${parent.name} · ${category.name}';
+    }
+    return category.name;
+  }
 }
 
 class _BudgetLoadResult {
   final CurrencyService currencyService;
   final BudgetService budgetService;
   final List<BudgetSummary> summaries;
+  final Map<String, JiveCategory> categoryByKey;
 
   const _BudgetLoadResult({
     required this.currencyService,
     required this.budgetService,
     required this.summaries,
+    required this.categoryByKey,
   });
 }
 
@@ -476,10 +581,12 @@ class _BudgetLoadResult {
 class _CreateBudgetSheet extends StatefulWidget {
   final CurrencyService currencyService;
   final BudgetService budgetService;
+  final List<JiveCategory> categories;
 
   const _CreateBudgetSheet({
     required this.currencyService,
     required this.budgetService,
+    required this.categories,
   });
 
   @override
@@ -493,11 +600,16 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
   BudgetPeriod _period = BudgetPeriod.monthly;
   bool _alertEnabled = true;
   double _alertThreshold = 80;
+  String? _categoryKey;
+  late final Map<String, JiveCategory> _categoryByKey;
+  late final bool _preferUserCategories;
   bool _isCreating = false;
 
   @override
   void initState() {
     super.initState();
+    _categoryByKey = {for (final c in widget.categories) c.key: c};
+    _preferUserCategories = widget.categories.any((c) => !c.isIncome && !c.isSystem);
     _loadCurrency();
   }
 
@@ -539,6 +651,7 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
       name: name,
       amount: amount,
       currency: _currency,
+      categoryKey: _categoryKey,
       startDate: startDate,
       endDate: endDate,
       period: _period.value,
@@ -595,6 +708,48 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
                   hintText: '如：日常开销、餐饮预算',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 分类范围
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _pickCategory,
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: '预算分类',
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _buildCategoryLeading(),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _categoryKey == null ? '全部分类' : _categoryLabel(_categoryKey!),
+                          style: GoogleFonts.lato(fontSize: 13, fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (_categoryKey != null)
+                        IconButton(
+                          tooltip: '清除',
+                          onPressed: () => setState(() => _categoryKey = null),
+                          icon: Icon(Icons.close, size: 16, color: Colors.grey.shade700),
+                          padding: EdgeInsets.zero,
+                          splashRadius: 16,
+                          constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                        ),
+                      Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade600),
+                    ],
                   ),
                 ),
               ),
@@ -715,17 +870,84 @@ class _CreateBudgetSheetState extends State<_CreateBudgetSheet> {
       ),
     );
   }
+
+  Widget _buildCategoryLeading() {
+    if (_categoryKey == null) {
+      return CircleAvatar(
+        radius: 14,
+        backgroundColor: Colors.grey.shade200,
+        child: Icon(Icons.all_inclusive, size: 16, color: Colors.grey.shade700),
+      );
+    }
+    final category = _categoryByKey[_categoryKey!];
+    if (category == null) {
+      return CircleAvatar(
+        radius: 14,
+        backgroundColor: Colors.grey.shade200,
+        child: Icon(Icons.category, size: 16, color: Colors.grey.shade700),
+      );
+    }
+    final color = CategoryService.parseColorHex(category.colorHex) ?? JiveTheme.categoryIconInactive;
+    return CircleAvatar(
+      radius: 14,
+      backgroundColor: color.withValues(alpha: 0.12),
+      child: CategoryService.buildIcon(
+        category.iconName,
+        size: 14,
+        color: color,
+        isSystemCategory: category.isSystem,
+        forceTinted: category.iconForceTinted,
+      ),
+    );
+  }
+
+  String _categoryLabel(String key) {
+    final category = _categoryByKey[key];
+    if (category == null) return key;
+    final parentKey = category.parentKey;
+    if (parentKey != null && parentKey.isNotEmpty) {
+      final parent = _categoryByKey[parentKey];
+      if (parent != null) return '${parent.name} · ${category.name}';
+    }
+    return category.name;
+  }
+
+  Future<void> _pickCategory() async {
+    final isar = await DatabaseService.getInstance();
+    if (!mounted) return;
+    final picked = await Navigator.push<CategorySearchResult>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryPickerScreen(
+          isIncome: false,
+          onlyUserCategories: _preferUserCategories,
+          isar: isar,
+          title: '选择预算分类',
+        ),
+      ),
+    );
+    if (picked == null) return;
+    final key = picked.sub?.key ?? picked.parent.key;
+    setState(() => _categoryKey = key);
+
+    // If user didn't name the budget, help them generate a good default.
+    if (_nameController.text.trim().isEmpty) {
+      _nameController.text = '${picked.primaryName}预算';
+    }
+  }
 }
 
 /// 预算详情底部弹窗
 class _BudgetDetailSheet extends StatelessWidget {
   final BudgetSummary summary;
   final CurrencyService currencyService;
+  final Map<String, JiveCategory> categoryByKey;
   final VoidCallback onDelete;
 
   const _BudgetDetailSheet({
     required this.summary,
     required this.currencyService,
+    required this.categoryByKey,
     required this.onDelete,
   });
 
@@ -737,6 +959,12 @@ class _BudgetDetailSheet extends StatelessWidget {
       orElse: () => {'symbol': budget.currency},
     );
     final symbol = currencyData['symbol'] as String;
+    final scope = _budgetScopeText(budget);
+    final totalDays = _totalDaysInclusive(budget.startDate, budget.endDate);
+    final dailyBudget = budget.amount / totalDays;
+    final dailyRemaining = summary.daysRemaining > 0
+        ? summary.remainingAmount / summary.daysRemaining
+        : summary.remainingAmount;
 
     return SafeArea(
       child: Padding(
@@ -792,6 +1020,39 @@ class _BudgetDetailSheet extends StatelessWidget {
             const Divider(),
             const SizedBox(height: 12),
 
+            if (summary.status != BudgetStatus.normal) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: (summary.status == BudgetStatus.exceeded
+                          ? Colors.red
+                          : Colors.orange)
+                      .withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: (summary.status == BudgetStatus.exceeded
+                            ? Colors.red
+                            : Colors.orange)
+                        .withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Text(
+                  summary.status == BudgetStatus.exceeded
+                      ? '已超支 $symbol ${_formatAmount((summary.usedAmount - budget.amount).abs())}'
+                      : '已达到预警阈值 ${budget.alertThreshold?.toStringAsFixed(0) ?? '--'}%',
+                  style: GoogleFonts.lato(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: summary.status == BudgetStatus.exceeded
+                        ? Colors.red.shade700
+                        : Colors.orange.shade700,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             // 进度圆环
             Center(
               child: SizedBox(
@@ -832,6 +1093,7 @@ class _BudgetDetailSheet extends StatelessWidget {
             const SizedBox(height: 24),
 
             // 详细信息
+            _buildDetailRow('预算分类', scope),
             _buildDetailRow('预算金额', '$symbol ${_formatAmount(budget.amount)}'),
             _buildDetailRow(
               '已使用',
@@ -843,6 +1105,15 @@ class _BudgetDetailSheet extends StatelessWidget {
               valueColor: summary.remainingAmount < 0 ? Colors.red : null,
             ),
             _buildDetailRow(
+              '日均预算',
+              '$symbol ${_formatAmount(dailyBudget)}',
+            ),
+            _buildDetailRow(
+              '剩余日预算',
+              '$symbol ${_formatAmount(dailyRemaining)}',
+              valueColor: dailyRemaining < 0 ? Colors.red : null,
+            ),
+            _buildDetailRow(
               '开始日期',
               DateFormat('yyyy-MM-dd').format(budget.startDate),
             ),
@@ -851,10 +1122,78 @@ class _BudgetDetailSheet extends StatelessWidget {
               DateFormat('yyyy-MM-dd').format(budget.endDate),
             ),
             _buildDetailRow('剩余天数', '${summary.daysRemaining} 天'),
+            _buildDetailRow(
+              '预算预警',
+              budget.alertEnabled && budget.alertThreshold != null
+                  ? '已启用（${budget.alertThreshold!.toStringAsFixed(0)}%）'
+                  : '未启用',
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _openTransactions(context),
+                icon: const Icon(Icons.receipt_long),
+                label: const Text('查看账单'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: JiveTheme.primaryGreen,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _openTransactions(BuildContext context) {
+    final budget = summary.budget;
+    String? filterCategoryKey;
+    String? filterSubCategoryKey;
+    if (budget.categoryKey != null && budget.categoryKey!.isNotEmpty) {
+      final selected = categoryByKey[budget.categoryKey!];
+      if (selected != null && selected.parentKey != null && selected.parentKey!.isNotEmpty) {
+        filterSubCategoryKey = selected.key;
+      } else {
+        filterCategoryKey = budget.categoryKey;
+      }
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryTransactionsScreen(
+          title: '账单 · ${budget.name}',
+          filterCategoryKey: filterCategoryKey,
+          filterSubCategoryKey: filterSubCategoryKey,
+          includeSubCategories: true,
+        ),
+      ),
+    );
+  }
+
+  String _budgetScopeText(JiveBudget budget) {
+    final key = budget.categoryKey;
+    if (key == null || key.isEmpty) return '全部分类';
+    final category = categoryByKey[key];
+    if (category == null) return key;
+    final parentKey = category.parentKey;
+    if (parentKey != null && parentKey.isNotEmpty) {
+      final parent = categoryByKey[parentKey];
+      if (parent != null) return '${parent.name} · ${category.name}';
+    }
+    return category.name;
+  }
+
+  int _totalDaysInclusive(DateTime start, DateTime end) {
+    final startDay = DateTime(start.year, start.month, start.day);
+    final endDay = DateTime(end.year, end.month, end.day);
+    final diff = endDay.difference(startDay).inDays;
+    return diff >= 0 ? diff + 1 : 1;
   }
 
   Widget _buildDetailRow(String label, String value, {Color? valueColor}) {
