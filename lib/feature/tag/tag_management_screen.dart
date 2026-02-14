@@ -19,6 +19,7 @@ import '../../core/service/tag_service.dart';
 import '../../core/service/tag_rule_service.dart';
 import '../../core/service/smart_tag_log_service.dart';
 import '../../core/service/ui_pref_service.dart';
+import '../../core/widgets/date_range_picker_sheet.dart';
 import 'tag_edit_dialog.dart';
 import 'tag_group_dialog.dart';
 import 'tag_transactions_screen.dart';
@@ -2182,15 +2183,42 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
               onTap: () async {
                 final now = DateTime.now();
                 final lastDate = DateTime(now.year, now.month, now.day);
-                final range = await showDateRangePicker(
+                DateTimeRange? picked;
+                var didChange = false;
+                await showModalBottomSheet<void>(
                   context: context,
-                  firstDate: DateTime(now.year - 5),
-                  lastDate: lastDate,
-                  helpText: '选择补标时间范围',
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) {
+                    return DateRangePickerSheet(
+                      initialRange: null,
+                      firstDay: DateTime(now.year - 5, 1, 1),
+                      lastDay: lastDate,
+                      minSelectableDay: DateTime(now.year - 5, 1, 1),
+                      maxSelectableDay: lastDate,
+                      bottomLabel: '选择补标时间范围',
+                      onChanged: (range) {
+                        didChange = true;
+                        picked = range;
+                      },
+                    );
+                  },
                 );
-                if (range == null) return;
-                final start = DateTime(range.start.year, range.start.month, range.start.day);
-                final end = DateTime(range.end.year, range.end.month, range.end.day, 23, 59, 59, 999);
+                if (!didChange || picked == null) return;
+                final start = DateTime(
+                  picked!.start.year,
+                  picked!.start.month,
+                  picked!.start.day,
+                );
+                final end = DateTime(
+                  picked!.end.year,
+                  picked!.end.month,
+                  picked!.end.day,
+                  23,
+                  59,
+                  59,
+                  999,
+                );
                 if (!context.mounted) return;
                 Navigator.pop(context, _BackfillRange(start: start, end: end));
               },
