@@ -9,6 +9,7 @@ import '../../core/design_system/theme.dart';
 import '../../core/service/budget_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
+import 'budget_exclude_screen.dart';
 
 /// 预算管理界面
 class BudgetListScreen extends StatefulWidget {
@@ -111,12 +112,25 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
     }
   }
 
+  Future<void> _openBudgetExclude() async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const BudgetExcludeScreen()),
+    );
+    _loadData();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('预算管理'),
         actions: [
+          IconButton(
+            tooltip: '预算排除',
+            onPressed: _openBudgetExclude,
+            icon: const Icon(Icons.block),
+          ),
           IconButton(icon: const Icon(Icons.add), onPressed: _createBudget),
         ],
       ),
