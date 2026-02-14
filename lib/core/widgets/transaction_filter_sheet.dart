@@ -5,6 +5,12 @@ import '../database/account_model.dart';
 import '../database/category_model.dart';
 import 'date_range_picker_sheet.dart';
 
+enum BudgetInclusionFilter {
+  all,
+  excludedOnly,
+  includedOnly,
+}
+
 class TransactionFilterSheet extends StatefulWidget {
   final List<JiveCategory> categories;
   final List<JiveAccount> accounts;
@@ -12,6 +18,8 @@ class TransactionFilterSheet extends StatefulWidget {
   final int? initialAccountId;
   final String? initialTag;
   final DateTimeRange? initialDateRange;
+  final BudgetInclusionFilter initialBudgetFilter;
+  final ValueChanged<BudgetInclusionFilter>? onBudgetFilterChanged;
   final void Function(
     String? categoryKey,
     int? accountId,
@@ -24,6 +32,7 @@ class TransactionFilterSheet extends StatefulWidget {
   final String hint;
   final String categoryLabel;
   final String accountLabel;
+  final String budgetLabel;
   final String tagLabel;
   final String dateRangeLabel;
   final bool showDateRange;
@@ -41,10 +50,13 @@ class TransactionFilterSheet extends StatefulWidget {
     required this.initialDateRange,
     required this.onChanged,
     required this.onClear,
+    this.initialBudgetFilter = BudgetInclusionFilter.all,
+    this.onBudgetFilterChanged,
     this.title = '查找账单（按条件）',
     this.hint = '选择即生效',
     this.categoryLabel = '分类',
     this.accountLabel = '账户',
+    this.budgetLabel = '预算',
     this.tagLabel = '标签（备注中的词）',
     this.dateRangeLabel = '日期范围',
     this.showDateRange = true,
@@ -62,6 +74,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
   int? _accountId;
   late final TextEditingController _tagController;
   DateTimeRange? _dateRange;
+  late BudgetInclusionFilter _budgetFilter;
 
   @override
   void initState() {
@@ -70,6 +83,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     _accountId = widget.initialAccountId;
     _tagController = TextEditingController(text: widget.initialTag ?? '');
     _dateRange = widget.initialDateRange;
+    _budgetFilter = widget.initialBudgetFilter;
   }
 
   @override
@@ -94,7 +108,9 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
       _accountId = null;
       _tagController.clear();
       _dateRange = null;
+      _budgetFilter = BudgetInclusionFilter.all;
     });
+    widget.onBudgetFilterChanged?.call(_budgetFilter);
     widget.onClear();
   }
 
@@ -120,6 +136,12 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     if (_dateRange == null) return;
     setState(() => _dateRange = null);
     _notifyChange();
+  }
+
+  void _clearBudgetFilter() {
+    if (_budgetFilter == BudgetInclusionFilter.all) return;
+    setState(() => _budgetFilter = BudgetInclusionFilter.all);
+    widget.onBudgetFilterChanged?.call(_budgetFilter);
   }
 
   Widget _buildClearIcon(VoidCallback onPressed) {
@@ -324,6 +346,49 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                 _notifyChange();
               },
             ),
+            if (widget.onBudgetFilterChanged != null) ...[
+              const SizedBox(height: 10),
+              DropdownButtonFormField<BudgetInclusionFilter>(
+                key: ValueKey(_budgetFilter),
+                initialValue: _budgetFilter,
+                decoration: InputDecoration(
+                  labelText: widget.budgetLabel,
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  suffixIcon: _budgetFilter == BudgetInclusionFilter.all
+                      ? null
+                      : _buildClearIcon(_clearBudgetFilter),
+                ),
+                icon: Icon(
+                  Icons.keyboard_arrow_down,
+                  color: Colors.grey.shade600,
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: BudgetInclusionFilter.all,
+                    child: Text('全部'),
+                  ),
+                  DropdownMenuItem(
+                    value: BudgetInclusionFilter.excludedOnly,
+                    child: Text('不计入预算'),
+                  ),
+                  DropdownMenuItem(
+                    value: BudgetInclusionFilter.includedOnly,
+                    child: Text('仅计入预算'),
+                  ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => _budgetFilter = value);
+                  widget.onBudgetFilterChanged?.call(_budgetFilter);
+                },
+              ),
+            ],
             const SizedBox(height: 10),
             TextField(
               controller: _tagController,
