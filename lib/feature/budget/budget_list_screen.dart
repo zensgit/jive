@@ -1698,16 +1698,42 @@ class _BudgetTrendChartSectionState extends State<_BudgetTrendChartSection> {
   }
 
   Widget _buildChart() {
-    final source = _showCumulative ? _toCumulative(_daily) : _daily;
-    final maxY = source.map((e) => e.amount).reduce((a, b) => a > b ? a : b);
+    final daily = _daily;
+    final cumulative = _toCumulative(daily);
+    final series = _showCumulative ? cumulative : daily;
+    final remaining = _showCumulative
+        ? cumulative
+              .map(
+                (e) => BudgetDailySpending(
+                  day: e.day,
+                  amount: (widget.budget.amount - e.amount) < 0
+                      ? 0
+                      : (widget.budget.amount - e.amount),
+                ),
+              )
+              .toList()
+        : const <BudgetDailySpending>[];
+
+    double maxY = 0;
+    for (final e in series) {
+      if (e.amount > maxY) maxY = e.amount;
+    }
+    if (_showCumulative && widget.budget.amount > maxY) {
+      maxY = widget.budget.amount;
+    }
     final yInterval = maxY > 0 ? (maxY / 4).ceilToDouble() : 100.0;
 
-    final spots = <FlSpot>[];
-    for (var i = 0; i < source.length; i++) {
-      spots.add(FlSpot(i.toDouble(), source[i].amount));
+    final spendSpots = <FlSpot>[];
+    final remainSpots = <FlSpot>[];
+    for (var i = 0; i < series.length; i++) {
+      spendSpots.add(FlSpot(i.toDouble(), series[i].amount));
+      if (_showCumulative) {
+        remainSpots.add(FlSpot(i.toDouble(), remaining[i].amount));
+      }
     }
 
     final dateFormat = DateFormat('M/d');
+    final remainColor = Colors.grey.shade500;
 
     return Container(
       decoration: BoxDecoration(
@@ -1748,6 +1774,19 @@ class _BudgetTrendChartSectionState extends State<_BudgetTrendChartSection> {
               _showCumulative ? '近14天累计支出' : '近14天每日支出',
               style: GoogleFonts.lato(fontSize: 12, color: Colors.grey),
             ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 14,
+              runSpacing: 6,
+              children: [
+                _buildLegendItem(
+                  color: widget.themeColor,
+                  label: _showCumulative ? '累计支出' : '每日支出',
+                ),
+                if (_showCumulative)
+                  _buildLegendItem(color: remainColor, label: '剩余预算'),
+              ],
+            ),
             const SizedBox(height: 12),
             SizedBox(
               height: 160,
@@ -1785,16 +1824,16 @@ class _BudgetTrendChartSectionState extends State<_BudgetTrendChartSection> {
                       sideTitles: SideTitles(
                         showTitles: true,
                         reservedSize: 24,
-                        interval: source.length > 10 ? 3 : 1,
+                        interval: series.length > 10 ? 3 : 1,
                         getTitlesWidget: (value, meta) {
                           final index = value.toInt();
-                          if (index < 0 || index >= source.length) {
+                          if (index < 0 || index >= series.length) {
                             return const SizedBox.shrink();
                           }
                           return Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
-                              dateFormat.format(source[index].day),
+                              dateFormat.format(series[index].day),
                               style: GoogleFonts.lato(
                                 fontSize: 10,
                                 color: Colors.grey,
@@ -1813,12 +1852,12 @@ class _BudgetTrendChartSectionState extends State<_BudgetTrendChartSection> {
                   ),
                   borderData: FlBorderData(show: false),
                   minX: 0,
-                  maxX: (source.length - 1).toDouble(),
+                  maxX: (series.length - 1).toDouble(),
                   minY: 0,
                   maxY: maxY > 0 ? maxY * 1.1 : 100,
                   lineBarsData: [
                     LineChartBarData(
-                      spots: spots,
+                      spots: spendSpots,
                       isCurved: true,
                       curveSmoothness: 0.3,
                       color: widget.themeColor,
@@ -1840,16 +1879,60 @@ class _BudgetTrendChartSectionState extends State<_BudgetTrendChartSection> {
                         color: widget.themeColor.withValues(alpha: 0.10),
                       ),
                     ),
+                    if (_showCumulative)
+                      LineChartBarData(
+                        spots: remainSpots,
+                        isCurved: true,
+                        curveSmoothness: 0.3,
+                        color: remainColor,
+                        barWidth: 2.2,
+                        isStrokeCapRound: true,
+                        dotData: const FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: remainColor.withValues(alpha: 0.10),
+                        ),
+                      ),
                   ],
                   lineTouchData: LineTouchData(
                     touchTooltipData: LineTouchTooltipData(
                       getTooltipItems: (touchedSpots) {
+                        if (touchedSpots.isEmpty) return const [];
+                        final index = touchedSpots.first.x.toInt();
+                        if (index < 0 || index >= series.length) {
+                          return const [];
+                        }
+
+                        if (!_showCumulative) {
+                          final item = series[index];
+                          return touchedSpots.map((spot) {
+                            if (spot != touchedSpots.first) return null;
+                            return LineTooltipItem(
+                              '${dateFormat.format(item.day)}\n${widget.symbol} ${_formatAmount(item.amount)}',
+                              GoogleFonts.lato(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            );
+                          }).toList();
+                        }
+
+                        final spend = cumulative[index];
+                        final remain = remaining[index];
+                        final text = StringBuffer()
+                          ..write(dateFormat.format(spend.day))
+                          ..write(
+                            '\n支出  ${widget.symbol} ${_formatAmount(spend.amount)}',
+                          )
+                          ..write(
+                            '\n剩余  ${widget.symbol} ${_formatAmount(remain.amount)}',
+                          );
+
                         return touchedSpots.map((spot) {
-                          final index = spot.x.toInt();
-                          if (index < 0 || index >= source.length) return null;
-                          final item = source[index];
+                          if (spot != touchedSpots.first) return null;
                           return LineTooltipItem(
-                            '${dateFormat.format(item.day)}\n${widget.symbol} ${_formatAmount(item.amount)}',
+                            text.toString(),
                             GoogleFonts.lato(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
@@ -1892,6 +1975,31 @@ class _BudgetTrendChartSectionState extends State<_BudgetTrendChartSection> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLegendItem({required Color color, required String label}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: 3,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: GoogleFonts.lato(
+            fontSize: 11,
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
