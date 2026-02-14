@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:isar/isar.dart';
 import '../database/budget_model.dart';
+import '../database/category_model.dart';
 import '../database/transaction_model.dart';
 import 'currency_service.dart';
 
@@ -92,7 +93,31 @@ class BudgetService {
       query = query.categoryKeyEqualTo(budget.categoryKey!);
     }
 
-    final transactions = await query.findAll();
+    var transactions = await query.findAll();
+
+    // yimu-like behavior: overall budget ignores categories that are marked as "exclude from budget".
+    // Only apply this to total budgets (categoryKey == null) to avoid surprising results for
+    // category-specific budgets (future feature).
+    if (budget.categoryKey == null) {
+      final excluded = await _isar.collection<JiveCategory>()
+          .filter()
+          .excludeFromBudgetEqualTo(true)
+          .and()
+          .isIncomeEqualTo(false)
+          .findAll();
+      if (excluded.isNotEmpty) {
+        final excludedKeys = excluded.map((c) => c.key).toSet();
+        transactions = transactions
+            .where((tx) {
+              final parentKey = tx.categoryKey;
+              if (parentKey != null && excludedKeys.contains(parentKey)) return false;
+              final subKey = tx.subCategoryKey;
+              if (subKey != null && excludedKeys.contains(subKey)) return false;
+              return true;
+            })
+            .toList();
+      }
+    }
 
     // 计算总使用金额（转换为预算货币）
     // 目前交易默认按 CNY 存储，因此汇率在预算维度只需查询一次，避免逐笔查询导致卡顿。

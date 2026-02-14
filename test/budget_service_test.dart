@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
 import 'package:jive/core/database/budget_model.dart';
+import 'package:jive/core/database/category_model.dart';
 import 'package:jive/core/database/currency_model.dart';
 import 'package:jive/core/database/transaction_model.dart';
 import 'package:jive/core/service/budget_service.dart';
@@ -43,6 +44,8 @@ void main() {
       JiveBudgetSchema,
       JiveBudgetUsageSchema,
       JiveTransactionSchema,
+      JiveCategorySchema,
+      JiveCategoryOverrideSchema,
       JiveCurrencySchema,
       JiveExchangeRateSchema,
       JiveCurrencyPreferenceSchema,
@@ -148,6 +151,140 @@ void main() {
       expect(summaries.length, 1);
       expect(summaries.first.usedAmount, 120);
       expect(summaries.first.remainingAmount, 380);
+    },
+  );
+
+  test(
+    'overall budget ignores transactions in excluded categories',
+    () async {
+      await budgetService.createBudget(
+        name: '月度预算',
+        amount: 1000,
+        currency: 'CNY',
+        startDate: DateTime(2024, 3, 1),
+        endDate: DateTime(2024, 3, 31, 23, 59, 59),
+        period: 'monthly',
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveCategory>().putAll([
+          JiveCategory()
+            ..key = 'food'
+            ..name = '餐饮'
+            ..iconName = 'food'
+            ..order = 0
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..excludeFromBudget = true
+            ..updatedAt = DateTime(2024, 3, 1),
+          JiveCategory()
+            ..key = 'transport'
+            ..name = '交通'
+            ..iconName = 'transport'
+            ..order = 1
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..excludeFromBudget = false
+            ..updatedAt = DateTime(2024, 3, 1),
+        ]);
+
+        await isar.collection<JiveTransaction>().putAll([
+          JiveTransaction()
+            ..amount = 200
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 3, 10, 9)
+            ..type = 'expense'
+            ..categoryKey = 'food',
+          JiveTransaction()
+            ..amount = 50
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 3, 11, 9)
+            ..type = 'expense'
+            ..categoryKey = 'transport',
+        ]);
+      });
+
+      final summaries = await budgetService.getAllBudgetSummaries();
+
+      expect(summaries.length, 1);
+      expect(summaries.first.usedAmount, 50);
+      expect(summaries.first.remainingAmount, 950);
+    },
+  );
+
+  test(
+    'overall budget ignores transactions in excluded subcategories only',
+    () async {
+      await budgetService.createBudget(
+        name: '月度预算',
+        amount: 1000,
+        currency: 'CNY',
+        startDate: DateTime(2024, 4, 1),
+        endDate: DateTime(2024, 4, 30, 23, 59, 59),
+        period: 'monthly',
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveCategory>().putAll([
+          JiveCategory()
+            ..key = 'food'
+            ..name = '餐饮'
+            ..iconName = 'food'
+            ..order = 0
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..excludeFromBudget = false
+            ..updatedAt = DateTime(2024, 4, 1),
+          JiveCategory()
+            ..key = 'coffee'
+            ..name = '咖啡'
+            ..iconName = 'coffee'
+            ..parentKey = 'food'
+            ..order = 0
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..excludeFromBudget = true
+            ..updatedAt = DateTime(2024, 4, 1),
+          JiveCategory()
+            ..key = 'lunch'
+            ..name = '午餐'
+            ..iconName = 'lunch'
+            ..parentKey = 'food'
+            ..order = 1
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..excludeFromBudget = false
+            ..updatedAt = DateTime(2024, 4, 1),
+        ]);
+
+        await isar.collection<JiveTransaction>().putAll([
+          JiveTransaction()
+            ..amount = 100
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 4, 10, 9)
+            ..type = 'expense'
+            ..categoryKey = 'food'
+            ..subCategoryKey = 'coffee',
+          JiveTransaction()
+            ..amount = 50
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 4, 11, 9)
+            ..type = 'expense'
+            ..categoryKey = 'food'
+            ..subCategoryKey = 'lunch',
+        ]);
+      });
+
+      final summaries = await budgetService.getAllBudgetSummaries();
+
+      expect(summaries.length, 1);
+      expect(summaries.first.usedAmount, 50);
+      expect(summaries.first.remainingAmount, 950);
     },
   );
 

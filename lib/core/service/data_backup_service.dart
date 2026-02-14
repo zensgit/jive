@@ -239,6 +239,7 @@ class JiveDataBackupService {
         'iconName': category.iconName,
         'colorHex': category.colorHex,
         'iconForceTinted': category.iconForceTinted,
+        'excludeFromBudget': category.excludeFromBudget,
         'parentKey': category.parentKey,
         'sourceTagKey': category.sourceTagKey,
         'order': category.order,
@@ -256,6 +257,7 @@ class JiveDataBackupService {
       ..iconName = map['iconName']?.toString() ?? ''
       ..colorHex = map['colorHex']?.toString()
       ..iconForceTinted = map['iconForceTinted'] == true
+      ..excludeFromBudget = map['excludeFromBudget'] == true
       ..parentKey = map['parentKey']?.toString()
       ..sourceTagKey = map['sourceTagKey']?.toString()
       ..order = _parseInt(map['order']) ?? 0
@@ -275,6 +277,7 @@ class JiveDataBackupService {
         'parentOverrideKey': override.parentOverrideKey,
         'orderOverride': override.orderOverride,
         'isHiddenOverride': override.isHiddenOverride,
+        'excludeFromBudgetOverride': override.excludeFromBudgetOverride,
         'updatedAt': override.updatedAt.toIso8601String(),
       };
 
@@ -288,6 +291,7 @@ class JiveDataBackupService {
       ..parentOverrideKey = map['parentOverrideKey']?.toString()
       ..orderOverride = _parseInt(map['orderOverride'])
       ..isHiddenOverride = map['isHiddenOverride'] as bool?
+      ..excludeFromBudgetOverride = map['excludeFromBudgetOverride'] as bool?
       ..updatedAt = _parseDate(map['updatedAt']) ?? DateTime.now();
     return override;
   }

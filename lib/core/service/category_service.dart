@@ -779,6 +779,11 @@ class CategoryService {
         cat.isHidden = override.isHiddenOverride!;
         changed = true;
       }
+      if (override.excludeFromBudgetOverride != null &&
+          cat.excludeFromBudget != override.excludeFromBudgetOverride) {
+        cat.excludeFromBudget = override.excludeFromBudgetOverride!;
+        changed = true;
+      }
 
       if (changed) {
         cat.updatedAt = now;
@@ -1744,7 +1749,7 @@ class CategoryService {
     String icon,
     String? newParentKey,
     String? colorHex,
-    {bool? iconForceTinted}
+    {bool? iconForceTinted, bool? excludeFromBudget}
   ) async {
     final cat = await isar.collection<JiveCategory>().get(id);
     if (cat == null) return;
@@ -1757,6 +1762,9 @@ class CategoryService {
     cat.colorHex = _normalizeColorHex(colorHex);
     if (iconForceTinted != null) {
       cat.iconForceTinted = iconForceTinted;
+    }
+    if (excludeFromBudget != null) {
+      cat.excludeFromBudget = excludeFromBudget;
     }
     cat.updatedAt = DateTime.now();
 
@@ -1939,6 +1947,9 @@ class CategoryService {
       )
       ..orderOverride = includeOrder && category.order != base.order ? category.order : null
       ..isHiddenOverride = category.isHidden != base.isHidden ? category.isHidden : null
+      ..excludeFromBudgetOverride = category.excludeFromBudget != false
+          ? category.excludeFromBudget
+          : null
       ..updatedAt = now;
 
     if (override.colorHexOverride == base.colorHex) {
@@ -1968,6 +1979,9 @@ class CategoryService {
       )
       ..orderOverride = null
       ..isHiddenOverride = source.isHidden != base.isHidden ? source.isHidden : null
+      ..excludeFromBudgetOverride = source.excludeFromBudget != false
+          ? source.excludeFromBudget
+          : null
       ..updatedAt = now;
 
     if (snapshot.colorHexOverride == base.colorHex) {
@@ -1997,6 +2011,7 @@ class CategoryService {
       ..parentOverrideKey = existing.parentOverrideKey
       ..orderOverride = existing.orderOverride
       ..isHiddenOverride = existing.isHiddenOverride
+      ..excludeFromBudgetOverride = existing.excludeFromBudgetOverride
       ..updatedAt = now;
 
     void applyIfNeeded(String? incomingValue, void Function(String? value) setter, String? existingValue) {
@@ -2012,6 +2027,10 @@ class CategoryService {
     applyIfNeeded(incoming.parentOverrideKey, (value) => merged.parentOverrideKey = value, merged.parentOverrideKey);
     if (incoming.isHiddenOverride != null && (preferIncoming || merged.isHiddenOverride == null)) {
       merged.isHiddenOverride = incoming.isHiddenOverride;
+    }
+    if (incoming.excludeFromBudgetOverride != null &&
+        (preferIncoming || merged.excludeFromBudgetOverride == null)) {
+      merged.excludeFromBudgetOverride = incoming.excludeFromBudgetOverride;
     }
 
     return _hasOverrideData(merged) ? merged : null;
@@ -2031,7 +2050,8 @@ class CategoryService {
         override.colorHexOverride != null ||
         override.parentOverrideKey != null ||
         override.orderOverride != null ||
-        override.isHiddenOverride != null;
+        override.isHiddenOverride != null ||
+        override.excludeFromBudgetOverride != null;
   }
 
   String suggestIconName(String name, {String fallback = "category"}) {

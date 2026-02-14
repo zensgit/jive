@@ -14,6 +14,7 @@ class JiveCategory {
   late String iconName;     // 图标名称 (例如: "restaurant")
   String? colorHex;         // 自定义颜色 (#RRGGBB)
   bool iconForceTinted = false; // 强制单色图标(跟随分类颜色)，即使全局为彩色
+  bool excludeFromBudget = false; // 不计入预算（预算排除）
 
   @Index()
   String? parentKey;        // 父分类 Key (空则为一级)
@@ -43,6 +44,7 @@ class JiveCategoryOverride {
   String? parentOverrideKey;    // 自定义父级 Key
   int? orderOverride;           // 自定义排序
   bool? isHiddenOverride;       // 自定义隐藏状态
+  bool? excludeFromBudgetOverride; // 不计入预算（预算排除）
 
   late DateTime updatedAt;      // 同步用
 }
