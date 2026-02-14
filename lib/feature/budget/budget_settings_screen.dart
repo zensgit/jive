@@ -16,6 +16,9 @@ class _BudgetSettingsScreenState extends State<BudgetSettingsScreen> {
   bool _saveAlertEnabled = true;
   bool _trendChartEnabled = true;
   bool _pullToExcludeEnabled = true;
+  bool _monthlyAutoCopyEnabled = true;
+  bool _carryoverAddEnabled = false;
+  bool _carryoverReduceEnabled = false;
 
   @override
   void initState() {
@@ -27,11 +30,17 @@ class _BudgetSettingsScreenState extends State<BudgetSettingsScreen> {
     final saveAlert = await BudgetPrefService.getBudgetSaveAlertEnabled();
     final trend = await BudgetPrefService.getBudgetTrendChartEnabled();
     final pull = await BudgetPrefService.getBudgetPullToExcludeEnabled();
+    final autoCopy = await BudgetPrefService.getBudgetMonthlyAutoCopyEnabled();
+    final carryAdd = await BudgetPrefService.getBudgetCarryoverAddEnabled();
+    final carryReduce = await BudgetPrefService.getBudgetCarryoverReduceEnabled();
     if (!mounted) return;
     setState(() {
       _saveAlertEnabled = saveAlert;
       _trendChartEnabled = trend;
       _pullToExcludeEnabled = pull;
+      _monthlyAutoCopyEnabled = autoCopy;
+      _carryoverAddEnabled = carryAdd;
+      _carryoverReduceEnabled = carryReduce;
       _isLoading = false;
     });
   }
@@ -111,6 +120,60 @@ class _BudgetSettingsScreenState extends State<BudgetSettingsScreen> {
                         onChanged: (value) async {
                           setState(() => _pullToExcludeEnabled = value);
                           await BudgetPrefService.setBudgetPullToExcludeEnabled(
+                            value,
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _sectionCard(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '周期与结转',
+                        style: GoogleFonts.lato(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 10),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('每月自动复制预算'),
+                        subtitle: const Text('进入新月份且当月预算为空时，自动复制上月的总预算与分类预算。'),
+                        value: _monthlyAutoCopyEnabled,
+                        activeThumbColor: JiveTheme.primaryGreen,
+                        onChanged: (value) async {
+                          setState(() => _monthlyAutoCopyEnabled = value);
+                          await BudgetPrefService.setBudgetMonthlyAutoCopyEnabled(
+                            value,
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('多余预算累加'),
+                        subtitle: const Text('未使用的预算会加入下一月（随复制动作生效）。'),
+                        value: _carryoverAddEnabled,
+                        activeThumbColor: JiveTheme.primaryGreen,
+                        onChanged: (value) async {
+                          setState(() => _carryoverAddEnabled = value);
+                          await BudgetPrefService.setBudgetCarryoverAddEnabled(
+                            value,
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('超额支出扣除'),
+                        subtitle: const Text('支出大于预算的部分会从下月扣除（最低扣至 0）。'),
+                        value: _carryoverReduceEnabled,
+                        activeThumbColor: JiveTheme.primaryGreen,
+                        onChanged: (value) async {
+                          setState(() => _carryoverReduceEnabled = value);
+                          await BudgetPrefService.setBudgetCarryoverReduceEnabled(
                             value,
                           );
                         },
