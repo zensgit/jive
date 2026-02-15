@@ -93,6 +93,7 @@ flutter:
     - assets/account_icons/brands/
     - assets/emoji/
     - assets/auto_rules.json
+    - assets/holidays/
   fonts:
     - family: Lato
       fonts:
