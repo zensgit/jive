@@ -17,6 +17,22 @@ Future<void> _pumpUntilSettled(
   // Best-effort: don't hard-fail here; the test will fail on missing finders.
 }
 
+Future<void> _waitForAnyText(
+  WidgetTester tester,
+  List<String> texts, {
+  Duration timeout = const Duration(seconds: 10),
+  Duration step = const Duration(milliseconds: 250),
+}) async {
+  final sw = Stopwatch()..start();
+  while (sw.elapsed < timeout) {
+    await tester.pump(step);
+    for (final value in texts) {
+      if (find.text(value).evaluate().isNotEmpty) return;
+    }
+  }
+  fail('Timed out waiting for any of: ${texts.join(', ')}');
+}
+
 Future<void> _dismissAutoPermissionDialogIfPresent(WidgetTester tester) async {
   final title = find.text('自动记账权限未开启');
   if (title.evaluate().isEmpty) return;
@@ -73,7 +89,9 @@ void main() {
     await _pumpUntilSettled(tester);
 
     // Open date range picker.
-    await tester.tap(find.byKey(const Key('transaction_filter_date_range_tile')));
+    await tester.tap(
+      find.byKey(const Key('transaction_filter_date_range_tile')),
+    );
     await _pumpUntilSettled(tester);
 
     // Switch to Feb 2026 which should contain holiday/workday adjustments.
@@ -84,14 +102,18 @@ void main() {
     await tester.tap(find.byKey(const Key('jive_calendar_filter_holiday')));
     await _pumpUntilSettled(tester);
 
+    // Holiday data is loaded async (asset -> optional disk override). Wait for
+    // the marks to appear instead of assuming the next frame has them.
+    await _waitForAnyText(tester, ['班', '休']);
+
     final workMarks = find.text('班');
     final restMarks = find.text('休');
     expect(
       workMarks.evaluate().isNotEmpty || restMarks.evaluate().isNotEmpty,
       isTrue,
     );
-    final badgeMark = (workMarks.evaluate().isNotEmpty ? workMarks : restMarks)
-        .first;
+    final badgeMark =
+        (workMarks.evaluate().isNotEmpty ? workMarks : restMarks).first;
 
     // Validate that the corner mark and its day number do not overlap in the
     // same cell. (This guards against the "中文与数字重叠" regression.)
