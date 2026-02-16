@@ -1125,19 +1125,15 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
     final initial = _customRange;
     final viewStart = DateTime((initial?.start.year ?? now.year) - 1, 1, 1);
     final viewEnd = DateTime((initial?.end.year ?? now.year) + 1, 12, 31);
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DateRangePickerSheet(
-          initialRange: initial,
-          firstDay: viewStart,
-          lastDay: viewEnd,
-          onChanged: (range) => setState(() => _customRange = range),
-        );
-      },
+    final result = await JiveDatePicker.pickDateRangeResult(
+      context,
+      initialRange: initial,
+      firstDay: viewStart,
+      lastDay: viewEnd,
     );
+    if (!mounted) return;
+    if (!result.didChange) return;
+    setState(() => _customRange = result.value);
   }
 
   Widget _buildCategoryLeading() {

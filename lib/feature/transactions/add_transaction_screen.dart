@@ -960,27 +960,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _pickTransactionDate() async {
     final now = DateTime.now();
     final lastDay = DateTime(now.year, now.month, now.day);
-    DateTime? pickedDay;
-    var didChange = false;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DatePickerSheet(
-          initialDay: _selectedTime,
-          firstDay: DateTime(2010),
-          lastDay: lastDay,
-          bottomLabel: '选择日期',
-          onChanged: (day) {
-            didChange = true;
-            pickedDay = day;
-          },
-        );
-      },
+    final result = await JiveDatePicker.pickDateResult(
+      context,
+      initialDay: _selectedTime,
+      firstDay: DateTime(2010),
+      lastDay: lastDay,
+      bottomLabel: '选择日期',
     );
-    if (!didChange || pickedDay == null) return;
     if (!mounted) return;
+    final pickedDay = result.value;
+    if (!result.didChange || pickedDay == null) return;
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_selectedTime),
@@ -988,9 +977,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (time == null) return;
     setState(() {
       _selectedTime = DateTime(
-        pickedDay!.year,
-        pickedDay!.month,
-        pickedDay!.day,
+        pickedDay.year,
+        pickedDay.month,
+        pickedDay.day,
         time.hour,
         time.minute,
       );

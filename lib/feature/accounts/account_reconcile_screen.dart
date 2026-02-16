@@ -162,39 +162,36 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
           : _startDate,
       end: maxDate != null && _endDate.isAfter(maxDate) ? maxDate : _endDate,
     );
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DateRangePickerSheet(
-          initialRange: initialRange,
-          firstDay: viewStart,
-          lastDay: viewEnd,
-          minSelectableDay: minDate,
-          maxSelectableDay: maxDate,
-          enabledYears: enabledYears,
-          bottomLabel: '选择对账日期范围',
-          onChanged: (range) async {
-            if (range == null) {
-              final fallbackStart = minDate ?? DateTime.now();
-              final fallbackEnd = maxDate ?? DateTime.now();
-              setState(() {
-                _startDate = _startOfDay(fallbackStart);
-                _endDate = _endOfDay(fallbackEnd);
-              });
-              await _loadData();
-              return;
-            }
-            setState(() {
-              _startDate = _startOfDay(range.start);
-              _endDate = _endOfDay(range.end);
-            });
-            await _loadData();
-          },
-        );
-      },
+    final result = await JiveDatePicker.pickDateRangeResult(
+      context,
+      initialRange: initialRange,
+      firstDay: viewStart,
+      lastDay: viewEnd,
+      minSelectableDay: minDate,
+      maxSelectableDay: maxDate,
+      enabledYears: enabledYears,
+      bottomLabel: '选择对账日期范围',
     );
+    if (!mounted) return;
+    if (!result.didChange) return;
+
+    final pickedRange = result.value;
+    if (pickedRange == null) {
+      final fallbackStart = minDate ?? DateTime.now();
+      final fallbackEnd = maxDate ?? DateTime.now();
+      setState(() {
+        _startDate = _startOfDay(fallbackStart);
+        _endDate = _endOfDay(fallbackEnd);
+      });
+      await _loadData();
+      return;
+    }
+
+    setState(() {
+      _startDate = _startOfDay(pickedRange.start);
+      _endDate = _endOfDay(pickedRange.end);
+    });
+    await _loadData();
   }
 
   @override
