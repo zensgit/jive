@@ -9,6 +9,8 @@ import '../database/account_model.dart';
 import '../database/auto_draft_model.dart';
 import '../database/category_model.dart';
 import '../database/currency_model.dart';
+import '../database/import_job_model.dart';
+import '../database/import_job_record_model.dart';
 import '../database/recurring_rule_model.dart';
 import '../database/tag_conversion_log.dart';
 import '../database/tag_model.dart';
@@ -29,6 +31,8 @@ class BackupImportSummary {
   final int exchangeRates;
   final int currencyPreferences;
   final int recurringRules;
+  final int importJobs;
+  final int importJobRecords;
 
   const BackupImportSummary({
     required this.accounts,
@@ -43,25 +47,50 @@ class BackupImportSummary {
     this.exchangeRates = 0,
     this.currencyPreferences = 0,
     this.recurringRules = 0,
+    this.importJobs = 0,
+    this.importJobRecords = 0,
   });
 }
 
 class JiveDataBackupService {
-  static const int schemaVersion = 2;
+  static const int schemaVersion = 4;
 
   static Future<File> exportToFile(Isar isar) async {
     final accounts = await isar.collection<JiveAccount>().where().findAll();
     final categories = await isar.collection<JiveCategory>().where().findAll();
-    final overrides = await isar.collection<JiveCategoryOverride>().where().findAll();
+    final overrides = await isar
+        .collection<JiveCategoryOverride>()
+        .where()
+        .findAll();
     final tags = await isar.collection<JiveTag>().where().findAll();
     final tagGroups = await isar.collection<JiveTagGroup>().where().findAll();
     final tagRules = await isar.collection<JiveTagRule>().where().findAll();
-    final transactions = await isar.collection<JiveTransaction>().where().findAll();
+    final transactions = await isar
+        .collection<JiveTransaction>()
+        .where()
+        .findAll();
     final autoDrafts = await isar.collection<JiveAutoDraft>().where().findAll();
-    final logs = await isar.collection<JiveTagConversionLog>().where().findAll();
-    final exchangeRates = await isar.collection<JiveExchangeRate>().where().findAll();
-    final currencyPrefs = await isar.collection<JiveCurrencyPreference>().where().findAll();
-    final recurringRules = await isar.collection<JiveRecurringRule>().where().findAll();
+    final logs = await isar
+        .collection<JiveTagConversionLog>()
+        .where()
+        .findAll();
+    final exchangeRates = await isar
+        .collection<JiveExchangeRate>()
+        .where()
+        .findAll();
+    final currencyPrefs = await isar
+        .collection<JiveCurrencyPreference>()
+        .where()
+        .findAll();
+    final recurringRules = await isar
+        .collection<JiveRecurringRule>()
+        .where()
+        .findAll();
+    final importJobs = await isar.collection<JiveImportJob>().where().findAll();
+    final importJobRecords = await isar
+        .collection<JiveImportJobRecord>()
+        .where()
+        .findAll();
 
     final payload = <String, dynamic>{
       'schemaVersion': schemaVersion,
@@ -76,8 +105,12 @@ class JiveDataBackupService {
       'autoDrafts': autoDrafts.map(_autoDraftToMap).toList(),
       'tagConversionLogs': logs.map(_tagConversionLogToMap).toList(),
       'exchangeRates': exchangeRates.map(_exchangeRateToMap).toList(),
-      'currencyPreferences': currencyPrefs.map(_currencyPreferenceToMap).toList(),
+      'currencyPreferences': currencyPrefs
+          .map(_currencyPreferenceToMap)
+          .toList(),
       'recurringRules': recurringRules.map(_recurringRuleToMap).toList(),
+      'importJobs': importJobs.map(_importJobToMap).toList(),
+      'importJobRecords': importJobRecords.map(_importJobRecordToMap).toList(),
     };
 
     final dir = await getApplicationDocumentsDirectory();
@@ -97,16 +130,36 @@ class JiveDataBackupService {
 
     final accounts = _decodeList(data['accounts'], _accountFromMap);
     final categories = _decodeList(data['categories'], _categoryFromMap);
-    final overrides = _decodeList(data['categoryOverrides'], _categoryOverrideFromMap);
+    final overrides = _decodeList(
+      data['categoryOverrides'],
+      _categoryOverrideFromMap,
+    );
     final tags = _decodeList(data['tags'], _tagFromMap);
     final tagGroups = _decodeList(data['tagGroups'], _tagGroupFromMap);
     final tagRules = _decodeList(data['tagRules'], _tagRuleFromMap);
     final transactions = _decodeList(data['transactions'], _transactionFromMap);
     final autoDrafts = _decodeList(data['autoDrafts'], _autoDraftFromMap);
-    final logs = _decodeList(data['tagConversionLogs'], _tagConversionLogFromMap);
-    final exchangeRates = _decodeList(data['exchangeRates'], _exchangeRateFromMap);
-    final currencyPrefs = _decodeList(data['currencyPreferences'], _currencyPreferenceFromMap);
-    final recurringRules = _decodeList(data['recurringRules'], _recurringRuleFromMap);
+    final logs = _decodeList(
+      data['tagConversionLogs'],
+      _tagConversionLogFromMap,
+    );
+    final exchangeRates = _decodeList(
+      data['exchangeRates'],
+      _exchangeRateFromMap,
+    );
+    final currencyPrefs = _decodeList(
+      data['currencyPreferences'],
+      _currencyPreferenceFromMap,
+    );
+    final recurringRules = _decodeList(
+      data['recurringRules'],
+      _recurringRuleFromMap,
+    );
+    final importJobs = _decodeList(data['importJobs'], _importJobFromMap);
+    final importJobRecords = _decodeList(
+      data['importJobRecords'],
+      _importJobRecordFromMap,
+    );
 
     await isar.writeTxn(() async {
       if (clearBefore) {
@@ -121,6 +174,8 @@ class JiveDataBackupService {
         await isar.collection<JiveExchangeRate>().clear();
         await isar.collection<JiveCurrencyPreference>().clear();
         await isar.collection<JiveRecurringRule>().clear();
+        await isar.collection<JiveImportJob>().clear();
+        await isar.collection<JiveImportJobRecord>().clear();
       }
 
       if (accounts.isNotEmpty) {
@@ -159,6 +214,12 @@ class JiveDataBackupService {
       if (recurringRules.isNotEmpty) {
         await isar.collection<JiveRecurringRule>().putAll(recurringRules);
       }
+      if (importJobs.isNotEmpty) {
+        await isar.collection<JiveImportJob>().putAll(importJobs);
+      }
+      if (importJobRecords.isNotEmpty) {
+        await isar.collection<JiveImportJobRecord>().putAll(importJobRecords);
+      }
     });
 
     return BackupImportSummary(
@@ -174,6 +235,8 @@ class JiveDataBackupService {
       exchangeRates: exchangeRates.length,
       currencyPreferences: currencyPrefs.length,
       recurringRules: recurringRules.length,
+      importJobs: importJobs.length,
+      importJobRecords: importJobRecords.length,
     );
   }
 
@@ -189,25 +252,25 @@ class JiveDataBackupService {
   }
 
   static Map<String, dynamic> _accountToMap(JiveAccount account) => {
-        'id': account.id,
-        'key': account.key,
-        'name': account.name,
-        'type': account.type,
-        'subType': account.subType,
-        'groupName': account.groupName,
-        'currency': account.currency,
-        'iconName': account.iconName,
-        'colorHex': account.colorHex,
-        'order': account.order,
-        'includeInBalance': account.includeInBalance,
-        'isHidden': account.isHidden,
-        'isArchived': account.isArchived,
-        'billingDay': account.billingDay,
-        'repaymentDay': account.repaymentDay,
-        'creditLimit': account.creditLimit,
-        'openingBalance': account.openingBalance,
-        'updatedAt': account.updatedAt.toIso8601String(),
-      };
+    'id': account.id,
+    'key': account.key,
+    'name': account.name,
+    'type': account.type,
+    'subType': account.subType,
+    'groupName': account.groupName,
+    'currency': account.currency,
+    'iconName': account.iconName,
+    'colorHex': account.colorHex,
+    'order': account.order,
+    'includeInBalance': account.includeInBalance,
+    'isHidden': account.isHidden,
+    'isArchived': account.isArchived,
+    'billingDay': account.billingDay,
+    'repaymentDay': account.repaymentDay,
+    'creditLimit': account.creditLimit,
+    'openingBalance': account.openingBalance,
+    'updatedAt': account.updatedAt.toIso8601String(),
+  };
 
   static JiveAccount _accountFromMap(Map<String, dynamic> map) {
     final account = JiveAccount()
@@ -233,21 +296,21 @@ class JiveDataBackupService {
   }
 
   static Map<String, dynamic> _categoryToMap(JiveCategory category) => {
-        'id': category.id,
-        'key': category.key,
-        'name': category.name,
-        'iconName': category.iconName,
-        'colorHex': category.colorHex,
-        'iconForceTinted': category.iconForceTinted,
-        'excludeFromBudget': category.excludeFromBudget,
-        'parentKey': category.parentKey,
-        'sourceTagKey': category.sourceTagKey,
-        'order': category.order,
-        'isSystem': category.isSystem,
-        'isHidden': category.isHidden,
-        'isIncome': category.isIncome,
-        'updatedAt': category.updatedAt.toIso8601String(),
-      };
+    'id': category.id,
+    'key': category.key,
+    'name': category.name,
+    'iconName': category.iconName,
+    'colorHex': category.colorHex,
+    'iconForceTinted': category.iconForceTinted,
+    'excludeFromBudget': category.excludeFromBudget,
+    'parentKey': category.parentKey,
+    'sourceTagKey': category.sourceTagKey,
+    'order': category.order,
+    'isSystem': category.isSystem,
+    'isHidden': category.isHidden,
+    'isIncome': category.isIncome,
+    'updatedAt': category.updatedAt.toIso8601String(),
+  };
 
   static JiveCategory _categoryFromMap(Map<String, dynamic> map) {
     final category = JiveCategory()
@@ -268,20 +331,24 @@ class JiveDataBackupService {
     return category;
   }
 
-  static Map<String, dynamic> _categoryOverrideToMap(JiveCategoryOverride override) => {
-        'id': override.id,
-        'systemKey': override.systemKey,
-        'nameOverride': override.nameOverride,
-        'iconOverride': override.iconOverride,
-        'colorHexOverride': override.colorHexOverride,
-        'parentOverrideKey': override.parentOverrideKey,
-        'orderOverride': override.orderOverride,
-        'isHiddenOverride': override.isHiddenOverride,
-        'excludeFromBudgetOverride': override.excludeFromBudgetOverride,
-        'updatedAt': override.updatedAt.toIso8601String(),
-      };
+  static Map<String, dynamic> _categoryOverrideToMap(
+    JiveCategoryOverride override,
+  ) => {
+    'id': override.id,
+    'systemKey': override.systemKey,
+    'nameOverride': override.nameOverride,
+    'iconOverride': override.iconOverride,
+    'colorHexOverride': override.colorHexOverride,
+    'parentOverrideKey': override.parentOverrideKey,
+    'orderOverride': override.orderOverride,
+    'isHiddenOverride': override.isHiddenOverride,
+    'excludeFromBudgetOverride': override.excludeFromBudgetOverride,
+    'updatedAt': override.updatedAt.toIso8601String(),
+  };
 
-  static JiveCategoryOverride _categoryOverrideFromMap(Map<String, dynamic> map) {
+  static JiveCategoryOverride _categoryOverrideFromMap(
+    Map<String, dynamic> map,
+  ) {
     final override = JiveCategoryOverride()
       ..id = _parseInt(map['id']) ?? Isar.autoIncrement
       ..systemKey = map['systemKey']?.toString() ?? ''
@@ -297,21 +364,21 @@ class JiveDataBackupService {
   }
 
   static Map<String, dynamic> _tagToMap(JiveTag tag) => {
-        'id': tag.id,
-        'key': tag.key,
-        'name': tag.name,
-        'colorHex': tag.colorHex,
-        'iconName': tag.iconName,
-        'iconText': tag.iconText,
-        'groupKey': tag.groupKey,
-        'redirectCategoryKey': tag.redirectCategoryKey,
-        'order': tag.order,
-        'isArchived': tag.isArchived,
-        'usageCount': tag.usageCount,
-        'lastUsedAt': tag.lastUsedAt?.toIso8601String(),
-        'createdAt': tag.createdAt.toIso8601String(),
-        'updatedAt': tag.updatedAt.toIso8601String(),
-      };
+    'id': tag.id,
+    'key': tag.key,
+    'name': tag.name,
+    'colorHex': tag.colorHex,
+    'iconName': tag.iconName,
+    'iconText': tag.iconText,
+    'groupKey': tag.groupKey,
+    'redirectCategoryKey': tag.redirectCategoryKey,
+    'order': tag.order,
+    'isArchived': tag.isArchived,
+    'usageCount': tag.usageCount,
+    'lastUsedAt': tag.lastUsedAt?.toIso8601String(),
+    'createdAt': tag.createdAt.toIso8601String(),
+    'updatedAt': tag.updatedAt.toIso8601String(),
+  };
 
   static JiveTag _tagFromMap(Map<String, dynamic> map) {
     final tag = JiveTag()
@@ -333,17 +400,17 @@ class JiveDataBackupService {
   }
 
   static Map<String, dynamic> _tagGroupToMap(JiveTagGroup group) => {
-        'id': group.id,
-        'key': group.key,
-        'name': group.name,
-        'colorHex': group.colorHex,
-        'iconName': group.iconName,
-        'iconText': group.iconText,
-        'order': group.order,
-        'isArchived': group.isArchived,
-        'createdAt': group.createdAt.toIso8601String(),
-        'updatedAt': group.updatedAt.toIso8601String(),
-      };
+    'id': group.id,
+    'key': group.key,
+    'name': group.name,
+    'colorHex': group.colorHex,
+    'iconName': group.iconName,
+    'iconText': group.iconText,
+    'order': group.order,
+    'isArchived': group.isArchived,
+    'createdAt': group.createdAt.toIso8601String(),
+    'updatedAt': group.updatedAt.toIso8601String(),
+  };
 
   static JiveTagGroup _tagGroupFromMap(Map<String, dynamic> map) {
     final group = JiveTagGroup()
@@ -361,19 +428,19 @@ class JiveDataBackupService {
   }
 
   static Map<String, dynamic> _tagRuleToMap(JiveTagRule rule) => {
-        'id': rule.id,
-        'tagKey': rule.tagKey,
-        'isEnabled': rule.isEnabled,
-        'applyType': rule.applyType,
-        'minAmount': rule.minAmount,
-        'maxAmount': rule.maxAmount,
-        'accountIds': rule.accountIds,
-        'categoryKey': rule.categoryKey,
-        'subCategoryKey': rule.subCategoryKey,
-        'keywords': rule.keywords,
-        'createdAt': rule.createdAt.toIso8601String(),
-        'updatedAt': rule.updatedAt.toIso8601String(),
-      };
+    'id': rule.id,
+    'tagKey': rule.tagKey,
+    'isEnabled': rule.isEnabled,
+    'applyType': rule.applyType,
+    'minAmount': rule.minAmount,
+    'maxAmount': rule.maxAmount,
+    'accountIds': rule.accountIds,
+    'categoryKey': rule.categoryKey,
+    'subCategoryKey': rule.subCategoryKey,
+    'keywords': rule.keywords,
+    'createdAt': rule.createdAt.toIso8601String(),
+    'updatedAt': rule.updatedAt.toIso8601String(),
+  };
 
   static JiveTagRule _tagRuleFromMap(Map<String, dynamic> map) {
     final rule = JiveTagRule()
@@ -393,27 +460,27 @@ class JiveDataBackupService {
   }
 
   static Map<String, dynamic> _transactionToMap(JiveTransaction tx) => {
-        'id': tx.id,
-        'amount': tx.amount,
-        'source': tx.source,
-        'timestamp': tx.timestamp.toIso8601String(),
-        'rawText': tx.rawText,
-        'category': tx.category,
-        'subCategory': tx.subCategory,
-        'categoryKey': tx.categoryKey,
-        'subCategoryKey': tx.subCategoryKey,
-        'type': tx.type,
-        'note': tx.note,
-        'accountId': tx.accountId,
-        'toAccountId': tx.toAccountId,
-        'toAmount': tx.toAmount,
-        'exchangeRate': tx.exchangeRate,
-        'projectId': tx.projectId,
-        'tagKeys': tx.tagKeys,
-        'smartTagKeys': tx.smartTagKeys,
-        'recurringRuleId': tx.recurringRuleId,
-        'recurringKey': tx.recurringKey,
-      };
+    'id': tx.id,
+    'amount': tx.amount,
+    'source': tx.source,
+    'timestamp': tx.timestamp.toIso8601String(),
+    'rawText': tx.rawText,
+    'category': tx.category,
+    'subCategory': tx.subCategory,
+    'categoryKey': tx.categoryKey,
+    'subCategoryKey': tx.subCategoryKey,
+    'type': tx.type,
+    'note': tx.note,
+    'accountId': tx.accountId,
+    'toAccountId': tx.toAccountId,
+    'toAmount': tx.toAmount,
+    'exchangeRate': tx.exchangeRate,
+    'projectId': tx.projectId,
+    'tagKeys': tx.tagKeys,
+    'smartTagKeys': tx.smartTagKeys,
+    'recurringRuleId': tx.recurringRuleId,
+    'recurringKey': tx.recurringKey,
+  };
 
   static JiveTransaction _transactionFromMap(Map<String, dynamic> map) {
     final tx = JiveTransaction()
@@ -441,25 +508,25 @@ class JiveDataBackupService {
   }
 
   static Map<String, dynamic> _autoDraftToMap(JiveAutoDraft draft) => {
-        'id': draft.id,
-        'amount': draft.amount,
-        'source': draft.source,
-        'timestamp': draft.timestamp.toIso8601String(),
-        'rawText': draft.rawText,
-        'metadataJson': draft.metadataJson,
-        'type': draft.type,
-        'category': draft.category,
-        'subCategory': draft.subCategory,
-        'categoryKey': draft.categoryKey,
-        'subCategoryKey': draft.subCategoryKey,
-        'accountId': draft.accountId,
-        'toAccountId': draft.toAccountId,
-        'dedupKey': draft.dedupKey,
-        'createdAt': draft.createdAt.toIso8601String(),
-        'tagKeys': draft.tagKeys,
-        'recurringRuleId': draft.recurringRuleId,
-        'recurringKey': draft.recurringKey,
-      };
+    'id': draft.id,
+    'amount': draft.amount,
+    'source': draft.source,
+    'timestamp': draft.timestamp.toIso8601String(),
+    'rawText': draft.rawText,
+    'metadataJson': draft.metadataJson,
+    'type': draft.type,
+    'category': draft.category,
+    'subCategory': draft.subCategory,
+    'categoryKey': draft.categoryKey,
+    'subCategoryKey': draft.subCategoryKey,
+    'accountId': draft.accountId,
+    'toAccountId': draft.toAccountId,
+    'dedupKey': draft.dedupKey,
+    'createdAt': draft.createdAt.toIso8601String(),
+    'tagKeys': draft.tagKeys,
+    'recurringRuleId': draft.recurringRuleId,
+    'recurringKey': draft.recurringKey,
+  };
 
   static JiveAutoDraft _autoDraftFromMap(Map<String, dynamic> map) {
     final draft = JiveAutoDraft()
@@ -484,28 +551,32 @@ class JiveDataBackupService {
     return draft;
   }
 
-  static Map<String, dynamic> _tagConversionLogToMap(JiveTagConversionLog log) => {
-        'id': log.id,
-        'tagKey': log.tagKey,
-        'tagName': log.tagName,
-        'categoryKey': log.categoryKey,
-        'parentCategoryKey': log.parentCategoryKey,
-        'categoryName': log.categoryName,
-        'parentCategoryName': log.parentCategoryName,
-        'categoryIsIncome': log.categoryIsIncome,
-        'migratePolicy': log.migratePolicy,
-        'keepTagActive': log.keepTagActive,
-        'taggedTransactionCount': log.taggedTransactionCount,
-        'updatedTransactionCount': log.updatedTransactionCount,
-        'skippedExistingCategoryCount': log.skippedExistingCategoryCount,
-        'skippedTypeMismatchCount': log.skippedTypeMismatchCount,
-        'skippedUnknownCategoryCount': log.skippedUnknownCategoryCount,
-        'skippedByPolicyCount': log.skippedByPolicyCount,
-        'updatedTransactionIds': log.updatedTransactionIds,
-        'createdAt': log.createdAt.toIso8601String(),
-      };
+  static Map<String, dynamic> _tagConversionLogToMap(
+    JiveTagConversionLog log,
+  ) => {
+    'id': log.id,
+    'tagKey': log.tagKey,
+    'tagName': log.tagName,
+    'categoryKey': log.categoryKey,
+    'parentCategoryKey': log.parentCategoryKey,
+    'categoryName': log.categoryName,
+    'parentCategoryName': log.parentCategoryName,
+    'categoryIsIncome': log.categoryIsIncome,
+    'migratePolicy': log.migratePolicy,
+    'keepTagActive': log.keepTagActive,
+    'taggedTransactionCount': log.taggedTransactionCount,
+    'updatedTransactionCount': log.updatedTransactionCount,
+    'skippedExistingCategoryCount': log.skippedExistingCategoryCount,
+    'skippedTypeMismatchCount': log.skippedTypeMismatchCount,
+    'skippedUnknownCategoryCount': log.skippedUnknownCategoryCount,
+    'skippedByPolicyCount': log.skippedByPolicyCount,
+    'updatedTransactionIds': log.updatedTransactionIds,
+    'createdAt': log.createdAt.toIso8601String(),
+  };
 
-  static JiveTagConversionLog _tagConversionLogFromMap(Map<String, dynamic> map) {
+  static JiveTagConversionLog _tagConversionLogFromMap(
+    Map<String, dynamic> map,
+  ) {
     final log = JiveTagConversionLog()
       ..id = _parseInt(map['id']) ?? Isar.autoIncrement
       ..tagKey = map['tagKey']?.toString() ?? ''
@@ -519,40 +590,45 @@ class JiveDataBackupService {
       ..keepTagActive = map['keepTagActive'] == true
       ..taggedTransactionCount = _parseInt(map['taggedTransactionCount']) ?? 0
       ..updatedTransactionCount = _parseInt(map['updatedTransactionCount']) ?? 0
-      ..skippedExistingCategoryCount = _parseInt(map['skippedExistingCategoryCount']) ?? 0
-      ..skippedTypeMismatchCount = _parseInt(map['skippedTypeMismatchCount']) ?? 0
-      ..skippedUnknownCategoryCount = _parseInt(map['skippedUnknownCategoryCount']) ?? 0
+      ..skippedExistingCategoryCount =
+          _parseInt(map['skippedExistingCategoryCount']) ?? 0
+      ..skippedTypeMismatchCount =
+          _parseInt(map['skippedTypeMismatchCount']) ?? 0
+      ..skippedUnknownCategoryCount =
+          _parseInt(map['skippedUnknownCategoryCount']) ?? 0
       ..skippedByPolicyCount = _parseInt(map['skippedByPolicyCount']) ?? 0
-      ..updatedTransactionIds = List<int>.from(map['updatedTransactionIds'] ?? [])
+      ..updatedTransactionIds = List<int>.from(
+        map['updatedTransactionIds'] ?? [],
+      )
       ..createdAt = _parseDate(map['createdAt']) ?? DateTime.now();
     return log;
   }
 
   static Map<String, dynamic> _recurringRuleToMap(JiveRecurringRule rule) => {
-        'id': rule.id,
-        'name': rule.name,
-        'type': rule.type,
-        'amount': rule.amount,
-        'accountId': rule.accountId,
-        'toAccountId': rule.toAccountId,
-        'categoryKey': rule.categoryKey,
-        'subCategoryKey': rule.subCategoryKey,
-        'note': rule.note,
-        'tagKeys': rule.tagKeys,
-        'projectId': rule.projectId,
-        'commitMode': rule.commitMode,
-        'startDate': rule.startDate.toIso8601String(),
-        'endDate': rule.endDate?.toIso8601String(),
-        'intervalType': rule.intervalType,
-        'intervalValue': rule.intervalValue,
-        'dayOfMonth': rule.dayOfMonth,
-        'dayOfWeek': rule.dayOfWeek,
-        'nextRunAt': rule.nextRunAt.toIso8601String(),
-        'lastRunAt': rule.lastRunAt?.toIso8601String(),
-        'isActive': rule.isActive,
-        'createdAt': rule.createdAt.toIso8601String(),
-        'updatedAt': rule.updatedAt.toIso8601String(),
-      };
+    'id': rule.id,
+    'name': rule.name,
+    'type': rule.type,
+    'amount': rule.amount,
+    'accountId': rule.accountId,
+    'toAccountId': rule.toAccountId,
+    'categoryKey': rule.categoryKey,
+    'subCategoryKey': rule.subCategoryKey,
+    'note': rule.note,
+    'tagKeys': rule.tagKeys,
+    'projectId': rule.projectId,
+    'commitMode': rule.commitMode,
+    'startDate': rule.startDate.toIso8601String(),
+    'endDate': rule.endDate?.toIso8601String(),
+    'intervalType': rule.intervalType,
+    'intervalValue': rule.intervalValue,
+    'dayOfMonth': rule.dayOfMonth,
+    'dayOfWeek': rule.dayOfWeek,
+    'nextRunAt': rule.nextRunAt.toIso8601String(),
+    'lastRunAt': rule.lastRunAt?.toIso8601String(),
+    'isActive': rule.isActive,
+    'createdAt': rule.createdAt.toIso8601String(),
+    'updatedAt': rule.updatedAt.toIso8601String(),
+  };
 
   static JiveRecurringRule _recurringRuleFromMap(Map<String, dynamic> map) {
     final rule = JiveRecurringRule()
@@ -580,6 +656,93 @@ class JiveDataBackupService {
       ..createdAt = _parseDate(map['createdAt']) ?? DateTime.now()
       ..updatedAt = _parseDate(map['updatedAt']) ?? DateTime.now();
     return rule;
+  }
+
+  static Map<String, dynamic> _importJobToMap(JiveImportJob job) => {
+    'id': job.id,
+    'createdAt': job.createdAt.toIso8601String(),
+    'updatedAt': job.updatedAt.toIso8601String(),
+    'finishedAt': job.finishedAt?.toIso8601String(),
+    'status': job.status,
+    'sourceType': job.sourceType,
+    'entryType': job.entryType,
+    'filePath': job.filePath,
+    'fileName': job.fileName,
+    'payloadText': job.payloadText,
+    'errorMessage': job.errorMessage,
+    'totalCount': job.totalCount,
+    'insertedCount': job.insertedCount,
+    'duplicateCount': job.duplicateCount,
+    'invalidCount': job.invalidCount,
+    'skippedByDuplicateDecisionCount': job.skippedByDuplicateDecisionCount,
+    'duplicatePolicy': job.duplicatePolicy,
+    'decisionSummaryJson': job.decisionSummaryJson,
+    'retryCount': job.retryCount,
+    'retryFromJobId': job.retryFromJobId,
+  };
+
+  static JiveImportJob _importJobFromMap(Map<String, dynamic> map) {
+    final job = JiveImportJob()
+      ..id = _parseInt(map['id']) ?? Isar.autoIncrement
+      ..createdAt = _parseDate(map['createdAt']) ?? DateTime.now()
+      ..updatedAt = _parseDate(map['updatedAt']) ?? DateTime.now()
+      ..finishedAt = _parseDate(map['finishedAt'])
+      ..status = map['status']?.toString() ?? 'review'
+      ..sourceType = map['sourceType']?.toString() ?? 'auto'
+      ..entryType = map['entryType']?.toString() ?? 'text'
+      ..filePath = map['filePath']?.toString()
+      ..fileName = map['fileName']?.toString()
+      ..payloadText = map['payloadText']?.toString()
+      ..errorMessage = map['errorMessage']?.toString()
+      ..totalCount = _parseInt(map['totalCount']) ?? 0
+      ..insertedCount = _parseInt(map['insertedCount']) ?? 0
+      ..duplicateCount = _parseInt(map['duplicateCount']) ?? 0
+      ..invalidCount = _parseInt(map['invalidCount']) ?? 0
+      ..skippedByDuplicateDecisionCount =
+          _parseInt(map['skippedByDuplicateDecisionCount']) ?? 0
+      ..duplicatePolicy = map['duplicatePolicy']?.toString() ?? 'keep_latest'
+      ..decisionSummaryJson = map['decisionSummaryJson']?.toString()
+      ..retryCount = _parseInt(map['retryCount']) ?? 0
+      ..retryFromJobId = _parseInt(map['retryFromJobId']);
+    return job;
+  }
+
+  static Map<String, dynamic> _importJobRecordToMap(
+    JiveImportJobRecord record,
+  ) => {
+    'id': record.id,
+    'jobId': record.jobId,
+    'sourceLineNumber': record.sourceLineNumber,
+    'amount': record.amount,
+    'source': record.source,
+    'timestamp': record.timestamp.toIso8601String(),
+    'type': record.type,
+    'confidence': record.confidence,
+    'warningsJson': record.warningsJson,
+    'dedupKey': record.dedupKey,
+    'riskLevel': record.riskLevel,
+    'decision': record.decision,
+    'decisionReason': record.decisionReason,
+    'createdAt': record.createdAt.toIso8601String(),
+  };
+
+  static JiveImportJobRecord _importJobRecordFromMap(Map<String, dynamic> map) {
+    final record = JiveImportJobRecord()
+      ..id = _parseInt(map['id']) ?? Isar.autoIncrement
+      ..jobId = _parseInt(map['jobId']) ?? 0
+      ..sourceLineNumber = _parseInt(map['sourceLineNumber']) ?? 0
+      ..amount = _parseDouble(map['amount']) ?? 0
+      ..source = map['source']?.toString() ?? 'Import'
+      ..timestamp = _parseDate(map['timestamp']) ?? DateTime.now()
+      ..type = map['type']?.toString()
+      ..confidence = _parseDouble(map['confidence']) ?? 0
+      ..warningsJson = map['warningsJson']?.toString() ?? '[]'
+      ..dedupKey = map['dedupKey']?.toString() ?? ''
+      ..riskLevel = map['riskLevel']?.toString() ?? 'none'
+      ..decision = map['decision']?.toString() ?? 'invalid'
+      ..decisionReason = map['decisionReason']?.toString()
+      ..createdAt = _parseDate(map['createdAt']) ?? DateTime.now();
+    return record;
   }
 
   static int? _parseInt(dynamic value) {
@@ -620,14 +783,14 @@ class JiveDataBackupService {
 
   // 汇率数据转换
   static Map<String, dynamic> _exchangeRateToMap(JiveExchangeRate rate) => {
-        'id': rate.id,
-        'fromCurrency': rate.fromCurrency,
-        'toCurrency': rate.toCurrency,
-        'rate': rate.rate,
-        'effectiveDate': rate.effectiveDate.toIso8601String(),
-        'source': rate.source,
-        'updatedAt': rate.updatedAt?.toIso8601String(),
-      };
+    'id': rate.id,
+    'fromCurrency': rate.fromCurrency,
+    'toCurrency': rate.toCurrency,
+    'rate': rate.rate,
+    'effectiveDate': rate.effectiveDate.toIso8601String(),
+    'source': rate.source,
+    'updatedAt': rate.updatedAt?.toIso8601String(),
+  };
 
   static JiveExchangeRate _exchangeRateFromMap(Map<String, dynamic> map) {
     final rate = JiveExchangeRate()
@@ -642,19 +805,23 @@ class JiveDataBackupService {
   }
 
   // 货币偏好数据转换
-  static Map<String, dynamic> _currencyPreferenceToMap(JiveCurrencyPreference pref) => {
-        'id': pref.id,
-        'baseCurrency': pref.baseCurrency,
-        'enabledCurrencies': pref.enabledCurrencies,
-        'autoUpdateRates': pref.autoUpdateRates,
-        'lastRateUpdate': pref.lastRateUpdate?.toIso8601String(),
-        'rateChangeAlert': pref.rateChangeAlert,
-        'rateChangeThreshold': pref.rateChangeThreshold,
-        'preferredRateSource': pref.preferredRateSource,
-        'preferredCryptoSource': pref.preferredCryptoSource,
-      };
+  static Map<String, dynamic> _currencyPreferenceToMap(
+    JiveCurrencyPreference pref,
+  ) => {
+    'id': pref.id,
+    'baseCurrency': pref.baseCurrency,
+    'enabledCurrencies': pref.enabledCurrencies,
+    'autoUpdateRates': pref.autoUpdateRates,
+    'lastRateUpdate': pref.lastRateUpdate?.toIso8601String(),
+    'rateChangeAlert': pref.rateChangeAlert,
+    'rateChangeThreshold': pref.rateChangeThreshold,
+    'preferredRateSource': pref.preferredRateSource,
+    'preferredCryptoSource': pref.preferredCryptoSource,
+  };
 
-  static JiveCurrencyPreference _currencyPreferenceFromMap(Map<String, dynamic> map) {
+  static JiveCurrencyPreference _currencyPreferenceFromMap(
+    Map<String, dynamic> map,
+  ) {
     final pref = JiveCurrencyPreference()
       ..id = _parseInt(map['id']) ?? Isar.autoIncrement
       ..baseCurrency = map['baseCurrency']?.toString() ?? 'CNY'
@@ -663,8 +830,10 @@ class JiveDataBackupService {
       ..lastRateUpdate = _parseDate(map['lastRateUpdate'])
       ..rateChangeAlert = map['rateChangeAlert'] == true
       ..rateChangeThreshold = _parseDouble(map['rateChangeThreshold']) ?? 1.0
-      ..preferredRateSource = map['preferredRateSource']?.toString() ?? 'frankfurter'
-      ..preferredCryptoSource = map['preferredCryptoSource']?.toString() ?? 'coingecko';
+      ..preferredRateSource =
+          map['preferredRateSource']?.toString() ?? 'frankfurter'
+      ..preferredCryptoSource =
+          map['preferredCryptoSource']?.toString() ?? 'coingecko';
     return pref;
   }
 
@@ -693,7 +862,8 @@ class JiveDataBackupService {
       if (startDate != null && tx.timestamp.isBefore(startDate)) return false;
       if (endDate != null && tx.timestamp.isAfter(endDate)) return false;
       if (accountIds != null && accountIds.isNotEmpty) {
-        if (tx.accountId == null || !accountIds.contains(tx.accountId.toString())) {
+        if (tx.accountId == null ||
+            !accountIds.contains(tx.accountId.toString())) {
           return false;
         }
       }
@@ -714,8 +884,12 @@ class JiveDataBackupService {
     for (final tx in filteredTxs) {
       final account = tx.accountId != null ? accountById[tx.accountId] : null;
       final txCurrency = account?.currency ?? 'CNY';
-      final category = tx.categoryKey != null ? categoryByKey[tx.categoryKey] : null;
-      final subCategory = tx.subCategoryKey != null ? categoryByKey[tx.subCategoryKey] : null;
+      final category = tx.categoryKey != null
+          ? categoryByKey[tx.categoryKey]
+          : null;
+      final subCategory = tx.subCategoryKey != null
+          ? categoryByKey[tx.subCategoryKey]
+          : null;
 
       // 转换金额到目标货币
       double convertedAmount = tx.amount;
@@ -763,24 +937,28 @@ class JiveDataBackupService {
     if (format == 'csv') {
       final buffer = StringBuffer();
       // CSV 头部
-      buffer.writeln('日期,时间,类型,分类,子分类,账户,原始金额,原始货币,转换金额($currencySymbol),汇率,备注,标签');
+      buffer.writeln(
+        '日期,时间,类型,分类,子分类,账户,原始金额,原始货币,转换金额($currencySymbol),汇率,备注,标签',
+      );
 
       // 数据行
       for (final row in reportRows) {
-        buffer.writeln([
-          row['date'],
-          row['time'],
-          row['type'],
-          _escapeCsv(row['category']),
-          _escapeCsv(row['subCategory']),
-          _escapeCsv(row['account']),
-          row['originalAmount'],
-          row['originalCurrency'],
-          row['convertedAmount'],
-          row['exchangeRate'] ?? '',
-          _escapeCsv(row['note']),
-          _escapeCsv(row['tags']),
-        ].join(','));
+        buffer.writeln(
+          [
+            row['date'],
+            row['time'],
+            row['type'],
+            _escapeCsv(row['category']),
+            _escapeCsv(row['subCategory']),
+            _escapeCsv(row['account']),
+            row['originalAmount'],
+            row['originalCurrency'],
+            row['convertedAmount'],
+            row['exchangeRate'] ?? '',
+            _escapeCsv(row['note']),
+            _escapeCsv(row['tags']),
+          ].join(','),
+        );
       }
 
       // 汇总行
@@ -788,10 +966,14 @@ class JiveDataBackupService {
       buffer.writeln('汇总统计,$targetCurrency');
       buffer.writeln('总收入,$currencySymbol${totalIncome.toStringAsFixed(2)}');
       buffer.writeln('总支出,$currencySymbol${totalExpense.toStringAsFixed(2)}');
-      buffer.writeln('净收入,$currencySymbol${(totalIncome - totalExpense).toStringAsFixed(2)}');
+      buffer.writeln(
+        '净收入,$currencySymbol${(totalIncome - totalExpense).toStringAsFixed(2)}',
+      );
       buffer.writeln('转账合计,$currencySymbol${totalTransfer.toStringAsFixed(2)}');
 
-      final file = File('${dir.path}/jive_report_${targetCurrency}_$timestamp.csv');
+      final file = File(
+        '${dir.path}/jive_report_${targetCurrency}_$timestamp.csv',
+      );
       await file.writeAsString(buffer.toString());
       return file;
     } else {
@@ -813,7 +995,9 @@ class JiveDataBackupService {
         'transactions': reportRows,
       };
 
-      final file = File('${dir.path}/jive_report_${targetCurrency}_$timestamp.json');
+      final file = File(
+        '${dir.path}/jive_report_${targetCurrency}_$timestamp.json',
+      );
       await file.writeAsString(jsonEncode(payload));
       return file;
     }
