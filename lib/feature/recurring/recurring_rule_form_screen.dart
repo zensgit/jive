@@ -256,29 +256,19 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
   }
 
   Future<void> _pickStartDate() async {
-    DateTime? picked;
-    var didChange = false;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DatePickerSheet(
-          initialDay: _startDate,
-          firstDay: DateTime(2010),
-          lastDay: DateTime(2100),
-          maxSelectableDay: _endDate,
-          bottomLabel: '选择开始日期',
-          onChanged: (day) {
-            didChange = true;
-            picked = day;
-          },
-        );
-      },
+    final result = await JiveDatePicker.pickDateResult(
+      context,
+      initialDay: _startDate,
+      firstDay: DateTime(2010),
+      lastDay: DateTime(2100),
+      maxSelectableDay: _endDate,
+      bottomLabel: '选择开始日期',
     );
-    if (!didChange || picked == null) return;
+    if (!mounted) return;
+    final picked = result.value;
+    if (!result.didChange || picked == null) return;
     setState(() {
-      _startDate = picked!;
+      _startDate = picked;
       if (_endDate != null && _endDate!.isBefore(_startDate)) {
         _endDate = null;
       }
@@ -286,30 +276,19 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
   }
 
   Future<void> _pickEndDate() async {
-    DateTime? picked;
-    var didChange = false;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DatePickerSheet(
-          initialDay: _endDate ?? _startDate,
-          firstDay: DateTime(2010),
-          lastDay: DateTime(2100),
-          minSelectableDay: _startDate,
-          bottomLabel: '选择结束日期',
-          allowClear: true,
-          clearLabel: '无',
-          onChanged: (day) {
-            didChange = true;
-            picked = day;
-          },
-        );
-      },
+    final result = await JiveDatePicker.pickDateResult(
+      context,
+      initialDay: _endDate ?? _startDate,
+      firstDay: DateTime(2010),
+      lastDay: DateTime(2100),
+      minSelectableDay: _startDate,
+      bottomLabel: '选择结束日期',
+      allowClear: true,
+      clearLabel: '无',
     );
-    if (!didChange) return;
-    setState(() => _endDate = picked);
+    if (!mounted) return;
+    if (!result.didChange) return;
+    setState(() => _endDate = result.value);
   }
 
   Future<void> _pickCategory() async {

@@ -199,30 +199,20 @@ class _TagStatisticsScreenState extends State<TagStatisticsScreen> {
   }
 
   Future<void> _pickRange() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.white,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          top: false,
-          child: DateRangePickerSheet(
-            initialRange: _range,
-            onChanged: (range) {
-              if (range == null) return;
-              setState(() {
-                _range = range;
-                _isLoading = true;
-              });
-              _loadStats();
-            },
-          ),
-        );
-      },
+    final previous = _range;
+    final result = await JiveDatePicker.pickDateRangeResult(
+      context,
+      initialRange: previous,
+      bottomLabel: '选择日期范围',
     );
+    if (!mounted) return;
+    final picked = result.value;
+    if (!result.didChange || picked == null || picked == previous) return;
+    setState(() {
+      _range = picked;
+      _isLoading = true;
+    });
+    _loadStats();
   }
 
   @override

@@ -60,25 +60,20 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
 
   Future<void> _selectDateRange() async {
     final now = DateTime.now();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DateRangePickerSheet(
-          initialRange: _dateRange,
-          firstDay: DateTime(2020),
-          lastDay: now,
-          minSelectableDay: DateTime(2020),
-          maxSelectableDay: now,
-          bottomLabel: '选择日期范围',
-          onChanged: (range) {
-            if (range == null) return;
-            setState(() => _dateRange = range);
-          },
-        );
-      },
+    final previous = _dateRange;
+    final result = await JiveDatePicker.pickDateRangeResult(
+      context,
+      initialRange: previous,
+      firstDay: DateTime(2020),
+      lastDay: now,
+      minSelectableDay: DateTime(2020),
+      maxSelectableDay: now,
+      bottomLabel: '选择日期范围',
     );
+    if (!mounted) return;
+    final picked = result.value;
+    if (!result.didChange || picked == null || picked == previous) return;
+    setState(() => _dateRange = picked);
   }
 
   Future<void> _export() async {
