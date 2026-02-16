@@ -8,7 +8,7 @@ import '../date_range_picker_sheet.dart';
 /// These helpers wrap the internal sheet widgets and provide a stable API
 /// for callers across the app.
 class JiveDatePicker {
-  static Future<DateTime?> pickDate(
+  static Future<({DateTime? value, bool didChange})> pickDateResult(
     BuildContext context, {
     required DateTime? initialDay,
     DateTime? firstDay,
@@ -44,10 +44,37 @@ class JiveDatePicker {
         );
       },
     );
-    return didChange ? picked : initialDay;
+    return (value: picked, didChange: didChange);
   }
 
-  static Future<DateTimeRange?> pickDateRange(
+  static Future<DateTime?> pickDate(
+    BuildContext context, {
+    required DateTime? initialDay,
+    DateTime? firstDay,
+    DateTime? lastDay,
+    String bottomLabel = '选择日期',
+    String clearLabel = '清除',
+    bool allowClear = false,
+    Set<int>? enabledYears,
+    DateTime? minSelectableDay,
+    DateTime? maxSelectableDay,
+  }) async {
+    final result = await pickDateResult(
+      context,
+      initialDay: initialDay,
+      firstDay: firstDay,
+      lastDay: lastDay,
+      bottomLabel: bottomLabel,
+      clearLabel: clearLabel,
+      allowClear: allowClear,
+      enabledYears: enabledYears,
+      minSelectableDay: minSelectableDay,
+      maxSelectableDay: maxSelectableDay,
+    );
+    return result.didChange ? result.value : initialDay;
+  }
+
+  static Future<({DateTimeRange? value, bool didChange})> pickDateRangeResult(
     BuildContext context, {
     required DateTimeRange? initialRange,
     DateTime? firstDay,
@@ -81,7 +108,31 @@ class JiveDatePicker {
         );
       },
     );
-    return didChange ? picked : initialRange;
+    return (value: picked, didChange: didChange);
+  }
+
+  static Future<DateTimeRange?> pickDateRange(
+    BuildContext context, {
+    required DateTimeRange? initialRange,
+    DateTime? firstDay,
+    DateTime? lastDay,
+    String bottomLabel = '选择日历范围',
+    String clearLabel = '清除',
+    Set<int>? enabledYears,
+    DateTime? minSelectableDay,
+    DateTime? maxSelectableDay,
+  }) async {
+    final result = await pickDateRangeResult(
+      context,
+      initialRange: initialRange,
+      firstDay: firstDay,
+      lastDay: lastDay,
+      bottomLabel: bottomLabel,
+      clearLabel: clearLabel,
+      enabledYears: enabledYears,
+      minSelectableDay: minSelectableDay,
+      maxSelectableDay: maxSelectableDay,
+    );
+    return result.didChange ? result.value : initialRange;
   }
 }
-

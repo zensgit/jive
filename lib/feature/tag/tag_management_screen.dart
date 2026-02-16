@@ -2183,37 +2183,26 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
               onTap: () async {
                 final now = DateTime.now();
                 final lastDate = DateTime(now.year, now.month, now.day);
-                DateTimeRange? picked;
-                var didChange = false;
-                await showModalBottomSheet<void>(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) {
-                    return DateRangePickerSheet(
-                      initialRange: null,
-                      firstDay: DateTime(now.year - 5, 1, 1),
-                      lastDay: lastDate,
-                      minSelectableDay: DateTime(now.year - 5, 1, 1),
-                      maxSelectableDay: lastDate,
-                      bottomLabel: '选择补标时间范围',
-                      onChanged: (range) {
-                        didChange = true;
-                        picked = range;
-                      },
-                    );
-                  },
+                final result = await JiveDatePicker.pickDateRangeResult(
+                  context,
+                  initialRange: null,
+                  firstDay: DateTime(now.year - 5, 1, 1),
+                  lastDay: lastDate,
+                  minSelectableDay: DateTime(now.year - 5, 1, 1),
+                  maxSelectableDay: lastDate,
+                  bottomLabel: '选择补标时间范围',
                 );
-                if (!didChange || picked == null) return;
+                final picked = result.value;
+                if (!result.didChange || picked == null) return;
                 final start = DateTime(
-                  picked!.start.year,
-                  picked!.start.month,
-                  picked!.start.day,
+                  picked.start.year,
+                  picked.start.month,
+                  picked.start.day,
                 );
                 final end = DateTime(
-                  picked!.end.year,
-                  picked!.end.month,
-                  picked!.end.day,
+                  picked.end.year,
+                  picked.end.month,
+                  picked.end.day,
                   23,
                   59,
                   59,
