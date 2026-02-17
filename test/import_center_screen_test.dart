@@ -223,6 +223,69 @@ void main() {
   });
 
   testWidgets(
+    'tap export failure report uses selected source scope in request',
+    (WidgetTester tester) async {
+      final now = DateTime.now();
+      final jobs = <JiveImportJob>[
+        _buildJob(
+          id: 19,
+          status: 'failed',
+          errorMessage: 'TimeoutError: request timeout',
+          updatedAt: now.subtract(const Duration(days: 1)),
+          payloadText: 'raw csv payload',
+          sourceType: 'csv',
+        ),
+        _buildJob(
+          id: 20,
+          status: 'failed',
+          errorMessage: 'TimeoutError: request timeout',
+          updatedAt: now.subtract(const Duration(days: 1)),
+          payloadText: null,
+          sourceType: 'wechat',
+        ),
+      ];
+      final requests = <ImportFailureReportExportRequest>[];
+      final exporter = _FakeFailureReportExporter(
+        onExport: (request) async {
+          requests.add(request);
+          return const ImportFailureReportExportResult(
+            filePath: '/tmp/failure_report_wechat.csv',
+            fileName: 'failure_report_wechat.csv',
+            csv: 'meta,value',
+          );
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ImportCenterScreen(
+            debugJobs: jobs,
+            failureReportExporter: exporter,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _scrollToHistory(tester);
+
+      await _tapVisibleText(tester, '来源:微信');
+      await tester.pumpAndSettle();
+      await _tapVisibleText(tester, '导出失败报表');
+      await tester.pumpAndSettle();
+
+      expect(requests, hasLength(1));
+      final request = requests.first;
+      expect(request.sourceName, 'wechat');
+      expect(request.sourceScopeLabel, '微信文本');
+      expect(request.failedCount, 1);
+      expect(request.retryableCount, 0);
+      expect(request.blockedCount, 1);
+      expect(request.aggregates, hasLength(1));
+      expect(request.aggregates.first.reason, 'request timeout');
+      expect(request.aggregates.first.count, 1);
+    },
+  );
+
+  testWidgets(
     'tap failure reason applies failed quick filter and search query',
     (WidgetTester tester) async {
       final now = DateTime.now();
@@ -412,7 +475,8 @@ Future<void> _tapVisibleText(WidgetTester tester, String text) async {
 class _FakeFailureReportExporter extends ImportFailureReportExporter {
   final Future<ImportFailureReportExportResult> Function(
     ImportFailureReportExportRequest request,
-  ) onExport;
+  )
+  onExport;
 
   _FakeFailureReportExporter({required this.onExport});
 

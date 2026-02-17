@@ -102,6 +102,44 @@ void main() {
     );
   });
 
+  test('export keeps non-ascii segment with hash fallback', () async {
+    final tempDir = await Directory.systemTemp.createTemp(
+      'jive_failure_export_test_non_ascii_',
+    );
+    addTearDown(() async {
+      await tempDir.delete(recursive: true);
+    });
+
+    final exporter = ImportFailureReportExporter(
+      now: () => DateTime(2026, 2, 17, 9, 31, 0),
+      resolveTempDirectory: () async => tempDir,
+      writeFileText: (_, __) async {},
+      shareFile: (_) async {},
+    );
+
+    final result = await exporter.export(
+      ImportFailureReportExportRequest(
+        aggregates: const [],
+        retryableByReason: const {},
+        blockedByReason: const {},
+        windowName: 'd30',
+        windowLabel: '30天',
+        sourceName: '微信文本',
+        sourceScopeLabel: '微信文本',
+        failedCount: 0,
+        retryableCount: 0,
+        blockedCount: 0,
+      ),
+    );
+
+    expect(
+      result.fileName,
+      matches(
+        RegExp(r'^jive_failure_aggregate_d30_u[0-9a-f]+_20260217_093100\.csv$'),
+      ),
+    );
+  });
+
   test('export bubbles share errors to caller', () async {
     final tempDir = await Directory.systemTemp.createTemp(
       'jive_failure_export_test_error_',

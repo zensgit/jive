@@ -7,13 +7,10 @@ import 'import_history_analytics.dart';
 
 typedef ImportReportNow = DateTime Function();
 typedef ImportReportDirectoryResolver = Future<Directory> Function();
-typedef ImportReportWriteFile = Future<void> Function(
-  String filePath,
-  String content,
-);
-typedef ImportReportShareFile = Future<void> Function(
-  ImportReportSharePayload payload,
-);
+typedef ImportReportWriteFile =
+    Future<void> Function(String filePath, String content);
+typedef ImportReportShareFile =
+    Future<void> Function(ImportReportSharePayload payload);
 
 class ImportReportSharePayload {
   final String filePath;
@@ -31,7 +28,10 @@ class _ImportCsvExportResult {
   final String filePath;
   final String fileName;
 
-  const _ImportCsvExportResult({required this.filePath, required this.fileName});
+  const _ImportCsvExportResult({
+    required this.filePath,
+    required this.fileName,
+  });
 }
 
 class _ImportCsvExporterInfrastructure {
@@ -83,13 +83,22 @@ class _ImportCsvExporterInfrastructure {
   }) {
     final segments = <String>[prefix];
     for (final raw in nameSegments) {
-      final segment = _sanitizeFileSegment(raw);
+      final segment = _normalizeFileSegment(raw);
       if (segment.isNotEmpty) {
         segments.add(segment);
       }
     }
     segments.add(_timestamp(now));
     return '${segments.join('_')}.csv';
+  }
+
+  String _normalizeFileSegment(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    final normalized = _sanitizeFileSegment(trimmed);
+    if (normalized.isNotEmpty) return normalized;
+    final hash = _stableHash(trimmed).toRadixString(16);
+    return 'u$hash';
   }
 
   String _sanitizeFileSegment(String raw) {
@@ -100,6 +109,14 @@ class _ImportCsvExporterInfrastructure {
         .replaceAll(RegExp(r'_+'), '_')
         .replaceAll(RegExp(r'^_|_$'), '');
     return replaced;
+  }
+
+  int _stableHash(String input) {
+    var hash = 0;
+    for (final code in input.codeUnits) {
+      hash = (hash * 31 + code) & 0x7fffffff;
+    }
+    return hash;
   }
 
   String _timestamp(DateTime value) {
@@ -156,9 +173,8 @@ class ImportFailureReportExportResult {
   });
 }
 
-typedef ImportFailureReportShareFile = Future<void> Function(
-  ImportFailureReportSharePayload payload,
-);
+typedef ImportFailureReportShareFile =
+    Future<void> Function(ImportFailureReportSharePayload payload);
 
 class ImportFailureReportExporter {
   final _ImportCsvExporterInfrastructure _infrastructure;
@@ -249,9 +265,8 @@ class ImportReviewChecklistExportResult {
   });
 }
 
-typedef ImportReviewChecklistShareFile = Future<void> Function(
-  ImportReviewChecklistSharePayload payload,
-);
+typedef ImportReviewChecklistShareFile =
+    Future<void> Function(ImportReviewChecklistSharePayload payload);
 
 class ImportReviewChecklistExporter {
   final _ImportCsvExporterInfrastructure _infrastructure;
