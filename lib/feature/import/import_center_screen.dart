@@ -5,21 +5,27 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/import_job_model.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/import_service.dart';
 import '../auto/auto_drafts_screen.dart';
+import 'import_failure_report_exporter.dart';
 import 'import_history_analytics.dart';
 import 'import_job_detail_screen.dart';
 
 class ImportCenterScreen extends StatefulWidget {
   final List<JiveImportJob>? debugJobs;
+  final ImportFailureReportExporter? failureReportExporter;
+  final ImportReviewChecklistExporter? reviewChecklistExporter;
 
-  const ImportCenterScreen({super.key, this.debugJobs});
+  const ImportCenterScreen({
+    super.key,
+    this.debugJobs,
+    this.failureReportExporter,
+    this.reviewChecklistExporter,
+  });
 
   @override
   State<ImportCenterScreen> createState() => _ImportCenterScreenState();
@@ -206,6 +212,8 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _jobSearchController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
+  late final ImportFailureReportExporter _failureReportExporter;
+  late final ImportReviewChecklistExporter _reviewChecklistExporter;
 
   ImportService? _importService;
 
@@ -232,11 +240,10 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.debugJobs != null) {
-      _jobs = List<JiveImportJob>.from(widget.debugJobs!);
-      _isLoading = false;
-      return;
-    }
+    _failureReportExporter =
+        widget.failureReportExporter ?? ImportFailureReportExporter();
+    _reviewChecklistExporter =
+        widget.reviewChecklistExporter ?? ImportReviewChecklistExporter();
     _init();
   }
 
@@ -248,10 +255,22 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   }
 
   Future<void> _init() async {
-    final isar = await DatabaseService.getInstance();
-    final service = ImportService(isar);
     final templates = await _loadRuleTemplates();
     final failureScopePrefs = await _loadFailureScopePrefs();
+    if (widget.debugJobs != null) {
+      if (!mounted) return;
+      setState(() {
+        _ruleTemplates.clear();
+        _ruleTemplates.addAll(templates);
+        _failureWindow = failureScopePrefs.window;
+        _failureSourceTypeFilter = failureScopePrefs.sourceType;
+        _jobs = List<JiveImportJob>.from(widget.debugJobs!);
+        _isLoading = false;
+      });
+      return;
+    }
+    final isar = await DatabaseService.getInstance();
+    final service = ImportService(isar);
     final jobs = await service.listRecentJobs();
     if (!mounted) return;
     setState(() {
@@ -784,49 +803,21 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     }
 
     try {
-      final dir = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file = File('${dir.path}/import_review_$timestamp.csv');
-      final riskByIndex = prepared.duplicateReview.byRecordIndex;
-      final buffer = StringBuffer();
-      buffer.writeln(
-        'lineNumber,selected,isValid,amount,timestamp,type,source,confidence,duplicateRisk,warnings,rawText',
+      final csv = _buildReviewChecklistCsv(
+        prepared: prepared,
+        visibleIndices: visibleIndices,
       );
-      for (final index in visibleIndices) {
-        final record = prepared.records[index];
-        final selected = index < _selected.length && _selected[index];
-        final riskItem = riskByIndex[index];
-        final riskLabel = riskItem == null
-            ? ''
-            : '${riskItem.inBatchDuplicate ? 'batch' : ''}${riskItem.inBatchDuplicate && riskItem.existingDuplicate ? '+' : ''}${riskItem.existingDuplicate ? 'existing' : ''}';
-        buffer.writeln(
-          [
-            record.lineNumber,
-            selected ? 'yes' : 'no',
-            record.isValid ? 'yes' : 'no',
-            record.amount.toStringAsFixed(2),
-            _csvSafe(_formatDateTime(record.timestamp)),
-            _csvSafe(_typeLabel(record.type)),
-            _csvSafe(record.source),
-            (record.confidence * 100).toStringAsFixed(1),
-            _csvSafe(riskLabel),
-            _csvSafe(record.warnings.join(' | ')),
-            _csvSafe(record.rawText ?? ''),
-          ].join(','),
-        );
-      }
-
-      await file.writeAsString(buffer.toString(), flush: true);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          subject: 'Jive 导入复核清单',
-          text:
-              '导入复核清单（${visibleIndices.length} 条，筛选：${_previewFilterLabel(_previewFilter)}）',
+      final result = await _reviewChecklistExporter.export(
+        ImportReviewChecklistExportRequest(
+          csv: csv,
+          previewFilterName: _previewFilter.name,
+          previewFilterLabel: _previewFilterLabel(_previewFilter),
+          visibleCount: visibleIndices.length,
         ),
       );
+      _showMessage('已导出复核清单：${result.fileName}');
     } catch (e) {
-      _showMessage('导出失败：$e');
+      _showMessage('导出复核清单失败：$e');
     }
   }
 
@@ -1541,6 +1532,43 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       case _PreviewFilter.invalid:
         return '无效';
     }
+  }
+
+  String _buildReviewChecklistCsv({
+    required _PreparedImport prepared,
+    required List<int> visibleIndices,
+  }) {
+    final riskByIndex = prepared.duplicateReview.byRecordIndex;
+    final buffer = StringBuffer();
+    buffer.writeln(
+      'lineNumber,selected,isValid,amount,timestamp,type,source,confidence,duplicateRisk,warnings,rawText',
+    );
+    for (final index in visibleIndices) {
+      final record = prepared.records[index];
+      final selected = index < _selected.length && _selected[index];
+      final riskLabel = _duplicateRiskLabel(riskByIndex[index]);
+      buffer.writeln(
+        [
+          record.lineNumber,
+          selected ? 'yes' : 'no',
+          record.isValid ? 'yes' : 'no',
+          record.amount.toStringAsFixed(2),
+          _csvSafe(_formatDateTime(record.timestamp)),
+          _csvSafe(_typeLabel(record.type)),
+          _csvSafe(record.source),
+          (record.confidence * 100).toStringAsFixed(1),
+          _csvSafe(riskLabel),
+          _csvSafe(record.warnings.join(' | ')),
+          _csvSafe(record.rawText ?? ''),
+        ].join(','),
+      );
+    }
+    return buffer.toString();
+  }
+
+  String _duplicateRiskLabel(ImportDuplicateRiskItem? riskItem) {
+    if (riskItem == null) return '';
+    return '${riskItem.inBatchDuplicate ? 'batch' : ''}${riskItem.inBatchDuplicate && riskItem.existingDuplicate ? '+' : ''}${riskItem.existingDuplicate ? 'existing' : ''}';
   }
 
   String _csvSafe(String value) {
@@ -2656,34 +2684,21 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
         retryableByReason[entry.key] = entry.value.retryableCount;
         blockedByReason[entry.key] = entry.value.blockedCount;
       }
-      final csv = buildImportFailureAggregateCsv(
-        aggregates: aggregates,
-        retryableByReason: retryableByReason,
-        blockedByReason: blockedByReason,
-        windowLabel: _failureWindowLabel(_failureWindow),
-        sourceScopeLabel: _failureSourceScopeLabel(_failureSourceTypeFilter),
-        failedCount: failedCountInWindow,
-        retryableCount: retryabilitySnapshot.retryableCount,
-        blockedCount: retryabilitySnapshot.blockedCount,
-      );
-      final dir = await getTemporaryDirectory();
-      final now = DateTime.now();
-      final stamp =
-          '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_'
-          '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
-      final sourcePart = _failureSourceTypeFilter?.name ?? 'all';
-      final file = File(
-        '${dir.path}/jive_failure_aggregate_${_failureWindow.name}_${sourcePart}_$stamp.csv',
-      );
-      await file.writeAsString(csv);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          text:
-              'Jive 失败聚合报表（${_failureWindowLabel(_failureWindow)} / ${_failureSourceScopeLabel(_failureSourceTypeFilter)}）',
+      final result = await _failureReportExporter.export(
+        ImportFailureReportExportRequest(
+          aggregates: aggregates,
+          retryableByReason: retryableByReason,
+          blockedByReason: blockedByReason,
+          windowName: _failureWindow.name,
+          windowLabel: _failureWindowLabel(_failureWindow),
+          sourceName: _failureSourceTypeFilter?.name ?? 'all',
+          sourceScopeLabel: _failureSourceScopeLabel(_failureSourceTypeFilter),
+          failedCount: failedCountInWindow,
+          retryableCount: retryabilitySnapshot.retryableCount,
+          blockedCount: retryabilitySnapshot.blockedCount,
         ),
       );
-      _showMessage('已导出失败报表：${_basename(file.path)}');
+      _showMessage('已导出失败报表：${result.fileName}');
     } catch (e) {
       _showMessage('导出失败报表失败：$e');
     }

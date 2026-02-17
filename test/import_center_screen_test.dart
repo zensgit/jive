@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:jive/core/database/import_job_model.dart';
 import 'package:jive/feature/import/import_center_screen.dart';
+import 'package:jive/feature/import/import_failure_report_exporter.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('failure aggregate supports time window switch and retry entry', (
     WidgetTester tester,
   ) async {
@@ -104,6 +110,116 @@ void main() {
     await tester.tap(find.text('来源:微信'));
     await tester.pumpAndSettle();
     expect(find.textContaining('request timeout ×1'), findsOneWidget);
+  });
+
+  testWidgets('failure aggregate restores persisted scope on reopen', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'import_failure_window': 'all',
+      'import_failure_source_type': 'wechat',
+    });
+    final now = DateTime.now();
+    final jobs = <JiveImportJob>[
+      _buildJob(
+        id: 14,
+        status: 'failed',
+        errorMessage: 'TimeoutError: request timeout',
+        updatedAt: now.subtract(const Duration(days: 1)),
+        payloadText: 'raw wechat payload',
+        sourceType: 'wechat',
+      ),
+      _buildJob(
+        id: 15,
+        status: 'failed',
+        errorMessage: 'FormatException: csv issue',
+        updatedAt: now.subtract(const Duration(days: 1)),
+        payloadText: 'raw csv payload',
+        sourceType: 'csv',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: ImportCenterScreen(debugJobs: jobs)),
+    );
+    await tester.pumpAndSettle();
+    await _scrollToHistory(tester);
+
+    expect(find.text('最近失败原因聚合（全部）'), findsOneWidget);
+    expect(find.textContaining('request timeout ×1'), findsOneWidget);
+    expect(find.textContaining('csv issue ×1'), findsNothing);
+    final sourceWechatChip = find.widgetWithText(ChoiceChip, '来源:微信');
+    expect(sourceWechatChip, findsOneWidget);
+    expect(tester.widget<ChoiceChip>(sourceWechatChip).selected, isTrue);
+  });
+
+  testWidgets('tap export failure report calls exporter with current scope', (
+    WidgetTester tester,
+  ) async {
+    final now = DateTime.now();
+    final jobs = <JiveImportJob>[
+      _buildJob(
+        id: 16,
+        status: 'failed',
+        errorMessage: 'TimeoutError: request timeout',
+        updatedAt: now.subtract(const Duration(days: 1)),
+        payloadText: 'raw timeout payload',
+      ),
+      _buildJob(
+        id: 17,
+        status: 'failed',
+        errorMessage: 'TimeoutError: request timeout',
+        updatedAt: now.subtract(const Duration(days: 2)),
+        payloadText: null,
+      ),
+      _buildJob(
+        id: 18,
+        status: 'failed',
+        errorMessage: 'FormatException: old issue',
+        updatedAt: now.subtract(const Duration(days: 40)),
+        payloadText: 'raw old payload',
+      ),
+    ];
+    final requests = <ImportFailureReportExportRequest>[];
+    final exporter = _FakeFailureReportExporter(
+      onExport: (request) async {
+        requests.add(request);
+        return const ImportFailureReportExportResult(
+          filePath: '/tmp/failure_report.csv',
+          fileName: 'failure_report.csv',
+          csv: 'meta,value',
+        );
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ImportCenterScreen(
+          debugJobs: jobs,
+          failureReportExporter: exporter,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _scrollToHistory(tester);
+
+    await _tapVisibleText(tester, '导出失败报表');
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(1));
+    final request = requests.first;
+    expect(request.windowName, 'd30');
+    expect(request.sourceName, 'all');
+    expect(request.windowLabel, '30天');
+    expect(request.sourceScopeLabel, '全部来源');
+    expect(request.failedCount, 2);
+    expect(request.retryableCount, 1);
+    expect(request.blockedCount, 1);
+    expect(request.aggregates, hasLength(1));
+    expect(request.aggregates.first.reason, 'request timeout');
+    expect(request.aggregates.first.count, 2);
+    expect(request.retryableByReason['request timeout'], 1);
+    expect(request.blockedByReason['request timeout'], 1);
   });
 
   testWidgets(
@@ -291,4 +407,19 @@ Future<void> _tapVisibleText(WidgetTester tester, String text) async {
   );
   await tester.pumpAndSettle();
   await tester.tap(find.text(text).first, warnIfMissed: false);
+}
+
+class _FakeFailureReportExporter extends ImportFailureReportExporter {
+  final Future<ImportFailureReportExportResult> Function(
+    ImportFailureReportExportRequest request,
+  ) onExport;
+
+  _FakeFailureReportExporter({required this.onExport});
+
+  @override
+  Future<ImportFailureReportExportResult> export(
+    ImportFailureReportExportRequest request,
+  ) {
+    return onExport(request);
+  }
 }
