@@ -89,6 +89,13 @@ class _TimeShiftConfig {
   const _TimeShiftConfig({required this.offset, required this.workdayMode});
 }
 
+class _FailureScopePrefs {
+  final _FailureWindow window;
+  final ImportSourceType? sourceType;
+
+  const _FailureScopePrefs({required this.window, required this.sourceType});
+}
+
 class _ResolvedRetryCandidate {
   final JiveImportJob job;
   final ImportRetryability retryability;
@@ -193,6 +200,8 @@ class _ImportRuleTemplate {
 
 class _ImportCenterScreenState extends State<ImportCenterScreen> {
   static const String _ruleTemplateKeyPrefix = 'import_rule_template_';
+  static const String _failureWindowPrefKey = 'import_failure_window';
+  static const String _failureSourcePrefKey = 'import_failure_source_type';
 
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _jobSearchController = TextEditingController();
@@ -242,12 +251,15 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     final isar = await DatabaseService.getInstance();
     final service = ImportService(isar);
     final templates = await _loadRuleTemplates();
+    final failureScopePrefs = await _loadFailureScopePrefs();
     final jobs = await service.listRecentJobs();
     if (!mounted) return;
     setState(() {
       _importService = service;
       _ruleTemplates.clear();
       _ruleTemplates.addAll(templates);
+      _failureWindow = failureScopePrefs.window;
+      _failureSourceTypeFilter = failureScopePrefs.sourceType;
       _jobs = jobs;
       _isLoading = false;
     });
@@ -1111,6 +1123,38 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       '$_ruleTemplateKeyPrefix${sourceType.name}',
       jsonEncode(template.toJson()),
     );
+  }
+
+  Future<_FailureScopePrefs> _loadFailureScopePrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final windowRaw = (prefs.getString(_failureWindowPrefKey) ?? '').trim();
+    final sourceRaw = (prefs.getString(_failureSourcePrefKey) ?? '').trim();
+    var window = _FailureWindow.d30;
+    for (final value in _FailureWindow.values) {
+      if (value.name == windowRaw) {
+        window = value;
+        break;
+      }
+    }
+    return _FailureScopePrefs(
+      window: window,
+      sourceType: _parseImportSourceType(sourceRaw),
+    );
+  }
+
+  Future<void> _saveFailureScopePrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_failureWindowPrefKey, _failureWindow.name);
+    final sourceType = _failureSourceTypeFilter;
+    if (sourceType == null) {
+      await prefs.remove(_failureSourcePrefKey);
+    } else {
+      await prefs.setString(_failureSourcePrefKey, sourceType.name);
+    }
+  }
+
+  void _persistFailureScopePrefs() {
+    _saveFailureScopePrefs();
   }
 
   Future<void> _refreshDuplicateInsights() async {
@@ -2247,6 +2291,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   setState(() {
                     _failureWindow = _FailureWindow.d7;
                   });
+                  _persistFailureScopePrefs();
                 },
               ),
               ChoiceChip(
@@ -2256,6 +2301,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   setState(() {
                     _failureWindow = _FailureWindow.d30;
                   });
+                  _persistFailureScopePrefs();
                 },
               ),
               ChoiceChip(
@@ -2265,6 +2311,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   setState(() {
                     _failureWindow = _FailureWindow.all;
                   });
+                  _persistFailureScopePrefs();
                 },
               ),
             ],
@@ -2281,6 +2328,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   setState(() {
                     _failureSourceTypeFilter = null;
                   });
+                  _persistFailureScopePrefs();
                 },
               ),
               ...ImportSourceType.values.map(
@@ -2291,6 +2339,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                     setState(() {
                       _failureSourceTypeFilter = source;
                     });
+                    _persistFailureScopePrefs();
                   },
                 ),
               ),
@@ -2312,6 +2361,21 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
               onPressed: _isBusy ? null : _retryAllRetryableInWindow,
               icon: const Icon(Icons.play_circle_outline, size: 18),
               label: const Text('本窗口重试可重试'),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _isBusy
+                  ? null
+                  : () => _exportFailureAggregateReport(
+                      aggregates: aggregates,
+                      failedCountInWindow: failedCountInWindow,
+                      retryabilitySnapshot: retryabilitySnapshot,
+                      reasonRetryabilitySnapshots: reasonRetryabilitySnapshots,
+                    ),
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: const Text('导出失败报表'),
             ),
           ),
           if (windowSuggestion.hasAction)
@@ -2576,6 +2640,53 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
         );
       },
     );
+  }
+
+  Future<void> _exportFailureAggregateReport({
+    required List<ImportFailureReasonAggregate> aggregates,
+    required int failedCountInWindow,
+    required _FailureRetryabilitySnapshot retryabilitySnapshot,
+    required Map<String, _FailureRetryabilitySnapshot>
+    reasonRetryabilitySnapshots,
+  }) async {
+    try {
+      final retryableByReason = <String, int>{};
+      final blockedByReason = <String, int>{};
+      for (final entry in reasonRetryabilitySnapshots.entries) {
+        retryableByReason[entry.key] = entry.value.retryableCount;
+        blockedByReason[entry.key] = entry.value.blockedCount;
+      }
+      final csv = buildImportFailureAggregateCsv(
+        aggregates: aggregates,
+        retryableByReason: retryableByReason,
+        blockedByReason: blockedByReason,
+        windowLabel: _failureWindowLabel(_failureWindow),
+        sourceScopeLabel: _failureSourceScopeLabel(_failureSourceTypeFilter),
+        failedCount: failedCountInWindow,
+        retryableCount: retryabilitySnapshot.retryableCount,
+        blockedCount: retryabilitySnapshot.blockedCount,
+      );
+      final dir = await getTemporaryDirectory();
+      final now = DateTime.now();
+      final stamp =
+          '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_'
+          '${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
+      final sourcePart = _failureSourceTypeFilter?.name ?? 'all';
+      final file = File(
+        '${dir.path}/jive_failure_aggregate_${_failureWindow.name}_${sourcePart}_$stamp.csv',
+      );
+      await file.writeAsString(csv);
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          text:
+              'Jive 失败聚合报表（${_failureWindowLabel(_failureWindow)} / ${_failureSourceScopeLabel(_failureSourceTypeFilter)}）',
+        ),
+      );
+      _showMessage('已导出失败报表：${_basename(file.path)}');
+    } catch (e) {
+      _showMessage('导出失败报表失败：$e');
+    }
   }
 
   Future<int?> _showRetryCountDialog({

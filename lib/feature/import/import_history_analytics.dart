@@ -115,6 +115,49 @@ String summarizeImportReasonCounts(
       .join('，');
 }
 
+String buildImportFailureAggregateCsv({
+  required List<ImportFailureReasonAggregate> aggregates,
+  required Map<String, int> retryableByReason,
+  required Map<String, int> blockedByReason,
+  required String windowLabel,
+  required String sourceScopeLabel,
+  required int failedCount,
+  required int retryableCount,
+  required int blockedCount,
+  DateTime? generatedAt,
+}) {
+  final now = generatedAt ?? DateTime.now();
+  final totalRetryability = retryableCount + blockedCount;
+  final blockedPercent = totalRetryability <= 0
+      ? 0
+      : ((blockedCount * 100) / totalRetryability).round();
+  final buffer = StringBuffer();
+  buffer.writeln('meta,value');
+  buffer.writeln('${_csvEscape('生成时间')},${_csvEscape(now.toIso8601String())}');
+  buffer.writeln('${_csvEscape('时间窗口')},${_csvEscape(windowLabel)}');
+  buffer.writeln('${_csvEscape('来源范围')},${_csvEscape(sourceScopeLabel)}');
+  buffer.writeln('${_csvEscape('失败任务数')},$failedCount');
+  buffer.writeln('${_csvEscape('可重试任务数')},$retryableCount');
+  buffer.writeln('${_csvEscape('不可重试任务数')},$blockedCount');
+  buffer.writeln('${_csvEscape('不可重试占比')},$blockedPercent%');
+  buffer.writeln();
+  buffer.writeln(
+    'reason,count,latestJobId,latestOccurredAt,retryableCount,blockedCount,blockedPercent',
+  );
+  for (final item in aggregates) {
+    final retryable = retryableByReason[item.reason] ?? 0;
+    final blocked = blockedByReason[item.reason] ?? 0;
+    final total = retryable + blocked;
+    final reasonBlockedPercent = total <= 0
+        ? 0
+        : ((blocked * 100) / total).round();
+    buffer.writeln(
+      '${_csvEscape(item.reason)},${item.count},${item.latestJobId},${item.latestOccurredAt.toIso8601String()},$retryable,$blocked,$reasonBlockedPercent%',
+    );
+  }
+  return buffer.toString();
+}
+
 String suggestImportFailureAction(Map<String, int> reasonCounts) {
   return deriveImportFailureActionSuggestion(reasonCounts).message;
 }
@@ -244,4 +287,9 @@ List<MapEntry<String, int>> _sortedReasonEntries(Map<String, int> counts) {
       return a.key.compareTo(b.key);
     });
   return entries;
+}
+
+String _csvEscape(String value) {
+  final escaped = value.replaceAll('"', '""');
+  return '"$escaped"';
 }

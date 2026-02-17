@@ -42,6 +42,7 @@ void main() {
     expect(find.textContaining('new issue ×1'), findsOneWidget);
     expect(find.textContaining('old issue ×1'), findsNothing);
     expect(find.text('本窗口重试可重试'), findsOneWidget);
+    expect(find.text('导出失败报表'), findsOneWidget);
     expect(find.text('窗口建议：查看失败任务'), findsOneWidget);
     expect(find.text('重试可重试'), findsOneWidget);
     expect(find.text('重试最近N'), findsOneWidget);
@@ -184,7 +185,7 @@ void main() {
       await tester.pumpAndSettle();
       await _scrollToHistory(tester);
 
-      await tester.tap(find.text('重试可重试'));
+      await _tapVisibleText(tester, '重试可重试');
       await tester.pumpAndSettle();
 
       expect(find.text('当前模式不可执行批量重试'), findsOneWidget);
@@ -211,7 +212,7 @@ void main() {
       await tester.pumpAndSettle();
       await _scrollToHistory(tester);
 
-      await tester.tap(find.text('本窗口重试可重试'));
+      await _tapVisibleText(tester, '本窗口重试可重试');
       await tester.pumpAndSettle();
 
       expect(find.text('当前模式不可执行批量重试'), findsOneWidget);
@@ -280,4 +281,14 @@ Future<void> _scrollToHistory(WidgetTester tester) async {
     scrollable: find.byType(Scrollable).first,
   );
   await tester.pumpAndSettle();
+}
+
+Future<void> _tapVisibleText(WidgetTester tester, String text) async {
+  await tester.scrollUntilVisible(
+    find.text(text).first,
+    180,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(text).first, warnIfMissed: false);
 }
