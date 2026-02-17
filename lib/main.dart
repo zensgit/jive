@@ -43,6 +43,7 @@ import 'feature/auto/auto_drafts_screen.dart';
 import 'feature/auto/auto_rule_tester_screen.dart';
 import 'feature/auto/auto_supported_apps_screen.dart';
 import 'feature/auto/auto_settings_screen.dart';
+import 'feature/import/import_center_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/transactions/transaction_detail_screen.dart';
 import 'feature/stats/stats_screen.dart';
@@ -327,7 +328,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Future<void> _snoozeAutoPermissionPrompt() async {
     final prefs = await SharedPreferences.getInstance();
     final until = DateTime.now().add(_autoPermissionSnoozeDuration);
-    await prefs.setInt(_prefKeyAutoPermissionSnoozeUntilMs, until.millisecondsSinceEpoch);
+    await prefs.setInt(
+      _prefKeyAutoPermissionSnoozeUntilMs,
+      until.millisecondsSinceEpoch,
+    );
   }
 
   Future<void> _clearAutoPermissionPromptSnooze() async {
@@ -927,10 +931,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     try {
       final file = await JiveDataBackupService.exportToFile(_isar);
       await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          text: 'Jive 数据备份',
-        ),
+        ShareParams(files: [XFile(file.path)], text: 'Jive 数据备份'),
       );
       _showMessage('已导出数据');
     } catch (e) {
@@ -1147,6 +1148,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final changed = await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const AutoDraftsScreen()),
+    );
+    if (changed == true) {
+      await _loadTransactions();
+      await _loadAutoDraftCount();
+      _notifyDataChanged();
+    }
+  }
+
+  Future<void> _openImportCenter() async {
+    final changed = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ImportCenterScreen()),
     );
     if (changed == true) {
       await _loadTransactions();
@@ -1472,7 +1485,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 await Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => const SettingsScreen(),
+                                    builder: (context) =>
+                                        const SettingsScreen(),
                                   ),
                                 );
                               },
@@ -1660,6 +1674,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               onTap: () async {
                                 Navigator.pop(context);
                                 await _importBackup();
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(
+                                Icons.playlist_add_check_circle_outlined,
+                              ),
+                              title: const Text("导入中心"),
+                              subtitle: const Text("文本/CSV/OCR 导入到待确认草稿"),
+                              onTap: () async {
+                                Navigator.pop(context);
+                                await _openImportCenter();
                               },
                             ),
                             const Divider(height: 1),
@@ -2067,7 +2092,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
-  _CreditSummary _computeCreditSummary(List<JiveAccount> accounts, Map<int, double> balances) {
+  _CreditSummary _computeCreditSummary(
+    List<JiveAccount> accounts,
+    Map<int, double> balances,
+  ) {
     double limit = 0;
     double used = 0;
     double available = 0;
@@ -2227,7 +2255,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                           decoration: BoxDecoration(
                             color: color.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: color.withValues(alpha: 0.4)),
+                            border: Border.all(
+                              color: color.withValues(alpha: 0.4),
+                            ),
                           ),
                           child: Text(
                             tagDisplayName(tag),
@@ -2276,7 +2306,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       decoration: BoxDecoration(
         color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
         shape: BoxShape.circle,
-        border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.4)),
+        border: Border.all(
+          color: JiveTheme.primaryGreen.withValues(alpha: 0.4),
+        ),
       ),
       child: const Icon(
         Icons.auto_awesome,
