@@ -17,18 +17,44 @@ import 'import_job_detail_screen.dart';
 
 class ImportCenterScreen extends StatefulWidget {
   final List<JiveImportJob>? debugJobs;
+  final ImportCenterDebugPreviewData? debugPreviewData;
   final ImportFailureReportExporter? failureReportExporter;
   final ImportReviewChecklistExporter? reviewChecklistExporter;
 
   const ImportCenterScreen({
     super.key,
     this.debugJobs,
+    this.debugPreviewData,
     this.failureReportExporter,
     this.reviewChecklistExporter,
   });
 
   @override
   State<ImportCenterScreen> createState() => _ImportCenterScreenState();
+}
+
+class ImportCenterDebugPreviewData {
+  final List<ImportParsedRecord> records;
+  final List<bool>? selected;
+  final String payloadText;
+  final ImportSourceType sourceType;
+  final ImportEntryType entryType;
+  final String? filePath;
+  final String? fileName;
+  final ImportDuplicateEstimate duplicateEstimate;
+  final ImportDuplicateReview duplicateReview;
+
+  const ImportCenterDebugPreviewData({
+    required this.records,
+    this.selected,
+    this.payloadText = '',
+    this.sourceType = ImportSourceType.csv,
+    this.entryType = ImportEntryType.text,
+    this.filePath,
+    this.fileName,
+    this.duplicateEstimate = const ImportDuplicateEstimate.empty(),
+    this.duplicateReview = const ImportDuplicateReview.empty(),
+  });
 }
 
 class _PreparedImport {
@@ -258,6 +284,19 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     final templates = await _loadRuleTemplates();
     final failureScopePrefs = await _loadFailureScopePrefs();
     if (widget.debugJobs != null) {
+      final debugPreview = widget.debugPreviewData;
+      final prepared = debugPreview == null
+          ? null
+          : _PreparedImport(
+              records: List<ImportParsedRecord>.from(debugPreview.records),
+              payloadText: debugPreview.payloadText,
+              sourceType: debugPreview.sourceType,
+              entryType: debugPreview.entryType,
+              filePath: debugPreview.filePath,
+              fileName: debugPreview.fileName,
+              duplicateEstimate: debugPreview.duplicateEstimate,
+              duplicateReview: debugPreview.duplicateReview,
+            );
       if (!mounted) return;
       setState(() {
         _ruleTemplates.clear();
@@ -265,6 +304,14 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
         _failureWindow = failureScopePrefs.window;
         _failureSourceTypeFilter = failureScopePrefs.sourceType;
         _jobs = List<JiveImportJob>.from(widget.debugJobs!);
+        _prepared = prepared;
+        _selected = _normalizeDebugSelection(
+          debugPreview?.selected,
+          debugPreview?.records.length ?? 0,
+        );
+        if (debugPreview != null) {
+          _sourceType = debugPreview.sourceType;
+        }
         _isLoading = false;
       });
       return;
@@ -282,6 +329,14 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       _jobs = jobs;
       _isLoading = false;
     });
+  }
+
+  List<bool> _normalizeDebugSelection(List<bool>? selected, int length) {
+    if (length <= 0) return const [];
+    if (selected == null || selected.length != length) {
+      return List<bool>.filled(length, false);
+    }
+    return List<bool>.from(selected);
   }
 
   Future<void> _refreshJobs() async {

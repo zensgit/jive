@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:jive/core/database/import_job_model.dart';
+import 'package:jive/core/service/import_service.dart';
 import 'package:jive/feature/import/import_center_screen.dart';
 import 'package:jive/feature/import/import_failure_report_exporter.dart';
 
@@ -285,6 +286,76 @@ void main() {
     },
   );
 
+  testWidgets('tap export review checklist calls exporter with preview scope', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final requests = <ImportReviewChecklistExportRequest>[];
+    final exporter = _FakeReviewChecklistExporter(
+      onExport: (request) async {
+        requests.add(request);
+        return const ImportReviewChecklistExportResult(
+          filePath: '/tmp/review_export.csv',
+          fileName: 'review_export.csv',
+          csv: 'lineNumber,selected',
+        );
+      },
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ImportCenterScreen(
+          debugJobs: const [],
+          debugPreviewData: ImportCenterDebugPreviewData(
+            records: [
+              _buildPreviewRecord(
+                lineNumber: 1,
+                amount: 23.5,
+                source: 'WeChat',
+                rawText: '午餐',
+              ),
+              _buildPreviewRecord(
+                lineNumber: 2,
+                amount: 0,
+                source: 'Alipay',
+                rawText: '无效行',
+              ),
+            ],
+            selected: const [true, false],
+            payloadText: 'debug preview payload',
+            sourceType: ImportSourceType.csv,
+            entryType: ImportEntryType.text,
+          ),
+          reviewChecklistExporter: exporter,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('导入预览（先勾选，再导入）'), findsOneWidget);
+    expect(find.text('导出复核清单'), findsOneWidget);
+
+    await tester.tap(find.text('导出复核清单'));
+    await tester.pumpAndSettle();
+
+    expect(requests, hasLength(1));
+    final request = requests.first;
+    expect(request.previewFilterName, 'all');
+    expect(request.previewFilterLabel, '全部');
+    expect(request.visibleCount, 2);
+    expect(
+      request.csv,
+      contains(
+        'lineNumber,selected,isValid,amount,timestamp,type,source,confidence,duplicateRisk,warnings,rawText',
+      ),
+    );
+    expect(request.csv, contains('1,yes,yes,23.50'));
+    expect(request.csv, contains('2,no,no,0.00'));
+  });
+
   testWidgets(
     'tap failure reason applies failed quick filter and search query',
     (WidgetTester tester) async {
@@ -453,6 +524,23 @@ JiveImportJob _buildJob({
   return job;
 }
 
+ImportParsedRecord _buildPreviewRecord({
+  required int lineNumber,
+  required double amount,
+  required String source,
+  required String rawText,
+}) {
+  return ImportParsedRecord(
+    amount: amount,
+    source: source,
+    timestamp: DateTime(2026, 2, 17, 9, lineNumber),
+    rawText: rawText,
+    type: 'expense',
+    lineNumber: lineNumber,
+    confidence: 1,
+  );
+}
+
 Future<void> _scrollToHistory(WidgetTester tester) async {
   await tester.scrollUntilVisible(
     find.text('导入任务历史'),
@@ -483,6 +571,22 @@ class _FakeFailureReportExporter extends ImportFailureReportExporter {
   @override
   Future<ImportFailureReportExportResult> export(
     ImportFailureReportExportRequest request,
+  ) {
+    return onExport(request);
+  }
+}
+
+class _FakeReviewChecklistExporter extends ImportReviewChecklistExporter {
+  final Future<ImportReviewChecklistExportResult> Function(
+    ImportReviewChecklistExportRequest request,
+  )
+  onExport;
+
+  _FakeReviewChecklistExporter({required this.onExport});
+
+  @override
+  Future<ImportReviewChecklistExportResult> export(
+    ImportReviewChecklistExportRequest request,
   ) {
     return onExport(request);
   }
