@@ -174,6 +174,45 @@ void main() {
     expect(empty.kind, ImportFailureActionKind.none);
     expect(empty.hasAction, isFalse);
   });
+
+  test('buildImportFailureAggregateCsv includes meta and reason rows', () {
+    final csv = buildImportFailureAggregateCsv(
+      aggregates: [
+        ImportFailureReasonAggregate(
+          reason: 'parse error',
+          count: 2,
+          latestJobId: 101,
+          latestOccurredAt: DateTime(2026, 2, 16, 10, 0),
+        ),
+        ImportFailureReasonAggregate(
+          reason: 'request timeout',
+          count: 1,
+          latestJobId: 102,
+          latestOccurredAt: DateTime(2026, 2, 16, 9, 30),
+        ),
+      ],
+      retryableByReason: {'parse error': 1, 'request timeout': 1},
+      blockedByReason: {'parse error': 1, 'request timeout': 0},
+      windowLabel: '30天',
+      sourceScopeLabel: 'CSV/TSV',
+      failedCount: 3,
+      retryableCount: 2,
+      blockedCount: 1,
+      generatedAt: DateTime(2026, 2, 16, 12, 0),
+    );
+
+    expect(csv, contains('"时间窗口","30天"'));
+    expect(csv, contains('"来源范围","CSV/TSV"'));
+    expect(csv, contains('"失败任务数",3'));
+    expect(
+      csv,
+      contains('"parse error",2,101,2026-02-16T10:00:00.000,1,1,50%'),
+    );
+    expect(
+      csv,
+      contains('"request timeout",1,102,2026-02-16T09:30:00.000,1,0,0%'),
+    );
+  });
 }
 
 JiveImportJob _buildJob({

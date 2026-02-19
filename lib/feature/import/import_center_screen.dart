@@ -5,24 +5,56 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/import_job_model.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/import_service.dart';
 import '../auto/auto_drafts_screen.dart';
+import 'import_failure_report_exporter.dart';
 import 'import_history_analytics.dart';
 import 'import_job_detail_screen.dart';
 
 class ImportCenterScreen extends StatefulWidget {
   final List<JiveImportJob>? debugJobs;
+  final ImportCenterDebugPreviewData? debugPreviewData;
+  final ImportFailureReportExporter? failureReportExporter;
+  final ImportReviewChecklistExporter? reviewChecklistExporter;
 
-  const ImportCenterScreen({super.key, this.debugJobs});
+  const ImportCenterScreen({
+    super.key,
+    this.debugJobs,
+    this.debugPreviewData,
+    this.failureReportExporter,
+    this.reviewChecklistExporter,
+  });
 
   @override
   State<ImportCenterScreen> createState() => _ImportCenterScreenState();
+}
+
+class ImportCenterDebugPreviewData {
+  final List<ImportParsedRecord> records;
+  final List<bool>? selected;
+  final String payloadText;
+  final ImportSourceType sourceType;
+  final ImportEntryType entryType;
+  final String? filePath;
+  final String? fileName;
+  final ImportDuplicateEstimate duplicateEstimate;
+  final ImportDuplicateReview duplicateReview;
+
+  const ImportCenterDebugPreviewData({
+    required this.records,
+    this.selected,
+    this.payloadText = '',
+    this.sourceType = ImportSourceType.csv,
+    this.entryType = ImportEntryType.text,
+    this.filePath,
+    this.fileName,
+    this.duplicateEstimate = const ImportDuplicateEstimate.empty(),
+    this.duplicateReview = const ImportDuplicateReview.empty(),
+  });
 }
 
 class _PreparedImport {
@@ -87,6 +119,13 @@ class _TimeShiftConfig {
   final _WorkdayAdjustMode workdayMode;
 
   const _TimeShiftConfig({required this.offset, required this.workdayMode});
+}
+
+class _FailureScopePrefs {
+  final _FailureWindow window;
+  final ImportSourceType? sourceType;
+
+  const _FailureScopePrefs({required this.window, required this.sourceType});
 }
 
 class _ResolvedRetryCandidate {
@@ -193,10 +232,14 @@ class _ImportRuleTemplate {
 
 class _ImportCenterScreenState extends State<ImportCenterScreen> {
   static const String _ruleTemplateKeyPrefix = 'import_rule_template_';
+  static const String _failureWindowPrefKey = 'import_failure_window';
+  static const String _failureSourcePrefKey = 'import_failure_source_type';
 
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _jobSearchController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
+  late final ImportFailureReportExporter _failureReportExporter;
+  late final ImportReviewChecklistExporter _reviewChecklistExporter;
 
   ImportService? _importService;
 
@@ -223,11 +266,10 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.debugJobs != null) {
-      _jobs = List<JiveImportJob>.from(widget.debugJobs!);
-      _isLoading = false;
-      return;
-    }
+    _failureReportExporter =
+        widget.failureReportExporter ?? ImportFailureReportExporter();
+    _reviewChecklistExporter =
+        widget.reviewChecklistExporter ?? ImportReviewChecklistExporter();
     _init();
   }
 
@@ -239,18 +281,62 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   }
 
   Future<void> _init() async {
+    final templates = await _loadRuleTemplates();
+    final failureScopePrefs = await _loadFailureScopePrefs();
+    if (widget.debugJobs != null) {
+      final debugPreview = widget.debugPreviewData;
+      final prepared = debugPreview == null
+          ? null
+          : _PreparedImport(
+              records: List<ImportParsedRecord>.from(debugPreview.records),
+              payloadText: debugPreview.payloadText,
+              sourceType: debugPreview.sourceType,
+              entryType: debugPreview.entryType,
+              filePath: debugPreview.filePath,
+              fileName: debugPreview.fileName,
+              duplicateEstimate: debugPreview.duplicateEstimate,
+              duplicateReview: debugPreview.duplicateReview,
+            );
+      if (!mounted) return;
+      setState(() {
+        _ruleTemplates.clear();
+        _ruleTemplates.addAll(templates);
+        _failureWindow = failureScopePrefs.window;
+        _failureSourceTypeFilter = failureScopePrefs.sourceType;
+        _jobs = List<JiveImportJob>.from(widget.debugJobs!);
+        _prepared = prepared;
+        _selected = _normalizeDebugSelection(
+          debugPreview?.selected,
+          debugPreview?.records.length ?? 0,
+        );
+        if (debugPreview != null) {
+          _sourceType = debugPreview.sourceType;
+        }
+        _isLoading = false;
+      });
+      return;
+    }
     final isar = await DatabaseService.getInstance();
     final service = ImportService(isar);
-    final templates = await _loadRuleTemplates();
     final jobs = await service.listRecentJobs();
     if (!mounted) return;
     setState(() {
       _importService = service;
       _ruleTemplates.clear();
       _ruleTemplates.addAll(templates);
+      _failureWindow = failureScopePrefs.window;
+      _failureSourceTypeFilter = failureScopePrefs.sourceType;
       _jobs = jobs;
       _isLoading = false;
     });
+  }
+
+  List<bool> _normalizeDebugSelection(List<bool>? selected, int length) {
+    if (length <= 0) return const [];
+    if (selected == null || selected.length != length) {
+      return List<bool>.filled(length, false);
+    }
+    return List<bool>.from(selected);
   }
 
   Future<void> _refreshJobs() async {
@@ -772,49 +858,21 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     }
 
     try {
-      final dir = await getTemporaryDirectory();
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final file = File('${dir.path}/import_review_$timestamp.csv');
-      final riskByIndex = prepared.duplicateReview.byRecordIndex;
-      final buffer = StringBuffer();
-      buffer.writeln(
-        'lineNumber,selected,isValid,amount,timestamp,type,source,confidence,duplicateRisk,warnings,rawText',
+      final csv = _buildReviewChecklistCsv(
+        prepared: prepared,
+        visibleIndices: visibleIndices,
       );
-      for (final index in visibleIndices) {
-        final record = prepared.records[index];
-        final selected = index < _selected.length && _selected[index];
-        final riskItem = riskByIndex[index];
-        final riskLabel = riskItem == null
-            ? ''
-            : '${riskItem.inBatchDuplicate ? 'batch' : ''}${riskItem.inBatchDuplicate && riskItem.existingDuplicate ? '+' : ''}${riskItem.existingDuplicate ? 'existing' : ''}';
-        buffer.writeln(
-          [
-            record.lineNumber,
-            selected ? 'yes' : 'no',
-            record.isValid ? 'yes' : 'no',
-            record.amount.toStringAsFixed(2),
-            _csvSafe(_formatDateTime(record.timestamp)),
-            _csvSafe(_typeLabel(record.type)),
-            _csvSafe(record.source),
-            (record.confidence * 100).toStringAsFixed(1),
-            _csvSafe(riskLabel),
-            _csvSafe(record.warnings.join(' | ')),
-            _csvSafe(record.rawText ?? ''),
-          ].join(','),
-        );
-      }
-
-      await file.writeAsString(buffer.toString(), flush: true);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(file.path)],
-          subject: 'Jive 导入复核清单',
-          text:
-              '导入复核清单（${visibleIndices.length} 条，筛选：${_previewFilterLabel(_previewFilter)}）',
+      final result = await _reviewChecklistExporter.export(
+        ImportReviewChecklistExportRequest(
+          csv: csv,
+          previewFilterName: _previewFilter.name,
+          previewFilterLabel: _previewFilterLabel(_previewFilter),
+          visibleCount: visibleIndices.length,
         ),
       );
+      _showMessage('已导出复核清单：${result.fileName}');
     } catch (e) {
-      _showMessage('导出失败：$e');
+      _showMessage('导出复核清单失败：$e');
     }
   }
 
@@ -1111,6 +1169,38 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       '$_ruleTemplateKeyPrefix${sourceType.name}',
       jsonEncode(template.toJson()),
     );
+  }
+
+  Future<_FailureScopePrefs> _loadFailureScopePrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final windowRaw = (prefs.getString(_failureWindowPrefKey) ?? '').trim();
+    final sourceRaw = (prefs.getString(_failureSourcePrefKey) ?? '').trim();
+    var window = _FailureWindow.d30;
+    for (final value in _FailureWindow.values) {
+      if (value.name == windowRaw) {
+        window = value;
+        break;
+      }
+    }
+    return _FailureScopePrefs(
+      window: window,
+      sourceType: _parseImportSourceType(sourceRaw),
+    );
+  }
+
+  Future<void> _saveFailureScopePrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_failureWindowPrefKey, _failureWindow.name);
+    final sourceType = _failureSourceTypeFilter;
+    if (sourceType == null) {
+      await prefs.remove(_failureSourcePrefKey);
+    } else {
+      await prefs.setString(_failureSourcePrefKey, sourceType.name);
+    }
+  }
+
+  void _persistFailureScopePrefs() {
+    _saveFailureScopePrefs();
   }
 
   Future<void> _refreshDuplicateInsights() async {
@@ -1497,6 +1587,43 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       case _PreviewFilter.invalid:
         return '无效';
     }
+  }
+
+  String _buildReviewChecklistCsv({
+    required _PreparedImport prepared,
+    required List<int> visibleIndices,
+  }) {
+    final riskByIndex = prepared.duplicateReview.byRecordIndex;
+    final buffer = StringBuffer();
+    buffer.writeln(
+      'lineNumber,selected,isValid,amount,timestamp,type,source,confidence,duplicateRisk,warnings,rawText',
+    );
+    for (final index in visibleIndices) {
+      final record = prepared.records[index];
+      final selected = index < _selected.length && _selected[index];
+      final riskLabel = _duplicateRiskLabel(riskByIndex[index]);
+      buffer.writeln(
+        [
+          record.lineNumber,
+          selected ? 'yes' : 'no',
+          record.isValid ? 'yes' : 'no',
+          record.amount.toStringAsFixed(2),
+          _csvSafe(_formatDateTime(record.timestamp)),
+          _csvSafe(_typeLabel(record.type)),
+          _csvSafe(record.source),
+          (record.confidence * 100).toStringAsFixed(1),
+          _csvSafe(riskLabel),
+          _csvSafe(record.warnings.join(' | ')),
+          _csvSafe(record.rawText ?? ''),
+        ].join(','),
+      );
+    }
+    return buffer.toString();
+  }
+
+  String _duplicateRiskLabel(ImportDuplicateRiskItem? riskItem) {
+    if (riskItem == null) return '';
+    return '${riskItem.inBatchDuplicate ? 'batch' : ''}${riskItem.inBatchDuplicate && riskItem.existingDuplicate ? '+' : ''}${riskItem.existingDuplicate ? 'existing' : ''}';
   }
 
   String _csvSafe(String value) {
@@ -2247,6 +2374,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   setState(() {
                     _failureWindow = _FailureWindow.d7;
                   });
+                  _persistFailureScopePrefs();
                 },
               ),
               ChoiceChip(
@@ -2256,6 +2384,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   setState(() {
                     _failureWindow = _FailureWindow.d30;
                   });
+                  _persistFailureScopePrefs();
                 },
               ),
               ChoiceChip(
@@ -2265,6 +2394,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   setState(() {
                     _failureWindow = _FailureWindow.all;
                   });
+                  _persistFailureScopePrefs();
                 },
               ),
             ],
@@ -2281,6 +2411,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   setState(() {
                     _failureSourceTypeFilter = null;
                   });
+                  _persistFailureScopePrefs();
                 },
               ),
               ...ImportSourceType.values.map(
@@ -2291,6 +2422,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                     setState(() {
                       _failureSourceTypeFilter = source;
                     });
+                    _persistFailureScopePrefs();
                   },
                 ),
               ),
@@ -2312,6 +2444,21 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
               onPressed: _isBusy ? null : _retryAllRetryableInWindow,
               icon: const Icon(Icons.play_circle_outline, size: 18),
               label: const Text('本窗口重试可重试'),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _isBusy
+                  ? null
+                  : () => _exportFailureAggregateReport(
+                      aggregates: aggregates,
+                      failedCountInWindow: failedCountInWindow,
+                      retryabilitySnapshot: retryabilitySnapshot,
+                      reasonRetryabilitySnapshots: reasonRetryabilitySnapshots,
+                    ),
+              icon: const Icon(Icons.download_outlined, size: 18),
+              label: const Text('导出失败报表'),
             ),
           ),
           if (windowSuggestion.hasAction)
@@ -2576,6 +2723,40 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
         );
       },
     );
+  }
+
+  Future<void> _exportFailureAggregateReport({
+    required List<ImportFailureReasonAggregate> aggregates,
+    required int failedCountInWindow,
+    required _FailureRetryabilitySnapshot retryabilitySnapshot,
+    required Map<String, _FailureRetryabilitySnapshot>
+    reasonRetryabilitySnapshots,
+  }) async {
+    try {
+      final retryableByReason = <String, int>{};
+      final blockedByReason = <String, int>{};
+      for (final entry in reasonRetryabilitySnapshots.entries) {
+        retryableByReason[entry.key] = entry.value.retryableCount;
+        blockedByReason[entry.key] = entry.value.blockedCount;
+      }
+      final result = await _failureReportExporter.export(
+        ImportFailureReportExportRequest(
+          aggregates: aggregates,
+          retryableByReason: retryableByReason,
+          blockedByReason: blockedByReason,
+          windowName: _failureWindow.name,
+          windowLabel: _failureWindowLabel(_failureWindow),
+          sourceName: _failureSourceTypeFilter?.name ?? 'all',
+          sourceScopeLabel: _failureSourceScopeLabel(_failureSourceTypeFilter),
+          failedCount: failedCountInWindow,
+          retryableCount: retryabilitySnapshot.retryableCount,
+          blockedCount: retryabilitySnapshot.blockedCount,
+        ),
+      );
+      _showMessage('已导出失败报表：${result.fileName}');
+    } catch (e) {
+      _showMessage('导出失败报表失败：$e');
+    }
   }
 
   Future<int?> _showRetryCountDialog({
