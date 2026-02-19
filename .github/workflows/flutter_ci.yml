@@ -81,6 +81,7 @@ jobs:
           disable-animations: true
           script: >-
             flutter test integration_test/calendar_date_picker_flow_test.dart
+            integration_test/transaction_search_flow_test.dart
             -d emulator-5554
             --flavor dev
             --dart-define=JIVE_E2E=true
