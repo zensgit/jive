@@ -57,9 +57,17 @@ flutter test integration_test/calendar_date_picker_flow_test.dart -d EP0110MZ0BC
 
 ```bash
 flutter test integration_test -d EP0110MZ0BC110087W
+bash scripts/run_integration_tests.sh EP0110MZ0BC110087W
 ```
 
 结果：通过（2/2 用例通过，All tests passed）。
+
+4. CI 对齐
+
+- 新增脚本：`scripts/run_integration_tests.sh`
+  - 统一 `--flavor dev` 与 `--dart-define=JIVE_E2E=true` 参数。
+  - 逐条执行 integration 用例，定位失败更直观。
+- `.github/workflows/flutter_ci.yml` 的 Android integration job 已改为调用该脚本，避免命令分叉。
 
 ## 结论
 

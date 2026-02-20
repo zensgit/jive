@@ -79,9 +79,6 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          script: >-
-            flutter test integration_test/calendar_date_picker_flow_test.dart
-            integration_test/transaction_search_flow_test.dart
-            -d emulator-5554
-            --flavor dev
-            --dart-define=JIVE_E2E=true
+          script: |
+            flutter devices
+            bash scripts/run_integration_tests.sh emulator-5554
