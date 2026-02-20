@@ -423,7 +423,8 @@ class BudgetService {
     for (final entry in previousByCurrency.entries) {
       final currency = entry.key;
       final prevBudgets = entry.value;
-      final currentBudgets = currentByCurrency[currency] ?? const <JiveBudget>[];
+      final currentBudgets =
+          currentByCurrency[currency] ?? const <JiveBudget>[];
 
       final currentTotal = _findTotalBudget(currentBudgets);
       final prevTotal = _findTotalBudget(prevBudgets);
@@ -612,14 +613,12 @@ class BudgetService {
   Future<List<JiveTransaction>> _getBudgetTransactionsInRange(
     JiveBudget budget,
     DateTime start,
-    DateTime end,
-    {
-      required Set<String>? excludedKeys,
-      required Set<String>? budgetedParentKeys,
-      required Set<String>? budgetedChildKeys,
-      required bool onlyBudgetedCategories,
-    }
-  ) async {
+    DateTime end, {
+    required Set<String>? excludedKeys,
+    required Set<String>? budgetedParentKeys,
+    required Set<String>? budgetedChildKeys,
+    required bool onlyBudgetedCategories,
+  }) async {
     // 获取周期内的交易
     var query = _isar.jiveTransactions
         .filter()
@@ -781,6 +780,79 @@ class BudgetService {
     return result;
   }
 
+  /// 基于当前使用进度，计算预算节奏分析（预计月末、进度偏差、建议日均）。
+  BudgetPacingInsight buildBudgetPacingInsight(
+    BudgetSummary summary, {
+    DateTime? referenceDate,
+  }) {
+    final budget = summary.budget;
+    final startDay = DateTime(
+      budget.startDate.year,
+      budget.startDate.month,
+      budget.startDate.day,
+    );
+    final endDay = DateTime(
+      budget.endDate.year,
+      budget.endDate.month,
+      budget.endDate.day,
+    );
+    final totalDays = _daysInclusive(startDay, endDay);
+
+    final ref = referenceDate ?? DateTime.now();
+    final refDay = DateTime(ref.year, ref.month, ref.day);
+
+    late final int elapsedDays;
+    late final int remainingDays;
+    if (refDay.isBefore(startDay)) {
+      elapsedDays = 0;
+      remainingDays = totalDays;
+    } else if (refDay.isAfter(endDay)) {
+      elapsedDays = totalDays;
+      remainingDays = 0;
+    } else {
+      elapsedDays = refDay.difference(startDay).inDays + 1;
+      remainingDays = endDay.difference(refDay).inDays;
+    }
+
+    final effectiveAmount = summary.effectiveAmount;
+    final usedAmount = summary.usedAmount;
+    final expectedUsedByNow = totalDays > 0
+        ? effectiveAmount * (elapsedDays / totalDays)
+        : 0.0;
+    final paceDelta = usedAmount - expectedUsedByNow;
+
+    final projectedUsedAmount = elapsedDays > 0
+        ? (usedAmount / elapsedDays) * totalDays
+        : 0.0;
+    final projectedUsedPercent = effectiveAmount > 0
+        ? (projectedUsedAmount / effectiveAmount * 100)
+        : 0.0;
+    final projectedRemainingAmount = effectiveAmount - projectedUsedAmount;
+    final suggestedDailyLimit = remainingDays > 0
+        ? summary.remainingAmount / remainingDays
+        : 0.0;
+
+    final projectedStatus = _statusForProjectedUsage(
+      budget,
+      effectiveAmount: effectiveAmount,
+      projectedUsedAmount: projectedUsedAmount,
+      projectedUsedPercent: projectedUsedPercent,
+    );
+
+    return BudgetPacingInsight(
+      totalDays: totalDays,
+      elapsedDays: elapsedDays,
+      remainingDays: remainingDays,
+      expectedUsedByNow: _finiteValue(expectedUsedByNow),
+      paceDelta: _finiteValue(paceDelta),
+      projectedUsedAmount: _finiteValue(projectedUsedAmount),
+      projectedRemainingAmount: _finiteValue(projectedRemainingAmount),
+      projectedUsedPercent: _finiteValue(projectedUsedPercent),
+      suggestedDailyLimit: _finiteValue(suggestedDailyLimit),
+      projectedStatus: projectedStatus,
+    );
+  }
+
   /// 评估“保存一笔支出”会导致哪些预算从正常变为预警/超支（用于保存前提示）
   Future<List<BudgetTransactionImpact>> evaluateBudgetImpactsForTransaction({
     required JiveTransaction newTransaction,
@@ -919,7 +991,8 @@ class BudgetService {
       if (subKey != null && excludedCategoryKeys.contains(subKey)) return 0;
 
       if (onlyBudgetedCategories) {
-        final inParent = parentKey != null &&
+        final inParent =
+            parentKey != null &&
             (budgetedParentKeys?.contains(parentKey) ?? false);
         final inChild =
             subKey != null && (budgetedChildKeys?.contains(subKey) ?? false);
@@ -986,6 +1059,16 @@ class BudgetService {
         )
         .toList();
   }
+
+  int _daysInclusive(DateTime start, DateTime end) {
+    final diff = end.difference(start).inDays;
+    return diff >= 0 ? diff + 1 : 1;
+  }
+
+  double _finiteValue(double value) {
+    if (value.isNaN || value.isInfinite) return 0.0;
+    return value;
+  }
 }
 
 class BudgetDailySpending {
@@ -993,6 +1076,32 @@ class BudgetDailySpending {
   final double amount;
 
   const BudgetDailySpending({required this.day, required this.amount});
+}
+
+class BudgetPacingInsight {
+  final int totalDays;
+  final int elapsedDays;
+  final int remainingDays;
+  final double expectedUsedByNow;
+  final double paceDelta;
+  final double projectedUsedAmount;
+  final double projectedRemainingAmount;
+  final double projectedUsedPercent;
+  final double suggestedDailyLimit;
+  final BudgetStatus projectedStatus;
+
+  const BudgetPacingInsight({
+    required this.totalDays,
+    required this.elapsedDays,
+    required this.remainingDays,
+    required this.expectedUsedByNow,
+    required this.paceDelta,
+    required this.projectedUsedAmount,
+    required this.projectedRemainingAmount,
+    required this.projectedUsedPercent,
+    required this.suggestedDailyLimit,
+    required this.projectedStatus,
+  });
 }
 
 class _OverallBudgetYimuContext {
