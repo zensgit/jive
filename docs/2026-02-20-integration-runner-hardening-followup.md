@@ -51,3 +51,21 @@ bash scripts/run_integration_tests.sh \
 ## 结论
 
 本轮 `1+2` 的“CI 跟进 + runner 能力增强”已完成，可进入新的 PR 检查闭环。
+
+## CI 失败跟进（同日追加）
+
+在 follow-up PR 的一次手动 CI（run `22226844318`）中，`android_integration_test` 失败，日志关键点：
+
+- `Run Android integration_test (emulator)` 持续轮询 `adb shell getprop sys.boot_completed`
+- 最终报错：`Timeout waiting for emulator to boot.`
+
+对应修复：
+
+1. `.github/workflows/flutter_ci.yml` 调整 emulator 配置：
+   - `api-level: 33`（由 34 调整）
+   - `profile: pixel_5`
+   - `emulator-boot-timeout: 900`
+   - `emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect`
+2. 保留统一 runner 调用与 `--retry 1`。
+
+目的：降低 emulator 启动超时概率，提升 `android_integration_test` 稳定性。
