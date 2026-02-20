@@ -84,19 +84,59 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Run Android integration_test (emulator)
+      - name: Enable KVM for emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || true
+
+      - name: Run Android integration_test (emulator, try 1 hw accel)
+        id: android_e2e_try1
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
           target: google_apis
           arch: x86_64
           profile: Nexus 6
+          cores: 4
+          ram-size: 3072M
+          heap-size: 512M
+          sdcard-path-or-size: 512M
+          disk-size: 4096M
+          emulator-boot-timeout: 420
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -no-metrics -gpu swiftshader_indirect
+          disable-linux-hw-accel: false
+          pre-emulator-launch-script: |
+            adb kill-server || true
+            adb start-server
+            adb devices
+          disable-animations: true
+          script: |
+            flutter devices
+            timeout 1800 bash scripts/run_integration_tests.sh --retry 1 --timeout 360 emulator-5554
+
+      - name: Run Android integration_test (emulator, retry software accel)
+        if: steps.android_e2e_try1.outcome == 'failure'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          cores: 2
           ram-size: 2048M
           heap-size: 256M
           sdcard-path-or-size: 512M
           disk-size: 4096M
-          emulator-boot-timeout: 420
-          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -gpu swiftshader_indirect
+          emulator-boot-timeout: 360
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -no-metrics -gpu swiftshader_indirect
+          disable-linux-hw-accel: true
+          pre-emulator-launch-script: |
+            adb kill-server || true
+            adb start-server
+            adb devices
           disable-animations: true
           script: |
             flutter devices
