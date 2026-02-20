@@ -221,6 +221,30 @@ tap_title_with_scroll_small() {
   return 1
 }
 
+tap_nth_calendar_day_cell() {
+  local xml="$1"
+  local rank="${2:-1}"
+  local line bounds x1 y1 x2 y2 cx cy
+
+  line="$(grep 'content-desc="星期[^"]*日"' "${xml}" | sed -n "${rank}p" || true)"
+  if [[ -z "${line}" ]]; then
+    line="$(grep 'content-desc="星期[^"]*"' "${xml}" | sed -n "${rank}p" || true)"
+  fi
+  if [[ -z "${line}" ]]; then
+    return 1
+  fi
+
+  bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/p')"
+  if [[ -z "${bounds}" ]]; then
+    return 1
+  fi
+  read -r x1 y1 x2 y2 <<<"${bounds}"
+  cx="$(((x1 + x2) / 2))"
+  cy="$(((y1 + y2) / 2))"
+  tap_xy "${cx}" "${cy}"
+  return 0
+}
+
 tap_top_right_clickable() {
   local xml="$1"
   local best=""
@@ -528,15 +552,30 @@ cap "01_all_tx_date_picker"
 dump_ui "01_all_tx_date_picker"
 assert_text_exists "选择日历范围" "01_all_tx_date_picker"
 
-if tap_text_once "10" "${OUT_DIR}/01_all_tx_date_picker.nodes.xml"; then
-  sleep 1
-  dump_ui "01_all_tx_date_picker_after_start"
-  tap_text_once "13" "${OUT_DIR}/01_all_tx_date_picker_after_start.nodes.xml" || true
+if ! tap_nth_calendar_day_cell "${OUT_DIR}/01_all_tx_date_picker.nodes.xml" 2; then
+  tap_text_once "星期二, 2026年2月10日" "${OUT_DIR}/01_all_tx_date_picker.nodes.xml" || true
 fi
 sleep 1
+dump_ui "01_all_tx_date_picker_after_start"
+if ! tap_nth_calendar_day_cell "${OUT_DIR}/01_all_tx_date_picker_after_start.nodes.xml" 6; then
+  tap_text_once "星期五, 2026年2月13日" "${OUT_DIR}/01_all_tx_date_picker_after_start.nodes.xml" || true
+fi
+sleep 1
+dump_ui "01_all_tx_date_picker_after_end"
+
+if grep -q "选择日历范围" "${OUT_DIR}/01_all_tx_date_picker_after_end.nodes.xml"; then
+  adb shell input keyevent 4
+  sleep 1
+fi
+
 cap "01_all_tx_filter_after_range"
 dump_ui "01_all_tx_filter_after_range"
-if ! grep -Eq "[0-9]{4}-[0-9]{2}-[0-9]{2} - [0-9]{4}-[0-9]{2}-[0-9]{2}" "${OUT_DIR}/01_all_tx_filter_after_range.nodes.xml"; then
+
+has_range_in_picker=0
+if grep -Eq "[0-9]{4}-[0-9]{2}-[0-9]{2} - [0-9]{4}-[0-9]{2}-[0-9]{2}" "${OUT_DIR}/01_all_tx_date_picker_after_end.nodes.xml"; then
+  has_range_in_picker=1
+fi
+if ! grep -Eq "[0-9]{4}-[0-9]{2}-[0-9]{2} - [0-9]{4}-[0-9]{2}-[0-9]{2}" "${OUT_DIR}/01_all_tx_filter_after_range.nodes.xml" && (( has_range_in_picker == 0 )); then
   fail "date range was not applied in transaction filter sheet"
 fi
 

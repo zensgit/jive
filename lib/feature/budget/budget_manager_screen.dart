@@ -52,6 +52,8 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
   JiveBudget? _totalBudget; // persisted total budget for this month/currency
   BudgetSummary? _totalSummary;
   BudgetPacingInsight? _totalPacingInsight;
+  List<BudgetCategoryContribution> _totalTopCategories = const [];
+  List<BudgetSpendingAnomalyDay> _totalAnomalyDays = const [];
   List<BudgetDailySpending> _totalDaily = const [];
 
   List<BudgetSummary> _categorySummaries = const [];
@@ -103,6 +105,8 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
         _totalBudget = result.totalBudget;
         _totalSummary = result.totalSummary;
         _totalPacingInsight = result.totalPacingInsight;
+        _totalTopCategories = result.totalTopCategories;
+        _totalAnomalyDays = result.totalAnomalyDays;
         _totalDaily = result.totalDaily;
         _categorySummaries = result.categorySummaries;
         _categoryByKey = result.categoryByKey;
@@ -168,6 +172,7 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
 
     final totalSummary = await budgetService.calculateBudgetUsage(totalBudget);
     final totalDays = _totalDaysInclusive(start, end);
+    final insightRef = _insightReferenceDate(start, end);
     final totalDaily = await budgetService.getBudgetDailySpendingTrend(
       totalBudget,
       days: totalDays,
@@ -175,8 +180,23 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
     );
     final totalPacingInsight = budgetService.buildBudgetPacingInsight(
       totalSummary,
-      referenceDate: _insightReferenceDate(start, end),
+      referenceDate: insightRef,
     );
+    final totalTopCategories = await budgetService
+        .getBudgetCategoryContributions(
+          totalBudget,
+          referenceDate: insightRef,
+          limit: 4,
+        );
+    final totalAnomalyDays = budgetService
+        .detectBudgetSpendingAnomaliesFromDaily(
+          totalDaily,
+          effectiveAmount: totalSummary.effectiveAmount,
+          periodStart: start,
+          periodEnd: end,
+          referenceDate: insightRef,
+          limit: 2,
+        );
 
     final categoryBudgets = budgets
         .where((b) => b.categoryKey != null && b.categoryKey!.isNotEmpty)
@@ -204,6 +224,8 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
           : null,
       totalSummary: totalSummary,
       totalPacingInsight: totalPacingInsight,
+      totalTopCategories: totalTopCategories,
+      totalAnomalyDays: totalAnomalyDays,
       totalDaily: totalDaily,
       categorySummaries: categorySummaries,
       categoryByKey: categoryByKey,
@@ -367,6 +389,11 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
     if (amount > 0.004) return '+$abs';
     if (amount < -0.004) return '-$abs';
     return '0.00';
+  }
+
+  String _displayCategoryName(String categoryKey) {
+    if (categoryKey == '__uncategorized__') return '未分类';
+    return _categoryByKey[categoryKey]?.name ?? categoryKey;
   }
 
   @override
@@ -677,6 +704,14 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                 symbol: symbol,
               ),
             ],
+            if (_totalTopCategories.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _buildTopCategorySection(symbol: symbol),
+            ],
+            if (_totalAnomalyDays.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              _buildAnomalyDaysSection(symbol: symbol),
+            ],
           ],
         ),
       ),
@@ -748,6 +783,93 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopCategorySection({required String symbol}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '分类支出贡献 Top${_totalTopCategories.length}',
+            style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          ..._totalTopCategories.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _displayCategoryName(item.categoryKey),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade800,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$symbol ${_formatAmount(item.amount)} (${item.ratioPercent.toStringAsFixed(1)}%)',
+                    style: GoogleFonts.rubik(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnomalyDaysSection({required String symbol}) {
+    final dateFormat = DateFormat('M/d');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '异常支出日',
+            style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          ..._totalAnomalyDays.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '${dateFormat.format(item.day)} 支出 $symbol ${_formatAmount(item.amount)}（阈值 $symbol ${_formatAmount(item.thresholdAmount)}）',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1496,6 +1618,8 @@ class _BudgetManagerLoadResult {
   final JiveBudget? totalBudget;
   final BudgetSummary totalSummary;
   final BudgetPacingInsight totalPacingInsight;
+  final List<BudgetCategoryContribution> totalTopCategories;
+  final List<BudgetSpendingAnomalyDay> totalAnomalyDays;
   final List<BudgetDailySpending> totalDaily;
   final List<BudgetSummary> categorySummaries;
   final Map<String, JiveCategory> categoryByKey;
@@ -1507,6 +1631,8 @@ class _BudgetManagerLoadResult {
     required this.totalBudget,
     required this.totalSummary,
     required this.totalPacingInsight,
+    required this.totalTopCategories,
+    required this.totalAnomalyDays,
     required this.totalDaily,
     required this.categorySummaries,
     required this.categoryByKey,
