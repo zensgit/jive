@@ -100,7 +100,7 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: Nexus 6
-          cores: 4
+          cores: 2
           ram-size: 3072M
           heap-size: 512M
           sdcard-path-or-size: 512M
@@ -115,10 +115,10 @@ jobs:
           disable-animations: true
           script: |
             flutter devices
-            timeout 1800 bash scripts/run_integration_tests.sh --retry 1 --timeout 360 emulator-5554
+            timeout 2100 bash scripts/run_integration_tests.sh --retry 0 --timeout 900 emulator-5554
 
       - name: Run Android integration_test (emulator, retry software accel)
-        if: steps.android_e2e_try1.outcome == 'failure'
+        if: failure()
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
@@ -140,4 +140,4 @@ jobs:
           disable-animations: true
           script: |
             flutter devices
-            timeout 1800 bash scripts/run_integration_tests.sh --retry 1 --timeout 360 emulator-5554
+            timeout 2100 bash scripts/run_integration_tests.sh --retry 0 --timeout 900 emulator-5554
