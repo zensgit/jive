@@ -56,6 +56,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Free disk space for emulator
+        run: |
+          echo "Disk before cleanup:"
+          df -h
+          sudo rm -rf /usr/share/dotnet || true
+          sudo rm -rf /usr/share/swift || true
+          sudo rm -rf /opt/ghc || true
+          sudo rm -rf /usr/local/.ghcup || true
+          sudo apt-get clean
+          echo "Disk after cleanup:"
+          df -h
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
