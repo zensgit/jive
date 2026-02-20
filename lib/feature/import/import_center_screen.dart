@@ -11,6 +11,7 @@ import '../../core/database/import_job_model.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/import_service.dart';
 import '../auto/auto_drafts_screen.dart';
+import 'import_batch_retry_runner.dart';
 import 'import_failure_report_exporter.dart';
 import 'import_history_analytics.dart';
 import 'import_job_detail_screen.dart';
@@ -248,6 +249,8 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   bool _isParsing = false;
   bool _isFailureReportExporting = false;
   bool _isReviewChecklistExporting = false;
+  bool _isBatchRetryRunning = false;
+  bool _batchRetryCancelRequested = false;
   bool _hasChanges = false;
 
   ImportSourceType _sourceType = ImportSourceType.auto;
@@ -262,10 +265,12 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   String _jobSearchQuery = '';
   List<JiveImportJob> _jobs = const [];
   final Map<ImportSourceType, _ImportRuleTemplate> _ruleTemplates = {};
+  ImportBatchRetryProgress? _batchRetryProgress;
 
   bool get _isBusy => _isImporting || _isParsing;
   bool get _isExporting =>
       _isFailureReportExporting || _isReviewChecklistExporting;
+  bool get _canRunBatchRetry => _importService != null;
 
   @override
   void initState() {
@@ -2453,6 +2458,47 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
             '可重试 ${retryabilitySnapshot.retryableCount} 条，不可重试 ${retryabilitySnapshot.blockedCount} 条（占比 $blockedPercent%）',
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          if (_isBatchRetryRunning && _batchRetryProgress != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              key: const Key('import_batch_retry_progress'),
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.6),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '批量重试进行中：${_batchRetryProgress!.processed}/${_batchRetryProgress!.total}（成功${_batchRetryProgress!.successCount} 失败${_batchRetryProgress!.failedCount} 新增${_batchRetryProgress!.insertedCount}）',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    value: _batchRetryProgress!.ratio.clamp(0, 1),
+                    minHeight: 6,
+                    backgroundColor: Colors.grey.shade200,
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      key: const Key('import_batch_retry_cancel_button'),
+                      onPressed: _batchRetryCancelRequested
+                          ? null
+                          : _requestCancelBatchRetry,
+                      child: Text(
+                        _batchRetryCancelRequested ? '停止中...' : '停止重试',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
@@ -2589,9 +2635,15 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     });
   }
 
+  void _requestCancelBatchRetry() {
+    if (!_isBatchRetryRunning || _batchRetryCancelRequested) return;
+    setState(() {
+      _batchRetryCancelRequested = true;
+    });
+  }
+
   Future<void> _promptBatchRetryByReason(String reason) async {
-    final service = _importService;
-    if (service == null) {
+    if (!_canRunBatchRetry) {
       _showMessage('当前模式不可执行批量重试');
       return;
     }
@@ -2626,8 +2678,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   }
 
   Future<void> _retryAllRetryableByReason(String reason) async {
-    final service = _importService;
-    if (service == null) {
+    if (!_canRunBatchRetry) {
       _showMessage('当前模式不可执行批量重试');
       return;
     }
@@ -2663,8 +2714,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   }
 
   Future<void> _retryAllRetryableInWindow() async {
-    final service = _importService;
-    if (service == null) {
+    if (!_canRunBatchRetry) {
       _showMessage('当前模式不可执行批量重试');
       return;
     }
@@ -2861,46 +2911,50 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     required int limit,
   }) async {
     final service = _importService;
-    if (service == null) return;
+    if (service == null) {
+      _showMessage('当前模式不可执行批量重试');
+      return;
+    }
     if (retryableJobs.isEmpty) {
       _showMessage('未找到可重试的失败任务');
       return;
     }
-    final target = retryableJobs
-        .take(limit.clamp(1, retryableJobs.length))
-        .toList();
+    final targetLimit = limit.clamp(1, retryableJobs.length);
+    final runner = const ImportBatchRetryRunner();
     setState(() {
       _isImporting = true;
+      _isBatchRetryRunning = true;
+      _batchRetryCancelRequested = false;
+      _batchRetryProgress = ImportBatchRetryProgress.initial(
+        total: targetLimit,
+      );
       _lastResult = null;
     });
-    var successCount = 0;
-    var failedCount = 0;
-    var insertedCount = 0;
-    final secondaryFailureReasons = <String, int>{};
     try {
-      for (final job in target) {
-        try {
+      final summary = await runner.run(
+        retryableJobs: retryableJobs,
+        limit: targetLimit,
+        retryJob: (job) async {
           final result = await service.retryJob(job.id);
-          if (result.hasError) {
-            failedCount += 1;
-            final reason = normalizeImportFailureReason(result.errorMessage);
-            secondaryFailureReasons[reason] =
-                (secondaryFailureReasons[reason] ?? 0) + 1;
+          if (mounted) {
+            setState(() {
+              _lastResult = result;
+              _hasChanges = _hasChanges || result.hasChanges;
+            });
           } else {
-            successCount += 1;
+            _hasChanges = _hasChanges || result.hasChanges;
           }
-          insertedCount += result.insertedCount;
+          return result;
+        },
+        shouldCancel: () => _batchRetryCancelRequested,
+        onProgress: (progress) {
           if (!mounted) return;
           setState(() {
-            _lastResult = result;
-            _hasChanges = _hasChanges || result.hasChanges;
+            _batchRetryProgress = progress;
           });
-        } catch (_) {
-          failedCount += 1;
-          secondaryFailureReasons['未知失败'] =
-              (secondaryFailureReasons['未知失败'] ?? 0) + 1;
-        }
-      }
+        },
+      );
+      final secondaryFailureReasons = summary.secondaryFailureReasons;
       final secondarySummary = summarizeImportReasonCounts(
         secondaryFailureReasons,
         maxItems: 3,
@@ -2911,12 +2965,13 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       final secondaryActionSuggestion = deriveImportFailureActionSuggestion(
         secondaryFailureReasons,
       );
+      final titlePrefix = summary.cancelled ? '批量重试已取消' : '批量重试完成';
       _showMessage(
         secondarySummary.isEmpty
-            ? '批量重试完成：目标${target.length} 成功$successCount 失败$failedCount 新增$insertedCount'
+            ? '$titlePrefix：目标${summary.total} 已处理${summary.processed} 成功${summary.successCount} 失败${summary.failedCount} 新增${summary.insertedCount}'
             : secondaryAction.isEmpty
-            ? '批量重试完成：目标${target.length} 成功$successCount 失败$failedCount 新增$insertedCount；二次失败：$secondarySummary'
-            : '批量重试完成：目标${target.length} 成功$successCount 失败$failedCount 新增$insertedCount；二次失败：$secondarySummary；建议：$secondaryAction',
+            ? '$titlePrefix：目标${summary.total} 已处理${summary.processed} 成功${summary.successCount} 失败${summary.failedCount} 新增${summary.insertedCount}；二次失败：$secondarySummary'
+            : '$titlePrefix：目标${summary.total} 已处理${summary.processed} 成功${summary.successCount} 失败${summary.failedCount} 新增${summary.insertedCount}；二次失败：$secondarySummary；建议：$secondaryAction',
         actionLabel: secondaryActionSuggestion.hasAction
             ? secondaryActionSuggestion.actionLabel
             : null,
@@ -2931,6 +2986,9 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       if (mounted) {
         setState(() {
           _isImporting = false;
+          _isBatchRetryRunning = false;
+          _batchRetryCancelRequested = false;
+          _batchRetryProgress = null;
         });
       }
     }
