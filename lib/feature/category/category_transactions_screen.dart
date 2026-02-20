@@ -24,6 +24,9 @@ class CategoryTransactionsScreen extends StatefulWidget {
   final String? filterCategoryKey;
   final String? filterSubCategoryKey;
   final bool includeSubCategories;
+  final TransactionListFilterState? initialFilterState;
+  final String? initialSearchQuery;
+  final bool persistFilterState;
 
   const CategoryTransactionsScreen({
     super.key,
@@ -31,6 +34,9 @@ class CategoryTransactionsScreen extends StatefulWidget {
     this.filterCategoryKey,
     this.filterSubCategoryKey,
     this.includeSubCategories = true,
+    this.initialFilterState,
+    this.initialSearchQuery,
+    this.persistFilterState = true,
   });
 
   @override
@@ -82,6 +88,12 @@ class _CategoryTransactionsScreenState
         (widget.filterSubCategoryKey?.trim().isNotEmpty ?? false);
     _groupByDate = !hasCategoryFilter;
     _includeSubCategories = widget.includeSubCategories;
+    _filterState =
+        widget.initialFilterState ?? const TransactionListFilterState();
+    _searchQuery = widget.initialSearchQuery?.trim() ?? '';
+    if (_searchQuery.isNotEmpty) {
+      _searchController.text = _searchQuery;
+    }
     _listScrollController.addListener(_onScrollLoadMore);
     _loadGroupingPreference();
     _load();
@@ -102,7 +114,9 @@ class _CategoryTransactionsScreenState
     try {
       _isar = await DatabaseService.getInstance();
       _transactionQueryService = TransactionQueryService(_isar);
-      await _loadPersistedFilterState();
+      if (!_hasInitialOverrides) {
+        await _loadPersistedFilterState();
+      }
 
       final showBadge = await UiPrefService.getShowSmartTagBadge();
       final categories = await _isar
@@ -136,7 +150,7 @@ class _CategoryTransactionsScreenState
   }
 
   Future<void> _loadPersistedFilterState() async {
-    if (!_isAllTransactionsMode) return;
+    if (!_shouldPersistFilterState) return;
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_searchFilterStatePrefKey);
     if (raw == null || raw.trim().isEmpty) return;
@@ -155,7 +169,7 @@ class _CategoryTransactionsScreenState
   }
 
   Future<void> _persistFilterState() async {
-    if (!_isAllTransactionsMode) return;
+    if (!_shouldPersistFilterState) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _searchFilterStatePrefKey,
@@ -278,6 +292,15 @@ class _CategoryTransactionsScreenState
     final hasCategory = widget.filterCategoryKey?.trim().isNotEmpty ?? false;
     final hasSub = widget.filterSubCategoryKey?.trim().isNotEmpty ?? false;
     return !hasCategory && !hasSub;
+  }
+
+  bool get _shouldPersistFilterState {
+    return widget.persistFilterState && _isAllTransactionsMode;
+  }
+
+  bool get _hasInitialOverrides {
+    return (widget.initialFilterState?.hasAnyFilter ?? false) ||
+        ((widget.initialSearchQuery?.trim().isNotEmpty) ?? false);
   }
 
   bool get _usePaginatedQuery {
