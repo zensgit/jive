@@ -91,9 +91,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -l /dev/kvm || true
 
-      - name: Run Android integration_test (emulator, try 1 hw accel)
-        id: android_e2e_try1
-        continue-on-error: true
+      - name: Run Android integration_test (emulator)
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
@@ -108,31 +106,6 @@ jobs:
           emulator-boot-timeout: 420
           emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -no-metrics -gpu swiftshader_indirect
           disable-linux-hw-accel: false
-          pre-emulator-launch-script: |
-            adb kill-server || true
-            adb start-server
-            adb devices
-          disable-animations: true
-          script: |
-            flutter devices
-            timeout 2100 bash scripts/run_integration_tests.sh --retry 0 --timeout 1000 --test-case-timeout 20m --ignore-test-timeouts emulator-5554
-
-      - name: Run Android integration_test (emulator, retry software accel)
-        if: failure()
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 33
-          target: google_apis
-          arch: x86_64
-          profile: Nexus 6
-          cores: 2
-          ram-size: 2048M
-          heap-size: 256M
-          sdcard-path-or-size: 512M
-          disk-size: 4096M
-          emulator-boot-timeout: 360
-          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -no-metrics -gpu swiftshader_indirect
-          disable-linux-hw-accel: true
           pre-emulator-launch-script: |
             adb kill-server || true
             adb start-server
