@@ -11,6 +11,7 @@ import '../../core/database/transaction_model.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/project_service.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/model/transaction_list_filter_state.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../transactions/transaction_detail_screen.dart';
@@ -80,8 +81,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final spent = await service.calculateProjectSpending(widget.projectId);
     final transactions = await service.getProjectTransactions(widget.projectId);
     final stats = await service.getProjectCategoryStats(widget.projectId);
-    final daily = await service.getProjectDailySpending(widget.projectId, days: 14);
-    final cumulative = await service.getProjectCumulativeSpending(widget.projectId, days: 14);
+    final daily = await service.getProjectDailySpending(
+      widget.projectId,
+      days: 14,
+    );
+    final cumulative = await service.getProjectCumulativeSpending(
+      widget.projectId,
+      days: 14,
+    );
     final categories = await isar.collection<JiveCategory>().where().findAll();
     final accounts = await isar.collection<JiveAccount>().where().findAll();
 
@@ -159,9 +166,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
     if (filtered.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('该分类暂无交易')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('该分类暂无交易')));
       return;
     }
 
@@ -210,26 +217,50 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           actions: [
             if (_project != null) ...[
               if (_project!.status == 'active')
-                IconButton(icon: const Icon(Icons.edit), onPressed: _editProject),
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: _editProject,
+                ),
               PopupMenuButton<String>(
                 onSelected: _handleAction,
                 itemBuilder: (context) {
                   final items = <PopupMenuEntry<String>>[];
 
                   if (_project!.status == 'active') {
-                    items.add(const PopupMenuItem(value: 'complete', child: Text('标记完成')));
-                    items.add(const PopupMenuItem(value: 'archive', child: Text('归档')));
+                    items.add(
+                      const PopupMenuItem(
+                        value: 'complete',
+                        child: Text('标记完成'),
+                      ),
+                    );
+                    items.add(
+                      const PopupMenuItem(value: 'archive', child: Text('归档')),
+                    );
                   } else if (_project!.status == 'completed') {
-                    items.add(const PopupMenuItem(value: 'reopen', child: Text('恢复进行中')));
-                    items.add(const PopupMenuItem(value: 'archive', child: Text('归档')));
+                    items.add(
+                      const PopupMenuItem(
+                        value: 'reopen',
+                        child: Text('恢复进行中'),
+                      ),
+                    );
+                    items.add(
+                      const PopupMenuItem(value: 'archive', child: Text('归档')),
+                    );
                   } else if (_project!.status == 'archived') {
-                    items.add(const PopupMenuItem(value: 'reopen', child: Text('恢复进行中')));
+                    items.add(
+                      const PopupMenuItem(
+                        value: 'reopen',
+                        child: Text('恢复进行中'),
+                      ),
+                    );
                   }
 
-                  items.add(const PopupMenuItem(
-                    value: 'delete',
-                    child: Text('删除', style: TextStyle(color: Colors.red)),
-                  ));
+                  items.add(
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('删除', style: TextStyle(color: Colors.red)),
+                    ),
+                  );
                   return items;
                 },
               ),
@@ -240,15 +271,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         body: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _project == null
-                ? const Center(child: Text('项目不存在'))
-                : _buildContent(),
+            ? const Center(child: Text('项目不存在'))
+            : _buildContent(),
       ),
     );
   }
 
   Widget _buildContent() {
     final project = _project!;
-    final progress = project.budget > 0 ? (_totalSpent / project.budget).clamp(0.0, 1.0) : 0.0;
+    final progress = project.budget > 0
+        ? (_totalSpent / project.budget).clamp(0.0, 1.0)
+        : 0.0;
     final remaining = project.budget > 0 ? project.budget - _totalSpent : 0.0;
     final color = project.colorHex != null
         ? Color(int.parse(project.colorHex!.replaceFirst('#', '0xFF')))
@@ -257,21 +290,21 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     // 预警级别
     final warningLevel = project.budget > 0
         ? (progress >= 1.0
-            ? 'exceeded'
-            : progress >= 0.9
-                ? 'critical'
-                : progress >= 0.8
-                    ? 'warning'
-                    : null)
+              ? 'exceeded'
+              : progress >= 0.9
+              ? 'critical'
+              : progress >= 0.8
+              ? 'warning'
+              : null)
         : null;
 
     final progressColor = warningLevel == 'exceeded'
         ? Colors.red.shade700
         : warningLevel == 'critical'
-            ? Colors.red
-            : warningLevel == 'warning'
-                ? Colors.orange
-                : color;
+        ? Colors.red
+        : warningLevel == 'warning'
+        ? Colors.orange
+        : color;
 
     return ListView(
       controller: _contentScrollController,
@@ -305,9 +338,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [color.withValues(alpha: 0.15), color.withValues(alpha: 0.05)],
+                    colors: [
+                      color.withValues(alpha: 0.15),
+                      color.withValues(alpha: 0.05),
+                    ],
                   ),
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -327,7 +365,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               ),
                             ],
                           ),
-                          child: iconWidgetForName(project.iconName, size: 28, color: color),
+                          child: iconWidgetForName(
+                            project.iconName,
+                            size: 28,
+                            color: color,
+                          ),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -336,15 +378,22 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             children: [
                               Text(
                                 project.name,
-                                style: GoogleFonts.lato(fontSize: 20, fontWeight: FontWeight.bold),
+                                style: GoogleFonts.lato(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-                              if (project.description != null && project.description!.isNotEmpty) ...[
+                              if (project.description != null &&
+                                  project.description!.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(
                                   project.description!,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.lato(fontSize: 13, color: Colors.grey.shade700),
+                                  style: GoogleFonts.lato(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade700,
+                                  ),
                                 ),
                               ],
                             ],
@@ -360,31 +409,53 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('已支出', style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600)),
+                              Text(
+                                '已支出',
+                                style: GoogleFonts.lato(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 '¥${_formatAmount(_totalSpent)}',
                                 style: GoogleFonts.rubik(
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
-                                  color: warningLevel == 'exceeded' ? Colors.red : Colors.black87,
+                                  color: warningLevel == 'exceeded'
+                                      ? Colors.red
+                                      : Colors.black87,
                                 ),
                               ),
                             ],
                           ),
                         ),
                         if (project.budget > 0) ...[
-                          Container(width: 1, height: 40, color: Colors.grey.shade300),
+                          Container(
+                            width: 1,
+                            height: 40,
+                            color: Colors.grey.shade300,
+                          ),
                           const SizedBox(width: 20),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('预算', style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600)),
+                                Text(
+                                  '预算',
+                                  style: GoogleFonts.lato(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
                                 Text(
                                   '¥${_formatAmount(project.budget)}',
-                                  style: GoogleFonts.rubik(fontSize: 28, fontWeight: FontWeight.w500, color: Colors.grey.shade700),
+                                  style: GoogleFonts.rubik(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey.shade700,
+                                  ),
                                 ),
                               ],
                             ),
@@ -429,16 +500,27 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         children: [
                           Text(
                             '已使用 ${(progress * 100).toStringAsFixed(0)}%',
-                            style: GoogleFonts.lato(fontSize: 13, color: progressColor, fontWeight: FontWeight.w600),
+                            style: GoogleFonts.lato(
+                              fontSize: 13,
+                              color: progressColor,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
-                              color: remaining < 0 ? Colors.red.shade50 : color.withValues(alpha: 0.1),
+                              color: remaining < 0
+                                  ? Colors.red.shade50
+                                  : color.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              remaining < 0 ? '超支 ¥${_formatAmount(-remaining)}' : '剩余 ¥${_formatAmount(remaining)}',
+                              remaining < 0
+                                  ? '超支 ¥${_formatAmount(-remaining)}'
+                                  : '剩余 ¥${_formatAmount(remaining)}',
                               style: GoogleFonts.lato(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -453,12 +535,25 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 )
               else
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 16, color: Colors.grey.shade500),
+                      Icon(
+                        Icons.info_outline,
+                        size: 16,
+                        color: Colors.grey.shade500,
+                      ),
                       const SizedBox(width: 8),
-                      Text('未设置预算', style: GoogleFonts.lato(fontSize: 13, color: Colors.grey.shade600)),
+                      Text(
+                        '未设置预算',
+                        style: GoogleFonts.lato(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -466,11 +561,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           ),
         ),
 
-      // 项目信息卡片
-      const SizedBox(height: 16),
-      _buildInfoCard(project, color),
-      const SizedBox(height: 16),
-      _buildTimelineCard(project, color),
+        // 项目信息卡片
+        const SizedBox(height: 16),
+        _buildInfoCard(project, color),
+        const SizedBox(height: 16),
+        _buildTimelineCard(project, color),
 
         // 分类统计
         if (_categoryStats.isNotEmpty) ...[
@@ -484,10 +579,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Icon(Icons.pie_chart_outline, size: 18, color: Colors.grey.shade700),
+                  Icon(
+                    Icons.pie_chart_outline,
+                    size: 18,
+                    color: Colors.grey.shade700,
+                  ),
                   const SizedBox(width: 8),
-                  Text('按分类',
-                      style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(
+                    '按分类',
+                    style: GoogleFonts.lato(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const Spacer(),
                   Icon(
                     _categoryExpanded ? Icons.expand_less : Icons.expand_more,
@@ -511,18 +615,36 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         const SizedBox(height: 24),
         Row(
           children: [
-            Icon(Icons.receipt_long_outlined, size: 18, color: Colors.grey.shade700),
+            Icon(
+              Icons.receipt_long_outlined,
+              size: 18,
+              color: Colors.grey.shade700,
+            ),
             const SizedBox(width: 8),
-            Text('交易记录', style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              '交易记录',
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(width: 6),
-            Text('· ${_transactions.length} 笔',
-                style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade500)),
+            Text(
+              '· ${_transactions.length} 笔',
+              style: GoogleFonts.lato(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+              ),
+            ),
             const Spacer(),
             if (_transactions.isNotEmpty)
               TextButton(
                 onPressed: _openAllTransactionsPage,
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -558,7 +680,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             child: Padding(
               padding: const EdgeInsets.all(32),
               child: Center(
-                child: Text('暂无交易记录', style: GoogleFonts.lato(color: Colors.grey)),
+                child: Text(
+                  '暂无交易记录',
+                  style: GoogleFonts.lato(color: Colors.grey),
+                ),
               ),
             ),
           )
@@ -629,7 +754,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     final fromAccount = _resolveAccountName(tx.accountId);
     final toAccount = _resolveAccountName(tx.toAccountId);
     final accountLabel = fromAccount.isNotEmpty ? fromAccount : toAccount;
-    final subtitleText = subtitle.isEmpty ? timeLabel : '$subtitle • $timeLabel';
+    final subtitleText = subtitle.isEmpty
+        ? timeLabel
+        : '$subtitle • $timeLabel';
 
     final padding = compact
         ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
@@ -656,7 +783,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: selected
-              ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35))
+              ? Border.all(
+                  color: JiveTheme.primaryGreen.withValues(alpha: 0.35),
+                )
               : null,
           boxShadow: [
             BoxShadow(
@@ -668,10 +797,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         ),
         child: Row(
           children: [
-            if (leading != null) ...[
-              leading,
-              const SizedBox(width: 4),
-            ],
+            if (leading != null) ...[leading, const SizedBox(width: 4)],
             Container(
               padding: EdgeInsets.all(iconPadding),
               decoration: BoxDecoration(
@@ -710,7 +836,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   onTap: detailTap,
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 2,
+                      vertical: 2,
+                    ),
                     child: Text(
                       '$amountPrefix¥${tx.amount.toStringAsFixed(2)}',
                       style: GoogleFonts.rubik(
@@ -727,7 +856,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     onTap: detailTap,
                     borderRadius: BorderRadius.circular(6),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
+                      ),
                       child: Text(
                         accountLabel,
                         style: GoogleFonts.lato(
@@ -771,16 +903,27 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _buildInfoRow(Icons.calendar_today_outlined, '开始日期',
-                project.startDate != null ? dateFormat.format(project.startDate!) : '未设置'),
+            _buildInfoRow(
+              Icons.calendar_today_outlined,
+              '开始日期',
+              project.startDate != null
+                  ? dateFormat.format(project.startDate!)
+                  : '未设置',
+            ),
             if (project.endDate != null) ...[
               const Divider(height: 20),
-              _buildInfoRow(Icons.event_outlined, '结束日期', dateFormat.format(project.endDate!)),
+              _buildInfoRow(
+                Icons.event_outlined,
+                '结束日期',
+                dateFormat.format(project.endDate!),
+              ),
             ],
             if (project.status != 'active') ...[
               const Divider(height: 20),
               _buildInfoRow(
-                project.status == 'completed' ? Icons.check_circle_outline : Icons.archive_outlined,
+                project.status == 'completed'
+                    ? Icons.check_circle_outline
+                    : Icons.archive_outlined,
                 '状态',
                 project.status == 'completed' ? '已完成' : '已归档',
               ),
@@ -816,12 +959,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             const SizedBox(width: 12),
             Text(
               '项目进度时间线',
-              style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.w600),
+              style: GoogleFonts.lato(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const Spacer(),
             Text(
               '未设置',
-              style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade500),
+              style: GoogleFonts.lato(
+                fontSize: 12,
+                color: Colors.grey.shade500,
+              ),
             ),
           ],
         ),
@@ -872,12 +1021,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               const SizedBox(width: 8),
               Text(
                 '项目进度时间线',
-                style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.w600),
+                style: GoogleFonts.lato(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const Spacer(),
               Text(
                 '${(progress * 100).toStringAsFixed(0)}%',
-                style: GoogleFonts.lato(fontSize: 12, color: color, fontWeight: FontWeight.w600),
+                style: GoogleFonts.lato(
+                  fontSize: 12,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -923,8 +1079,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text('今天',
-                              style: GoogleFonts.lato(fontSize: 10, color: color)),
+                          Text(
+                            '今天',
+                            style: GoogleFonts.lato(fontSize: 10, color: color),
+                          ),
                         ],
                       ),
                     ),
@@ -938,11 +1096,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             children: [
               Text(
                 start != null ? dateFormat.format(startDate) : '未设置开始',
-                style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600),
+                style: GoogleFonts.lato(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
               ),
               Text(
                 end != null ? dateFormat.format(endDate) : '未设置结束',
-                style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600),
+                style: GoogleFonts.lato(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
               ),
             ],
           ),
@@ -1020,9 +1184,15 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       children: [
         Icon(icon, size: 18, color: Colors.grey.shade500),
         const SizedBox(width: 12),
-        Text(label, style: GoogleFonts.lato(fontSize: 14, color: Colors.grey.shade600)),
+        Text(
+          label,
+          style: GoogleFonts.lato(fontSize: 14, color: Colors.grey.shade600),
+        ),
         const Spacer(),
-        Text(value, style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.w600)),
+        Text(
+          value,
+          style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
       ],
     );
   }
@@ -1068,7 +1238,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     ];
     final topCount = sortedStats.length > 6 ? 6 : sortedStats.length;
     final topEntries = sortedStats.take(topCount).toList();
-    final othersValue = sortedStats.skip(topCount).fold<double>(0, (sum, e) => sum + e.value);
+    final othersValue = sortedStats
+        .skip(topCount)
+        .fold<double>(0, (sum, e) => sum + e.value);
     final sections = <PieChartSectionData>[
       for (var i = 0; i < topEntries.length; i++)
         PieChartSectionData(
@@ -1109,12 +1281,18 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   children: [
                     Text(
                       '分类占比',
-                      style: GoogleFonts.lato(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: GoogleFonts.lato(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const Spacer(),
                     Text(
                       '合计 ¥${total.toStringAsFixed(0)}',
-                      style: GoogleFonts.rubik(fontSize: 12, color: Colors.grey.shade600),
+                      style: GoogleFonts.rubik(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
@@ -1140,7 +1318,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               return Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: InkWell(
                       onTap: () => _openCategoryTransactions(e.key),
                       borderRadius: BorderRadius.circular(10),
@@ -1149,7 +1330,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                           // 分类名称
                           Expanded(
                             flex: 2,
-                            child: Text(e.key, style: GoogleFonts.lato(fontSize: 14)),
+                            child: Text(
+                              e.key,
+                              style: GoogleFonts.lato(fontSize: 14),
+                            ),
                           ),
                           // 进度条
                           Expanded(
@@ -1165,7 +1349,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 widthFactor: percent,
                                 child: Container(
                                   decoration: BoxDecoration(
-                                    color: color.withValues(alpha: 0.7 + 0.3 * (1 - index / sortedStats.length)),
+                                    color: color.withValues(
+                                      alpha:
+                                          0.7 +
+                                          0.3 *
+                                              (1 - index / sortedStats.length),
+                                    ),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                 ),
@@ -1183,12 +1372,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                   child: Text(
                                     '¥${e.value.toStringAsFixed(0)} (${(percent * 100).toStringAsFixed(0)}%)',
                                     textAlign: TextAlign.right,
-                                    style: GoogleFonts.rubik(fontSize: 13, fontWeight: FontWeight.w500),
+                                    style: GoogleFonts.rubik(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 const SizedBox(width: 4),
-                                Icon(Icons.chevron_right, size: 16, color: Colors.grey.shade400),
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 16,
+                                  color: Colors.grey.shade400,
+                                ),
                               ],
                             ),
                           ),
@@ -1196,7 +1392,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       ),
                     ),
                   ),
-                  if (!isLast) Divider(height: 1, indent: 16, endIndent: 16, color: Colors.grey.shade100),
+                  if (!isLast)
+                    Divider(
+                      height: 1,
+                      indent: 16,
+                      endIndent: 16,
+                      color: Colors.grey.shade100,
+                    ),
                 ],
               );
             }),
@@ -1209,7 +1411,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   void _editProject() async {
     if (_project == null || _project!.status != 'active') return;
     final result = await Navigator.push(
-        context, MaterialPageRoute(builder: (context) => ProjectFormScreen(project: _project)));
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProjectFormScreen(project: _project),
+      ),
+    );
     if (result == true) {
       _hasChanges = true;
       _reloadPreservingScroll();
@@ -1245,7 +1451,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             title: const Text('删除项目'),
             content: const Text('删除后无法恢复，关联的交易不会被删除'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('取消'),
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -1266,9 +1475,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Future<void> _showLinkTransactionsSheet() async {
     if (_project?.status != 'active') {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('仅进行中项目可关联交易')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('仅进行中项目可关联交易')));
       return;
     }
     // 获取所有未关联项目的交易
@@ -1282,14 +1491,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 
     if (unlinkedTransactions.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('没有可关联的交易')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('没有可关联的交易')));
       return;
     }
 
     // 获取分类和账户信息
-    final categories = await _isar!.collection<JiveCategory>().where().findAll();
+    final categories = await _isar!
+        .collection<JiveCategory>()
+        .where()
+        .findAll();
     final accounts = await _isar!.collection<JiveAccount>().where().findAll();
     final categoryByKey = {for (final c in categories) c.key: c};
     final accountById = {for (final a in accounts) a.id: a};
@@ -1300,6 +1512,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     int? filterAccountId;
     String? filterTag;
     DateTimeRange? filterDateRange;
+    BudgetInclusionFilter filterBudget = BudgetInclusionFilter.all;
     String sortBy = 'time_desc';
     String searchQuery = '';
     final searchController = _linkSearchController;
@@ -1326,33 +1539,64 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
           builder: (builderContext, setSheetState) {
             final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
             // 过滤交易
-            List<JiveTransaction> filteredTransactions = unlinkedTransactions.where((tx) {
+            List<JiveTransaction>
+            filteredTransactions = unlinkedTransactions.where((tx) {
               // 模糊搜索
               if (searchQuery.isNotEmpty) {
                 final query = searchQuery.toLowerCase();
-                final categoryName = (tx.categoryKey != null
-                    ? categoryByKey[tx.categoryKey]?.name ?? tx.category
-                    : tx.category) ?? '';
+                final categoryName =
+                    (tx.categoryKey != null
+                        ? categoryByKey[tx.categoryKey]?.name ?? tx.category
+                        : tx.category) ??
+                    '';
                 final accountName = tx.accountId != null
                     ? accountById[tx.accountId]?.name ?? ''
                     : '';
                 final note = tx.note ?? '';
                 final amount = tx.amount.toStringAsFixed(2);
                 final date = tx.timestamp.toString().substring(0, 10);
-                final searchText = '$categoryName $accountName $note $amount $date'.toLowerCase();
+                final searchText =
+                    '$categoryName $accountName $note $amount $date'
+                        .toLowerCase();
                 if (!searchText.contains(query)) {
                   return false;
                 }
               }
               // 分类筛选
               if (filterCategoryKey != null) {
-                if (tx.categoryKey != filterCategoryKey && tx.subCategoryKey != filterCategoryKey) {
+                if (tx.categoryKey != filterCategoryKey &&
+                    tx.subCategoryKey != filterCategoryKey) {
                   return false;
                 }
               }
               // 账户筛选
               if (filterAccountId != null && tx.accountId != filterAccountId) {
                 return false;
+              }
+              // 预算筛选
+              if (filterBudget != BudgetInclusionFilter.all) {
+                if ((tx.type ?? 'expense') != 'expense') {
+                  return false;
+                }
+                final categoryExcluded =
+                    tx.categoryKey != null &&
+                    (categoryByKey[tx.categoryKey!]?.excludeFromBudget == true);
+                final subCategoryExcluded =
+                    tx.subCategoryKey != null &&
+                    (categoryByKey[tx.subCategoryKey!]?.excludeFromBudget ==
+                        true);
+                final excluded =
+                    tx.excludeFromBudget ||
+                    categoryExcluded ||
+                    subCategoryExcluded;
+                if (filterBudget == BudgetInclusionFilter.excludedOnly &&
+                    !excluded) {
+                  return false;
+                }
+                if (filterBudget == BudgetInclusionFilter.includedOnly &&
+                    excluded) {
+                  return false;
+                }
               }
               // 标签/备注筛选
               if (filterTag != null && filterTag!.isNotEmpty) {
@@ -1363,9 +1607,21 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               }
               // 日期范围筛选
               if (filterDateRange != null) {
-                final txDate = DateTime(tx.timestamp.year, tx.timestamp.month, tx.timestamp.day);
-                final startDate = DateTime(filterDateRange!.start.year, filterDateRange!.start.month, filterDateRange!.start.day);
-                final endDate = DateTime(filterDateRange!.end.year, filterDateRange!.end.month, filterDateRange!.end.day);
+                final txDate = DateTime(
+                  tx.timestamp.year,
+                  tx.timestamp.month,
+                  tx.timestamp.day,
+                );
+                final startDate = DateTime(
+                  filterDateRange!.start.year,
+                  filterDateRange!.start.month,
+                  filterDateRange!.start.day,
+                );
+                final endDate = DateTime(
+                  filterDateRange!.end.year,
+                  filterDateRange!.end.month,
+                  filterDateRange!.end.day,
+                );
                 if (txDate.isBefore(startDate) || txDate.isAfter(endDate)) {
                   return false;
                 }
@@ -1389,10 +1645,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             });
 
             // 是否有筛选条件
-            final hasFilter = filterCategoryKey != null ||
+            final hasFilter =
+                filterCategoryKey != null ||
                 filterAccountId != null ||
                 (filterTag != null && filterTag!.isNotEmpty) ||
-                filterDateRange != null;
+                filterDateRange != null ||
+                filterBudget != BudgetInclusionFilter.all;
             final hasSearch = searchQuery.isNotEmpty || hasFilter;
 
             return DraggableScrollableSheet(
@@ -1429,15 +1687,32 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     // 筛选条件显示
                     if (hasFilter)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
                         child: Row(
                           children: [
-                            Icon(Icons.filter_alt, size: 14, color: JiveTheme.primaryGreen),
+                            Icon(
+                              Icons.filter_alt,
+                              size: 14,
+                              color: JiveTheme.primaryGreen,
+                            ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
-                                _buildFilterSummary(filterCategoryKey, filterAccountId, filterTag, filterDateRange, categoryByKey, accountById),
-                                style: GoogleFonts.lato(fontSize: 11, color: JiveTheme.primaryGreen),
+                                _buildFilterSummary(
+                                  filterCategoryKey,
+                                  filterAccountId,
+                                  filterTag,
+                                  filterDateRange,
+                                  categoryByKey,
+                                  accountById,
+                                ),
+                                style: GoogleFonts.lato(
+                                  fontSize: 11,
+                                  color: JiveTheme.primaryGreen,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1452,11 +1727,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 });
                               },
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
                                 minimumSize: Size.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              child: Text('清除', style: GoogleFonts.lato(fontSize: 11)),
+                              child: Text(
+                                '清除',
+                                style: GoogleFonts.lato(fontSize: 11),
+                              ),
                             ),
                           ],
                         ),
@@ -1469,7 +1749,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.search_off, size: 48, color: Colors.grey.shade300),
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 48,
+                                    color: Colors.grey.shade300,
+                                  ),
                                   const SizedBox(height: 8),
                                   Text(
                                     '没有匹配的交易',
@@ -1535,17 +1819,30 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                       child: TextField(
                                         controller: searchController,
                                         onChanged: (value) {
-                                          setSheetState(() => searchQuery = value.trim());
+                                          setSheetState(
+                                            () => searchQuery = value.trim(),
+                                          );
                                         },
                                         textInputAction: TextInputAction.search,
                                         decoration: InputDecoration(
                                           hintText: '查找账单',
-                                          hintStyle: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                                          prefixIcon: Icon(Icons.search, size: 20, color: Colors.grey.shade600),
+                                          hintStyle: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade500,
+                                          ),
+                                          prefixIcon: Icon(
+                                            Icons.search,
+                                            size: 20,
+                                            color: Colors.grey.shade600,
+                                          ),
                                           filled: true,
                                           isDense: true,
                                           fillColor: Colors.transparent,
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 12,
+                                              ),
                                           border: InputBorder.none,
                                           suffixIcon: hasSearch
                                               ? IconButton(
@@ -1557,142 +1854,201 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                                       filterAccountId = null;
                                                       filterTag = null;
                                                       filterDateRange = null;
+                                                      filterBudget =
+                                                          BudgetInclusionFilter
+                                                              .all;
                                                     });
                                                   },
-                                                  icon: Icon(Icons.close, size: 18, color: Colors.grey.shade600),
+                                                  icon: Icon(
+                                                    Icons.close,
+                                                    size: 18,
+                                                    color: Colors.grey.shade600,
+                                                  ),
                                                   splashRadius: 18,
                                                 )
                                               : null,
                                         ),
                                       ),
                                     ),
-                                  // 筛选按钮
-                                  IconButton(
-                                    onPressed: () async {
-                                      await showModalBottomSheet<void>(
-                                        context: sheetContext,
-                                        isScrollControlled: true,
-                                        backgroundColor: Colors.white,
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                                        ),
-                                        builder: (ctx) {
-                                          return TransactionFilterSheet(
-                                            categories: categories,
-                                            accounts: accounts,
-                                            initialCategoryKey: filterCategoryKey,
-                                            initialAccountId: filterAccountId,
-                                            initialTag: filterTag,
-                                            initialDateRange: filterDateRange,
-                                            minDate: minDate,
-                                            maxDate: maxDate,
-                                            title: '查找账单（按条件）',
-                                            hint: '选择即生效',
-                                            onChanged: (categoryKey, accountId, tag, dateRange) {
-                                              setSheetState(() {
-                                                filterCategoryKey = categoryKey;
-                                                filterAccountId = accountId;
-                                                filterTag = tag;
-                                                filterDateRange = dateRange;
-                                              });
-                                            },
-                                            onClear: () {
-                                              setSheetState(() {
-                                                filterCategoryKey = null;
-                                                filterAccountId = null;
-                                                filterTag = null;
-                                                filterDateRange = null;
-                                              });
-                                            },
-                                          );
-                                        },
-                                      );
-                                    },
-                                    icon: Stack(
-                                      clipBehavior: Clip.none,
-                                      children: [
-                                        Icon(Icons.tune, size: 20, color: Colors.grey.shade700),
-                                        if (hasFilter)
-                                          Positioned(
-                                            right: -2,
-                                            top: -2,
-                                            child: Container(
-                                              width: 8,
-                                              height: 8,
-                                              decoration: const BoxDecoration(
-                                                color: Colors.redAccent,
-                                                shape: BoxShape.circle,
-                                              ),
+                                    // 筛选按钮
+                                    IconButton(
+                                      onPressed: () async {
+                                        await showModalBottomSheet<void>(
+                                          context: sheetContext,
+                                          isScrollControlled: true,
+                                          backgroundColor: Colors.white,
+                                          shape: const RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.vertical(
+                                              top: Radius.circular(20),
                                             ),
                                           ),
-                                      ],
-                                    ),
-                                    splashRadius: 20,
-                                  ),
-                                  // 排序按钮
-                                  IconButton(
-                                    onPressed: () async {
-                                      await _showSortOptions(sheetContext, sortBy, (newSort) {
-                                        setSheetState(() => sortBy = newSort);
-                                      });
-                                    },
-                                    icon: Icon(Icons.sort, size: 20, color: Colors.grey.shade700),
-                                    splashRadius: 20,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            // 关联按钮
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: selected.isEmpty
-                                    ? null
-                                    : () async {
-                                        if (selected.length >= 500) {
-                                          final confirmed = await showDialog<bool>(
-                                            context: sheetContext,
-                                            builder: (ctx) => AlertDialog(
-                                              title: const Text('已选交易较多'),
-                                              content: const Text('已选交易超过 500 笔，可能较慢，是否继续关联？'),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () => Navigator.pop(ctx, false),
-                                                  child: const Text('取消'),
-                                                ),
-                                                TextButton(
-                                                  onPressed: () => Navigator.pop(ctx, true),
-                                                  child: const Text('继续'),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                          if (confirmed != true) return;
-                                        }
-                                        if (!sheetContext.mounted) return;
-                                        Navigator.pop(sheetContext, true);
+                                          builder: (ctx) {
+                                            return TransactionFilterSheet(
+                                              categories: categories,
+                                              accounts: accounts,
+                                              initialState:
+                                                  TransactionListFilterState(
+                                                    categoryKey:
+                                                        filterCategoryKey,
+                                                    accountId: filterAccountId,
+                                                    tag: filterTag,
+                                                    dateRange: filterDateRange,
+                                                    budgetFilter: filterBudget,
+                                                  ),
+                                              initialCategoryKey:
+                                                  filterCategoryKey,
+                                              initialAccountId: filterAccountId,
+                                              initialTag: filterTag,
+                                              initialDateRange: filterDateRange,
+                                              initialBudgetFilter: filterBudget,
+                                              onBudgetFilterChanged: (_) {},
+                                              onStateChanged: (state) {
+                                                setSheetState(() {
+                                                  filterCategoryKey =
+                                                      state.categoryKey;
+                                                  filterAccountId =
+                                                      state.accountId;
+                                                  filterTag = state.tag;
+                                                  filterDateRange =
+                                                      state.dateRange;
+                                                  filterBudget =
+                                                      state.budgetFilter;
+                                                });
+                                              },
+                                              minDate: minDate,
+                                              maxDate: maxDate,
+                                              title: '查找账单（按条件）',
+                                              hint: '选择即生效',
+                                              onChanged: (_, __, ___, ____) {},
+                                              onClear: () {
+                                                setSheetState(() {
+                                                  filterCategoryKey = null;
+                                                  filterAccountId = null;
+                                                  filterTag = null;
+                                                  filterDateRange = null;
+                                                  filterBudget =
+                                                      BudgetInclusionFilter.all;
+                                                });
+                                              },
+                                            );
+                                          },
+                                        );
                                       },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: JiveTheme.primaryGreen,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Text(
-                                  selected.isEmpty
-                                      ? '请选择要关联的交易'
-                                      : selected.length >= 200
-                                          ? '关联 ${selected.length} 笔 · 较多可能较慢'
-                                          : '关联 ${selected.length} 笔交易',
-                                  style: GoogleFonts.lato(fontSize: 15, fontWeight: FontWeight.w600),
+                                      icon: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Icon(
+                                            Icons.tune,
+                                            size: 20,
+                                            color: Colors.grey.shade700,
+                                          ),
+                                          if (hasFilter)
+                                            Positioned(
+                                              right: -2,
+                                              top: -2,
+                                              child: Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.redAccent,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      splashRadius: 20,
+                                    ),
+                                    // 排序按钮
+                                    IconButton(
+                                      onPressed: () async {
+                                        await _showSortOptions(
+                                          sheetContext,
+                                          sortBy,
+                                          (newSort) {
+                                            setSheetState(
+                                              () => sortBy = newSort,
+                                            );
+                                          },
+                                        );
+                                      },
+                                      icon: Icon(
+                                        Icons.sort,
+                                        size: 20,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                      splashRadius: 20,
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
+                              const SizedBox(height: 8),
+                              // 关联按钮
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: selected.isEmpty
+                                      ? null
+                                      : () async {
+                                          if (selected.length >= 500) {
+                                            final confirmed =
+                                                await showDialog<bool>(
+                                                  context: sheetContext,
+                                                  builder: (ctx) => AlertDialog(
+                                                    title: const Text('已选交易较多'),
+                                                    content: const Text(
+                                                      '已选交易超过 500 笔，可能较慢，是否继续关联？',
+                                                    ),
+                                                    actions: [
+                                                      TextButton(
+                                                        onPressed: () =>
+                                                            Navigator.pop(
+                                                              ctx,
+                                                              false,
+                                                            ),
+                                                        child: const Text('取消'),
+                                                      ),
+                                                      TextButton(
+                                                        onPressed: () =>
+                                                            Navigator.pop(
+                                                              ctx,
+                                                              true,
+                                                            ),
+                                                        child: const Text('继续'),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                            if (confirmed != true) return;
+                                          }
+                                          if (!sheetContext.mounted) return;
+                                          Navigator.pop(sheetContext, true);
+                                        },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: JiveTheme.primaryGreen,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    selected.isEmpty
+                                        ? '请选择要关联的交易'
+                                        : selected.length >= 200
+                                        ? '关联 ${selected.length} 笔 · 较多可能较慢'
+                                        : '关联 ${selected.length} 笔交易',
+                                    style: GoogleFonts.lato(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -1721,8 +2077,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             title: const Text('预算将超支'),
             content: Text('关联后将超支 ¥${over.toStringAsFixed(0)}，是否继续？'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('继续')),
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('继续'),
+              ),
             ],
           ),
         );
@@ -1745,12 +2107,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     await _reloadPreservingScroll();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已关联 ${selected.length} 笔交易')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已关联 ${selected.length} 笔交易')));
   }
 
-  Future<void> _showSortOptions(BuildContext context, String currentSort, Function(String) onChanged) async {
+  Future<void> _showSortOptions(
+    BuildContext context,
+    String currentSort,
+    Function(String) onChanged,
+  ) async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -1767,17 +2133,44 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               children: [
                 Text(
                   '排列方式',
-                  style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.lato(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _buildSortOption('最新优先', 'time_desc', currentSort, onChanged, ctx),
-                    _buildSortOption('最早优先', 'time_asc', currentSort, onChanged, ctx),
-                    _buildSortOption('金额从高到低', 'amount_desc', currentSort, onChanged, ctx),
-                    _buildSortOption('金额从低到高', 'amount_asc', currentSort, onChanged, ctx),
+                    _buildSortOption(
+                      '最新优先',
+                      'time_desc',
+                      currentSort,
+                      onChanged,
+                      ctx,
+                    ),
+                    _buildSortOption(
+                      '最早优先',
+                      'time_asc',
+                      currentSort,
+                      onChanged,
+                      ctx,
+                    ),
+                    _buildSortOption(
+                      '金额从高到低',
+                      'amount_desc',
+                      currentSort,
+                      onChanged,
+                      ctx,
+                    ),
+                    _buildSortOption(
+                      '金额从低到高',
+                      'amount_asc',
+                      currentSort,
+                      onChanged,
+                      ctx,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -1789,7 +2182,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     );
   }
 
-  Widget _buildSortOption(String label, String value, String currentSort, Function(String) onChanged, BuildContext ctx) {
+  Widget _buildSortOption(
+    String label,
+    String value,
+    String currentSort,
+    Function(String) onChanged,
+    BuildContext ctx,
+  ) {
     final isSelected = currentSort == value;
     return ChoiceChip(
       label: Text(label),
@@ -1879,7 +2278,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   onTap: () => Navigator.pop(context, 'unlink'),
                 ),
               ListTile(
-                leading: Icon(Icons.info_outline, color: JiveTheme.primaryGreen),
+                leading: Icon(
+                  Icons.info_outline,
+                  color: JiveTheme.primaryGreen,
+                ),
                 title: const Text('查看详情'),
                 subtitle: const Text('查看交易完整信息'),
                 onTap: () => Navigator.pop(context, 'detail'),
@@ -1920,23 +2322,26 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     await _reloadPreservingScroll();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已取消关联')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已取消关联')));
   }
 
   Future<void> _showUnlinkTransactionsSheet() async {
     if (_project?.status != 'active') {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('仅进行中项目可取消关联')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('仅进行中项目可取消关联')));
       return;
     }
     if (_transactions.isEmpty) return;
 
     final selected = <int>{};
-    final categories = await _isar!.collection<JiveCategory>().where().findAll();
+    final categories = await _isar!
+        .collection<JiveCategory>()
+        .where()
+        .findAll();
     final accounts = await _isar!.collection<JiveAccount>().where().findAll();
     final categoryByKey = {for (final c in categories) c.key: c};
     final accountById = {for (final a in accounts) a.id: a};
@@ -1945,6 +2350,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     int? filterAccountId;
     String? filterTag;
     DateTimeRange? filterDateRange;
+    BudgetInclusionFilter filterBudget = BudgetInclusionFilter.all;
     String sortBy = 'time_desc';
     String searchQuery = '';
     final searchController = _unlinkSearchController;
@@ -1953,7 +2359,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     DateTime? minDate;
     DateTime? maxDate;
     if (_transactions.isNotEmpty) {
-      final sortedByTime = [..._transactions]..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      final sortedByTime = [..._transactions]
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
       minDate = sortedByTime.first.timestamp;
       maxDate = sortedByTime.last.timestamp;
     }
@@ -1970,30 +2377,61 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
-            List<JiveTransaction> filteredTransactions = _transactions.where((tx) {
+            List<JiveTransaction> filteredTransactions = _transactions.where((
+              tx,
+            ) {
               if (searchQuery.isNotEmpty) {
                 final query = searchQuery.toLowerCase();
-                final categoryName = (tx.categoryKey != null
-                    ? categoryByKey[tx.categoryKey]?.name ?? tx.category
-                    : tx.category) ?? '';
+                final categoryName =
+                    (tx.categoryKey != null
+                        ? categoryByKey[tx.categoryKey]?.name ?? tx.category
+                        : tx.category) ??
+                    '';
                 final accountName = tx.accountId != null
                     ? accountById[tx.accountId]?.name ?? ''
                     : '';
                 final note = tx.note ?? '';
                 final amount = tx.amount.toStringAsFixed(2);
                 final date = tx.timestamp.toString().substring(0, 10);
-                final searchText = '$categoryName $accountName $note $amount $date'.toLowerCase();
+                final searchText =
+                    '$categoryName $accountName $note $amount $date'
+                        .toLowerCase();
                 if (!searchText.contains(query)) {
                   return false;
                 }
               }
               if (filterCategoryKey != null) {
-                if (tx.categoryKey != filterCategoryKey && tx.subCategoryKey != filterCategoryKey) {
+                if (tx.categoryKey != filterCategoryKey &&
+                    tx.subCategoryKey != filterCategoryKey) {
                   return false;
                 }
               }
               if (filterAccountId != null && tx.accountId != filterAccountId) {
                 return false;
+              }
+              if (filterBudget != BudgetInclusionFilter.all) {
+                if ((tx.type ?? 'expense') != 'expense') {
+                  return false;
+                }
+                final categoryExcluded =
+                    tx.categoryKey != null &&
+                    (categoryByKey[tx.categoryKey!]?.excludeFromBudget == true);
+                final subCategoryExcluded =
+                    tx.subCategoryKey != null &&
+                    (categoryByKey[tx.subCategoryKey!]?.excludeFromBudget ==
+                        true);
+                final excluded =
+                    tx.excludeFromBudget ||
+                    categoryExcluded ||
+                    subCategoryExcluded;
+                if (filterBudget == BudgetInclusionFilter.excludedOnly &&
+                    !excluded) {
+                  return false;
+                }
+                if (filterBudget == BudgetInclusionFilter.includedOnly &&
+                    excluded) {
+                  return false;
+                }
               }
               if (filterTag != null && filterTag!.isNotEmpty) {
                 final note = tx.note?.toLowerCase() ?? '';
@@ -2002,9 +2440,21 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                 }
               }
               if (filterDateRange != null) {
-                final txDate = DateTime(tx.timestamp.year, tx.timestamp.month, tx.timestamp.day);
-                final startDate = DateTime(filterDateRange!.start.year, filterDateRange!.start.month, filterDateRange!.start.day);
-                final endDate = DateTime(filterDateRange!.end.year, filterDateRange!.end.month, filterDateRange!.end.day);
+                final txDate = DateTime(
+                  tx.timestamp.year,
+                  tx.timestamp.month,
+                  tx.timestamp.day,
+                );
+                final startDate = DateTime(
+                  filterDateRange!.start.year,
+                  filterDateRange!.start.month,
+                  filterDateRange!.start.day,
+                );
+                final endDate = DateTime(
+                  filterDateRange!.end.year,
+                  filterDateRange!.end.month,
+                  filterDateRange!.end.day,
+                );
                 if (txDate.isBefore(startDate) || txDate.isAfter(endDate)) {
                   return false;
                 }
@@ -2026,10 +2476,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               }
             });
 
-            final hasFilter = filterCategoryKey != null ||
+            final hasFilter =
+                filterCategoryKey != null ||
                 filterAccountId != null ||
                 (filterTag != null && filterTag!.isNotEmpty) ||
-                filterDateRange != null;
+                filterDateRange != null ||
+                filterBudget != BudgetInclusionFilter.all;
             final hasSearch = searchQuery.isNotEmpty || hasFilter;
 
             return DraggableScrollableSheet(
@@ -2058,12 +2510,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 if (selected.length == _transactions.length) {
                                   selected.clear();
                                 } else {
-                                  selected.addAll(_transactions.map((t) => t.id));
+                                  selected.addAll(
+                                    _transactions.map((t) => t.id),
+                                  );
                                 }
                               });
                             },
                             child: Text(
-                              selected.length == _transactions.length ? '取消全选' : '全选',
+                              selected.length == _transactions.length
+                                  ? '取消全选'
+                                  : '全选',
                               style: TextStyle(color: JiveTheme.primaryGreen),
                             ),
                           ),
@@ -2076,27 +2532,50 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         children: [
                           Text(
                             '已选 ${selected.length} 笔',
-                            style: GoogleFonts.lato(fontSize: 13, color: Colors.orange),
+                            style: GoogleFonts.lato(
+                              fontSize: 13,
+                              color: Colors.orange,
+                            ),
                           ),
                           const Spacer(),
                           Text(
                             '共 ${filteredTransactions.length} 笔',
-                            style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade500),
+                            style: GoogleFonts.lato(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     if (hasFilter)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
                         child: Row(
                           children: [
-                            Icon(Icons.filter_alt, size: 14, color: JiveTheme.primaryGreen),
+                            Icon(
+                              Icons.filter_alt,
+                              size: 14,
+                              color: JiveTheme.primaryGreen,
+                            ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
-                                _buildFilterSummary(filterCategoryKey, filterAccountId, filterTag, filterDateRange, categoryByKey, accountById),
-                                style: GoogleFonts.lato(fontSize: 11, color: JiveTheme.primaryGreen),
+                                _buildFilterSummary(
+                                  filterCategoryKey,
+                                  filterAccountId,
+                                  filterTag,
+                                  filterDateRange,
+                                  categoryByKey,
+                                  accountById,
+                                ),
+                                style: GoogleFonts.lato(
+                                  fontSize: 11,
+                                  color: JiveTheme.primaryGreen,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -2108,14 +2587,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                   filterAccountId = null;
                                   filterTag = null;
                                   filterDateRange = null;
+                                  filterBudget = BudgetInclusionFilter.all;
                                 });
                               },
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
                                 minimumSize: Size.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              child: Text('清除', style: GoogleFonts.lato(fontSize: 11)),
+                              child: Text(
+                                '清除',
+                                style: GoogleFonts.lato(fontSize: 11),
+                              ),
                             ),
                           ],
                         ),
@@ -2127,7 +2612,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.search_off, size: 48, color: Colors.grey.shade300),
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 48,
+                                    color: Colors.grey.shade300,
+                                  ),
                                   const SizedBox(height: 8),
                                   Text(
                                     '没有匹配的交易',
@@ -2190,17 +2679,30 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                       child: TextField(
                                         controller: searchController,
                                         onChanged: (value) {
-                                          setSheetState(() => searchQuery = value.trim());
+                                          setSheetState(
+                                            () => searchQuery = value.trim(),
+                                          );
                                         },
                                         textInputAction: TextInputAction.search,
                                         decoration: InputDecoration(
                                           hintText: '查找账单',
-                                          hintStyle: TextStyle(fontSize: 14, color: Colors.grey.shade500),
-                                          prefixIcon: Icon(Icons.search, size: 20, color: Colors.grey.shade600),
+                                          hintStyle: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade500,
+                                          ),
+                                          prefixIcon: Icon(
+                                            Icons.search,
+                                            size: 20,
+                                            color: Colors.grey.shade600,
+                                          ),
                                           filled: true,
                                           isDense: true,
                                           fillColor: Colors.transparent,
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 12,
+                                              ),
                                           border: InputBorder.none,
                                           suffixIcon: hasSearch
                                               ? IconButton(
@@ -2212,9 +2714,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                                       filterAccountId = null;
                                                       filterTag = null;
                                                       filterDateRange = null;
+                                                      filterBudget =
+                                                          BudgetInclusionFilter
+                                                              .all;
                                                     });
                                                   },
-                                                  icon: Icon(Icons.close, size: 18, color: Colors.grey.shade600),
+                                                  icon: Icon(
+                                                    Icons.close,
+                                                    size: 18,
+                                                    color: Colors.grey.shade600,
+                                                  ),
                                                   splashRadius: 18,
                                                 )
                                               : null,
@@ -2228,34 +2737,56 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                           isScrollControlled: true,
                                           backgroundColor: Colors.white,
                                           shape: const RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                                            borderRadius: BorderRadius.vertical(
+                                              top: Radius.circular(20),
+                                            ),
                                           ),
                                           builder: (ctx) {
                                             return TransactionFilterSheet(
                                               categories: categories,
                                               accounts: accounts,
-                                              initialCategoryKey: filterCategoryKey,
+                                              initialState:
+                                                  TransactionListFilterState(
+                                                    categoryKey:
+                                                        filterCategoryKey,
+                                                    accountId: filterAccountId,
+                                                    tag: filterTag,
+                                                    dateRange: filterDateRange,
+                                                    budgetFilter: filterBudget,
+                                                  ),
+                                              initialCategoryKey:
+                                                  filterCategoryKey,
                                               initialAccountId: filterAccountId,
                                               initialTag: filterTag,
                                               initialDateRange: filterDateRange,
+                                              initialBudgetFilter: filterBudget,
+                                              onBudgetFilterChanged: (_) {},
+                                              onStateChanged: (state) {
+                                                setSheetState(() {
+                                                  filterCategoryKey =
+                                                      state.categoryKey;
+                                                  filterAccountId =
+                                                      state.accountId;
+                                                  filterTag = state.tag;
+                                                  filterDateRange =
+                                                      state.dateRange;
+                                                  filterBudget =
+                                                      state.budgetFilter;
+                                                });
+                                              },
                                               minDate: minDate,
                                               maxDate: maxDate,
                                               title: '查找账单（按条件）',
                                               hint: '选择即生效',
-                                              onChanged: (categoryKey, accountId, tag, dateRange) {
-                                                setSheetState(() {
-                                                  filterCategoryKey = categoryKey;
-                                                  filterAccountId = accountId;
-                                                  filterTag = tag;
-                                                  filterDateRange = dateRange;
-                                                });
-                                              },
+                                              onChanged: (_, __, ___, ____) {},
                                               onClear: () {
                                                 setSheetState(() {
                                                   filterCategoryKey = null;
                                                   filterAccountId = null;
                                                   filterTag = null;
                                                   filterDateRange = null;
+                                                  filterBudget =
+                                                      BudgetInclusionFilter.all;
                                                 });
                                               },
                                             );
@@ -2265,7 +2796,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                       icon: Stack(
                                         clipBehavior: Clip.none,
                                         children: [
-                                          Icon(Icons.tune, size: 20, color: Colors.grey.shade700),
+                                          Icon(
+                                            Icons.tune,
+                                            size: 20,
+                                            color: Colors.grey.shade700,
+                                          ),
                                           if (hasFilter)
                                             Positioned(
                                               right: -2,
@@ -2285,11 +2820,21 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                     ),
                                     IconButton(
                                       onPressed: () async {
-                                        await _showSortOptions(sheetContext, sortBy, (newSort) {
-                                          setSheetState(() => sortBy = newSort);
-                                        });
+                                        await _showSortOptions(
+                                          sheetContext,
+                                          sortBy,
+                                          (newSort) {
+                                            setSheetState(
+                                              () => sortBy = newSort,
+                                            );
+                                          },
+                                        );
                                       },
-                                      icon: Icon(Icons.sort, size: 20, color: Colors.grey.shade700),
+                                      icon: Icon(
+                                        Icons.sort,
+                                        size: 20,
+                                        color: Colors.grey.shade700,
+                                      ),
                                       splashRadius: 20,
                                     ),
                                   ],
@@ -2300,7 +2845,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 children: [
                                   Expanded(
                                     child: OutlinedButton(
-                                      onPressed: () => Navigator.pop(sheetContext, false),
+                                      onPressed: () =>
+                                          Navigator.pop(sheetContext, false),
                                       child: const Text('取消'),
                                     ),
                                   ),
@@ -2309,7 +2855,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                     child: ElevatedButton(
                                       onPressed: selected.isEmpty
                                           ? null
-                                          : () => Navigator.pop(sheetContext, true),
+                                          : () => Navigator.pop(
+                                              sheetContext,
+                                              true,
+                                            ),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.orange,
                                         foregroundColor: Colors.white,
@@ -2350,9 +2899,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     await _reloadPreservingScroll();
 
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('已取消关联 ${selected.length} 笔交易')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已取消关联 ${selected.length} 笔交易')));
   }
 
   Widget _buildWarningBanner(String level, double remaining) {
@@ -2469,7 +3018,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
               children: [
                 Text(
                   '支出趋势',
-                  style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.lato(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 Row(
                   children: [
@@ -2498,10 +3050,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     show: true,
                     drawVerticalLine: false,
                     horizontalInterval: yInterval > 0 ? yInterval : 100,
-                    getDrawingHorizontalLine: (value) => FlLine(
-                      color: Colors.grey.shade200,
-                      strokeWidth: 1,
-                    ),
+                    getDrawingHorizontalLine: (value) =>
+                        FlLine(color: Colors.grey.shade200, strokeWidth: 1),
                   ),
                   titlesData: FlTitlesData(
                     leftTitles: AxisTitles(
@@ -2512,8 +3062,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         getTitlesWidget: (value, meta) {
                           if (value == 0) return const SizedBox.shrink();
                           return Text(
-                            value >= 1000 ? '${(value / 1000).toStringAsFixed(1)}k' : value.toInt().toString(),
-                            style: GoogleFonts.lato(fontSize: 10, color: Colors.grey),
+                            value >= 1000
+                                ? '${(value / 1000).toStringAsFixed(1)}k'
+                                : value.toInt().toString(),
+                            style: GoogleFonts.lato(
+                              fontSize: 10,
+                              color: Colors.grey,
+                            ),
                           );
                         },
                       ),
@@ -2525,19 +3080,28 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         interval: 3,
                         getTitlesWidget: (value, meta) {
                           final index = value.toInt();
-                          if (index < 0 || index >= data.length) return const SizedBox.shrink();
+                          if (index < 0 || index >= data.length) {
+                            return const SizedBox.shrink();
+                          }
                           return Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
                               dateFormat.format(data[index].date),
-                              style: GoogleFonts.lato(fontSize: 10, color: Colors.grey),
+                              style: GoogleFonts.lato(
+                                fontSize: 10,
+                                color: Colors.grey,
+                              ),
                             ),
                           );
                         },
                       ),
                     ),
-                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                   ),
                   borderData: FlBorderData(show: false),
                   minX: 0,
@@ -2603,7 +3167,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? JiveTheme.primaryGreen.withValues(alpha: 0.1) : Colors.grey.shade100,
+          color: selected
+              ? JiveTheme.primaryGreen.withValues(alpha: 0.1)
+              : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: selected ? JiveTheme.primaryGreen : Colors.grey.shade300,
@@ -2620,7 +3186,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       ),
     );
   }
-
 }
 
 class _ProjectTransactionsPage extends StatefulWidget {
@@ -2643,7 +3208,8 @@ class _ProjectTransactionsPage extends StatefulWidget {
   });
 
   @override
-  State<_ProjectTransactionsPage> createState() => _ProjectTransactionsPageState();
+  State<_ProjectTransactionsPage> createState() =>
+      _ProjectTransactionsPageState();
 }
 
 class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
@@ -2661,6 +3227,7 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
   int? _filterAccountId;
   String? _filterTag;
   DateTimeRange? _filterDateRange;
+  BudgetInclusionFilter _filterBudget = BudgetInclusionFilter.all;
   String _sortBy = 'time_desc';
   DateTime? _minDate;
   DateTime? _maxDate;
@@ -2673,7 +3240,8 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
     _accountById = {for (final a in widget.accounts) a.id: a};
     _allTransactions = [...widget.transactions];
     if (_allTransactions.isNotEmpty) {
-      final sortedByTime = [..._allTransactions]..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      final sortedByTime = [..._allTransactions]
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
       _minDate = sortedByTime.first.timestamp;
       _maxDate = sortedByTime.last.timestamp;
     }
@@ -2688,10 +3256,12 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
   @override
   Widget build(BuildContext context) {
     final transactions = _filteredTransactions();
-    final hasFilter = _filterCategoryKey != null ||
+    final hasFilter =
+        _filterCategoryKey != null ||
         _filterAccountId != null ||
         (_filterTag != null && _filterTag!.isNotEmpty) ||
-        _filterDateRange != null;
+        _filterDateRange != null ||
+        _filterBudget != BudgetInclusionFilter.all;
     final bottomPadding = 120 + (_batchMode ? 64 : 0) + (hasFilter ? 28 : 0);
 
     return PopScope<Object?>(
@@ -2727,13 +3297,19 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                 children: [
                   Text(
                     '共 ${_allTransactions.length} 笔',
-                    style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade600),
+                    style: GoogleFonts.lato(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                   const Spacer(),
                   if (_batchMode)
                     Text(
                       '已选 ${_selected.length} 笔',
-                      style: GoogleFonts.lato(fontSize: 12, color: Colors.orange),
+                      style: GoogleFonts.lato(
+                        fontSize: 12,
+                        color: Colors.orange,
+                      ),
                     ),
                 ],
               ),
@@ -2746,14 +3322,23 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.search_off, size: 48, color: Colors.grey.shade300),
+                          Icon(
+                            Icons.search_off,
+                            size: 48,
+                            color: Colors.grey.shade300,
+                          ),
                           const SizedBox(height: 8),
-                          Text('没有匹配的交易', style: GoogleFonts.lato(color: Colors.grey)),
+                          Text(
+                            '没有匹配的交易',
+                            style: GoogleFonts.lato(color: Colors.grey),
+                          ),
                         ],
                       ),
                     )
                   : ListView.builder(
-                      padding: EdgeInsets.only(bottom: bottomPadding.toDouble()),
+                      padding: EdgeInsets.only(
+                        bottom: bottomPadding.toDouble(),
+                      ),
                       itemCount: transactions.length,
                       itemBuilder: (context, index) {
                         final tx = transactions[index];
@@ -2767,9 +3352,12 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                               value: isSelected,
                               onChanged: (_) => _toggleSelect(tx.id),
                               activeColor: JiveTheme.primaryGreen,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
                               visualDensity: VisualDensity.compact,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
                             ),
                             onTap: () => _toggleSelect(tx.id),
                           );
@@ -2778,13 +3366,19 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                           tx,
                           compact: true,
                           onTap: () async {
-                            final result = await showTransactionDetailSheet(context, tx.id);
+                            final result = await showTransactionDetailSheet(
+                              context,
+                              tx.id,
+                            );
                             if (result == true) {
                               _changed = true;
                             }
                           },
                           onAmountTap: () async {
-                            final result = await showTransactionDetailSheet(context, tx.id);
+                            final result = await showTransactionDetailSheet(
+                              context,
+                              tx.id,
+                            );
                             if (result == true) {
                               _changed = true;
                             }
@@ -2827,10 +3421,17 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                 ),
               if (hasFilter)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
                   child: Row(
                     children: [
-                      Icon(Icons.filter_alt, size: 14, color: JiveTheme.primaryGreen),
+                      Icon(
+                        Icons.filter_alt,
+                        size: 14,
+                        color: JiveTheme.primaryGreen,
+                      ),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
@@ -2842,7 +3443,10 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                             _categoryByKey,
                             _accountById,
                           ),
-                          style: GoogleFonts.lato(fontSize: 11, color: JiveTheme.primaryGreen),
+                          style: GoogleFonts.lato(
+                            fontSize: 11,
+                            color: JiveTheme.primaryGreen,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -2854,7 +3458,10 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                           minimumSize: Size.zero,
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
-                        child: Text('清除', style: GoogleFonts.lato(fontSize: 11)),
+                        child: Text(
+                          '清除',
+                          style: GoogleFonts.lato(fontSize: 11),
+                        ),
                       ),
                     ],
                   ),
@@ -2878,17 +3485,31 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                           textInputAction: TextInputAction.search,
                           decoration: InputDecoration(
                             hintText: '查找账单',
-                            hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-                            prefixIcon: Icon(Icons.search, size: 18, color: Colors.grey.shade600),
+                            hintStyle: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade500,
+                            ),
+                            prefixIcon: Icon(
+                              Icons.search,
+                              size: 18,
+                              color: Colors.grey.shade600,
+                            ),
                             filled: true,
                             isDense: true,
                             fillColor: Colors.transparent,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
                             border: InputBorder.none,
                             suffixIcon: _searchQuery.isNotEmpty
                                 ? IconButton(
                                     onPressed: _clearSearch,
-                                    icon: Icon(Icons.close, size: 18, color: Colors.grey.shade600),
+                                    icon: Icon(
+                                      Icons.close,
+                                      size: 18,
+                                      color: Colors.grey.shade600,
+                                    ),
                                     splashRadius: 18,
                                   )
                                 : null,
@@ -2902,7 +3523,11 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                       icon: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          Icon(Icons.tune, size: 20, color: Colors.grey.shade700),
+                          Icon(
+                            Icons.tune,
+                            size: 20,
+                            color: Colors.grey.shade700,
+                          ),
                           if (hasFilter)
                             Positioned(
                               right: -2,
@@ -2926,7 +3551,11 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                           setState(() => _sortBy = newSort);
                         });
                       },
-                      icon: Icon(Icons.sort, size: 20, color: Colors.grey.shade700),
+                      icon: Icon(
+                        Icons.sort,
+                        size: 20,
+                        color: Colors.grey.shade700,
+                      ),
                       splashRadius: 20,
                     ),
                   ],
@@ -2964,6 +3593,7 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
       _filterAccountId = null;
       _filterTag = null;
       _filterDateRange = null;
+      _filterBudget = BudgetInclusionFilter.all;
     });
   }
 
@@ -2973,6 +3603,7 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
       _filterAccountId = null;
       _filterTag = null;
       _filterDateRange = null;
+      _filterBudget = BudgetInclusionFilter.all;
     });
   }
 
@@ -2988,20 +3619,31 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
         return TransactionFilterSheet(
           categories: widget.categories,
           accounts: widget.accounts,
+          initialState: TransactionListFilterState(
+            categoryKey: _filterCategoryKey,
+            accountId: _filterAccountId,
+            tag: _filterTag,
+            dateRange: _filterDateRange,
+            budgetFilter: _filterBudget,
+          ),
           initialCategoryKey: _filterCategoryKey,
           initialAccountId: _filterAccountId,
           initialTag: _filterTag,
           initialDateRange: _filterDateRange,
-          minDate: _minDate,
-          maxDate: _maxDate,
-          onChanged: (categoryKey, accountId, tag, dateRange) {
+          initialBudgetFilter: _filterBudget,
+          onBudgetFilterChanged: (_) {},
+          onStateChanged: (state) {
             setState(() {
-              _filterCategoryKey = categoryKey;
-              _filterAccountId = accountId;
-              _filterTag = tag;
-              _filterDateRange = dateRange;
+              _filterCategoryKey = state.categoryKey;
+              _filterAccountId = state.accountId;
+              _filterTag = state.tag;
+              _filterDateRange = state.dateRange;
+              _filterBudget = state.budgetFilter;
             });
           },
+          minDate: _minDate,
+          maxDate: _maxDate,
+          onChanged: (_, __, ___, ____) {},
           onClear: _clearFilters,
         );
       },
@@ -3012,25 +3654,50 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
     final filtered = _allTransactions.where((tx) {
       if (_searchQuery.isNotEmpty) {
         final query = _searchQuery.toLowerCase();
-        final categoryName = (tx.categoryKey != null
-            ? _categoryByKey[tx.categoryKey]?.name ?? tx.category
-            : tx.category) ?? '';
-        final accountName = tx.accountId != null ? _accountById[tx.accountId]?.name ?? '' : '';
+        final categoryName =
+            (tx.categoryKey != null
+                ? _categoryByKey[tx.categoryKey]?.name ?? tx.category
+                : tx.category) ??
+            '';
+        final accountName = tx.accountId != null
+            ? _accountById[tx.accountId]?.name ?? ''
+            : '';
         final note = tx.note ?? '';
         final amount = tx.amount.toStringAsFixed(2);
         final date = tx.timestamp.toString().substring(0, 10);
-        final searchText = '$categoryName $accountName $note $amount $date'.toLowerCase();
+        final searchText = '$categoryName $accountName $note $amount $date'
+            .toLowerCase();
         if (!searchText.contains(query)) {
           return false;
         }
       }
       if (_filterCategoryKey != null) {
-        if (tx.categoryKey != _filterCategoryKey && tx.subCategoryKey != _filterCategoryKey) {
+        if (tx.categoryKey != _filterCategoryKey &&
+            tx.subCategoryKey != _filterCategoryKey) {
           return false;
         }
       }
       if (_filterAccountId != null && tx.accountId != _filterAccountId) {
         return false;
+      }
+      if (_filterBudget != BudgetInclusionFilter.all) {
+        if ((tx.type ?? 'expense') != 'expense') {
+          return false;
+        }
+        final categoryExcluded =
+            tx.categoryKey != null &&
+            (_categoryByKey[tx.categoryKey!]?.excludeFromBudget == true);
+        final subCategoryExcluded =
+            tx.subCategoryKey != null &&
+            (_categoryByKey[tx.subCategoryKey!]?.excludeFromBudget == true);
+        final excluded =
+            tx.excludeFromBudget || categoryExcluded || subCategoryExcluded;
+        if (_filterBudget == BudgetInclusionFilter.excludedOnly && !excluded) {
+          return false;
+        }
+        if (_filterBudget == BudgetInclusionFilter.includedOnly && excluded) {
+          return false;
+        }
       }
       if (_filterTag != null && _filterTag!.isNotEmpty) {
         final note = tx.note?.toLowerCase() ?? '';
@@ -3039,7 +3706,11 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
         }
       }
       if (_filterDateRange != null) {
-        final txDate = DateTime(tx.timestamp.year, tx.timestamp.month, tx.timestamp.day);
+        final txDate = DateTime(
+          tx.timestamp.year,
+          tx.timestamp.month,
+          tx.timestamp.day,
+        );
         final startDate = DateTime(
           _filterDateRange!.start.year,
           _filterDateRange!.start.month,
@@ -3092,12 +3763,16 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
     });
     _changed = true;
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已取消关联交易')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已取消关联交易')));
   }
 
-  Future<void> _showSortOptions(BuildContext context, String currentSort, Function(String) onChanged) async {
+  Future<void> _showSortOptions(
+    BuildContext context,
+    String currentSort,
+    Function(String) onChanged,
+  ) async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
@@ -3114,17 +3789,44 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
               children: [
                 Text(
                   '排列方式',
-                  style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.lato(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _buildSortOption('最新优先', 'time_desc', currentSort, onChanged, ctx),
-                    _buildSortOption('最早优先', 'time_asc', currentSort, onChanged, ctx),
-                    _buildSortOption('金额从高到低', 'amount_desc', currentSort, onChanged, ctx),
-                    _buildSortOption('金额从低到高', 'amount_asc', currentSort, onChanged, ctx),
+                    _buildSortOption(
+                      '最新优先',
+                      'time_desc',
+                      currentSort,
+                      onChanged,
+                      ctx,
+                    ),
+                    _buildSortOption(
+                      '最早优先',
+                      'time_asc',
+                      currentSort,
+                      onChanged,
+                      ctx,
+                    ),
+                    _buildSortOption(
+                      '金额从高到低',
+                      'amount_desc',
+                      currentSort,
+                      onChanged,
+                      ctx,
+                    ),
+                    _buildSortOption(
+                      '金额从低到高',
+                      'amount_asc',
+                      currentSort,
+                      onChanged,
+                      ctx,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -3203,7 +3905,9 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
     final fromAccount = _resolveAccountName(tx.accountId);
     final toAccount = _resolveAccountName(tx.toAccountId);
     final accountLabel = fromAccount.isNotEmpty ? fromAccount : toAccount;
-    final subtitleText = subtitle.isEmpty ? timeLabel : '$subtitle • $timeLabel';
+    final subtitleText = subtitle.isEmpty
+        ? timeLabel
+        : '$subtitle • $timeLabel';
 
     final padding = compact
         ? const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
@@ -3230,7 +3934,9 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: selected
-              ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35))
+              ? Border.all(
+                  color: JiveTheme.primaryGreen.withValues(alpha: 0.35),
+                )
               : null,
           boxShadow: [
             BoxShadow(
@@ -3242,10 +3948,7 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
         ),
         child: Row(
           children: [
-            if (leading != null) ...[
-              leading,
-              const SizedBox(width: 4),
-            ],
+            if (leading != null) ...[leading, const SizedBox(width: 4)],
             Container(
               padding: EdgeInsets.all(iconPadding),
               decoration: BoxDecoration(
@@ -3284,7 +3987,10 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                   onTap: detailTap,
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 2,
+                      vertical: 2,
+                    ),
                     child: Text(
                       '$amountPrefix¥${tx.amount.toStringAsFixed(2)}',
                       style: GoogleFonts.rubik(
@@ -3301,7 +4007,10 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
                     onTap: detailTap,
                     borderRadius: BorderRadius.circular(6),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
+                      ),
                       child: Text(
                         accountLabel,
                         style: GoogleFonts.lato(

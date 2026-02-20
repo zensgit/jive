@@ -246,6 +246,8 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   bool _isLoading = true;
   bool _isImporting = false;
   bool _isParsing = false;
+  bool _isFailureReportExporting = false;
+  bool _isReviewChecklistExporting = false;
   bool _hasChanges = false;
 
   ImportSourceType _sourceType = ImportSourceType.auto;
@@ -262,6 +264,8 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   final Map<ImportSourceType, _ImportRuleTemplate> _ruleTemplates = {};
 
   bool get _isBusy => _isImporting || _isParsing;
+  bool get _isExporting =>
+      _isFailureReportExporting || _isReviewChecklistExporting;
 
   @override
   void initState() {
@@ -856,6 +860,11 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       _showMessage('当前筛选条件下没有可导出记录');
       return;
     }
+    if (_isExporting) return;
+
+    setState(() {
+      _isReviewChecklistExporting = true;
+    });
 
     try {
       final csv = _buildReviewChecklistCsv(
@@ -873,6 +882,12 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       _showMessage('已导出复核清单：${result.fileName}');
     } catch (e) {
       _showMessage('导出复核清单失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isReviewChecklistExporting = false;
+        });
+      }
     }
   }
 
@@ -1986,7 +2001,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   label: const Text('批量偏移时间'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: visibleIndices.isNotEmpty
+                  onPressed: visibleIndices.isNotEmpty && !_isExporting
                       ? _exportReviewChecklist
                       : null,
                   icon: const Icon(Icons.ios_share_outlined),
@@ -2449,7 +2464,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
-              onPressed: _isBusy
+              onPressed: _isBusy || _isExporting
                   ? null
                   : () => _exportFailureAggregateReport(
                       aggregates: aggregates,
@@ -2732,6 +2747,12 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     required Map<String, _FailureRetryabilitySnapshot>
     reasonRetryabilitySnapshots,
   }) async {
+    if (_isExporting) return;
+
+    setState(() {
+      _isFailureReportExporting = true;
+    });
+
     try {
       final retryableByReason = <String, int>{};
       final blockedByReason = <String, int>{};
@@ -2756,6 +2777,12 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       _showMessage('已导出失败报表：${result.fileName}');
     } catch (e) {
       _showMessage('导出失败报表失败：$e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isFailureReportExporting = false;
+        });
+      }
     }
   }
 

@@ -30,6 +30,7 @@ import 'core/service/auto_draft_service.dart';
 import 'core/service/auto_app_registry.dart';
 import 'core/service/auto_app_settings.dart';
 import 'core/service/auto_permission_service.dart';
+import 'core/service/auto_permission_prompt_policy.dart';
 import 'core/service/auto_settings.dart';
 import 'core/service/tag_service.dart';
 import 'core/service/data_reload_bus.dart';
@@ -134,6 +135,8 @@ class _RandomAccountSeed {
   const _RandomAccountSeed(this.name, this.type, this.subType);
 }
 
+enum _AutoPermissionDialogAction { later, settings }
+
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -144,9 +147,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   static const eventChannel = EventChannel('com.jive.app/stream');
   static const _prefKeyDemoSeedEnabled = 'demo_seed_enabled';
-  static const _prefKeyAutoPermissionSnoozeUntilMs =
-      'auto_permission_prompt_snooze_until_ms';
-  static const _autoPermissionSnoozeDuration = Duration(hours: 24);
   static const _kE2eMode = bool.fromEnvironment(
     'JIVE_E2E',
     defaultValue: false,
@@ -174,6 +174,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   Map<String, bool> _autoAppEnabled = {};
   int _autoAppEnabledCount = AutoAppRegistry.apps.length;
   bool _permissionDialogVisible = false;
+  AutoPermissionPromptPolicy? _autoPermissionPromptPolicy;
   final ValueNotifier<int> _dataReloadSignal = ValueNotifier(0);
   final Random _random = Random();
   bool _isProcessingRecurringRules = false;
@@ -212,6 +213,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   Future<void> _initDatabase() async {
     _isar = await DatabaseService.getInstance();
+    _autoPermissionPromptPolicy = AutoPermissionPromptPolicy(
+      await SharedPreferences.getInstance(),
+    );
     await _loadDemoSeedPrefs();
     await _loadAutoSettings();
     await _loadAutoAppSettings();
@@ -310,75 +314,64 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     });
     await AutoSettingsStore.save(settings);
     if (!wasEnabled && settings.enabled) {
-      await _clearAutoPermissionPromptSnooze();
+      await _autoPermissionPromptPolicy?.clearSnooze();
     }
     await _checkAutoPermissions();
-  }
-
-  Future<bool> _isAutoPermissionPromptSnoozed() async {
-    final prefs = await SharedPreferences.getInstance();
-    final untilMs = prefs.getInt(_prefKeyAutoPermissionSnoozeUntilMs);
-    if (untilMs == null) return false;
-    final until = DateTime.fromMillisecondsSinceEpoch(untilMs);
-    if (DateTime.now().isBefore(until)) return true;
-    await prefs.remove(_prefKeyAutoPermissionSnoozeUntilMs);
-    return false;
-  }
-
-  Future<void> _snoozeAutoPermissionPrompt() async {
-    final prefs = await SharedPreferences.getInstance();
-    final until = DateTime.now().add(_autoPermissionSnoozeDuration);
-    await prefs.setInt(
-      _prefKeyAutoPermissionSnoozeUntilMs,
-      until.millisecondsSinceEpoch,
-    );
-  }
-
-  Future<void> _clearAutoPermissionPromptSnooze() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_prefKeyAutoPermissionSnoozeUntilMs);
   }
 
   Future<void> _checkAutoPermissions() async {
     if (_kE2eMode) return;
     if (!_dbReady) return;
+    final promptPolicy = _autoPermissionPromptPolicy;
+    if (promptPolicy == null) return;
     if (!_autoSettings.enabled) return;
-    if (await _isAutoPermissionPromptSnoozed()) return;
     final status = await AutoPermissionService.getStatus();
     if (!mounted) return;
-    if (status.allRequired) {
-      await _clearAutoPermissionPromptSnooze();
+    final shouldPrompt = await promptPolicy.shouldPrompt(
+      autoEnabled: _autoSettings.enabled,
+      allRequiredPermissionsGranted: status.allRequired,
+      dialogVisible: _permissionDialogVisible,
+    );
+    if (!shouldPrompt) {
       return;
     }
-    if (_permissionDialogVisible) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _permissionDialogVisible) return;
       _permissionDialogVisible = true;
-      final missing = status.missingRequiredLabels();
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('自动记账权限未开启'),
-          content: Text('未开启：${missing.join('、')}'),
-          actions: [
-            TextButton(
-              onPressed: () async {
-                await _snoozeAutoPermissionPrompt();
-                if (context.mounted) Navigator.pop(context);
-              },
-              child: const Text('稍后'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _openAutoSettings();
-              },
-              child: const Text('去设置'),
-            ),
-          ],
-        ),
-      );
-      _permissionDialogVisible = false;
+      try {
+        final missing = status.missingRequiredLabels();
+        final action = await showDialog<_AutoPermissionDialogAction>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('自动记账权限未开启'),
+            content: Text('未开启：${missing.join('、')}'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(
+                  dialogContext,
+                  _AutoPermissionDialogAction.later,
+                ),
+                child: const Text('稍后'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(
+                  dialogContext,
+                  _AutoPermissionDialogAction.settings,
+                ),
+                child: const Text('去设置'),
+              ),
+            ],
+          ),
+        );
+
+        // Any close path should enter cooldown to avoid repeated interruptions.
+        await promptPolicy.snoozePrompt();
+        if (action == _AutoPermissionDialogAction.settings && mounted) {
+          _openAutoSettings();
+        }
+      } finally {
+        _permissionDialogVisible = false;
+      }
     });
   }
 

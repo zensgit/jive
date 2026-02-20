@@ -9,6 +9,7 @@ import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/model/transaction_list_filter_state.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/reconcile_service.dart';
 import '../../core/widgets/jive_calendar/jive_calendar.dart';
@@ -55,15 +56,18 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
   _ReconcileSortDirection _sortDirection = _ReconcileSortDirection.desc;
   bool _groupByDay = true;
   String _searchQuery = '';
-  String? _searchCategoryKey;
-  int? _searchAccountId;
-  String? _searchTag;
-  DateTimeRange? _searchDateRange;
+  TransactionListFilterState _searchFilterState =
+      const TransactionListFilterState();
   DateTime? _minTransactionDate;
   DateTime? _maxTransactionDate;
   Set<int> _transactionYears = {};
 
   static const double _floatingBarHeight = 118;
+
+  String? get _searchCategoryKey => _searchFilterState.categoryKey;
+  int? get _searchAccountId => _searchFilterState.accountId;
+  String? get _searchTag => _searchFilterState.normalizedTag;
+  DateTimeRange? get _searchDateRange => _searchFilterState.dateRange;
 
   @override
   void initState() {
@@ -879,19 +883,22 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
         return TransactionFilterSheet(
           categories: categories,
           accounts: accounts,
+          initialState: _searchFilterState,
           initialCategoryKey: _searchCategoryKey,
           initialAccountId: _searchAccountId,
           initialTag: _searchTag,
           initialDateRange: _searchDateRange,
           showDateRange: false,
-          onChanged: (categoryKey, accountId, tag, dateRange) {
+          onStateChanged: (state) {
             _updateSearchFilters(
-              categoryKey: categoryKey,
-              accountId: accountId,
-              tag: tag,
-              dateRange: dateRange,
+              categoryKey: state.categoryKey,
+              accountId: state.accountId,
+              tag: state.tag,
+              dateRange: state.dateRange,
+              budgetFilter: state.budgetFilter,
             );
           },
+          onChanged: (_, __, ___, ____) {},
           onClear: _clearSearchFilters,
         );
       },
@@ -936,8 +943,8 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                         return ChoiceChip(
                           label: Text(label),
                           selected: field == value,
-                          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 
-                            0.18,
+                          selectedColor: JiveTheme.primaryGreen.withValues(
+                            alpha: 0.18,
                           ),
                           onSelected: (_) => setModalState(() => field = value),
                         );
@@ -960,8 +967,8 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
                         return ChoiceChip(
                           label: Text(label),
                           selected: direction == value,
-                          selectedColor: JiveTheme.primaryGreen.withValues(alpha: 
-                            0.18,
+                          selectedColor: JiveTheme.primaryGreen.withValues(
+                            alpha: 0.18,
                           ),
                           onSelected: (_) =>
                               setModalState(() => direction = value),
@@ -1026,45 +1033,37 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
     int? accountId,
     String? tag,
     DateTimeRange? dateRange,
+    BudgetInclusionFilter? budgetFilter,
   }) {
     final normalizedTag = tag?.trim();
     setState(() {
-      _searchCategoryKey = categoryKey;
-      _searchAccountId = accountId;
-      _searchTag = (normalizedTag == null || normalizedTag.isEmpty)
-          ? null
-          : normalizedTag;
-      _searchDateRange = dateRange;
+      _searchFilterState = TransactionListFilterState(
+        categoryKey: categoryKey,
+        accountId: accountId,
+        tag: (normalizedTag == null || normalizedTag.isEmpty)
+            ? null
+            : normalizedTag,
+        dateRange: dateRange,
+        budgetFilter: budgetFilter ?? _searchFilterState.budgetFilter,
+      );
     });
   }
 
   void _clearSearchFilters() {
-    setState(() {
-      _searchCategoryKey = null;
-      _searchAccountId = null;
-      _searchTag = null;
-      _searchDateRange = null;
-    });
+    setState(() => _searchFilterState = const TransactionListFilterState());
   }
 
   void _clearSearch() {
     setState(() {
       _searchQuery = '';
-      _searchCategoryKey = null;
-      _searchAccountId = null;
-      _searchTag = null;
-      _searchDateRange = null;
+      _searchFilterState = const TransactionListFilterState();
     });
     _searchController.clear();
     _searchFocus.unfocus();
   }
 
   bool _hasSearchFilters() {
-    return _searchQuery.trim().isNotEmpty ||
-        _searchCategoryKey != null ||
-        _searchAccountId != null ||
-        (_searchTag?.isNotEmpty ?? false) ||
-        _searchDateRange != null;
+    return _searchQuery.trim().isNotEmpty || _searchFilterState.hasAnyFilter;
   }
 
   String _sortSummary() {

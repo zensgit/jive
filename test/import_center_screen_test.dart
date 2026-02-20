@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -208,6 +210,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(requests, hasLength(1));
+    expect(find.text('已导出失败报表：failure_report.csv'), findsOneWidget);
     final request = requests.first;
     expect(request.windowName, 'd30');
     expect(request.sourceName, 'all');
@@ -274,6 +277,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(requests, hasLength(1));
+      expect(find.text('已导出失败报表：failure_report_wechat.csv'), findsOneWidget);
       final request = requests.first;
       expect(request.sourceName, 'wechat');
       expect(request.sourceScopeLabel, '微信文本');
@@ -342,6 +346,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(requests, hasLength(1));
+    expect(find.text('已导出复核清单：review_export.csv'), findsOneWidget);
     final request = requests.first;
     expect(request.previewFilterName, 'all');
     expect(request.previewFilterLabel, '全部');
@@ -355,6 +360,202 @@ void main() {
     expect(request.csv, contains('1,yes,yes,23.50'));
     expect(request.csv, contains('2,no,no,0.00'));
   });
+
+  testWidgets(
+    'tap export failure report ignores repeated taps while exporting',
+    (WidgetTester tester) async {
+      final now = DateTime.now();
+      final jobs = <JiveImportJob>[
+        _buildJob(
+          id: 71,
+          status: 'failed',
+          errorMessage: 'TimeoutError: request timeout',
+          updatedAt: now.subtract(const Duration(days: 1)),
+          payloadText: 'raw timeout payload',
+        ),
+      ];
+      final completer = Completer<ImportFailureReportExportResult>();
+      var callCount = 0;
+      final exporter = _FakeFailureReportExporter(
+        onExport: (_) {
+          callCount += 1;
+          return completer.future;
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ImportCenterScreen(
+            debugJobs: jobs,
+            failureReportExporter: exporter,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _scrollToHistory(tester);
+
+      await _tapVisibleText(tester, '导出失败报表');
+      await tester.pump();
+      expect(callCount, 1);
+
+      await _tapVisibleText(tester, '导出失败报表');
+      await tester.pump();
+      expect(callCount, 1);
+
+      completer.complete(
+        const ImportFailureReportExportResult(
+          filePath: '/tmp/failure_report_once.csv',
+          fileName: 'failure_report_once.csv',
+          csv: 'meta,value',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(callCount, 1);
+      expect(find.text('已导出失败报表：failure_report_once.csv'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'tap export review checklist ignores repeated taps while exporting',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final completer = Completer<ImportReviewChecklistExportResult>();
+      var callCount = 0;
+      final exporter = _FakeReviewChecklistExporter(
+        onExport: (_) {
+          callCount += 1;
+          return completer.future;
+        },
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ImportCenterScreen(
+            debugJobs: const [],
+            debugPreviewData: ImportCenterDebugPreviewData(
+              records: [
+                _buildPreviewRecord(
+                  lineNumber: 1,
+                  amount: 88.8,
+                  source: 'WeChat',
+                  rawText: '测试记录',
+                ),
+              ],
+              selected: const [true],
+              payloadText: 'debug preview payload',
+              sourceType: ImportSourceType.csv,
+              entryType: ImportEntryType.text,
+            ),
+            reviewChecklistExporter: exporter,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('导出复核清单'));
+      await tester.pump();
+      expect(callCount, 1);
+
+      await tester.tap(find.text('导出复核清单'), warnIfMissed: false);
+      await tester.pump();
+      expect(callCount, 1);
+
+      completer.complete(
+        const ImportReviewChecklistExportResult(
+          filePath: '/tmp/review_export_once.csv',
+          fileName: 'review_export_once.csv',
+          csv: 'lineNumber,selected',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(callCount, 1);
+      expect(find.text('已导出复核清单：review_export_once.csv'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'tap export failure report shows error message when exporter throws',
+    (WidgetTester tester) async {
+      final now = DateTime.now();
+      final jobs = <JiveImportJob>[
+        _buildJob(
+          id: 61,
+          status: 'failed',
+          errorMessage: 'TimeoutError: request timeout',
+          updatedAt: now.subtract(const Duration(days: 1)),
+          payloadText: 'raw timeout payload',
+        ),
+      ];
+      final exporter = _FakeFailureReportExporter(
+        onExport: (_) async => throw Exception('failure export boom'),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ImportCenterScreen(
+            debugJobs: jobs,
+            failureReportExporter: exporter,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _scrollToHistory(tester);
+
+      await _tapVisibleText(tester, '导出失败报表');
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('导出失败报表失败：'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'tap export review checklist shows error message when exporter throws',
+    (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final exporter = _FakeReviewChecklistExporter(
+        onExport: (_) async => throw Exception('review export boom'),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: ImportCenterScreen(
+            debugJobs: const [],
+            debugPreviewData: ImportCenterDebugPreviewData(
+              records: [
+                _buildPreviewRecord(
+                  lineNumber: 1,
+                  amount: 23.5,
+                  source: 'WeChat',
+                  rawText: '午餐',
+                ),
+              ],
+              selected: const [true],
+              payloadText: 'debug preview payload',
+              sourceType: ImportSourceType.csv,
+              entryType: ImportEntryType.text,
+            ),
+            reviewChecklistExporter: exporter,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('导出复核清单'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('导出复核清单失败：'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'tap failure reason applies failed quick filter and search query',
