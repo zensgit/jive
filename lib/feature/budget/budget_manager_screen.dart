@@ -10,6 +10,7 @@ import '../../core/database/budget_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/model/transaction_list_filter_state.dart';
 import '../../core/service/budget_pref_service.dart';
 import '../../core/service/budget_service.dart';
 import '../../core/service/category_service.dart';
@@ -17,6 +18,7 @@ import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../category/category_picker_screen.dart';
 import '../category/category_search_delegate.dart';
+import '../category/category_transactions_screen.dart';
 import 'budget_exclude_screen.dart';
 import 'budget_list_screen.dart';
 import 'budget_settings_screen.dart';
@@ -394,6 +396,85 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
   String _displayCategoryName(String categoryKey) {
     if (categoryKey == '__uncategorized__') return '未分类';
     return _categoryByKey[categoryKey]?.name ?? categoryKey;
+  }
+
+  DateTimeRange _insightDateRange() {
+    final (start, end) = BudgetService.getPeriodDateRange(
+      BudgetPeriod.monthly,
+      referenceDate: _month,
+    );
+    final ref = _insightReferenceDate(start, end);
+    final endDay = ref.isBefore(start) ? start : ref;
+    final startDay = DateTime(start.year, start.month, start.day);
+    final rangeEnd = DateTime(
+      endDay.year,
+      endDay.month,
+      endDay.day,
+      23,
+      59,
+      59,
+      999,
+    );
+    return DateTimeRange(start: startDay, end: rangeEnd);
+  }
+
+  Future<void> _openContributionTransactions(
+    BudgetCategoryContribution item,
+  ) async {
+    if (item.categoryKey == '__uncategorized__') {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('未分类暂不支持快捷钻取')));
+      return;
+    }
+
+    String? categoryKey;
+    String? subCategoryKey;
+    var includeSubCategories = true;
+    final category = _categoryByKey[item.categoryKey];
+    final parentKey = category?.parentKey?.trim();
+    if (parentKey != null && parentKey.isNotEmpty) {
+      categoryKey = parentKey;
+      subCategoryKey = item.categoryKey;
+      includeSubCategories = false;
+    } else {
+      categoryKey = item.categoryKey;
+    }
+
+    final range = _insightDateRange();
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryTransactionsScreen(
+          title: '账单 · ${_displayCategoryName(item.categoryKey)}',
+          filterCategoryKey: categoryKey,
+          filterSubCategoryKey: subCategoryKey,
+          includeSubCategories: includeSubCategories,
+          initialFilterState: TransactionListFilterState(dateRange: range),
+          persistFilterState: false,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openAnomalyDayTransactions(
+    BudgetSpendingAnomalyDay item,
+  ) async {
+    final day = DateTime(item.day.year, item.day.month, item.day.day);
+    final range = DateTimeRange(
+      start: day,
+      end: DateTime(day.year, day.month, day.day, 23, 59, 59, 999),
+    );
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CategoryTransactionsScreen(
+          title: '账单 · 异常日 ${DateFormat('M/d').format(day)}',
+          initialFilterState: TransactionListFilterState(dateRange: range),
+          persistFilterState: false,
+        ),
+      ),
+    );
   }
 
   @override
@@ -806,35 +887,59 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
             style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          ..._totalTopCategories.map(
-            (item) => Padding(
+          ..._totalTopCategories.map((item) {
+            final canDrillDown = item.categoryKey != '__uncategorized__';
+            return Padding(
               padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _displayCategoryName(item.categoryKey),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade800,
-                      ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: canDrillDown
+                      ? () => _openContributionTransactions(item)
+                      : null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _displayCategoryName(item.categoryKey),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$symbol ${_formatAmount(item.amount)} (${item.ratioPercent.toStringAsFixed(1)}%)',
+                          style: GoogleFonts.rubik(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        if (canDrillDown) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.chevron_right,
+                            size: 16,
+                            color: Colors.grey.shade500,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$symbol ${_formatAmount(item.amount)} (${item.ratioPercent.toStringAsFixed(1)}%)',
-                    style: GoogleFonts.rubik(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          }),
         ],
       ),
     );
@@ -861,12 +966,36 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
           ..._totalAnomalyDays.map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                '${dateFormat.format(item.day)} 支出 $symbol ${_formatAmount(item.amount)}（阈值 $symbol ${_formatAmount(item.thresholdAmount)}）',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.red.shade700,
-                  fontWeight: FontWeight.w600,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: () => _openAnomalyDayTransactions(item),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${dateFormat.format(item.day)} 支出 $symbol ${_formatAmount(item.amount)}（阈值 $symbol ${_formatAmount(item.thresholdAmount)}）',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 16,
+                          color: Colors.grey.shade500,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
