@@ -26,6 +26,7 @@ RETRY_COUNT="${FLUTTER_TEST_RETRY_COUNT:-0}"
 TEST_TIMEOUT_SECONDS="${FLUTTER_TEST_TIMEOUT_SECONDS:-0}"
 ADB_TIMEOUT_SECONDS="${FLUTTER_ADB_TIMEOUT_SECONDS:-20}"
 TEST_CASE_TIMEOUT="${FLUTTER_TEST_CASE_TIMEOUT:-}"
+IGNORE_TEST_TIMEOUTS="${FLUTTER_TEST_IGNORE_TIMEOUTS:-0}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
@@ -41,6 +42,8 @@ Options:
   --timeout <seconds>    Per-test timeout in seconds. 0 disables timeout. Default: 0.
   --test-case-timeout <duration>
                          Pass through to 'flutter test --timeout'. Example: 20m.
+  --ignore-test-timeouts
+                         Pass through to 'flutter test --ignore-timeouts'.
   --artifact-dir <path>  Directory to store test logs/artifacts.
   --no-collect-on-fail   Disable adb artifact collection on failure.
   --list                 Print default integration test files and exit.
@@ -53,6 +56,7 @@ Env:
   FLUTTER_TEST_RETRY_COUNT
   FLUTTER_TEST_TIMEOUT_SECONDS
   FLUTTER_TEST_CASE_TIMEOUT
+  FLUTTER_TEST_IGNORE_TIMEOUTS
   FLUTTER_ADB_TIMEOUT_SECONDS
   FLUTTER_TEST_ARTIFACT_DIR
 EOF
@@ -115,6 +119,9 @@ while [[ $# -gt 0 ]]; do
       fi
       TEST_CASE_TIMEOUT="$1"
       ;;
+    --ignore-test-timeouts)
+      IGNORE_TEST_TIMEOUTS=1
+      ;;
     --no-collect-on-fail)
       COLLECT_ON_FAIL=0
       ;;
@@ -159,6 +166,11 @@ if ! [[ "${ADB_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
+if ! [[ "${IGNORE_TEST_TIMEOUTS}" =~ ^[01]$ ]]; then
+  echo "FLUTTER_TEST_IGNORE_TIMEOUTS must be 0 or 1, got: ${IGNORE_TEST_TIMEOUTS}" >&2
+  exit 2
+fi
+
 if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
   echo "no integration tests selected" >&2
   exit 2
@@ -193,6 +205,9 @@ run_flutter_test() {
   )
   if [[ -n "${TEST_CASE_TIMEOUT}" ]]; then
     cmd+=(--timeout "${TEST_CASE_TIMEOUT}")
+  fi
+  if (( IGNORE_TEST_TIMEOUTS == 1 )); then
+    cmd+=(--ignore-timeouts)
   fi
   if [[ -n "${DEVICE_ID}" ]]; then
     cmd+=(-d "${DEVICE_ID}")
