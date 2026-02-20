@@ -53,7 +53,7 @@ void main() {
       await _pumpUntilSettled(tester);
       await _dismissAutoPermissionDialogIfPresent(tester);
 
-      await tester.tap(find.text('View All'));
+      await tester.tap(find.byKey(const Key('home_view_all_button')));
       await _pumpUntilSettled(tester);
 
       final searchField = find.byType(TextField).first;
@@ -87,7 +87,9 @@ void main() {
         }
       }
 
-      final clearAll = find.text('全部清除');
+      final clearAll = find.byKey(
+        const Key('transaction_filter_clear_all_button'),
+      );
       await tester.ensureVisible(clearAll.first);
       await tester.tap(clearAll.first, warnIfMissed: false);
       await _pumpUntilSettled(tester);

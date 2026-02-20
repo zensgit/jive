@@ -215,158 +215,85 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
           20,
           16 + MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.title,
-                    style: GoogleFonts.lato(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                  tooltip: '关闭',
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                    tooltip: '关闭',
+                  ),
+                ],
+              ),
+              if (widget.hint.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  widget.hint,
+                  style: GoogleFonts.lato(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade600,
+                  ),
                 ),
               ],
-            ),
-            if (widget.hint.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                widget.hint,
-                style: GoogleFonts.lato(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            if (widget.showDateRange) ...[
-              InkWell(
-                key: const Key('transaction_filter_date_range_tile'),
-                onTap: _pickDateRange,
-                borderRadius: BorderRadius.circular(12),
-                child: InputDecorator(
-                  decoration: InputDecoration(
-                    labelText: widget.dateRangeLabel,
-                    isDense: true,
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+              const SizedBox(height: 12),
+              if (widget.showDateRange) ...[
+                InkWell(
+                  key: const Key('transaction_filter_date_range_tile'),
+                  onTap: _pickDateRange,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: widget.dateRangeLabel,
+                      isDense: true,
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _dateRange == null ? '不限' : _formatRange(_dateRange!),
-                          style: GoogleFonts.lato(fontSize: 13),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _dateRange == null
+                                ? '不限'
+                                : _formatRange(_dateRange!),
+                            style: GoogleFonts.lato(fontSize: 13),
+                          ),
                         ),
-                      ),
-                      if (_dateRange != null) _buildClearIcon(_clearDateRange),
-                      Icon(
-                        Icons.calendar_today,
-                        size: 16,
-                        color: Colors.grey.shade600,
-                      ),
-                    ],
+                        if (_dateRange != null)
+                          _buildClearIcon(_clearDateRange),
+                        Icon(
+                          Icons.calendar_today,
+                          size: 16,
+                          color: Colors.grey.shade600,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-            ],
-            DropdownButtonFormField<String?>(
-              key: ValueKey(_categoryKey),
-              initialValue: _categoryKey,
-              decoration: InputDecoration(
-                labelText: widget.categoryLabel,
-                isDense: true,
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                suffixIcon: _categoryKey == null
-                    ? null
-                    : _buildClearIcon(_clearCategory),
-              ),
-              icon: Icon(
-                Icons.keyboard_arrow_down,
-                color: Colors.grey.shade600,
-              ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('全部分类'),
-                ),
-                ...widget.categories.map((category) {
-                  final label = category.parentKey == null
-                      ? category.name
-                      : '  └ ${category.name}';
-                  return DropdownMenuItem<String?>(
-                    value: category.key,
-                    child: Text(label),
-                  );
-                }),
+                const SizedBox(height: 10),
               ],
-              onChanged: (value) {
-                setState(() => _categoryKey = value);
-                _notifyChange();
-              },
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<int?>(
-              key: ValueKey(_accountId),
-              initialValue: _accountId,
-              decoration: InputDecoration(
-                labelText: widget.accountLabel,
-                isDense: true,
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                suffixIcon: _accountId == null
-                    ? null
-                    : _buildClearIcon(_clearAccount),
-              ),
-              icon: Icon(
-                Icons.keyboard_arrow_down,
-                color: Colors.grey.shade600,
-              ),
-              items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('全部账户')),
-                ...widget.accounts.map((account) {
-                  return DropdownMenuItem<int?>(
-                    value: account.id,
-                    child: Text(account.name),
-                  );
-                }),
-              ],
-              onChanged: (value) {
-                setState(() => _accountId = value);
-                _notifyChange();
-              },
-            ),
-            if (widget.onBudgetFilterChanged != null) ...[
-              const SizedBox(height: 10),
-              DropdownButtonFormField<BudgetInclusionFilter>(
-                key: ValueKey(_budgetFilter),
-                initialValue: _budgetFilter,
+              DropdownButtonFormField<String?>(
+                key: ValueKey(_categoryKey),
+                initialValue: _categoryKey,
                 decoration: InputDecoration(
-                  labelText: widget.budgetLabel,
+                  labelText: widget.categoryLabel,
                   isDense: true,
                   filled: true,
                   fillColor: Colors.grey.shade100,
@@ -374,69 +301,151 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
-                  suffixIcon: _budgetFilter == BudgetInclusionFilter.all
+                  suffixIcon: _categoryKey == null
                       ? null
-                      : _buildClearIcon(_clearBudgetFilter),
+                      : _buildClearIcon(_clearCategory),
                 ),
                 icon: Icon(
                   Icons.keyboard_arrow_down,
                   color: Colors.grey.shade600,
                 ),
-                items: const [
-                  DropdownMenuItem(
-                    value: BudgetInclusionFilter.all,
-                    child: Text('全部'),
+                items: [
+                  const DropdownMenuItem<String?>(
+                    value: null,
+                    child: Text('全部分类'),
                   ),
-                  DropdownMenuItem(
-                    value: BudgetInclusionFilter.excludedOnly,
-                    child: Text('不计入预算'),
-                  ),
-                  DropdownMenuItem(
-                    value: BudgetInclusionFilter.includedOnly,
-                    child: Text('仅计入预算'),
-                  ),
+                  ...widget.categories.map((category) {
+                    final label = category.parentKey == null
+                        ? category.name
+                        : '  └ ${category.name}';
+                    return DropdownMenuItem<String?>(
+                      value: category.key,
+                      child: Text(label),
+                    );
+                  }),
                 ],
                 onChanged: (value) {
-                  if (value == null) return;
-                  setState(() => _budgetFilter = value);
-                  widget.onBudgetFilterChanged?.call(_budgetFilter);
-                  _notifyStateChanged();
+                  setState(() => _categoryKey = value);
+                  _notifyChange();
                 },
               ),
-            ],
-            const SizedBox(height: 10),
-            TextField(
-              controller: _tagController,
-              decoration: InputDecoration(
-                labelText: widget.tagLabel,
-                isDense: true,
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                suffixIcon: _tagController.text.trim().isEmpty
-                    ? null
-                    : _buildClearIcon(_clearTag),
-              ),
-              onChanged: (_) {
-                setState(() {});
-                _notifyChange();
-              },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _handleClear,
-                    child: const Text('全部清除'),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<int?>(
+                key: ValueKey(_accountId),
+                initialValue: _accountId,
+                decoration: InputDecoration(
+                  labelText: widget.accountLabel,
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
                   ),
+                  suffixIcon: _accountId == null
+                      ? null
+                      : _buildClearIcon(_clearAccount),
+                ),
+                icon: Icon(
+                  Icons.keyboard_arrow_down,
+                  color: Colors.grey.shade600,
+                ),
+                items: [
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('全部账户'),
+                  ),
+                  ...widget.accounts.map((account) {
+                    return DropdownMenuItem<int?>(
+                      value: account.id,
+                      child: Text(account.name),
+                    );
+                  }),
+                ],
+                onChanged: (value) {
+                  setState(() => _accountId = value);
+                  _notifyChange();
+                },
+              ),
+              if (widget.onBudgetFilterChanged != null) ...[
+                const SizedBox(height: 10),
+                DropdownButtonFormField<BudgetInclusionFilter>(
+                  key: ValueKey(_budgetFilter),
+                  initialValue: _budgetFilter,
+                  decoration: InputDecoration(
+                    labelText: widget.budgetLabel,
+                    isDense: true,
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    suffixIcon: _budgetFilter == BudgetInclusionFilter.all
+                        ? null
+                        : _buildClearIcon(_clearBudgetFilter),
+                  ),
+                  icon: Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Colors.grey.shade600,
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: BudgetInclusionFilter.all,
+                      child: Text('全部'),
+                    ),
+                    DropdownMenuItem(
+                      value: BudgetInclusionFilter.excludedOnly,
+                      child: Text('不计入预算'),
+                    ),
+                    DropdownMenuItem(
+                      value: BudgetInclusionFilter.includedOnly,
+                      child: Text('仅计入预算'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _budgetFilter = value);
+                    widget.onBudgetFilterChanged?.call(_budgetFilter);
+                    _notifyStateChanged();
+                  },
                 ),
               ],
-            ),
-          ],
+              const SizedBox(height: 10),
+              TextField(
+                controller: _tagController,
+                decoration: InputDecoration(
+                  labelText: widget.tagLabel,
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  suffixIcon: _tagController.text.trim().isEmpty
+                      ? null
+                      : _buildClearIcon(_clearTag),
+                ),
+                onChanged: (_) {
+                  setState(() {});
+                  _notifyChange();
+                },
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      key: const Key('transaction_filter_clear_all_button'),
+                      onPressed: _handleClear,
+                      child: const Text('全部清除'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -81,7 +81,7 @@ void main() {
     await _dismissAutoPermissionDialogIfPresent(tester);
 
     // Home -> View All (全部账单)
-    await tester.tap(find.text('View All'));
+    await tester.tap(find.byKey(const Key('home_view_all_button')));
     await _pumpUntilSettled(tester);
 
     // Open transaction filter sheet.
