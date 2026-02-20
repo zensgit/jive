@@ -69,3 +69,14 @@ bash scripts/run_integration_tests.sh \
 2. 保留统一 runner 调用与 `--retry 1`。
 
 目的：降低 emulator 启动超时概率，提升 `android_integration_test` 稳定性。
+
+二次验证（run `22227481696`）后继续定位到更深层根因：
+
+- emulator 启动日志出现：
+  - `FATAL | Not enough space to create userdata partition`
+  - `Available: 7318.05 MB ... need 7372.80 MB`
+
+追加修复：
+
+1. `.github/workflows/flutter_ci.yml` 增加 `disk-size: 6000M`，降低 AVD userdata 空间需求。
+2. 其余加固参数（`api-level/profile/emulator-options/boot-timeout`）保持不变。
