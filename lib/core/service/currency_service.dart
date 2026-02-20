@@ -35,6 +35,21 @@ class CurrencyService {
 
   CurrencyService(this._isar);
 
+  static String _cacheKey(String from, String to) =>
+      '${from.toUpperCase()}/${to.toUpperCase()}';
+
+  static bool _isValidRate(double value) =>
+      value.isFinite && !value.isNaN && value > 0;
+
+  static void _cacheRate(String from, String to, double rate, String source) {
+    if (!_isValidRate(rate)) return;
+    _rateCache[_cacheKey(from, to)] = _CachedRate(
+      rate: rate,
+      cachedAt: DateTime.now(),
+      source: source,
+    );
+  }
+
   /// 初始化货币数据（首次启动时调用）
   Future<void> initCurrencies() async {
     final existing = await _isar.jiveCurrencys.count();
@@ -92,13 +107,15 @@ class CurrencyService {
         if (from == to) continue;
         final rate = CurrencyDefaults.getRate(from, to);
         if (rate != null) {
-          rates.add(JiveExchangeRate()
-            ..fromCurrency = from
-            ..toCurrency = to
-            ..rate = rate
-            ..effectiveDate = now
-            ..source = 'mock'
-            ..updatedAt = now);
+          rates.add(
+            JiveExchangeRate()
+              ..fromCurrency = from
+              ..toCurrency = to
+              ..rate = rate
+              ..effectiveDate = now
+              ..source = 'mock'
+              ..updatedAt = now,
+          );
         }
       }
     }
@@ -120,13 +137,15 @@ class CurrencyService {
         if (from == to) continue;
         final rate = CurrencyDefaults.getRate(from, to);
         if (rate != null) {
-          rates.add(JiveExchangeRate()
-            ..fromCurrency = from
-            ..toCurrency = to
-            ..rate = rate
-            ..effectiveDate = now
-            ..source = 'offline'
-            ..updatedAt = now);
+          rates.add(
+            JiveExchangeRate()
+              ..fromCurrency = from
+              ..toCurrency = to
+              ..rate = rate
+              ..effectiveDate = now
+              ..source = 'offline'
+              ..updatedAt = now,
+          );
         }
       }
     }
@@ -244,10 +263,12 @@ class CurrencyService {
 
   /// 获取汇率（带内存缓存）
   Future<double?> getRate(String from, String to) async {
-    if (from == to) return 1.0;
+    final normalizedFrom = from.toUpperCase();
+    final normalizedTo = to.toUpperCase();
+    if (normalizedFrom == normalizedTo) return 1.0;
 
     // 检查内存缓存
-    final cacheKey = '$from/$to';
+    final cacheKey = _cacheKey(normalizedFrom, normalizedTo);
     final cached = _rateCache[cacheKey];
     if (cached != null && !cached.isExpired) {
       return cached.rate;
@@ -256,29 +277,21 @@ class CurrencyService {
     // 查本地数据库
     final rate = await _isar.jiveExchangeRates
         .filter()
-        .fromCurrencyEqualTo(from)
-        .toCurrencyEqualTo(to)
+        .fromCurrencyEqualTo(normalizedFrom)
+        .toCurrencyEqualTo(normalizedTo)
         .sortByEffectiveDateDesc()
         .findFirst();
 
     if (rate != null) {
       // 更新内存缓存
-      _rateCache[cacheKey] = _CachedRate(
-        rate: rate.rate,
-        cachedAt: DateTime.now(),
-        source: rate.source,
-      );
+      _cacheRate(normalizedFrom, normalizedTo, rate.rate, rate.source);
       return rate.rate;
     }
 
     // 本地没有则使用默认汇率
-    final defaultRate = CurrencyDefaults.getRate(from, to);
+    final defaultRate = CurrencyDefaults.getRate(normalizedFrom, normalizedTo);
     if (defaultRate != null) {
-      _rateCache[cacheKey] = _CachedRate(
-        rate: defaultRate,
-        cachedAt: DateTime.now(),
-        source: 'default',
-      );
+      _cacheRate(normalizedFrom, normalizedTo, defaultRate, 'default');
     }
     return defaultRate;
   }
@@ -289,7 +302,9 @@ class CurrencyService {
   }
 
   /// 检查汇率是否需要更新（超过指定时间）
-  Future<bool> shouldUpdateRates({Duration maxAge = const Duration(hours: 6)}) async {
+  Future<bool> shouldUpdateRates({
+    Duration maxAge = const Duration(hours: 6),
+  }) async {
     final pref = await getPreference();
     if (pref?.lastRateUpdate == null) return true;
     return DateTime.now().difference(pref!.lastRateUpdate!) > maxAge;
@@ -331,7 +346,12 @@ class CurrencyService {
   }
 
   /// 保存汇率历史记录
-  Future<void> saveRateHistory(String from, String to, double rate, String source) async {
+  Future<void> saveRateHistory(
+    String from,
+    String to,
+    double rate,
+    String source,
+  ) async {
     final history = JiveExchangeRateHistory()
       ..fromCurrency = from
       ..toCurrency = to
@@ -345,7 +365,11 @@ class CurrencyService {
   }
 
   /// 查询指定日期的历史汇率
-  Future<double?> getHistoricalRate(String from, String to, DateTime date) async {
+  Future<double?> getHistoricalRate(
+    String from,
+    String to,
+    DateTime date,
+  ) async {
     // 查找最接近指定日期的记录
     final history = await _isar.jiveExchangeRateHistorys
         .filter()
@@ -365,7 +389,12 @@ class CurrencyService {
     int days = 30,
   }) async {
     final startDate = DateTime.now().subtract(Duration(days: days));
-    final history = await getRateHistory(from, to, startDate: startDate, limit: 100);
+    final history = await getRateHistory(
+      from,
+      to,
+      startDate: startDate,
+      limit: 100,
+    );
 
     if (history.isEmpty) return null;
 
@@ -419,7 +448,12 @@ class CurrencyService {
 
     if (fromIsCrypto || toIsCrypto) {
       // 尝试从 CoinGecko 获取加密货币价格
-      final cryptoResponse = await _fetchCryptoRate(from, to, fromIsCrypto, toIsCrypto);
+      final cryptoResponse = await _fetchCryptoRate(
+        from,
+        to,
+        fromIsCrypto,
+        toIsCrypto,
+      );
       if (cryptoResponse != null) return cryptoResponse;
 
       // 失败则使用本地 Mock 数据
@@ -483,10 +517,11 @@ class CurrencyService {
         if (cryptoId == null) return null;
 
         final vsCurrency = to.toLowerCase();
-        final url = 'https://api.coingecko.com/api/v3/simple/price?ids=$cryptoId&vs_currencies=$vsCurrency';
-        final response = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 10),
-        );
+        final url =
+            'https://api.coingecko.com/api/v3/simple/price?ids=$cryptoId&vs_currencies=$vsCurrency';
+        final response = await http
+            .get(Uri.parse(url))
+            .timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -508,10 +543,11 @@ class CurrencyService {
         if (cryptoId == null) return null;
 
         final vsCurrency = from.toLowerCase();
-        final url = 'https://api.coingecko.com/api/v3/simple/price?ids=$cryptoId&vs_currencies=$vsCurrency';
-        final response = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 10),
-        );
+        final url =
+            'https://api.coingecko.com/api/v3/simple/price?ids=$cryptoId&vs_currencies=$vsCurrency';
+        final response = await http
+            .get(Uri.parse(url))
+            .timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -534,10 +570,11 @@ class CurrencyService {
         final toId = coinGeckoIds[to];
         if (fromId == null || toId == null) return null;
 
-        final url = 'https://api.coingecko.com/api/v3/simple/price?ids=$fromId,$toId&vs_currencies=usd';
-        final response = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 10),
-        );
+        final url =
+            'https://api.coingecko.com/api/v3/simple/price?ids=$fromId,$toId&vs_currencies=usd';
+        final response = await http
+            .get(Uri.parse(url))
+            .timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -566,12 +603,15 @@ class CurrencyService {
   }
 
   /// 从 Frankfurter API 获取汇率
-  Future<ExchangeRateResponse?> _fetchFromFrankfurter(String from, String to) async {
+  Future<ExchangeRateResponse?> _fetchFromFrankfurter(
+    String from,
+    String to,
+  ) async {
     try {
       final url = '$_primaryApiUrl/latest?from=$from&to=$to';
-      final response = await http.get(Uri.parse(url)).timeout(
-        const Duration(seconds: 10),
-      );
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -592,12 +632,15 @@ class CurrencyService {
   }
 
   /// 从 ExchangeRate.host API 获取汇率
-  Future<ExchangeRateResponse?> _fetchFromExchangeRateHost(String from, String to) async {
+  Future<ExchangeRateResponse?> _fetchFromExchangeRateHost(
+    String from,
+    String to,
+  ) async {
     try {
       final url = '$_fallbackApiUrl/latest?base=$from&symbols=$to';
-      final response = await http.get(Uri.parse(url)).timeout(
-        const Duration(seconds: 10),
-      );
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -618,36 +661,50 @@ class CurrencyService {
   }
 
   /// 批量获取汇率并更新本地数据库
-  Future<Map<String, double>> fetchAndUpdateRates(String baseCurrency, List<String> targets) async {
+  Future<Map<String, double>> fetchAndUpdateRates(
+    String baseCurrency,
+    List<String> targets,
+  ) async {
+    final normalizedBase = baseCurrency.toUpperCase();
     final results = <String, double>{};
     final now = DateTime.now();
 
     for (final to in targets) {
-      if (to == baseCurrency) continue;
+      final normalizedTo = to.toUpperCase();
+      if (normalizedTo == normalizedBase) continue;
 
-      final response = await fetchLiveRate(baseCurrency, to);
+      final response = await fetchLiveRate(normalizedBase, normalizedTo);
       if (response != null) {
-        results[to] = response.rate;
+        final rateValue = response.rate;
+        if (!_isValidRate(rateValue)) {
+          continue;
+        }
+        final reverseRate = 1.0 / rateValue;
+        if (!_isValidRate(reverseRate)) {
+          continue;
+        }
+        results[normalizedTo] = rateValue;
 
         // 更新本地数据库
         await _isar.writeTxn(() async {
           // 查找现有记录
           final existing = await _isar.jiveExchangeRates
               .filter()
-              .fromCurrencyEqualTo(baseCurrency)
-              .toCurrencyEqualTo(to)
+              .fromCurrencyEqualTo(normalizedBase)
+              .toCurrencyEqualTo(normalizedTo)
               .findFirst();
 
           if (existing != null) {
-            existing.rate = response.rate;
+            existing.rate = rateValue;
+            existing.effectiveDate = now;
             existing.source = response.source;
             existing.updatedAt = now;
             await _isar.jiveExchangeRates.put(existing);
           } else {
             final newRate = JiveExchangeRate()
-              ..fromCurrency = baseCurrency
-              ..toCurrency = to
-              ..rate = response.rate
+              ..fromCurrency = normalizedBase
+              ..toCurrency = normalizedTo
+              ..rate = rateValue
               ..effectiveDate = now
               ..source = response.source
               ..updatedAt = now;
@@ -657,20 +714,20 @@ class CurrencyService {
           // 同时更新反向汇率
           final reverseExisting = await _isar.jiveExchangeRates
               .filter()
-              .fromCurrencyEqualTo(to)
-              .toCurrencyEqualTo(baseCurrency)
+              .fromCurrencyEqualTo(normalizedTo)
+              .toCurrencyEqualTo(normalizedBase)
               .findFirst();
 
-          final reverseRate = 1.0 / response.rate;
           if (reverseExisting != null) {
             reverseExisting.rate = reverseRate;
+            reverseExisting.effectiveDate = now;
             reverseExisting.source = response.source;
             reverseExisting.updatedAt = now;
             await _isar.jiveExchangeRates.put(reverseExisting);
           } else {
             final newReverseRate = JiveExchangeRate()
-              ..fromCurrency = to
-              ..toCurrency = baseCurrency
+              ..fromCurrency = normalizedTo
+              ..toCurrency = normalizedBase
               ..rate = reverseRate
               ..effectiveDate = now
               ..source = response.source
@@ -680,13 +737,16 @@ class CurrencyService {
 
           // 保存汇率历史记录
           final history = JiveExchangeRateHistory()
-            ..fromCurrency = baseCurrency
-            ..toCurrency = to
-            ..rate = response.rate
+            ..fromCurrency = normalizedBase
+            ..toCurrency = normalizedTo
+            ..rate = rateValue
             ..recordedAt = now
             ..source = response.source;
           await _isar.jiveExchangeRateHistorys.put(history);
         });
+
+        _cacheRate(normalizedBase, normalizedTo, rateValue, response.source);
+        _cacheRate(normalizedTo, normalizedBase, reverseRate, response.source);
       }
     }
 
@@ -702,24 +762,36 @@ class CurrencyService {
 
   /// 手动设置汇率
   Future<void> setManualRate(String from, String to, double rate) async {
+    final normalizedFrom = from.toUpperCase();
+    final normalizedTo = to.toUpperCase();
+    if (normalizedFrom == normalizedTo) return;
+    if (!_isValidRate(rate)) {
+      throw ArgumentError.value(rate, 'rate', 'rate must be > 0');
+    }
+    final reverseRate = 1.0 / rate;
+    if (!_isValidRate(reverseRate)) {
+      throw ArgumentError.value(rate, 'rate', 'rate must be finite and > 0');
+    }
+
     final now = DateTime.now();
     await _isar.writeTxn(() async {
       // 更新正向汇率
       final existing = await _isar.jiveExchangeRates
           .filter()
-          .fromCurrencyEqualTo(from)
-          .toCurrencyEqualTo(to)
+          .fromCurrencyEqualTo(normalizedFrom)
+          .toCurrencyEqualTo(normalizedTo)
           .findFirst();
 
       if (existing != null) {
         existing.rate = rate;
+        existing.effectiveDate = now;
         existing.source = 'manual';
         existing.updatedAt = now;
         await _isar.jiveExchangeRates.put(existing);
       } else {
         final newRate = JiveExchangeRate()
-          ..fromCurrency = from
-          ..toCurrency = to
+          ..fromCurrency = normalizedFrom
+          ..toCurrency = normalizedTo
           ..rate = rate
           ..effectiveDate = now
           ..source = 'manual'
@@ -730,20 +802,20 @@ class CurrencyService {
       // 同时更新反向汇率
       final reverseExisting = await _isar.jiveExchangeRates
           .filter()
-          .fromCurrencyEqualTo(to)
-          .toCurrencyEqualTo(from)
+          .fromCurrencyEqualTo(normalizedTo)
+          .toCurrencyEqualTo(normalizedFrom)
           .findFirst();
 
-      final reverseRate = 1.0 / rate;
       if (reverseExisting != null) {
         reverseExisting.rate = reverseRate;
+        reverseExisting.effectiveDate = now;
         reverseExisting.source = 'manual';
         reverseExisting.updatedAt = now;
         await _isar.jiveExchangeRates.put(reverseExisting);
       } else {
         final newReverseRate = JiveExchangeRate()
-          ..fromCurrency = to
-          ..toCurrency = from
+          ..fromCurrency = normalizedTo
+          ..toCurrency = normalizedFrom
           ..rate = reverseRate
           ..effectiveDate = now
           ..source = 'manual'
@@ -753,13 +825,16 @@ class CurrencyService {
 
       // 保存汇率历史记录
       final history = JiveExchangeRateHistory()
-        ..fromCurrency = from
-        ..toCurrency = to
+        ..fromCurrency = normalizedFrom
+        ..toCurrency = normalizedTo
         ..rate = rate
         ..recordedAt = now
         ..source = 'manual';
       await _isar.jiveExchangeRateHistorys.put(history);
     });
+
+    _cacheRate(normalizedFrom, normalizedTo, rate, 'manual');
+    _cacheRate(normalizedTo, normalizedFrom, reverseRate, 'manual');
   }
 
   /// 获取所有汇率记录
@@ -787,15 +862,23 @@ class CurrencyService {
     final targetCurrency = baseCurrency ?? await getBaseCurrency();
 
     // 按币种和类型分组
-    final assetsByType = <String, Map<String, List<dynamic>>>{}; // 'asset' or 'liability' -> currency -> accounts
+    final assetsByType =
+        <
+          String,
+          Map<String, List<dynamic>>
+        >{}; // 'asset' or 'liability' -> currency -> accounts
     assetsByType['asset'] = {};
     assetsByType['liability'] = {};
 
     for (final account in accounts) {
-      if (account.isHidden || account.isArchived || !account.includeInBalance) continue;
+      if (account.isHidden || account.isArchived || !account.includeInBalance) {
+        continue;
+      }
 
       final currency = account.currency as String;
-      final type = (account.type as String) == 'liability' ? 'liability' : 'asset';
+      final type = (account.type as String) == 'liability'
+          ? 'liability'
+          : 'asset';
 
       assetsByType[type] ??= {};
       assetsByType[type]![currency] ??= [];
@@ -811,7 +894,11 @@ class CurrencyService {
       final currencyAccounts = entry.value;
       final currencyData = CurrencyDefaults.getAllCurrencies().firstWhere(
         (c) => c['code'] == currency,
-        orElse: () => {'code': currency, 'nameZh': currency, 'symbol': currency},
+        orElse: () => {
+          'code': currency,
+          'nameZh': currency,
+          'symbol': currency,
+        },
       );
 
       double totalAmount = 0;
@@ -824,36 +911,42 @@ class CurrencyService {
         // 转换为基础货币
         double convertedBalance = balance;
         if (currency != targetCurrency) {
-          convertedBalance = await convert(balance, currency, targetCurrency) ?? balance;
+          convertedBalance =
+              await convert(balance, currency, targetCurrency) ?? balance;
         }
 
-        accountItems.add(CurrencyAccountItem(
-          accountId: account.id,
-          accountName: account.name,
-          accountType: account.type,
-          iconName: account.iconName,
-          balance: balance,
-          convertedBalance: convertedBalance,
-        ));
+        accountItems.add(
+          CurrencyAccountItem(
+            accountId: account.id,
+            accountName: account.name,
+            accountType: account.type,
+            iconName: account.iconName,
+            balance: balance,
+            convertedBalance: convertedBalance,
+          ),
+        );
       }
 
       // 计算该币种的转换总额
       double convertedTotal = totalAmount;
       if (currency != targetCurrency) {
-        convertedTotal = await convert(totalAmount, currency, targetCurrency) ?? totalAmount;
+        convertedTotal =
+            await convert(totalAmount, currency, targetCurrency) ?? totalAmount;
       }
       totalAssets += convertedTotal;
 
-      assetGroups.add(CurrencyAssetGroup(
-        currency: currency,
-        currencyName: currencyData['nameZh'] as String,
-        flag: currencyData['flag'] as String?,
-        symbol: currencyData['symbol'] as String,
-        totalAmount: totalAmount,
-        convertedAmount: convertedTotal,
-        accountCount: currencyAccounts.length,
-        accounts: accountItems,
-      ));
+      assetGroups.add(
+        CurrencyAssetGroup(
+          currency: currency,
+          currencyName: currencyData['nameZh'] as String,
+          flag: currencyData['flag'] as String?,
+          symbol: currencyData['symbol'] as String,
+          totalAmount: totalAmount,
+          convertedAmount: convertedTotal,
+          accountCount: currencyAccounts.length,
+          accounts: accountItems,
+        ),
+      );
     }
 
     // 处理负债组
@@ -865,7 +958,11 @@ class CurrencyService {
       final currencyAccounts = entry.value;
       final currencyData = CurrencyDefaults.getAllCurrencies().firstWhere(
         (c) => c['code'] == currency,
-        orElse: () => {'code': currency, 'nameZh': currency, 'symbol': currency},
+        orElse: () => {
+          'code': currency,
+          'nameZh': currency,
+          'symbol': currency,
+        },
       );
 
       double totalAmount = 0;
@@ -877,40 +974,48 @@ class CurrencyService {
 
         double convertedBalance = balance;
         if (currency != targetCurrency) {
-          convertedBalance = await convert(balance, currency, targetCurrency) ?? balance;
+          convertedBalance =
+              await convert(balance, currency, targetCurrency) ?? balance;
         }
 
-        accountItems.add(CurrencyAccountItem(
-          accountId: account.id,
-          accountName: account.name,
-          accountType: account.type,
-          iconName: account.iconName,
-          balance: balance,
-          convertedBalance: convertedBalance,
-        ));
+        accountItems.add(
+          CurrencyAccountItem(
+            accountId: account.id,
+            accountName: account.name,
+            accountType: account.type,
+            iconName: account.iconName,
+            balance: balance,
+            convertedBalance: convertedBalance,
+          ),
+        );
       }
 
       double convertedTotal = totalAmount;
       if (currency != targetCurrency) {
-        convertedTotal = await convert(totalAmount, currency, targetCurrency) ?? totalAmount;
+        convertedTotal =
+            await convert(totalAmount, currency, targetCurrency) ?? totalAmount;
       }
       totalLiabilities += convertedTotal;
 
-      liabilityGroups.add(CurrencyAssetGroup(
-        currency: currency,
-        currencyName: currencyData['nameZh'] as String,
-        flag: currencyData['flag'] as String?,
-        symbol: currencyData['symbol'] as String,
-        totalAmount: totalAmount,
-        convertedAmount: convertedTotal,
-        accountCount: currencyAccounts.length,
-        accounts: accountItems,
-      ));
+      liabilityGroups.add(
+        CurrencyAssetGroup(
+          currency: currency,
+          currencyName: currencyData['nameZh'] as String,
+          flag: currencyData['flag'] as String?,
+          symbol: currencyData['symbol'] as String,
+          totalAmount: totalAmount,
+          convertedAmount: convertedTotal,
+          accountCount: currencyAccounts.length,
+          accounts: accountItems,
+        ),
+      );
     }
 
     // 按转换后金额排序
     assetGroups.sort((a, b) => b.convertedAmount.compareTo(a.convertedAmount));
-    liabilityGroups.sort((a, b) => b.convertedAmount.compareTo(a.convertedAmount));
+    liabilityGroups.sort(
+      (a, b) => b.convertedAmount.compareTo(a.convertedAmount),
+    );
 
     return MultiCurrencyAssetOverview(
       baseCurrency: targetCurrency,
@@ -997,7 +1102,12 @@ class CurrencyService {
   }
 
   /// 汇率变动信息
-  RateChangeInfo? calculateRateChange(double oldRate, double newRate, String from, String to) {
+  RateChangeInfo? calculateRateChange(
+    double oldRate,
+    double newRate,
+    String from,
+    String to,
+  ) {
     if (oldRate == 0) return null;
     final changePercent = ((newRate - oldRate) / oldRate) * 100;
     return RateChangeInfo(
