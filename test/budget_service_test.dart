@@ -668,6 +668,102 @@ void main() {
   );
 
   test(
+    'getBudgetCategoryContributions returns top categories by amount',
+    () async {
+      await isar.writeTxn(() async {
+        await isar.collection<JiveCategory>().putAll([
+          JiveCategory()
+            ..key = 'food'
+            ..name = '餐饮'
+            ..iconName = 'food'
+            ..order = 0
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..updatedAt = DateTime(2024, 2, 1),
+          JiveCategory()
+            ..key = 'travel'
+            ..name = '旅行'
+            ..iconName = 'travel'
+            ..order = 1
+            ..isSystem = false
+            ..isHidden = false
+            ..isIncome = false
+            ..updatedAt = DateTime(2024, 2, 1),
+        ]);
+      });
+
+      final budget = await budgetService.createBudget(
+        name: '总预算',
+        amount: 1000,
+        currency: 'CNY',
+        startDate: DateTime(2024, 2, 1),
+        endDate: DateTime(2024, 2, 29, 23, 59, 59, 999),
+        period: 'monthly',
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().putAll([
+          JiveTransaction()
+            ..amount = 60
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 2, 5, 10)
+            ..type = 'expense'
+            ..categoryKey = 'food',
+          JiveTransaction()
+            ..amount = 30
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 2, 6, 10)
+            ..type = 'expense'
+            ..categoryKey = 'travel',
+          JiveTransaction()
+            ..amount = 10
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 2, 7, 10)
+            ..type = 'expense'
+            ..categoryKey = 'food',
+        ]);
+      });
+
+      final top = await budgetService.getBudgetCategoryContributions(
+        budget,
+        referenceDate: DateTime(2024, 2, 10, 12),
+        limit: 2,
+      );
+
+      expect(top.length, 2);
+      expect(top[0].categoryKey, 'food');
+      expect(top[0].amount, closeTo(70, 0.001));
+      expect(top[0].ratioPercent, closeTo(70, 0.001));
+      expect(top[1].categoryKey, 'travel');
+      expect(top[1].amount, closeTo(30, 0.001));
+      expect(top[1].ratioPercent, closeTo(30, 0.001));
+    },
+  );
+
+  test('detectBudgetSpendingAnomaliesFromDaily finds spike days', () async {
+    final anomalies = budgetService.detectBudgetSpendingAnomaliesFromDaily(
+      [
+        BudgetDailySpending(day: DateTime(2024, 2, 1), amount: 10),
+        BudgetDailySpending(day: DateTime(2024, 2, 2), amount: 12),
+        BudgetDailySpending(day: DateTime(2024, 2, 3), amount: 9),
+        BudgetDailySpending(day: DateTime(2024, 2, 4), amount: 80),
+        BudgetDailySpending(day: DateTime(2024, 2, 5), amount: 11),
+      ],
+      effectiveAmount: 310,
+      periodStart: DateTime(2024, 2, 1),
+      periodEnd: DateTime(2024, 2, 29, 23, 59, 59, 999),
+      referenceDate: DateTime(2024, 2, 5, 12),
+      limit: 2,
+    );
+
+    expect(anomalies.length, 1);
+    expect(anomalies.first.day, DateTime(2024, 2, 4));
+    expect(anomalies.first.amount, 80);
+    expect(anomalies.first.thresholdAmount, greaterThan(40));
+  });
+
+  test(
     'calculateBudgetUsage uses carryoverAmount as part of effectiveAmount',
     () async {
       final budget = await budgetService.createBudget(

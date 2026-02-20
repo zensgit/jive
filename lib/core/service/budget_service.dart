@@ -780,6 +780,125 @@ class BudgetService {
     return result;
   }
 
+  /// 按分类聚合预算周期内支出贡献（默认用于“总预算”看板的 TopN）。
+  Future<List<BudgetCategoryContribution>> getBudgetCategoryContributions(
+    JiveBudget budget, {
+    DateTime? referenceDate,
+    int limit = 5,
+  }) async {
+    if (limit <= 0) return const [];
+
+    final effectiveDirectAmount = _effectiveDirectAmount(budget);
+    final context = budget.categoryKey == null
+        ? await _getOverallBudgetYimuContext(budget, effectiveDirectAmount)
+        : null;
+
+    final ref = referenceDate ?? DateTime.now();
+    final refEnd = DateTime(ref.year, ref.month, ref.day, 23, 59, 59, 999);
+    final queryEnd = refEnd.isAfter(budget.endDate) ? budget.endDate : refEnd;
+    if (queryEnd.isBefore(budget.startDate)) return const [];
+
+    final transactions = await _getBudgetTransactionsInRange(
+      budget,
+      budget.startDate,
+      queryEnd,
+      excludedKeys: context?.excludedCategoryKeys,
+      budgetedParentKeys: context?.budgetedParentKeys,
+      budgetedChildKeys: context?.budgetedChildKeys,
+      onlyBudgetedCategories: context?.onlyBudgetedCategories ?? false,
+    );
+    if (transactions.isEmpty) return const [];
+
+    final exchangeRate = await _budgetExchangeRate(budget);
+    final amountByCategory = <String, double>{};
+    for (final tx in transactions) {
+      final key = _contributionCategoryKey(tx);
+      amountByCategory.update(
+        key,
+        (value) => value + tx.amount * exchangeRate,
+        ifAbsent: () => tx.amount * exchangeRate,
+      );
+    }
+    if (amountByCategory.isEmpty) return const [];
+
+    final totalAmount = amountByCategory.values.fold<double>(
+      0,
+      (s, v) => s + v,
+    );
+    if (totalAmount <= 0) return const [];
+
+    final sorted = amountByCategory.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(limit).map((entry) {
+      final ratio = entry.value / totalAmount * 100;
+      return BudgetCategoryContribution(
+        categoryKey: entry.key,
+        amount: entry.value,
+        ratioPercent: _finiteValue(ratio),
+      );
+    }).toList();
+  }
+
+  /// 基于日级支出数据识别异常支出日（用于预算看板提示）。
+  List<BudgetSpendingAnomalyDay> detectBudgetSpendingAnomaliesFromDaily(
+    List<BudgetDailySpending> daily, {
+    required double effectiveAmount,
+    required DateTime periodStart,
+    required DateTime periodEnd,
+    DateTime? referenceDate,
+    int limit = 3,
+  }) {
+    if (daily.isEmpty || limit <= 0) return const [];
+
+    final startDay = DateTime(
+      periodStart.year,
+      periodStart.month,
+      periodStart.day,
+    );
+    final endDay = DateTime(periodEnd.year, periodEnd.month, periodEnd.day);
+    final ref = referenceDate ?? DateTime.now();
+    final refDay = DateTime(ref.year, ref.month, ref.day);
+
+    final effectiveEnd = refDay.isBefore(startDay)
+        ? startDay.subtract(const Duration(days: 1))
+        : refDay.isAfter(endDay)
+        ? endDay
+        : refDay;
+    if (effectiveEnd.isBefore(startDay)) return const [];
+
+    final elapsed = daily.where((e) {
+      final day = DateTime(e.day.year, e.day.month, e.day.day);
+      return !day.isAfter(effectiveEnd);
+    }).toList();
+    if (elapsed.length < 3) return const [];
+
+    final totalUsed = elapsed.fold<double>(0, (sum, e) => sum + e.amount);
+    final avg = totalUsed / elapsed.length;
+    final totalDays = _daysInclusive(startDay, endDay);
+    final dailyBudget = totalDays > 0 ? effectiveAmount / totalDays : 0.0;
+
+    var threshold = avg * 2.0;
+    final paceThreshold = dailyBudget * 1.8;
+    if (paceThreshold > threshold) threshold = paceThreshold;
+    if (threshold < 1) threshold = 1;
+
+    final anomalies =
+        elapsed
+            .where((e) => e.amount > 0 && e.amount >= threshold)
+            .map(
+              (e) => BudgetSpendingAnomalyDay(
+                day: e.day,
+                amount: e.amount,
+                thresholdAmount: threshold,
+                averageAmount: avg,
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.amount.compareTo(a.amount));
+
+    return anomalies.take(limit).toList();
+  }
+
   /// 基于当前使用进度，计算预算节奏分析（预计月末、进度偏差、建议日均）。
   BudgetPacingInsight buildBudgetPacingInsight(
     BudgetSummary summary, {
@@ -963,6 +1082,14 @@ class BudgetService {
     }
   }
 
+  String _contributionCategoryKey(JiveTransaction tx) {
+    final parent = tx.categoryKey;
+    if (parent != null && parent.isNotEmpty) return parent;
+    final child = tx.subCategoryKey;
+    if (child != null && child.isNotEmpty) return child;
+    return '__uncategorized__';
+  }
+
   Future<double> _transactionContributionInBudgetCurrency(
     JiveTransaction tx,
     JiveBudget budget,
@@ -1101,6 +1228,32 @@ class BudgetPacingInsight {
     required this.projectedUsedPercent,
     required this.suggestedDailyLimit,
     required this.projectedStatus,
+  });
+}
+
+class BudgetCategoryContribution {
+  final String categoryKey;
+  final double amount;
+  final double ratioPercent;
+
+  const BudgetCategoryContribution({
+    required this.categoryKey,
+    required this.amount,
+    required this.ratioPercent,
+  });
+}
+
+class BudgetSpendingAnomalyDay {
+  final DateTime day;
+  final double amount;
+  final double thresholdAmount;
+  final double averageAmount;
+
+  const BudgetSpendingAnomalyDay({
+    required this.day,
+    required this.amount,
+    required this.thresholdAmount,
+    required this.averageAmount,
   });
 }
 
