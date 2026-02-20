@@ -24,6 +24,7 @@ FLAVOR="${FLUTTER_TEST_FLAVOR:-dev}"
 DART_DEFINE="${FLUTTER_TEST_DART_DEFINE:-JIVE_E2E=true}"
 RETRY_COUNT="${FLUTTER_TEST_RETRY_COUNT:-0}"
 TEST_TIMEOUT_SECONDS="${FLUTTER_TEST_TIMEOUT_SECONDS:-0}"
+ADB_TIMEOUT_SECONDS="${FLUTTER_ADB_TIMEOUT_SECONDS:-20}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
@@ -48,6 +49,7 @@ Env:
   FLUTTER_TEST_DART_DEFINE
   FLUTTER_TEST_RETRY_COUNT
   FLUTTER_TEST_TIMEOUT_SECONDS
+  FLUTTER_ADB_TIMEOUT_SECONDS
   FLUTTER_TEST_ARTIFACT_DIR
 EOF
 }
@@ -140,6 +142,11 @@ if ! [[ "${TEST_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
+if ! [[ "${ADB_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
+  echo "FLUTTER_ADB_TIMEOUT_SECONDS must be a non-negative integer, got: ${ADB_TIMEOUT_SECONDS}" >&2
+  exit 2
+fi
+
 if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
   echo "no integration tests selected" >&2
   exit 2
@@ -183,6 +190,15 @@ run_flutter_test() {
   fi
 }
 
+run_adb() {
+  local cmd=(adb "${adb_args[@]}" "$@")
+  if [[ -n "${TIMEOUT_BIN}" ]] && (( ADB_TIMEOUT_SECONDS > 0 )); then
+    "${TIMEOUT_BIN}" --signal=TERM --kill-after=5s "${ADB_TIMEOUT_SECONDS}s" "${cmd[@]}"
+  else
+    "${cmd[@]}"
+  fi
+}
+
 collect_failure_artifacts() {
   local file="$1"
   local attempt="$2"
@@ -200,10 +216,10 @@ collect_failure_artifacts() {
   fi
 
   log "collecting failure artifacts for ${file} (attempt ${attempt})"
-  adb "${adb_args[@]}" logcat -d > "${prefix}.logcat.txt" 2>/dev/null || true
-  adb "${adb_args[@]}" exec-out screencap -p > "${prefix}.screen.png" 2>/dev/null || true
-  adb "${adb_args[@]}" shell uiautomator dump /sdcard/jive_integration_fail.xml >/dev/null 2>&1 || true
-  adb "${adb_args[@]}" pull /sdcard/jive_integration_fail.xml "${prefix}.ui.xml" >/dev/null 2>&1 || true
+  run_adb logcat -d > "${prefix}.logcat.txt" 2>/dev/null || true
+  run_adb exec-out screencap -p > "${prefix}.screen.png" 2>/dev/null || true
+  run_adb shell uiautomator dump /sdcard/jive_integration_fail.xml >/dev/null 2>&1 || true
+  run_adb pull /sdcard/jive_integration_fail.xml "${prefix}.ui.xml" >/dev/null 2>&1 || true
 }
 
 run_test_with_retry() {
@@ -217,7 +233,7 @@ run_test_with_retry() {
     local log_file="${ARTIFACT_DIR}/${safe_name}.attempt${attempt}.test.log"
     local exit_code=0
     log "running: ${file} (attempt ${attempt}/${max_attempts})"
-    adb "${adb_args[@]}" logcat -c >/dev/null 2>&1 || true
+    run_adb logcat -c >/dev/null 2>&1 || true
     if run_flutter_test "${file}" "${log_file}"; then
       log "passed: ${file} (attempt ${attempt})"
       return 0
