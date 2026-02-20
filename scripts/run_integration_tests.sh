@@ -25,6 +25,7 @@ DART_DEFINE="${FLUTTER_TEST_DART_DEFINE:-JIVE_E2E=true}"
 RETRY_COUNT="${FLUTTER_TEST_RETRY_COUNT:-0}"
 TEST_TIMEOUT_SECONDS="${FLUTTER_TEST_TIMEOUT_SECONDS:-0}"
 ADB_TIMEOUT_SECONDS="${FLUTTER_ADB_TIMEOUT_SECONDS:-20}"
+TEST_CASE_TIMEOUT="${FLUTTER_TEST_CASE_TIMEOUT:-}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
@@ -38,6 +39,8 @@ Options:
   --test <path>          Run only specified test file. Can be passed multiple times.
   --retry <count>        Retry each failed test up to <count> times. Default: 0.
   --timeout <seconds>    Per-test timeout in seconds. 0 disables timeout. Default: 0.
+  --test-case-timeout <duration>
+                         Pass through to 'flutter test --timeout'. Example: 20m.
   --artifact-dir <path>  Directory to store test logs/artifacts.
   --no-collect-on-fail   Disable adb artifact collection on failure.
   --list                 Print default integration test files and exit.
@@ -49,6 +52,7 @@ Env:
   FLUTTER_TEST_DART_DEFINE
   FLUTTER_TEST_RETRY_COUNT
   FLUTTER_TEST_TIMEOUT_SECONDS
+  FLUTTER_TEST_CASE_TIMEOUT
   FLUTTER_ADB_TIMEOUT_SECONDS
   FLUTTER_TEST_ARTIFACT_DIR
 EOF
@@ -102,6 +106,14 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       TEST_TIMEOUT_SECONDS="$1"
+      ;;
+    --test-case-timeout)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "missing value for --test-case-timeout" >&2
+        exit 2
+      fi
+      TEST_CASE_TIMEOUT="$1"
       ;;
     --no-collect-on-fail)
       COLLECT_ON_FAIL=0
@@ -179,6 +191,9 @@ run_flutter_test() {
     --flavor "${FLAVOR}"
     --dart-define="${DART_DEFINE}"
   )
+  if [[ -n "${TEST_CASE_TIMEOUT}" ]]; then
+    cmd+=(--timeout "${TEST_CASE_TIMEOUT}")
+  fi
   if [[ -n "${DEVICE_ID}" ]]; then
     cmd+=(-d "${DEVICE_ID}")
   fi
