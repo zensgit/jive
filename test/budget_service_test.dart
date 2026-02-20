@@ -557,6 +557,117 @@ void main() {
   );
 
   test(
+    'buildBudgetPacingInsight projects overspend from current run rate',
+    () async {
+      final budget = await budgetService.createBudget(
+        name: '月度预算',
+        amount: 290,
+        currency: 'CNY',
+        startDate: DateTime(2024, 2, 1),
+        endDate: DateTime(2024, 2, 29, 23, 59, 59, 999),
+        period: 'monthly',
+        alertEnabled: true,
+        alertThreshold: 80,
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().put(
+          JiveTransaction()
+            ..amount = 200
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 2, 10, 9)
+            ..type = 'expense',
+        );
+      });
+
+      final summary = await budgetService.calculateBudgetUsage(budget);
+      final insight = budgetService.buildBudgetPacingInsight(
+        summary,
+        referenceDate: DateTime(2024, 2, 10, 12),
+      );
+
+      expect(insight.totalDays, 29);
+      expect(insight.elapsedDays, 10);
+      expect(insight.remainingDays, 19);
+      expect(insight.expectedUsedByNow, closeTo(100, 0.001));
+      expect(insight.paceDelta, closeTo(100, 0.001));
+      expect(insight.projectedUsedAmount, closeTo(580, 0.001));
+      expect(insight.projectedRemainingAmount, closeTo(-290, 0.001));
+      expect(insight.projectedStatus, BudgetStatus.exceeded);
+      expect(insight.suggestedDailyLimit, closeTo(90 / 19, 0.001));
+    },
+  );
+
+  test(
+    'buildBudgetPacingInsight marks warning when projection reaches threshold',
+    () async {
+      final budget = await budgetService.createBudget(
+        name: '短周期预算',
+        amount: 100,
+        currency: 'CNY',
+        startDate: DateTime(2024, 5, 1),
+        endDate: DateTime(2024, 5, 10, 23, 59, 59, 999),
+        period: 'custom',
+        alertEnabled: true,
+        alertThreshold: 80,
+      );
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveTransaction>().put(
+          JiveTransaction()
+            ..amount = 35
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 5, 4, 9)
+            ..type = 'expense',
+        );
+      });
+
+      final summary = await budgetService.calculateBudgetUsage(budget);
+      final insight = budgetService.buildBudgetPacingInsight(
+        summary,
+        referenceDate: DateTime(2024, 5, 4, 12),
+      );
+
+      expect(insight.totalDays, 10);
+      expect(insight.elapsedDays, 4);
+      expect(insight.remainingDays, 6);
+      expect(insight.projectedUsedAmount, closeTo(87.5, 0.001));
+      expect(insight.projectedUsedPercent, closeTo(87.5, 0.001));
+      expect(insight.projectedRemainingAmount, closeTo(12.5, 0.001));
+      expect(insight.projectedStatus, BudgetStatus.warning);
+    },
+  );
+
+  test(
+    'buildBudgetPacingInsight keeps elapsed at zero for future period',
+    () async {
+      final budget = await budgetService.createBudget(
+        name: '未来预算',
+        amount: 300,
+        currency: 'CNY',
+        startDate: DateTime(2024, 6, 1),
+        endDate: DateTime(2024, 6, 30, 23, 59, 59, 999),
+        period: 'monthly',
+      );
+
+      final summary = await budgetService.calculateBudgetUsage(budget);
+      final insight = budgetService.buildBudgetPacingInsight(
+        summary,
+        referenceDate: DateTime(2024, 5, 20, 12),
+      );
+
+      expect(insight.totalDays, 30);
+      expect(insight.elapsedDays, 0);
+      expect(insight.remainingDays, 30);
+      expect(insight.expectedUsedByNow, 0);
+      expect(insight.projectedUsedAmount, 0);
+      expect(insight.projectedRemainingAmount, 300);
+      expect(insight.suggestedDailyLimit, closeTo(10, 0.001));
+      expect(insight.projectedStatus, BudgetStatus.normal);
+    },
+  );
+
+  test(
     'calculateBudgetUsage uses carryoverAmount as part of effectiveAmount',
     () async {
       final budget = await budgetService.createBudget(
@@ -571,12 +682,12 @@ void main() {
 
       await isar.writeTxn(() async {
         await isar.collection<JiveTransaction>().put(
-              JiveTransaction()
-                ..amount = 10
-                ..source = 'Seed'
-                ..timestamp = DateTime(2024, 3, 2, 9)
-                ..type = 'expense',
-            );
+          JiveTransaction()
+            ..amount = 10
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 3, 2, 9)
+            ..type = 'expense',
+        );
       });
 
       final summary = await budgetService.calculateBudgetUsage(budget);
@@ -693,12 +804,12 @@ void main() {
 
       await isar.writeTxn(() async {
         await isar.collection<JiveTransaction>().put(
-              JiveTransaction()
-                ..amount = 60
-                ..source = 'Seed'
-                ..timestamp = DateTime(2024, 2, 20, 9)
-                ..type = 'expense',
-            );
+          JiveTransaction()
+            ..amount = 60
+            ..source = 'Seed'
+            ..timestamp = DateTime(2024, 2, 20, 9)
+            ..type = 'expense',
+        );
       });
 
       final created = await budgetService.autoCopyMonthlyBudgetsIfNeeded(

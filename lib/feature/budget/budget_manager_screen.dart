@@ -51,6 +51,7 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
 
   JiveBudget? _totalBudget; // persisted total budget for this month/currency
   BudgetSummary? _totalSummary;
+  BudgetPacingInsight? _totalPacingInsight;
   List<BudgetDailySpending> _totalDaily = const [];
 
   List<BudgetSummary> _categorySummaries = const [];
@@ -66,7 +67,8 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
     final pullEnabled = await BudgetPrefService.getBudgetPullToExcludeEnabled();
     final autoCopy = await BudgetPrefService.getBudgetMonthlyAutoCopyEnabled();
     final carryAdd = await BudgetPrefService.getBudgetCarryoverAddEnabled();
-    final carryReduce = await BudgetPrefService.getBudgetCarryoverReduceEnabled();
+    final carryReduce =
+        await BudgetPrefService.getBudgetCarryoverReduceEnabled();
     if (!mounted) return;
     setState(() {
       _pullToExcludeEnabled = pullEnabled;
@@ -100,6 +102,7 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
         _budgetService = result.budgetService;
         _totalBudget = result.totalBudget;
         _totalSummary = result.totalSummary;
+        _totalPacingInsight = result.totalPacingInsight;
         _totalDaily = result.totalDaily;
         _categorySummaries = result.categorySummaries;
         _categoryByKey = result.categoryByKey;
@@ -170,6 +173,10 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
       days: totalDays,
       referenceDate: end,
     );
+    final totalPacingInsight = budgetService.buildBudgetPacingInsight(
+      totalSummary,
+      referenceDate: _insightReferenceDate(start, end),
+    );
 
     final categoryBudgets = budgets
         .where((b) => b.categoryKey != null && b.categoryKey!.isNotEmpty)
@@ -191,10 +198,12 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
       isar: isar,
       budgetService: budgetService,
       currency: selectedCurrency,
-      totalBudget: totalBudget.categoryKey == null || totalBudget.categoryKey!.isEmpty
+      totalBudget:
+          totalBudget.categoryKey == null || totalBudget.categoryKey!.isEmpty
           ? (totalBudget.id == 0 ? null : totalBudget)
           : null,
       totalSummary: totalSummary,
+      totalPacingInsight: totalPacingInsight,
       totalDaily: totalDaily,
       categorySummaries: categorySummaries,
       categoryByKey: categoryByKey,
@@ -331,6 +340,19 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
     return effectiveEnd.difference(startDay).inDays + 1;
   }
 
+  DateTime _insightReferenceDate(DateTime start, DateTime end) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final startDay = DateTime(start.year, start.month, start.day);
+    final endDay = DateTime(end.year, end.month, end.day);
+    if (today.isBefore(startDay)) {
+      // Keep elapsed days as 0 for future periods.
+      return startDay.subtract(const Duration(days: 1));
+    }
+    if (today.isAfter(endDay)) return endDay;
+    return today;
+  }
+
   String _formatAmount(double amount) {
     return amount
         .toStringAsFixed(2)
@@ -338,6 +360,13 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
           RegExp(r'(\\d)(?=(\\d{3})+\\.)'),
           (match) => '${match[1]},',
         );
+  }
+
+  String _formatSignedAmount(double amount) {
+    final abs = _formatAmount(amount.abs());
+    if (amount > 0.004) return '+$abs';
+    if (amount < -0.004) return '-$abs';
+    return '0.00';
   }
 
   @override
@@ -469,7 +498,10 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                 );
 
                 if (!_pullToExcludeEnabled) return list;
-                return RefreshIndicator(onRefresh: _pullToOpenBudgetExclude, child: list);
+                return RefreshIndicator(
+                  onRefresh: _pullToOpenBudgetExclude,
+                  child: list,
+                );
               },
             ),
     );
@@ -518,7 +550,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
     final totalDays = _totalDaysInclusive(budget.startDate, budget.endDate);
     final daysElapsed = _daysElapsedInclusive(budget.startDate, budget.endDate);
     final dayAvg = daysElapsed > 0 ? summary.usedAmount / daysElapsed : 0.0;
-    final dailyBudget = totalDays > 0 ? summary.effectiveAmount / totalDays : 0.0;
+    final dailyBudget = totalDays > 0
+        ? summary.effectiveAmount / totalDays
+        : 0.0;
     final allowedSoFar = dailyBudget * daysElapsed;
     final todayRemain = allowedSoFar - summary.usedAmount;
 
@@ -560,7 +594,10 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                   icon: const Icon(Icons.edit, size: 18),
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+                  constraints: const BoxConstraints(
+                    minWidth: 34,
+                    minHeight: 34,
+                  ),
                 ),
                 const Spacer(),
                 Text(
@@ -568,7 +605,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                   style: GoogleFonts.rubik(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: summary.remainingAmount < 0 ? Colors.red : Colors.black87,
+                    color: summary.remainingAmount < 0
+                        ? Colors.red
+                        : Colors.black87,
                   ),
                 ),
               ],
@@ -603,7 +642,10 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _metric('支出', '$symbol ${_formatAmount(summary.usedAmount)}'),
+                  child: _metric(
+                    '支出',
+                    '$symbol ${_formatAmount(summary.usedAmount)}',
+                  ),
                 ),
                 Expanded(
                   child: _metric('日均', '$symbol ${_formatAmount(dayAvg)}'),
@@ -614,7 +656,10 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
             Row(
               children: [
                 Expanded(
-                  child: _metric('日预算', '$symbol ${_formatAmount(dailyBudget)}'),
+                  child: _metric(
+                    '日预算',
+                    '$symbol ${_formatAmount(dailyBudget)}',
+                  ),
                 ),
                 Expanded(
                   child: _metric(
@@ -625,8 +670,86 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                 ),
               ],
             ),
+            if (_totalPacingInsight != null) ...[
+              const SizedBox(height: 12),
+              _buildPacingInsightSection(
+                insight: _totalPacingInsight!,
+                symbol: symbol,
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPacingInsightSection({
+    required BudgetPacingInsight insight,
+    required String symbol,
+  }) {
+    final headlineColor = switch (insight.projectedStatus) {
+      BudgetStatus.exceeded => Colors.red.shade700,
+      BudgetStatus.warning => Colors.orange.shade700,
+      BudgetStatus.normal => Colors.grey.shade700,
+    };
+
+    final headline = insight.elapsedDays == 0
+        ? '周期未开始，建议日预算 $symbol ${_formatAmount(insight.suggestedDailyLimit)}'
+        : switch (insight.projectedStatus) {
+            BudgetStatus.exceeded =>
+              '按当前节奏预计超支 $symbol ${_formatAmount(insight.projectedRemainingAmount.abs())}',
+            BudgetStatus.warning =>
+              '按当前节奏预计触发预警（${insight.projectedUsedPercent.toStringAsFixed(1)}%）',
+            BudgetStatus.normal =>
+              '按当前节奏预计月末剩余 $symbol ${_formatAmount(insight.projectedRemainingAmount)}',
+          };
+
+    final paceColor = insight.paceDelta > 0
+        ? Colors.red.shade700
+        : JiveTheme.primaryGreen;
+    final suggestedColor = insight.suggestedDailyLimit < 0
+        ? Colors.red.shade700
+        : Colors.black87;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            headline,
+            style: GoogleFonts.lato(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: headlineColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: _metric(
+                  '进度偏差',
+                  '$symbol ${_formatSignedAmount(insight.paceDelta)}',
+                  valueColor: paceColor,
+                ),
+              ),
+              Expanded(
+                child: _metric(
+                  '建议日均',
+                  '$symbol ${_formatAmount(insight.suggestedDailyLimit)}',
+                  valueColor: suggestedColor,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -727,10 +850,7 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
   }) {
     if (daily.isEmpty) {
       return Center(
-        child: Text(
-          '暂无数据',
-          style: TextStyle(color: Colors.grey.shade600),
-        ),
+        child: Text('暂无数据', style: TextStyle(color: Colors.grey.shade600)),
       );
     }
 
@@ -745,7 +865,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
         .map(
           (e) => BudgetDailySpending(
             day: e.day,
-            amount: (effectiveAmount - e.amount) < 0 ? 0 : (effectiveAmount - e.amount),
+            amount: (effectiveAmount - e.amount) < 0
+                ? 0
+                : (effectiveAmount - e.amount),
           ),
         )
         .toList();
@@ -811,8 +933,12 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
               },
             ),
           ),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
+          rightTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
         ),
         borderData: FlBorderData(show: false),
         minX: 0,
@@ -896,13 +1022,20 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
             const SizedBox(width: 10),
             Text(
               '添加分类预算',
-              style: GoogleFonts.lato(fontSize: 15, fontWeight: FontWeight.w700),
+              style: GoogleFonts.lato(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const Spacer(),
             IconButton(
               tooltip: '说明',
               onPressed: _showCategoryBudgetTip,
-              icon: const Icon(Icons.help_outline, size: 20, color: Colors.black45),
+              icon: const Icon(
+                Icons.help_outline,
+                size: 20,
+                color: Colors.black45,
+              ),
               visualDensity: VisualDensity.compact,
             ),
           ],
@@ -921,7 +1054,10 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
           '当“总预算(手动)”小于等于分类预算合计时，总预算仅统计已设置预算的分类支出。',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('知道了')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('知道了'),
+          ),
         ],
       ),
     );
@@ -973,7 +1109,8 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
 
     final iconName = category?.iconName ?? 'category';
     final iconColor =
-        CategoryService.parseColorHex(category?.colorHex) ?? JiveTheme.categoryIconInactive;
+        CategoryService.parseColorHex(category?.colorHex) ??
+        JiveTheme.categoryIconInactive;
 
     return Container(
       key: key,
@@ -1025,7 +1162,10 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                     index: index,
                     child: Padding(
                       padding: const EdgeInsets.only(right: 6),
-                      child: Icon(Icons.drag_handle, color: Colors.grey.shade500),
+                      child: Icon(
+                        Icons.drag_handle,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
                   ),
                 ],
@@ -1075,9 +1215,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
       await _budgetService!.updateBudgetOrder(budgets);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('排序保存失败：$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('排序保存失败：$e')));
       await _loadData();
     }
   }
@@ -1124,9 +1264,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
       await _loadData();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存失败：$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败：$e')));
     }
   }
 
@@ -1135,7 +1275,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
     final isar = await _ensureIsar();
     if (!mounted) return;
 
-    final onlyUserCategories = _categoryByKey.values.any((c) => !c.isIncome && !c.isSystem);
+    final onlyUserCategories = _categoryByKey.values.any(
+      (c) => !c.isIncome && !c.isSystem,
+    );
     final picked = await Navigator.push<CategorySearchResult>(
       context,
       MaterialPageRoute(
@@ -1162,11 +1304,12 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
       BudgetPeriod.monthly,
       referenceDate: _month,
     );
-    final nextWeight = (_categorySummaries.isEmpty
-        ? 0
-        : _categorySummaries
-            .map((e) => e.budget.positionWeight)
-            .reduce((a, b) => a > b ? a : b)) +
+    final nextWeight =
+        (_categorySummaries.isEmpty
+            ? 0
+            : _categorySummaries
+                  .map((e) => e.budget.positionWeight)
+                  .reduce((a, b) => a > b ? a : b)) +
         1;
 
     try {
@@ -1185,9 +1328,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
       await _loadData();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存失败：$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败：$e')));
     }
   }
 
@@ -1245,9 +1388,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
       await _loadData();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存失败：$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('保存失败：$e')));
     }
   }
 
@@ -1258,9 +1401,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
       await _loadData();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('删除失败：$e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除失败：$e')));
     }
   }
 
@@ -1293,16 +1436,23 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
           children: [
             Text(
               title,
-              style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w700),
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 prefixText: '$symbol ',
                 labelText: '金额',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               autofocus: true,
             ),
@@ -1313,9 +1463,9 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                 onPressed: () {
                   final value = double.tryParse(controller.text.trim()) ?? 0;
                   if (value <= 0) {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('请输入有效金额')),
-                    );
+                    ScaffoldMessenger.of(
+                      ctx,
+                    ).showSnackBar(const SnackBar(content: Text('请输入有效金额')));
                     return;
                   }
                   Navigator.pop(ctx, value);
@@ -1345,6 +1495,7 @@ class _BudgetManagerLoadResult {
   final String currency;
   final JiveBudget? totalBudget;
   final BudgetSummary totalSummary;
+  final BudgetPacingInsight totalPacingInsight;
   final List<BudgetDailySpending> totalDaily;
   final List<BudgetSummary> categorySummaries;
   final Map<String, JiveCategory> categoryByKey;
@@ -1355,6 +1506,7 @@ class _BudgetManagerLoadResult {
     required this.currency,
     required this.totalBudget,
     required this.totalSummary,
+    required this.totalPacingInsight,
     required this.totalDaily,
     required this.categorySummaries,
     required this.categoryByKey,
@@ -1397,7 +1549,10 @@ class _MonthPickerSheet extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               '选择月份',
-              style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w700),
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 8),
             const Divider(height: 1),
@@ -1408,7 +1563,8 @@ class _MonthPickerSheet extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final m = months[index];
                   final isSelected =
-                      m.year == initialMonth.year && m.month == initialMonth.month;
+                      m.year == initialMonth.year &&
+                      m.month == initialMonth.month;
                   final label = '${m.year}年${m.month}月';
                   return ListTile(
                     title: Text(label),
