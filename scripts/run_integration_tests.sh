@@ -264,13 +264,16 @@ run_test_with_retry() {
     local exit_code=0
     log "running: ${file} (attempt ${attempt}/${max_attempts})"
     run_adb logcat -c >/dev/null 2>&1 || true
-    if run_flutter_test "${file}" "${log_file}"; then
+    set +e
+    run_flutter_test "${file}" "${log_file}"
+    exit_code=$?
+    set -e
+    if (( exit_code == 0 )); then
       log "passed: ${file} (attempt ${attempt})"
       return 0
     fi
-    exit_code=$?
-    if [[ "${exit_code}" -eq 124 ]]; then
-      log "timed out: ${file} after ${TEST_TIMEOUT_SECONDS}s (attempt ${attempt})"
+    if [[ "${exit_code}" -eq 124 || "${exit_code}" -eq 137 || "${exit_code}" -eq 143 ]]; then
+      log "timed out or terminated: ${file} after ${TEST_TIMEOUT_SECONDS}s (attempt ${attempt}, exit=${exit_code})"
     fi
     log "failed: ${file} (attempt ${attempt})"
     collect_failure_artifacts "${file}" "${attempt}"
