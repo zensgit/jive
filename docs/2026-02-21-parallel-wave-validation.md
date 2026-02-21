@@ -7,7 +7,7 @@
 | C CI E2E 稳定化 | `codex/parallel-ci-e2e-stabilize` | [#51](https://github.com/zensgit/jive/pull/51) | `48ce281` | `bfaf0fb45116` | MERGED |
 | B 外币统计真实币种 | `codex/parallel-currency-spending-source` | [#52](https://github.com/zensgit/jive/pull/52) | `5c60130` | `951c2df6b532` | MERGED |
 | A 预算钻取自动化 | `codex/parallel-budget-drilldown-e2e` | [#53](https://github.com/zensgit/jive/pull/53) | `ef3f33f` | `5a35913e911e` | MERGED |
-| D 报告与验收文档 | `codex/parallel-release-reporting` | 待创建 | (this branch) | - | IN PROGRESS |
+| D 报告与验收文档 | `codex/parallel-release-reporting` | [#54](https://github.com/zensgit/jive/pull/54) | `fbc653f` | `28b0a5817be8` | MERGED |
 
 ## 2) 命令与结果
 
@@ -45,7 +45,7 @@
   - [Run 22258107732](https://github.com/zensgit/jive/actions/runs/22258107732)
 - PR #53（analyze_and_test success, android_integration_test skipped by gate）：
   - [Run 22258115538](https://github.com/zensgit/jive/actions/runs/22258115538)
-- workflow_dispatch（手动触发 Android E2E）：
+- workflow_dispatch（手动触发 Android E2E，状态：`in_progress`，记录时间 2026-02-21 22:39）：
   - [Run 22258144671](https://github.com/zensgit/jive/actions/runs/22258144671)
 
 ## 4) 已知风险与后续项
