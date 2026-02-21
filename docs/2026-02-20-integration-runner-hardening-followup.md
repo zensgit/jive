@@ -124,3 +124,22 @@ bash scripts/run_integration_tests.sh \
   1. 非零退出后脚本不会提前中断；
   2. 失败清单与产物路径能稳定输出；
   3. job 结果与日志结果一致（无假阳性）。
+
+## 最新验证结果（run `22238407218`）
+
+结果：`analyze_and_test` 成功，`android_integration_test` 失败（状态与日志一致）。
+
+关键观察：
+
+1. 启动阶段仍有短暂 `adb: device offline`，但可进入测试执行阶段。  
+2. 在执行 `calendar_date_picker_flow_test.dart` 期间，emulator 出现连续 `QEMU2 ... hanging thread`。  
+3. 外层超时命中后，脚本已正确记录：
+   - `[integration] timed out or terminated: ... exit=137`
+   - `[integration] failed: integration_test/calendar_date_picker_flow_test.dart`
+4. 失败 step 现在被正确标记为：
+   - `Run Android integration_test (emulator)`（不再出现“日志失败但 job success”）。
+
+结论：
+
+- “失败语义不一致”问题已修复（这是本轮核心收益）。  
+- 当前剩余问题是 emulator 运行期稳定性（挂线程导致测试超时终止），不是 workflow 结果判断逻辑。
