@@ -2,51 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
+import '../../core/database/account_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/currency_spending_analytics_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
-
-/// 币种消费数据
-class CurrencySpendingData {
-  final String currency;
-  final String currencyName;
-  final String? flag;
-  final String symbol;
-  final double totalAmount;
-  final double convertedAmount;
-  final int transactionCount;
-  final List<MonthlySpending> monthlyData;
-
-  CurrencySpendingData({
-    required this.currency,
-    required this.currencyName,
-    this.flag,
-    required this.symbol,
-    required this.totalAmount,
-    required this.convertedAmount,
-    required this.transactionCount,
-    required this.monthlyData,
-  });
-}
-
-class MonthlySpending {
-  final DateTime month;
-  final double amount;
-
-  MonthlySpending({required this.month, required this.amount});
-}
 
 /// 外币消费趋势界面
 class ForeignCurrencySpendingScreen extends StatefulWidget {
   const ForeignCurrencySpendingScreen({super.key});
 
   @override
-  State<ForeignCurrencySpendingScreen> createState() => _ForeignCurrencySpendingScreenState();
+  State<ForeignCurrencySpendingScreen> createState() =>
+      _ForeignCurrencySpendingScreenState();
 }
 
-class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingScreen> {
+class _ForeignCurrencySpendingScreenState
+    extends State<ForeignCurrencySpendingScreen> {
   bool _isLoading = true;
   String _baseCurrency = 'CNY';
   List<CurrencySpendingData> _spendingData = [];
@@ -54,6 +28,8 @@ class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingS
   int _selectedMonths = 6;
   late Isar _isar;
   late CurrencyService _currencyService;
+  final CurrencySpendingAnalyticsService _spendingAnalyticsService =
+      const CurrencySpendingAnalyticsService();
 
   @override
   void initState() {
@@ -67,6 +43,10 @@ class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingS
     _isar = await DatabaseService.getInstance();
     _currencyService = CurrencyService(_isar);
     _baseCurrency = await _currencyService.getBaseCurrency();
+    final accounts = await _isar.jiveAccounts.where().findAll();
+    final accountById = <int, JiveAccount>{
+      for (final account in accounts) account.id: account,
+    };
 
     final now = DateTime.now();
     final startDate = DateTime(now.year, now.month - _selectedMonths + 1, 1);
@@ -78,80 +58,19 @@ class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingS
         .timestampGreaterThan(startDate)
         .findAll();
 
-    // 按币种和月份分组统计
-    final currencyData = <String, Map<String, dynamic>>{};
-
-    for (final tx in transactions) {
-      // 假设交易有币种字段，这里使用默认的CNY
-      // TODO: 从交易关联的账户获取实际币种
-      final currency = 'CNY'; // 简化处理
-      final month = DateTime(tx.timestamp.year, tx.timestamp.month, 1);
-
-      currencyData[currency] ??= {
-        'total': 0.0,
-        'count': 0,
-        'monthly': <DateTime, double>{},
-      };
-
-      currencyData[currency]!['total'] += tx.amount;
-      currencyData[currency]!['count'] += 1;
-
-      final monthlyMap = currencyData[currency]!['monthly'] as Map<DateTime, double>;
-      monthlyMap[month] = (monthlyMap[month] ?? 0) + tx.amount;
-    }
-
-    // 转换为数据模型
-    final spendingList = <CurrencySpendingData>[];
-    double totalConverted = 0;
-
-    for (final entry in currencyData.entries) {
-      final currency = entry.key;
-      final data = entry.value;
-      final total = data['total'] as double;
-      final count = data['count'] as int;
-      final monthlyMap = data['monthly'] as Map<DateTime, double>;
-
-      // 转换为主币种
-      double converted = total;
-      if (currency != _baseCurrency) {
-        converted = await _currencyService.convert(total, currency, _baseCurrency) ?? total;
-      }
-      totalConverted += converted;
-
-      final currencyInfo = CurrencyDefaults.getAllCurrencies().firstWhere(
-        (c) => c['code'] == currency,
-        orElse: () => {'code': currency, 'nameZh': currency, 'symbol': currency},
-      );
-
-      // 生成月度数据
-      final monthlyData = <MonthlySpending>[];
-      for (int i = 0; i < _selectedMonths; i++) {
-        final month = DateTime(now.year, now.month - _selectedMonths + 1 + i, 1);
-        monthlyData.add(MonthlySpending(
-          month: month,
-          amount: monthlyMap[month] ?? 0,
-        ));
-      }
-
-      spendingList.add(CurrencySpendingData(
-        currency: currency,
-        currencyName: currencyInfo['nameZh'] as String,
-        flag: currencyInfo['flag'] as String?,
-        symbol: currencyInfo['symbol'] as String,
-        totalAmount: total,
-        convertedAmount: converted,
-        transactionCount: count,
-        monthlyData: monthlyData,
-      ));
-    }
-
-    // 按消费金额排序
-    spendingList.sort((a, b) => b.convertedAmount.compareTo(a.convertedAmount));
+    final analytics = await _spendingAnalyticsService.buildSpendingData(
+      transactions: transactions,
+      accountById: accountById,
+      baseCurrency: _baseCurrency,
+      selectedMonths: _selectedMonths,
+      now: now,
+      converter: _currencyService.convert,
+    );
 
     if (mounted) {
       setState(() {
-        _spendingData = spendingList;
-        _totalConvertedSpending = totalConverted;
+        _spendingData = analytics.spendingByCurrency;
+        _totalConvertedSpending = analytics.totalConvertedSpending;
         _isLoading = false;
       });
     }
@@ -176,9 +95,18 @@ class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingS
               _loadData();
             },
             itemBuilder: (ctx) => [
-              PopupMenuItem(value: 3, child: Text('近3个月${_selectedMonths == 3 ? ' ✓' : ''}')),
-              PopupMenuItem(value: 6, child: Text('近6个月${_selectedMonths == 6 ? ' ✓' : ''}')),
-              PopupMenuItem(value: 12, child: Text('近12个月${_selectedMonths == 12 ? ' ✓' : ''}')),
+              PopupMenuItem(
+                value: 3,
+                child: Text('近3个月${_selectedMonths == 3 ? ' ✓' : ''}'),
+              ),
+              PopupMenuItem(
+                value: 6,
+                child: Text('近6个月${_selectedMonths == 6 ? ' ✓' : ''}'),
+              ),
+              PopupMenuItem(
+                value: 12,
+                child: Text('近12个月${_selectedMonths == 12 ? ' ✓' : ''}'),
+              ),
             ],
           ),
         ],
@@ -205,7 +133,9 @@ class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingS
                           ),
                         ),
                         const SizedBox(height: 12),
-                        ..._spendingData.map((item) => _buildSpendingCard(item, symbol)),
+                        ..._spendingData.map(
+                          (item) => _buildSpendingCard(item, symbol),
+                        ),
                       ],
                     ),
             ),
@@ -288,7 +218,10 @@ class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingS
           children: [
             Row(
               children: [
-                Text(item.flag ?? item.currency, style: const TextStyle(fontSize: 24)),
+                Text(
+                  item.flag ?? item.currency,
+                  style: const TextStyle(fontSize: 24),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -342,7 +275,10 @@ class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingS
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: item.monthlyData.map((monthly) {
                   final height = maxMonthlyAmount > 0
-                      ? (monthly.amount / maxMonthlyAmount * 50).clamp(4.0, 50.0)
+                      ? (monthly.amount / maxMonthlyAmount * 50).clamp(
+                          4.0,
+                          50.0,
+                        )
                       : 4.0;
                   return Expanded(
                     child: Padding(
@@ -353,8 +289,12 @@ class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingS
                           Container(
                             height: height,
                             decoration: BoxDecoration(
-                              color: JiveTheme.primaryGreen.withValues(alpha: 0.7),
-                              borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                              color: JiveTheme.primaryGreen.withValues(
+                                alpha: 0.7,
+                              ),
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(4),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 4),
@@ -382,9 +322,11 @@ class _ForeignCurrencySpendingScreenState extends State<ForeignCurrencySpendingS
     if (amount >= 10000) {
       return '${(amount / 10000).toStringAsFixed(2)}万';
     }
-    return amount.toStringAsFixed(2).replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+\.)'),
-      (match) => '${match[1]},',
-    );
+    return amount
+        .toStringAsFixed(2)
+        .replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+\.)'),
+          (match) => '${match[1]},',
+        );
   }
 }
