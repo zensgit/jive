@@ -80,8 +80,12 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: >-
-            flutter test integration_test/calendar_date_picker_flow_test.dart
-            integration_test/transaction_search_flow_test.dart
-            -d emulator-5554
-            --flavor dev
-            --dart-define=JIVE_E2E=true
+            bash scripts/run_android_integration_ci.sh
+
+      - name: Upload Android integration artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-integration-artifacts-${{ github.run_id }}
+          path: ci_artifacts/android_integration
+          if-no-files-found: warn
