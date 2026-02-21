@@ -23,12 +23,24 @@ Future<void> _waitForFinder(
   Duration timeout = const Duration(seconds: 20),
   Duration step = const Duration(milliseconds: 250),
 }) async {
+  if (await _waitForFinderMaybe(tester, finder, timeout: timeout, step: step)) {
+    return;
+  }
+  fail('Timed out waiting for finder: $finder');
+}
+
+Future<bool> _waitForFinderMaybe(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 20),
+  Duration step = const Duration(milliseconds: 250),
+}) async {
   final sw = Stopwatch()..start();
   while (sw.elapsed < timeout) {
     await tester.pump(step);
-    if (finder.evaluate().isNotEmpty) return;
+    if (finder.evaluate().isNotEmpty) return true;
   }
-  fail('Timed out waiting for finder: $finder');
+  return false;
 }
 
 Future<void> _tapWhenVisible(
@@ -69,6 +81,42 @@ Future<void> _dismissAutoPermissionDialogIfPresent(WidgetTester tester) async {
   }
 }
 
+Future<void> _openAllTransactionsScreen(WidgetTester tester) async {
+  const pageTitle = '全部账单';
+  final homeViewAllButton = find.byKey(const Key('home_view_all_button'));
+  final filterButton = find.byKey(const Key('transaction_filter_open_button'));
+
+  for (var attempt = 1; attempt <= 2; attempt++) {
+    if (find.text(pageTitle).evaluate().isEmpty &&
+        homeViewAllButton.evaluate().isNotEmpty) {
+      await _tapWhenVisible(
+        tester,
+        homeViewAllButton,
+        timeout: const Duration(seconds: 30),
+      );
+    }
+
+    final hasPageTitle = await _waitForFinderMaybe(
+      tester,
+      find.text(pageTitle),
+      timeout: const Duration(seconds: 30),
+    );
+    final hasFilterButton = await _waitForFinderMaybe(
+      tester,
+      filterButton,
+      timeout: const Duration(seconds: 40),
+    );
+    if (hasPageTitle && hasFilterButton) return;
+
+    await _pumpUntilSettled(tester, maxSteps: 80);
+  }
+
+  fail(
+    'Timed out entering all-transactions screen '
+    '(missing title or filter button).',
+  );
+}
+
 Future<void> _selectMonth(
   WidgetTester tester, {
   required int year,
@@ -107,10 +155,7 @@ void main() {
     await _dismissAutoPermissionDialogIfPresent(tester);
 
     // Home -> View All (全部账单)
-    await _tapWhenVisible(
-      tester,
-      find.byKey(const Key('home_view_all_button')),
-    );
+    await _openAllTransactionsScreen(tester);
 
     // Open transaction filter sheet.
     await _tapWhenVisible(
