@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
-          timeout 900 flutter build apk --debug --flavor dev --dart-define=JIVE_E2E=true
+          timeout 1200 flutter build apk --debug --flavor dev --dart-define=JIVE_E2E=true
 
       - name: Run Android integration_test (emulator)
         uses: reactivecircus/android-emulator-runner@v2
