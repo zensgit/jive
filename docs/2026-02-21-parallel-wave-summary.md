@@ -33,11 +33,16 @@
 - `.github/workflows/flutter_ci.yml` 的 `android_integration_test` 改为调用 runner。
 - 失败时始终上传 `ci_artifacts/android_integration`。
 - 关闭冲突噪音 PR：[#45](https://github.com/zensgit/jive/pull/45)，由 [#51](https://github.com/zensgit/jive/pull/51) 替代。
+- 后续修正 [#56](https://github.com/zensgit/jive/pull/56)：
+  - 默认执行集降为 `transaction_search_flow`
+  - artifact 上传改为 `continue-on-error`（避免配额问题掩盖主失败原因）
 
 ## 合并结果（按计划顺序）
 1. C -> main: [#51](https://github.com/zensgit/jive/pull/51)（merge commit: `bfaf0fb45116`）
 2. B -> main: [#52](https://github.com/zensgit/jive/pull/52)（merge commit: `951c2df6b532`）
 3. A -> main: [#53](https://github.com/zensgit/jive/pull/53)（merge commit: `5a35913e911e`）
+4. D -> main: [#54](https://github.com/zensgit/jive/pull/54) + [#55](https://github.com/zensgit/jive/pull/55)
+5. C follow-up -> main: [#56](https://github.com/zensgit/jive/pull/56)（merge commit: `aaa0419d0e9a`）
 
 ## 影响范围
 - 预算页：新增测试 key、钻取链路可自动化回归。
@@ -45,5 +50,5 @@
 - CI：Android E2E 具备统一入口、可追溯日志与截图产物。
 
 ## 结论
-- 本批并行计划 A/B/C 已完成开发、验证、PR 与合并。
+- 本批并行计划 A/B/C/D 已完成开发、验证、PR 与合并。
 - 验收证据见：`docs/2026-02-21-parallel-wave-validation.md`。
