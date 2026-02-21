@@ -15,6 +15,31 @@ Future<void> _pumpUntilSettled(
   }
 }
 
+Future<void> _waitForFinder(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 20),
+  Duration step = const Duration(milliseconds: 250),
+}) async {
+  final sw = Stopwatch()..start();
+  while (sw.elapsed < timeout) {
+    await tester.pump(step);
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  fail('Timed out waiting for finder: $finder');
+}
+
+Future<void> _tapWhenVisible(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 20),
+}) async {
+  await _waitForFinder(tester, finder, timeout: timeout);
+  await tester.ensureVisible(finder.first);
+  await tester.tap(finder.first, warnIfMissed: false);
+  await _pumpUntilSettled(tester);
+}
+
 Future<void> _dismissAutoPermissionDialogIfPresent(WidgetTester tester) async {
   if (find.text('自动记账权限未开启').evaluate().isEmpty) return;
   final later = find.text('稍后');
@@ -29,18 +54,26 @@ Future<void> _selectMonth(
   required int year,
   required int month,
 }) async {
-  await tester.tap(find.byKey(const Key('jive_calendar_month_picker')));
-  await _pumpUntilSettled(tester);
-  await tester.tap(find.byType(DropdownButtonFormField<int>).first);
-  await _pumpUntilSettled(tester);
+  await _tapWhenVisible(
+    tester,
+    find.byKey(const Key('jive_calendar_month_picker')),
+  );
+  await _tapWhenVisible(
+    tester,
+    find.byType(DropdownButtonFormField<int>).first,
+  );
+  await _waitForFinder(tester, find.text(year.toString()));
   await tester.tap(find.text(year.toString()).last);
   await _pumpUntilSettled(tester);
+  await _waitForFinder(
+    tester,
+    find.widgetWithText(ChoiceChip, month.toString().padLeft(2, '0')),
+  );
   await tester.tap(
     find.widgetWithText(ChoiceChip, month.toString().padLeft(2, '0')),
   );
   await _pumpUntilSettled(tester);
-  await tester.tap(find.text('确定'));
-  await _pumpUntilSettled(tester);
+  await _tapWhenVisible(tester, find.text('确定'));
 }
 
 void main() {
@@ -53,25 +86,35 @@ void main() {
       await _pumpUntilSettled(tester);
       await _dismissAutoPermissionDialogIfPresent(tester);
 
-      await tester.tap(find.byKey(const Key('home_view_all_button')));
-      await _pumpUntilSettled(tester);
+      await _tapWhenVisible(
+        tester,
+        find.byKey(const Key('home_view_all_button')),
+      );
 
+      await _waitForFinder(
+        tester,
+        find.byKey(const Key('transaction_filter_open_button')),
+      );
       final searchField = find.byType(TextField).first;
       await tester.enterText(searchField, 'abc');
       await _pumpUntilSettled(tester);
       expect(find.text('abc'), findsOneWidget);
 
-      await tester.tap(find.byKey(const Key('transaction_filter_open_button')));
-      await _pumpUntilSettled(tester);
+      await _tapWhenVisible(
+        tester,
+        find.byKey(const Key('transaction_filter_open_button')),
+      );
       expect(find.text('查找账单（按条件）'), findsOneWidget);
 
-      await tester.tap(
+      await _tapWhenVisible(
+        tester,
         find.byKey(const Key('transaction_filter_date_range_tile')),
       );
-      await _pumpUntilSettled(tester);
       await _selectMonth(tester, year: 2026, month: 2);
+      await _waitForFinder(tester, find.text('10'));
       await tester.tap(find.text('10').first);
       await _pumpUntilSettled(tester);
+      await _waitForFinder(tester, find.text('13'));
       await tester.tap(find.text('13').first);
       await _pumpUntilSettled(tester);
       expect(find.text('2026-02-10 - 2026-02-13'), findsOneWidget);
@@ -90,9 +133,7 @@ void main() {
       final clearAll = find.byKey(
         const Key('transaction_filter_clear_all_button'),
       );
-      await tester.ensureVisible(clearAll.first);
-      await tester.tap(clearAll.first, warnIfMissed: false);
-      await _pumpUntilSettled(tester);
+      await _tapWhenVisible(tester, clearAll);
 
       final closeButton = find.byIcon(Icons.close);
       if (closeButton.evaluate().isNotEmpty) {

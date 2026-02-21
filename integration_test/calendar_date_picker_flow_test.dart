@@ -17,6 +17,31 @@ Future<void> _pumpUntilSettled(
   // Best-effort: don't hard-fail here; the test will fail on missing finders.
 }
 
+Future<void> _waitForFinder(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 20),
+  Duration step = const Duration(milliseconds: 250),
+}) async {
+  final sw = Stopwatch()..start();
+  while (sw.elapsed < timeout) {
+    await tester.pump(step);
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  fail('Timed out waiting for finder: $finder');
+}
+
+Future<void> _tapWhenVisible(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 20),
+}) async {
+  await _waitForFinder(tester, finder, timeout: timeout);
+  await tester.ensureVisible(finder.first);
+  await tester.tap(finder.first, warnIfMissed: false);
+  await _pumpUntilSettled(tester);
+}
+
 Future<void> _waitForAnyText(
   WidgetTester tester,
   List<String> texts, {
@@ -50,24 +75,25 @@ Future<void> _selectMonth(
   required int month,
 }) async {
   // Open month/year picker from calendar header.
-  await tester.tap(find.byKey(const Key('jive_calendar_month_picker')));
-  await _pumpUntilSettled(tester);
+  await _tapWhenVisible(
+    tester,
+    find.byKey(const Key('jive_calendar_month_picker')),
+  );
 
   // Pick year (DropdownButtonFormField).
   final yearDropdown = find.byType(DropdownButtonFormField<int>);
-  expect(yearDropdown, findsOneWidget);
-  await tester.tap(yearDropdown);
-  await _pumpUntilSettled(tester);
+  await _tapWhenVisible(tester, yearDropdown);
+  await _waitForFinder(tester, find.text(year.toString()));
   await tester.tap(find.text(year.toString()).last);
   await _pumpUntilSettled(tester);
 
   // Pick month chip.
   final monthLabel = month.toString().padLeft(2, '0');
+  await _waitForFinder(tester, find.widgetWithText(ChoiceChip, monthLabel));
   await tester.tap(find.widgetWithText(ChoiceChip, monthLabel));
   await _pumpUntilSettled(tester);
 
-  await tester.tap(find.text('确定'));
-  await _pumpUntilSettled(tester);
+  await _tapWhenVisible(tester, find.text('确定'));
 }
 
 void main() {
@@ -81,26 +107,32 @@ void main() {
     await _dismissAutoPermissionDialogIfPresent(tester);
 
     // Home -> View All (全部账单)
-    await tester.tap(find.byKey(const Key('home_view_all_button')));
-    await _pumpUntilSettled(tester);
+    await _tapWhenVisible(
+      tester,
+      find.byKey(const Key('home_view_all_button')),
+    );
 
     // Open transaction filter sheet.
-    await tester.tap(find.byKey(const Key('transaction_filter_open_button')));
-    await _pumpUntilSettled(tester);
+    await _tapWhenVisible(
+      tester,
+      find.byKey(const Key('transaction_filter_open_button')),
+    );
 
     // Open date range picker.
-    await tester.tap(
+    await _tapWhenVisible(
+      tester,
       find.byKey(const Key('transaction_filter_date_range_tile')),
     );
-    await _pumpUntilSettled(tester);
 
     // Switch to Feb 2026 which should contain holiday/workday adjustments.
     await _selectMonth(tester, year: 2026, month: 2);
     expect(find.text('2026-02'), findsOneWidget);
 
     // Enable holiday corner marks.
-    await tester.tap(find.byKey(const Key('jive_calendar_filter_holiday')));
-    await _pumpUntilSettled(tester);
+    await _tapWhenVisible(
+      tester,
+      find.byKey(const Key('jive_calendar_filter_holiday')),
+    );
 
     // Holiday data is loaded async (asset -> optional disk override). Wait for
     // the marks to appear instead of assuming the next frame has them.
@@ -144,8 +176,10 @@ void main() {
     expect(dayRect.overlaps(badgeRect), isFalse);
 
     // Select a range and ensure it is reflected in the filter sheet.
+    await _waitForFinder(tester, find.text('10'));
     await tester.tap(find.text('10').first);
     await _pumpUntilSettled(tester);
+    await _waitForFinder(tester, find.text('13'));
     await tester.tap(find.text('13').first);
     await _pumpUntilSettled(tester);
 
