@@ -94,7 +94,7 @@ jobs:
       - name: Prewarm Android build toolchain
         run: |
           set -euo pipefail
-          export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs=-Xmx2g"
+          export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
           timeout 900 flutter build apk --debug --flavor dev --dart-define=JIVE_E2E=true
 
       - name: Run Android integration_test (emulator)
@@ -118,6 +118,6 @@ jobs:
             adb devices
           disable-animations: true
           script: |
-            export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs=-Xmx2g"
+            export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
             flutter devices
             timeout 1800 bash scripts/run_integration_tests.sh --retry 0 --timeout 720 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 2 --device-recovery-timeout 60 --allow-emulator-reboot emulator-5554
