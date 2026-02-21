@@ -35,6 +35,8 @@ IGNORE_TEST_TIMEOUTS="${FLUTTER_TEST_IGNORE_TIMEOUTS:-0}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
+SUITE_STARTED_AT="$(date +%s)"
+TEST_RUN_SUMMARY=()
 
 usage() {
   cat <<'EOF'
@@ -86,6 +88,16 @@ EOF
 
 log() {
   echo "[integration] $*"
+}
+
+format_duration() {
+  local total_seconds="$1"
+  if (( total_seconds < 0 )); then
+    total_seconds=0
+  fi
+  local minutes=$((total_seconds / 60))
+  local seconds=$((total_seconds % 60))
+  printf "%dm%02ds" "${minutes}" "${seconds}"
 }
 
 list_tests() {
@@ -567,6 +579,8 @@ run_test_with_retry() {
   local max_attempts=$((RETRY_COUNT + 1))
   local attempt=1
   local safe_name="${file//\//_}"
+  local test_started_at
+  test_started_at="$(date +%s)"
   safe_name="${safe_name//./_}"
 
   while (( attempt <= max_attempts )); do
@@ -607,6 +621,11 @@ run_test_with_retry() {
     fi
 
     if (( exit_code == 0 )); then
+      local elapsed_seconds=$(( $(date +%s) - test_started_at ))
+      local elapsed_label
+      elapsed_label="$(format_duration "${elapsed_seconds}")"
+      TEST_RUN_SUMMARY+=("${file}: PASS in ${elapsed_label} (attempt ${attempt}/${max_attempts})")
+      log "duration: ${file} => ${elapsed_label}"
       log "passed: ${file} (attempt ${attempt})"
       return 0
     fi
@@ -625,7 +644,27 @@ run_test_with_retry() {
     attempt=$((attempt + 1))
   done
 
+  local elapsed_seconds=$(( $(date +%s) - test_started_at ))
+  local elapsed_label
+  elapsed_label="$(format_duration "${elapsed_seconds}")"
+  TEST_RUN_SUMMARY+=("${file}: FAIL in ${elapsed_label} (${max_attempts} attempts)")
+  log "duration: ${file} => ${elapsed_label}"
+
   return 1
+}
+
+print_timing_summary() {
+  local suite_elapsed=$(( $(date +%s) - SUITE_STARTED_AT ))
+  log "timing summary:"
+  if [[ "${#TEST_RUN_SUMMARY[@]}" -eq 0 ]]; then
+    log "  - no test timing data"
+  else
+    local summary_line
+    for summary_line in "${TEST_RUN_SUMMARY[@]}"; do
+      log "  - ${summary_line}"
+    done
+  fi
+  log "suite elapsed: $(format_duration "${suite_elapsed}")"
 }
 
 FAILED_TESTS=()
@@ -634,6 +673,8 @@ for test_file in "${TEST_FILES[@]}"; do
     FAILED_TESTS+=("${test_file}")
   fi
 done
+
+print_timing_summary
 
 if [[ "${#FAILED_TESTS[@]}" -gt 0 ]]; then
   log "failed test files:"

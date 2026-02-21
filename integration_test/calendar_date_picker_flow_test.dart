@@ -4,55 +4,7 @@ import 'package:integration_test/integration_test.dart';
 
 import 'package:jive/core/widgets/jive_calendar/jive_calendar_day_cell.dart';
 import 'package:jive/main.dart' as app;
-
-Future<void> _pumpUntilSettled(
-  WidgetTester tester, {
-  Duration step = const Duration(milliseconds: 250),
-  int maxSteps = 40,
-}) async {
-  for (var i = 0; i < maxSteps; i++) {
-    await tester.pump(step);
-    if (!tester.binding.hasScheduledFrame) return;
-  }
-  // Best-effort: don't hard-fail here; the test will fail on missing finders.
-}
-
-Future<void> _waitForFinder(
-  WidgetTester tester,
-  Finder finder, {
-  Duration timeout = const Duration(seconds: 20),
-  Duration step = const Duration(milliseconds: 250),
-}) async {
-  if (await _waitForFinderMaybe(tester, finder, timeout: timeout, step: step)) {
-    return;
-  }
-  fail('Timed out waiting for finder: $finder');
-}
-
-Future<bool> _waitForFinderMaybe(
-  WidgetTester tester,
-  Finder finder, {
-  Duration timeout = const Duration(seconds: 20),
-  Duration step = const Duration(milliseconds: 250),
-}) async {
-  final sw = Stopwatch()..start();
-  while (sw.elapsed < timeout) {
-    await tester.pump(step);
-    if (finder.evaluate().isNotEmpty) return true;
-  }
-  return false;
-}
-
-Future<void> _tapWhenVisible(
-  WidgetTester tester,
-  Finder finder, {
-  Duration timeout = const Duration(seconds: 20),
-}) async {
-  await _waitForFinder(tester, finder, timeout: timeout);
-  await tester.ensureVisible(finder.first);
-  await tester.tap(finder.first, warnIfMissed: false);
-  await _pumpUntilSettled(tester);
-}
+import 'support/e2e_flow_helpers.dart';
 
 Future<void> _waitForAnyText(
   WidgetTester tester,
@@ -70,80 +22,6 @@ Future<void> _waitForAnyText(
   fail('Timed out waiting for any of: ${texts.join(', ')}');
 }
 
-Future<void> _dismissAutoPermissionDialogIfPresent(WidgetTester tester) async {
-  final title = find.text('自动记账权限未开启');
-  if (title.evaluate().isEmpty) return;
-
-  final later = find.text('稍后');
-  if (later.evaluate().isNotEmpty) {
-    await tester.tap(later);
-    await _pumpUntilSettled(tester);
-  }
-}
-
-Future<void> _openAllTransactionsScreen(WidgetTester tester) async {
-  const pageTitle = '全部账单';
-  final homeViewAllButton = find.byKey(const Key('home_view_all_button'));
-  final filterButton = find.byKey(const Key('transaction_filter_open_button'));
-
-  for (var attempt = 1; attempt <= 2; attempt++) {
-    if (find.text(pageTitle).evaluate().isEmpty &&
-        homeViewAllButton.evaluate().isNotEmpty) {
-      await _tapWhenVisible(
-        tester,
-        homeViewAllButton,
-        timeout: const Duration(seconds: 30),
-      );
-    }
-
-    final hasPageTitle = await _waitForFinderMaybe(
-      tester,
-      find.text(pageTitle),
-      timeout: const Duration(seconds: 30),
-    );
-    final hasFilterButton = await _waitForFinderMaybe(
-      tester,
-      filterButton,
-      timeout: const Duration(seconds: 40),
-    );
-    if (hasPageTitle && hasFilterButton) return;
-
-    await _pumpUntilSettled(tester, maxSteps: 80);
-  }
-
-  fail(
-    'Timed out entering all-transactions screen '
-    '(missing title or filter button).',
-  );
-}
-
-Future<void> _selectMonth(
-  WidgetTester tester, {
-  required int year,
-  required int month,
-}) async {
-  // Open month/year picker from calendar header.
-  await _tapWhenVisible(
-    tester,
-    find.byKey(const Key('jive_calendar_month_picker')),
-  );
-
-  // Pick year (DropdownButtonFormField).
-  final yearDropdown = find.byType(DropdownButtonFormField<int>);
-  await _tapWhenVisible(tester, yearDropdown);
-  await _waitForFinder(tester, find.text(year.toString()));
-  await tester.tap(find.text(year.toString()).last);
-  await _pumpUntilSettled(tester);
-
-  // Pick month chip.
-  final monthLabel = month.toString().padLeft(2, '0');
-  await _waitForFinder(tester, find.widgetWithText(ChoiceChip, monthLabel));
-  await tester.tap(find.widgetWithText(ChoiceChip, monthLabel));
-  await _pumpUntilSettled(tester);
-
-  await _tapWhenVisible(tester, find.text('确定'));
-}
-
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -151,30 +29,30 @@ void main() {
     tester,
   ) async {
     app.main();
-    await _pumpUntilSettled(tester);
-    await _dismissAutoPermissionDialogIfPresent(tester);
+    await pumpUntilSettled(tester);
+    await dismissAutoPermissionDialogIfPresent(tester);
 
     // Home -> View All (全部账单)
-    await _openAllTransactionsScreen(tester);
+    await openAllTransactionsScreen(tester);
 
     // Open transaction filter sheet.
-    await _tapWhenVisible(
+    await tapWhenVisible(
       tester,
       find.byKey(const Key('transaction_filter_open_button')),
     );
 
     // Open date range picker.
-    await _tapWhenVisible(
+    await tapWhenVisible(
       tester,
       find.byKey(const Key('transaction_filter_date_range_tile')),
     );
 
     // Switch to Feb 2026 which should contain holiday/workday adjustments.
-    await _selectMonth(tester, year: 2026, month: 2);
+    await selectMonthFromJiveCalendar(tester, year: 2026, month: 2);
     expect(find.text('2026-02'), findsOneWidget);
 
     // Enable holiday corner marks.
-    await _tapWhenVisible(
+    await tapWhenVisible(
       tester,
       find.byKey(const Key('jive_calendar_filter_holiday')),
     );
@@ -221,12 +99,12 @@ void main() {
     expect(dayRect.overlaps(badgeRect), isFalse);
 
     // Select a range and ensure it is reflected in the filter sheet.
-    await _waitForFinder(tester, find.text('10'));
+    await waitForFinder(tester, find.text('10'));
     await tester.tap(find.text('10').first);
-    await _pumpUntilSettled(tester);
-    await _waitForFinder(tester, find.text('13'));
+    await pumpUntilSettled(tester);
+    await waitForFinder(tester, find.text('13'));
     await tester.tap(find.text('13').first);
-    await _pumpUntilSettled(tester);
+    await pumpUntilSettled(tester);
 
     expect(find.text('2026-02-10 - 2026-02-13'), findsOneWidget);
   });
