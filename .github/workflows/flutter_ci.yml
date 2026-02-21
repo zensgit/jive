@@ -118,4 +118,4 @@ jobs:
           disable-animations: true
           script: |
             flutter devices
-            timeout 2100 bash scripts/run_integration_tests.sh --retry 0 --timeout 1000 --test-case-timeout 20m --ignore-test-timeouts emulator-5554
+            timeout 2100 bash scripts/run_integration_tests.sh --retry 1 --timeout 780 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 3 --device-recovery-timeout 90 --allow-emulator-reboot emulator-5554

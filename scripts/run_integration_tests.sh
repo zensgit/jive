@@ -28,6 +28,7 @@ ADB_TIMEOUT_SECONDS="${FLUTTER_ADB_TIMEOUT_SECONDS:-20}"
 DEVICE_RECOVERY_ENABLED="${FLUTTER_DEVICE_RECOVERY_ENABLED:-1}"
 DEVICE_RECOVERY_RETRY_COUNT="${FLUTTER_DEVICE_RECOVERY_RETRY_COUNT:-2}"
 DEVICE_RECOVERY_WAIT_SECONDS="${FLUTTER_DEVICE_RECOVERY_WAIT_SECONDS:-20}"
+ALLOW_EMULATOR_REBOOT="${FLUTTER_DEVICE_RECOVERY_ALLOW_EMULATOR_REBOOT:-0}"
 TEST_CASE_TIMEOUT="${FLUTTER_TEST_CASE_TIMEOUT:-}"
 IGNORE_TEST_TIMEOUTS="${FLUTTER_TEST_IGNORE_TIMEOUTS:-0}"
 COLLECT_ON_FAIL=1
@@ -53,6 +54,10 @@ Options:
                          Number of recovery rounds when device is offline. Default: 2.
   --device-recovery-timeout <seconds>
                          Wait timeout for each recovery round. 0 disables waiting. Default: 20.
+  --allow-emulator-reboot
+                         Allow adb reboot for emulator-* devices during recovery. Default: disabled.
+  --no-allow-emulator-reboot
+                         Disable emulator reboot during recovery.
   --artifact-dir <path>  Directory to store test logs/artifacts.
   --no-collect-on-fail   Disable adb artifact collection on failure.
   --list                 Print default integration test files and exit.
@@ -70,6 +75,7 @@ Env:
   FLUTTER_DEVICE_RECOVERY_ENABLED
   FLUTTER_DEVICE_RECOVERY_RETRY_COUNT
   FLUTTER_DEVICE_RECOVERY_WAIT_SECONDS
+  FLUTTER_DEVICE_RECOVERY_ALLOW_EMULATOR_REBOOT
   FLUTTER_TEST_ARTIFACT_DIR
 EOF
 }
@@ -156,6 +162,12 @@ while [[ $# -gt 0 ]]; do
       fi
       DEVICE_RECOVERY_WAIT_SECONDS="$1"
       ;;
+    --allow-emulator-reboot)
+      ALLOW_EMULATOR_REBOOT=1
+      ;;
+    --no-allow-emulator-reboot)
+      ALLOW_EMULATOR_REBOOT=0
+      ;;
     --no-collect-on-fail)
       COLLECT_ON_FAIL=0
       ;;
@@ -212,6 +224,11 @@ fi
 
 if ! [[ "${DEVICE_RECOVERY_WAIT_SECONDS}" =~ ^[0-9]+$ ]]; then
   echo "device recovery timeout must be a non-negative integer, got: ${DEVICE_RECOVERY_WAIT_SECONDS}" >&2
+  exit 2
+fi
+
+if ! [[ "${ALLOW_EMULATOR_REBOOT}" =~ ^[01]$ ]]; then
+  echo "allow emulator reboot flag must be 0 or 1, got: ${ALLOW_EMULATOR_REBOOT}" >&2
   exit 2
 fi
 
@@ -290,6 +307,52 @@ run_adb_raw() {
   fi
 }
 
+first_ready_device_id() {
+  local devices_output=""
+  set +e
+  devices_output="$(run_adb_raw devices 2>/dev/null)"
+  local devices_rc=$?
+  set -e
+  if (( devices_rc != 0 )); then
+    return 1
+  fi
+
+  echo "${devices_output}" | awk '/\tdevice$/{print $1; exit}'
+}
+
+first_connected_device_id() {
+  local devices_output=""
+  set +e
+  devices_output="$(run_adb_raw devices 2>/dev/null)"
+  local devices_rc=$?
+  set -e
+  if (( devices_rc != 0 )); then
+    return 1
+  fi
+
+  echo "${devices_output}" | awk '/\t(device|offline|unauthorized)$/{print $1; exit}'
+}
+
+device_boot_completed() {
+  local target_device="$1"
+  if [[ -z "${target_device}" ]]; then
+    return 1
+  fi
+
+  local boot_completed=""
+  set +e
+  boot_completed="$(run_adb_raw -s "${target_device}" shell getprop sys.boot_completed 2>/dev/null)"
+  local boot_rc=$?
+  set -e
+
+  if (( boot_rc != 0 )); then
+    return 1
+  fi
+
+  boot_completed="$(echo "${boot_completed}" | tr -d '[:space:]')"
+  [[ "${boot_completed}" == "1" ]]
+}
+
 device_is_ready() {
   if ! command -v adb >/dev/null 2>&1; then
     return 0
@@ -303,21 +366,20 @@ device_is_ready() {
     set -e
     state="$(echo "${state}" | tr -d '\r\n')"
     if (( state_rc == 0 )) && [[ "${state}" == "device" ]]; then
-      return 0
+      if device_boot_completed "${DEVICE_ID}"; then
+        return 0
+      fi
     fi
     return 1
   fi
 
-  local devices_output=""
-  set +e
-  devices_output="$(run_adb_raw devices 2>/dev/null)"
-  local devices_rc=$?
-  set -e
-  if (( devices_rc != 0 )); then
+  local auto_device=""
+  auto_device="$(first_ready_device_id || true)"
+  if [[ -z "${auto_device}" ]]; then
     return 1
   fi
 
-  if grep -Eq $'\tdevice$' <<< "${devices_output}"; then
+  if device_boot_completed "${auto_device}"; then
     return 0
   fi
 
@@ -378,11 +440,22 @@ recover_device_liveness() {
   fi
 
   local round=1
+  local recovery_target="${DEVICE_ID}"
   while (( round <= DEVICE_RECOVERY_RETRY_COUNT )); do
+    if [[ -z "${recovery_target}" ]]; then
+      recovery_target="$(first_connected_device_id || true)"
+    fi
+
     log "device recovery round ${round}/${DEVICE_RECOVERY_RETRY_COUNT}"
+    run_adb_raw reconnect offline >/dev/null 2>&1 || true
     run_adb_raw reconnect >/dev/null 2>&1 || true
     run_adb_raw kill-server >/dev/null 2>&1 || true
     run_adb_raw start-server >/dev/null 2>&1 || true
+
+    if (( ALLOW_EMULATOR_REBOOT == 1 )) && [[ -n "${recovery_target}" ]] && [[ "${recovery_target}" =~ ^emulator-[0-9]+$ ]]; then
+      log "attempting emulator reboot on ${recovery_target}"
+      run_adb_raw -s "${recovery_target}" reboot >/dev/null 2>&1 || true
+    fi
 
     if wait_for_target_device && device_is_ready; then
       log "device is online after recovery round ${round}"
@@ -391,6 +464,7 @@ recover_device_liveness() {
 
     log "device still not ready after recovery round ${round}"
     log_adb_devices_snapshot
+    recovery_target=""
     round=$((round + 1))
   done
 
@@ -427,6 +501,11 @@ is_disconnect_failure_log() {
   grep -Eiq \
     "no supported devices|no devices connected|no devices are connected|device offline|adb:.*device.*offline|adb:.*no devices|lost connection to device|unable to find devices|error: device .* not found" \
     "${log_file}"
+}
+
+is_timeout_exit_code() {
+  local exit_code="$1"
+  [[ "${exit_code}" -eq 124 || "${exit_code}" -eq 137 || "${exit_code}" -eq 143 ]]
 }
 
 run_single_test_invocation() {
@@ -484,16 +563,25 @@ run_test_with_retry() {
     exit_code=$?
     set -e
 
-    if (( exit_code != 0 )) && (( DEVICE_RECOVERY_ENABLED == 1 )) && (( recovered_rerun == 0 )) && is_disconnect_failure_log "${log_file}"; then
-      log "device disconnect pattern detected for ${file}; recovering and rerunning same attempt"
-      if recover_device_liveness; then
-        recovered_rerun=1
-        set +e
-        run_single_test_invocation "${file}" "${rerun_log_file}"
-        exit_code=$?
-        set -e
-      else
-        log "recovery did not restore a ready device for same-attempt rerun"
+    if (( exit_code != 0 )) && (( DEVICE_RECOVERY_ENABLED == 1 )) && (( recovered_rerun == 0 )); then
+      local rerun_reason=""
+      if is_disconnect_failure_log "${log_file}"; then
+        rerun_reason="device disconnect"
+      elif is_timeout_exit_code "${exit_code}"; then
+        rerun_reason="timeout/termination"
+      fi
+
+      if [[ -n "${rerun_reason}" ]]; then
+        log "${rerun_reason} detected for ${file}; recovering and rerunning same attempt"
+        if recover_device_liveness; then
+          recovered_rerun=1
+          set +e
+          run_single_test_invocation "${file}" "${rerun_log_file}"
+          exit_code=$?
+          set -e
+        else
+          log "recovery did not restore a ready device for same-attempt rerun"
+        fi
       fi
     fi
 
@@ -501,8 +589,12 @@ run_test_with_retry() {
       log "passed: ${file} (attempt ${attempt})"
       return 0
     fi
-    if [[ "${exit_code}" -eq 124 || "${exit_code}" -eq 137 || "${exit_code}" -eq 143 ]]; then
-      log "timed out or terminated: ${file} after ${TEST_TIMEOUT_SECONDS}s (attempt ${attempt}, exit=${exit_code})"
+    if is_timeout_exit_code "${exit_code}"; then
+      local timeout_label="configured timeout"
+      if (( TEST_TIMEOUT_SECONDS > 0 )); then
+        timeout_label="${TEST_TIMEOUT_SECONDS}s"
+      fi
+      log "timed out or terminated: ${file} after ${timeout_label} (attempt ${attempt}, exit=${exit_code})"
     fi
     log "failed: ${file} (attempt ${attempt})"
     collect_failure_artifacts "${file}" "${attempt}"
