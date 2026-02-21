@@ -5,9 +5,10 @@
 | Stream | Branch | PR | 分支提交 | 合并提交 | 状态 |
 |---|---|---|---|---|---|
 | C CI E2E 稳定化 | `codex/parallel-ci-e2e-stabilize` | [#51](https://github.com/zensgit/jive/pull/51) | `48ce281` | `bfaf0fb45116` | MERGED |
+| C2 CI E2E 稳定化后续 | `codex/parallel-ci-e2e-stabilize-v2` | [#56](https://github.com/zensgit/jive/pull/56) | `c209b40` | `aaa0419d0e9a` | MERGED |
 | B 外币统计真实币种 | `codex/parallel-currency-spending-source` | [#52](https://github.com/zensgit/jive/pull/52) | `5c60130` | `951c2df6b532` | MERGED |
 | A 预算钻取自动化 | `codex/parallel-budget-drilldown-e2e` | [#53](https://github.com/zensgit/jive/pull/53) | `ef3f33f` | `5a35913e911e` | MERGED |
-| D 报告与验收文档 | `codex/parallel-release-reporting` | [#54](https://github.com/zensgit/jive/pull/54) | `fbc653f` | `28b0a5817be8` | MERGED |
+| D 报告与验收文档 | `codex/parallel-release-reporting` | [#54](https://github.com/zensgit/jive/pull/54), [#55](https://github.com/zensgit/jive/pull/55) | `fbc653f`, `2f6ad5f` | `28b0a5817be8`, `f317a0472e21` | MERGED |
 
 ## 2) 命令与结果
 
@@ -30,6 +31,9 @@
 - `grep -n "run_android_integration_ci.sh\|upload-artifact\|android_integration_test\|run_android_e2e\|contains(github.event.pull_request.labels" .github/workflows/flutter_ci.yml` -> PASS（命中关键门控与调用）
 - `CI_ARTIFACT_DIR=/tmp/jive-ci-dry-run bash scripts/run_android_integration_ci.sh __missing_case__` -> PASS（预期 exit=2，参数校验生效）
 - `ANDROID_DEVICE_SERIAL=EP0110MZ0BC110087W CI_ARTIFACT_DIR=/tmp/jive-ci-local-run bash scripts/run_android_integration_ci.sh transaction_search_flow` -> PASS
+- Follow-up（#56）：
+  - `grep -n "run_android_integration_ci.sh\\|transaction_search_flow\\|continue-on-error\\|upload-artifact" .github/workflows/flutter_ci.yml` -> PASS
+  - `ANDROID_DEVICE_SERIAL=EP0110MZ0BC110087W CI_ARTIFACT_DIR=/tmp/jive-ci-local-run-v2 bash scripts/run_android_integration_ci.sh` -> PASS
 
 ## 3) 产物与证据
 
@@ -37,6 +41,7 @@
 - ADB 全链路脚本产物：`/tmp/jive-verify-20260221-214755`
 - CI runner 本地 dry-run 产物：`/tmp/jive-ci-dry-run`
 - CI runner 本地真机执行产物：`/tmp/jive-ci-local-run`
+- CI runner 本地真机执行产物（follow-up）：`/tmp/jive-ci-local-run-v2`
 
 ### GitHub Actions 运行
 - PR #51（analyze_and_test success, android_integration_test skipped by gate）：
@@ -46,7 +51,10 @@
 - PR #53（analyze_and_test success, android_integration_test skipped by gate）：
   - [Run 22258115538](https://github.com/zensgit/jive/actions/runs/22258115538)
 - workflow_dispatch（手动触发 Android E2E，状态：`in_progress`，记录时间 2026-02-21 22:39）：
+- workflow_dispatch（手动触发 Android E2E，结果：`cancelled`）：
   - [Run 22258144671](https://github.com/zensgit/jive/actions/runs/22258144671)
+- workflow_dispatch（follow-up，默认仅跑 `transaction_search_flow`，状态：`in_progress`，记录时间 2026-02-21 23:08）：
+  - [Run 22258838299](https://github.com/zensgit/jive/actions/runs/22258838299)
 
 ## 4) 已知风险与后续项
 
@@ -54,9 +62,10 @@
    - 现状：脚本识别空数据后记 `skip`，避免误报失败。
    - 后续：补一个“预算测试数据注入”脚本步骤，确保每次都能执行钻取断言。
 
-2. **workflow_dispatch 的 Android E2E 运行时间较长**
-   - 现状：已通过本地 runner 真机执行验证；CI 采用 artifact 化输出便于定位。
-   - 后续：按需拆分 integration case 或降低默认执行集，缩短 job 时长。
+2. **workflow_dispatch 的 Android E2E 在 GitHub emulator 环境仍有不稳定因素**
+   - 现状：`Run 22258144671` 中 `calendar_date_picker_flow_test.dart` 超时，随后 emulator 挂起并触发取消；follow-up 已将默认集缩减为 `transaction_search_flow`。
+   - 限制：仓库 Actions artifact 存储配额耗尽时，artifact 无法上传（已设置 `continue-on-error`，不再掩盖主失败原因）。
+   - 后续：清理 Actions artifact 配额，并持续观察 `Run 22258838299` 的执行结果。
 
 3. **macOS 本地无 `timeout`/`gtimeout` 时无超时保护**
    - 现状：runner 降级为无 timeout 模式，但保持真实退出码与产物收集。
@@ -64,7 +73,7 @@
 
 ## 5) 验收结论
 
-- 计划中的 A/B/C 功能已完成开发、验证、PR、合并。
+- 计划中的 A/B/C/D 功能已完成开发、验证、PR、合并。
 - 阶段文档已交付：
   - `docs/2026-02-21-budget-drilldown-e2e.md`
   - `docs/2026-02-21-currency-spending-account-currency.md`
