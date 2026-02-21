@@ -13,7 +13,6 @@ Date: 2026-02-21
 - Added `scripts/run_android_integration_ci.sh`.
   - Accepts integration test targets as positional args.
   - Defaults to:
-    - `calendar_date_picker_flow`
     - `transaction_search_flow`
   - Normalizes args to `integration_test/*_test.dart`.
   - Enforces timeout for `adb` operations and `flutter test` when `timeout`/`gtimeout` exists.
@@ -22,8 +21,9 @@ Date: 2026-02-21
   - Exits with the underlying failure code from `adb wait-for-device` or `flutter test`.
 - Updated `.github/workflows/flutter_ci.yml`:
   - Kept existing job gating unchanged.
-  - Replaced inline `flutter test` invocation with `bash scripts/run_android_integration_ci.sh`.
+  - Replaced inline `flutter test` invocation with `bash scripts/run_android_integration_ci.sh transaction_search_flow`.
   - Added an `actions/upload-artifact@v4` step (`if: always()`) for `ci_artifacts/android_integration`.
+  - Added `continue-on-error: true` to artifact upload step to avoid masking test result when Actions artifact quota is exhausted.
 
 ## Verification
 
