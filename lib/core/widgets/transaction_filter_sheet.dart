@@ -3,13 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../database/account_model.dart';
 import '../database/category_model.dart';
+import '../model/transaction_list_filter_state.dart';
 import 'jive_calendar/jive_calendar.dart';
-
-enum BudgetInclusionFilter {
-  all,
-  excludedOnly,
-  includedOnly,
-}
 
 class TransactionFilterSheet extends StatefulWidget {
   final List<JiveCategory> categories;
@@ -20,6 +15,8 @@ class TransactionFilterSheet extends StatefulWidget {
   final DateTimeRange? initialDateRange;
   final BudgetInclusionFilter initialBudgetFilter;
   final ValueChanged<BudgetInclusionFilter>? onBudgetFilterChanged;
+  final TransactionListFilterState? initialState;
+  final ValueChanged<TransactionListFilterState>? onStateChanged;
   final void Function(
     String? categoryKey,
     int? accountId,
@@ -52,6 +49,8 @@ class TransactionFilterSheet extends StatefulWidget {
     required this.onClear,
     this.initialBudgetFilter = BudgetInclusionFilter.all,
     this.onBudgetFilterChanged,
+    this.initialState,
+    this.onStateChanged,
     this.title = '查找账单（按条件）',
     this.hint = '选择即生效',
     this.categoryLabel = '分类',
@@ -79,11 +78,14 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
   @override
   void initState() {
     super.initState();
-    _categoryKey = widget.initialCategoryKey;
-    _accountId = widget.initialAccountId;
-    _tagController = TextEditingController(text: widget.initialTag ?? '');
-    _dateRange = widget.initialDateRange;
-    _budgetFilter = widget.initialBudgetFilter;
+    final state = widget.initialState;
+    _categoryKey = state?.categoryKey ?? widget.initialCategoryKey;
+    _accountId = state?.accountId ?? widget.initialAccountId;
+    _tagController = TextEditingController(
+      text: state?.tag ?? widget.initialTag ?? '',
+    );
+    _dateRange = state?.dateRange ?? widget.initialDateRange;
+    _budgetFilter = state?.budgetFilter ?? widget.initialBudgetFilter;
   }
 
   @override
@@ -100,6 +102,19 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
       tag.isEmpty ? null : tag,
       _dateRange,
     );
+    _notifyStateChanged();
+  }
+
+  void _notifyStateChanged() {
+    widget.onStateChanged?.call(
+      TransactionListFilterState(
+        categoryKey: _categoryKey,
+        accountId: _accountId,
+        tag: _tagController.text.trim().isEmpty ? null : _tagController.text,
+        dateRange: _dateRange,
+        budgetFilter: _budgetFilter,
+      ),
+    );
   }
 
   void _handleClear() {
@@ -112,6 +127,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     });
     widget.onBudgetFilterChanged?.call(_budgetFilter);
     widget.onClear();
+    _notifyStateChanged();
   }
 
   void _clearCategory() {
@@ -142,6 +158,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     if (_budgetFilter == BudgetInclusionFilter.all) return;
     setState(() => _budgetFilter = BudgetInclusionFilter.all);
     widget.onBudgetFilterChanged?.call(_budgetFilter);
+    _notifyStateChanged();
   }
 
   Widget _buildClearIcon(VoidCallback onPressed) {
@@ -383,6 +400,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                   if (value == null) return;
                   setState(() => _budgetFilter = value);
                   widget.onBudgetFilterChanged?.call(_budgetFilter);
+                  _notifyStateChanged();
                 },
               ),
             ],

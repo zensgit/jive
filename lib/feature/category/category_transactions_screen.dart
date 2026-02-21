@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
@@ -7,6 +10,9 @@ import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/model/transaction_list_filter_state.dart';
+import '../../core/model/transaction_query_spec.dart';
+import '../../core/service/transaction_query_service.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
@@ -18,6 +24,9 @@ class CategoryTransactionsScreen extends StatefulWidget {
   final String? filterCategoryKey;
   final String? filterSubCategoryKey;
   final bool includeSubCategories;
+  final TransactionListFilterState? initialFilterState;
+  final String? initialSearchQuery;
+  final bool persistFilterState;
 
   const CategoryTransactionsScreen({
     super.key,
@@ -25,6 +34,9 @@ class CategoryTransactionsScreen extends StatefulWidget {
     this.filterCategoryKey,
     this.filterSubCategoryKey,
     this.includeSubCategories = true,
+    this.initialFilterState,
+    this.initialSearchQuery,
+    this.persistFilterState = true,
   });
 
   @override
@@ -44,16 +56,19 @@ class _CategoryTransactionsScreenState
   Map<int, JiveAccount> _accountById = {};
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
+  final ScrollController _listScrollController = ScrollController();
+  Timer? _searchDebounce;
   String _searchQuery = '';
-  String? _searchCategoryKey;
-  int? _searchAccountId;
-  String? _searchTag;
-  DateTimeRange? _searchDateRange;
-  BudgetInclusionFilter _searchBudgetFilter = BudgetInclusionFilter.all;
+  TransactionListFilterState _filterState = const TransactionListFilterState();
   DateTime? _minTransactionDate;
   DateTime? _maxTransactionDate;
   Set<int> _transactionYears = {};
   Map<String, JiveTag> _tagByKey = {};
+  TransactionQueryService? _transactionQueryService;
+  TransactionQueryCursor? _nextQueryCursor;
+  bool _hasMoreQueryResults = false;
+  bool _isLoadingMore = false;
+  int _queryRevision = 0;
   _TransactionSortField _sortField = _TransactionSortField.date;
   _TransactionSortDirection _sortDirection = _TransactionSortDirection.desc;
   bool _groupByDate = false;
@@ -62,6 +77,8 @@ class _CategoryTransactionsScreenState
   late bool _includeSubCategories;
 
   static const double _floatingBarHeight = 60;
+  static const String _searchFilterStatePrefKey =
+      'transactions_filter_state_v1';
 
   @override
   void initState() {
@@ -71,12 +88,23 @@ class _CategoryTransactionsScreenState
         (widget.filterSubCategoryKey?.trim().isNotEmpty ?? false);
     _groupByDate = !hasCategoryFilter;
     _includeSubCategories = widget.includeSubCategories;
+    _filterState =
+        widget.initialFilterState ?? const TransactionListFilterState();
+    _searchQuery = widget.initialSearchQuery?.trim() ?? '';
+    if (_searchQuery.isNotEmpty) {
+      _searchController.text = _searchQuery;
+    }
+    _listScrollController.addListener(_onScrollLoadMore);
     _loadGroupingPreference();
     _load();
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _listScrollController
+      ..removeListener(_onScrollLoadMore)
+      ..dispose();
     _searchController.dispose();
     _searchFocus.dispose();
     super.dispose();
@@ -85,6 +113,10 @@ class _CategoryTransactionsScreenState
   Future<void> _load() async {
     try {
       _isar = await DatabaseService.getInstance();
+      _transactionQueryService = TransactionQueryService(_isar);
+      if (!_hasInitialOverrides) {
+        await _loadPersistedFilterState();
+      }
 
       final showBadge = await UiPrefService.getShowSmartTagBadge();
       final categories = await _isar
@@ -106,7 +138,7 @@ class _CategoryTransactionsScreenState
         });
       }
 
-      await _reloadTransactions(showLoading: false);
+      await _reloadTransactions(showLoading: false, reset: true);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -115,6 +147,41 @@ class _CategoryTransactionsScreenState
         });
       }
     }
+  }
+
+  Future<void> _loadPersistedFilterState() async {
+    if (!_shouldPersistFilterState) return;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_searchFilterStatePrefKey);
+    if (raw == null || raw.trim().isEmpty) return;
+    try {
+      final json = jsonDecode(raw);
+      if (json is Map<String, dynamic>) {
+        _filterState = TransactionListFilterState.fromJson(json);
+      } else if (json is Map) {
+        _filterState = TransactionListFilterState.fromJson(
+          Map<String, dynamic>.from(json),
+        );
+      }
+    } catch (_) {
+      // Ignore invalid cache and continue with default filters.
+    }
+  }
+
+  Future<void> _persistFilterState() async {
+    if (!_shouldPersistFilterState) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _searchFilterStatePrefKey,
+      jsonEncode(_filterState.toJson()),
+    );
+  }
+
+  void _onScrollLoadMore() {
+    if (!_listScrollController.hasClients) return;
+    if (!_usePaginatedQuery) return;
+    if (_listScrollController.position.extentAfter > 360) return;
+    unawaited(_loadMoreTransactions());
   }
 
   @override
@@ -142,7 +209,7 @@ class _CategoryTransactionsScreenState
         child: Text(_error!, style: TextStyle(color: Colors.grey.shade600)),
       );
     }
-    final visible = _applySearch(_transactions);
+    final visible = _transactions;
     final items = _buildListItems(visible);
     final bottomInset = _floatingBarHeight + 32;
     return Stack(
@@ -155,21 +222,7 @@ class _CategoryTransactionsScreenState
               const SizedBox(height: 120),
               Center(
                 child: Text(
-                  '暂无账单',
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
-              ),
-            ],
-          )
-        else if (visible.isEmpty)
-          ListView(
-            padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset),
-            children: [
-              if (_canToggleSubCategories) _buildSubCategoryToggle(),
-              const SizedBox(height: 120),
-              Center(
-                child: Text(
-                  '没有符合条件的账单',
+                  _hasSearchFilters() ? '没有符合条件的账单' : '暂无账单',
                   style: TextStyle(color: Colors.grey.shade600),
                 ),
               ),
@@ -177,15 +230,41 @@ class _CategoryTransactionsScreenState
           )
         else
           ListView.separated(
+            controller: _listScrollController,
             padding: EdgeInsets.fromLTRB(16, 12, 16, bottomInset),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            itemCount: items.length + (_canToggleSubCategories ? 1 : 0),
+            itemCount:
+                items.length +
+                (_canToggleSubCategories ? 1 : 0) +
+                (_isLoadingMore || _hasMoreQueryResults ? 1 : 0),
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               if (_canToggleSubCategories && index == 0) {
                 return _buildSubCategoryToggle();
               }
-              final item = items[_canToggleSubCategories ? index - 1 : index];
+              final baseOffset = _canToggleSubCategories ? 1 : 0;
+              final listIndex = index - baseOffset;
+              if (listIndex >= items.length) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: _isLoadingMore
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _hasMoreQueryResults ? '上拉加载更多' : '',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                  ),
+                );
+              }
+              final item = items[listIndex];
               if (item is _TransactionDayHeader) {
                 return _buildDayHeader(item);
               }
@@ -208,6 +287,32 @@ class _CategoryTransactionsScreenState
     final hasSub = widget.filterSubCategoryKey?.trim().isNotEmpty ?? false;
     return hasCategory && !hasSub;
   }
+
+  bool get _isAllTransactionsMode {
+    final hasCategory = widget.filterCategoryKey?.trim().isNotEmpty ?? false;
+    final hasSub = widget.filterSubCategoryKey?.trim().isNotEmpty ?? false;
+    return !hasCategory && !hasSub;
+  }
+
+  bool get _shouldPersistFilterState {
+    return widget.persistFilterState && _isAllTransactionsMode;
+  }
+
+  bool get _hasInitialOverrides {
+    return (widget.initialFilterState?.hasAnyFilter ?? false) ||
+        ((widget.initialSearchQuery?.trim().isNotEmpty) ?? false);
+  }
+
+  bool get _usePaginatedQuery {
+    return _sortField == _TransactionSortField.date &&
+        _sortDirection == _TransactionSortDirection.desc;
+  }
+
+  String? get _searchCategoryKey => _filterState.categoryKey;
+  int? get _searchAccountId => _filterState.accountId;
+  String? get _searchTag => _filterState.normalizedTag;
+  DateTimeRange? get _searchDateRange => _filterState.dateRange;
+  BudgetInclusionFilter get _searchBudgetFilter => _filterState.budgetFilter;
 
   Widget _buildSubCategoryToggle() {
     return Container(
@@ -238,81 +343,159 @@ class _CategoryTransactionsScreenState
     );
   }
 
-  Future<void> _reloadTransactions({required bool showLoading}) async {
+  Future<void> _reloadTransactions({
+    required bool showLoading,
+    bool reset = true,
+  }) async {
+    final service = _transactionQueryService;
+    if (service == null) return;
+    final revision = ++_queryRevision;
+
     if (showLoading && mounted) {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        if (reset) {
+          _transactions = const [];
+          _nextQueryCursor = null;
+          _hasMoreQueryResults = false;
+        }
+      });
     }
 
-    final String? subKey =
-        (widget.filterSubCategoryKey != null &&
-            widget.filterSubCategoryKey!.isNotEmpty)
-        ? widget.filterSubCategoryKey
-        : null;
-    final String? categoryKey =
-        (widget.filterCategoryKey != null &&
-            widget.filterCategoryKey!.isNotEmpty)
-        ? widget.filterCategoryKey
-        : null;
+    final baseSpec = _buildQuerySpec(
+      keyword: null,
+      filterState: const TransactionListFilterState(),
+    );
+    final meta = await service.loadDateMeta(baseSpec);
+    if (!mounted || revision != _queryRevision) return;
 
-    late final List<JiveTransaction> txs;
-    if (subKey != null) {
-      txs = await _isar.jiveTransactions
-          .filter()
-          .subCategoryKeyEqualTo(subKey)
-          .sortByTimestampDesc()
-          .findAll();
-    } else if (categoryKey != null) {
-      final filter = _isar.jiveTransactions.filter().categoryKeyEqualTo(
-        categoryKey,
+    final querySpec = _buildQuerySpec();
+    List<JiveTransaction> loaded = const [];
+    TransactionQueryCursor? nextCursor;
+    var hasMore = false;
+
+    if (_usePaginatedQuery) {
+      final page = await service.query(
+        querySpec,
+        pageSize: 100,
+        categoryByKey: _categoryByKey,
+        accountById: _accountById,
+        tagByKey: _tagByKey,
       );
-      if (_canToggleSubCategories && !_includeSubCategories) {
-        txs = await filter
-            .group(
-              (q) => q.subCategoryKeyIsNull().or().subCategoryKeyEqualTo(''),
-            )
-            .sortByTimestampDesc()
-            .findAll();
-      } else {
-        txs = await filter.sortByTimestampDesc().findAll();
-      }
+      if (!mounted || revision != _queryRevision) return;
+      loaded = page.items;
+      nextCursor = page.nextCursor;
+      hasMore =
+          page.hasMore && page.nextCursor != null && page.items.isNotEmpty;
     } else {
-      txs = await _isar.jiveTransactions
-          .where()
-          .sortByTimestampDesc()
-          .findAll();
+      final all = <JiveTransaction>[];
+      TransactionQueryCursor? cursor;
+      var loops = 0;
+      while (loops < 200) {
+        loops += 1;
+        final page = await service.query(
+          querySpec,
+          cursor: cursor,
+          pageSize: 200,
+          categoryByKey: _categoryByKey,
+          accountById: _accountById,
+          tagByKey: _tagByKey,
+        );
+        all.addAll(page.items);
+        if (!page.hasMore || page.nextCursor == null || page.items.isEmpty) {
+          break;
+        }
+        cursor = page.nextCursor;
+      }
+      if (!mounted || revision != _queryRevision) return;
+      loaded = all;
+      nextCursor = null;
+      hasMore = false;
     }
 
-    DateTime? minDate;
-    DateTime? maxDate;
-    final years = <int>{};
-    for (final tx in txs) {
-      final timestamp = tx.timestamp;
-      years.add(timestamp.year);
-      minDate = minDate == null || timestamp.isBefore(minDate)
-          ? timestamp
-          : minDate;
-      maxDate = maxDate == null || timestamp.isAfter(maxDate)
-          ? timestamp
-          : maxDate;
-    }
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    var maxDate = meta.maxDate;
     if (maxDate == null || today.isAfter(maxDate)) {
       maxDate = today;
     }
-    if (minDate != null) {
-      minDate = DateTime(minDate.year, minDate.month, minDate.day);
-    }
-    maxDate = DateTime(maxDate.year, maxDate.month, maxDate.day);
 
-    if (mounted) {
-      setState(() {
-        _transactions = txs;
-        _minTransactionDate = minDate;
-        _maxTransactionDate = maxDate;
-        _transactionYears = years;
-        _isLoading = false;
-      });
+    setState(() {
+      _transactions = loaded;
+      _nextQueryCursor = nextCursor;
+      _hasMoreQueryResults = hasMore;
+      _minTransactionDate = meta.minDate;
+      _maxTransactionDate = maxDate;
+      _transactionYears = meta.years;
+      _isLoading = false;
+      _isLoadingMore = false;
+    });
+  }
+
+  Future<void> _loadMoreTransactions() async {
+    final service = _transactionQueryService;
+    final cursor = _nextQueryCursor;
+    if (service == null || cursor == null) return;
+    if (_isLoading || _isLoadingMore || !_hasMoreQueryResults) return;
+    if (!_usePaginatedQuery) return;
+
+    final revision = _queryRevision;
+    setState(() => _isLoadingMore = true);
+    final page = await service.query(
+      _buildQuerySpec(),
+      cursor: cursor,
+      pageSize: 100,
+      categoryByKey: _categoryByKey,
+      accountById: _accountById,
+      tagByKey: _tagByKey,
+    );
+    if (!mounted || revision != _queryRevision) return;
+
+    final existingIds = _transactions.map((tx) => tx.id).toSet();
+    final appended = page.items
+        .where((tx) => !existingIds.contains(tx.id))
+        .toList(growable: false);
+    setState(() {
+      _transactions = [..._transactions, ...appended];
+      _nextQueryCursor = page.nextCursor;
+      _hasMoreQueryResults =
+          page.hasMore && page.nextCursor != null && appended.isNotEmpty;
+      _isLoadingMore = false;
+    });
+  }
+
+  TransactionQuerySpec _buildQuerySpec({
+    String? keyword,
+    TransactionListFilterState? filterState,
+  }) {
+    final subKey = widget.filterSubCategoryKey?.trim();
+    final categoryKey = widget.filterCategoryKey?.trim();
+    return TransactionQuerySpec(
+      keyword: keyword ?? _searchQuery,
+      filterState: filterState ?? _filterState,
+      fixedCategoryKey: (categoryKey?.isEmpty ?? true) ? null : categoryKey,
+      fixedSubCategoryKey: (subKey?.isEmpty ?? true) ? null : subKey,
+      includeSubCategories: _includeSubCategories,
+      sortField: _mapSortField(_sortField),
+      sortDirection: _sortDirection == _TransactionSortDirection.desc
+          ? TransactionSortDirection.desc
+          : TransactionSortDirection.asc,
+      groupByDate: _groupByDate,
+    );
+  }
+
+  TransactionSortField _mapSortField(_TransactionSortField field) {
+    switch (field) {
+      case _TransactionSortField.amount:
+        return TransactionSortField.amount;
+      case _TransactionSortField.category:
+        return TransactionSortField.category;
+      case _TransactionSortField.account:
+        return TransactionSortField.account;
+      case _TransactionSortField.tag:
+        return TransactionSortField.tag;
+      case _TransactionSortField.date:
+        return TransactionSortField.date;
     }
   }
 
@@ -601,25 +784,20 @@ class _CategoryTransactionsScreenState
         return TransactionFilterSheet(
           categories: categories,
           accounts: accounts,
+          initialState: _filterState,
           initialCategoryKey: _searchCategoryKey,
           initialAccountId: _searchAccountId,
           initialTag: _searchTag,
           initialDateRange: _searchDateRange,
           initialBudgetFilter: _searchBudgetFilter,
-          onBudgetFilterChanged: (mode) {
-            _updateSearchFilters(budgetFilter: mode);
+          onStateChanged: (state) {
+            _applyFilterState(state);
           },
+          onBudgetFilterChanged: (_) {},
           minDate: _minTransactionDate,
           maxDate: _maxTransactionDate,
           enabledYears: enabledYears,
-          onChanged: (categoryKey, accountId, tag, dateRange) {
-            _updateSearchFilters(
-              categoryKey: categoryKey,
-              accountId: accountId,
-              tag: tag,
-              dateRange: dateRange,
-            );
-          },
+          onChanged: (_, __, ___, ____) {},
           onClear: _clearSearchFilters,
         );
       },
@@ -678,8 +856,8 @@ class _CategoryTransactionsScreenState
                         ChoiceChip(
                           label: const Text('账单模式'),
                           selected: groupByDate,
-                          selectedColor: Colors.green.shade600.withValues(alpha: 
-                            0.18,
+                          selectedColor: Colors.green.shade600.withValues(
+                            alpha: 0.18,
                           ),
                           onSelected: (_) =>
                               setModalState(() => groupByDate = true),
@@ -687,8 +865,8 @@ class _CategoryTransactionsScreenState
                         ChoiceChip(
                           label: const Text('列表模式'),
                           selected: !groupByDate,
-                          selectedColor: Colors.green.shade600.withValues(alpha: 
-                            0.18,
+                          selectedColor: Colors.green.shade600.withValues(
+                            alpha: 0.18,
                           ),
                           onSelected: (_) {
                             setModalState(() {
@@ -708,8 +886,8 @@ class _CategoryTransactionsScreenState
                         return ChoiceChip(
                           label: Text(label),
                           selected: field == value,
-                          selectedColor: Colors.green.shade600.withValues(alpha: 
-                            0.18,
+                          selectedColor: Colors.green.shade600.withValues(
+                            alpha: 0.18,
                           ),
                           onSelected: (_) => setModalState(() => field = value),
                         );
@@ -732,8 +910,8 @@ class _CategoryTransactionsScreenState
                         return ChoiceChip(
                           label: Text(label),
                           selected: direction == value,
-                          selectedColor: Colors.green.shade600.withValues(alpha: 
-                            0.18,
+                          selectedColor: Colors.green.shade600.withValues(
+                            alpha: 0.18,
                           ),
                           onSelected: (_) =>
                               setModalState(() => direction = value),
@@ -763,6 +941,12 @@ class _CategoryTransactionsScreenState
                                 showDateHeadersWhenNotDate;
                           });
                           _saveGroupingPreference(groupByDate);
+                          unawaited(
+                            _reloadTransactions(
+                              showLoading: false,
+                              reset: true,
+                            ),
+                          );
                           Navigator.pop(context);
                         },
                         style: ElevatedButton.styleFrom(
@@ -783,128 +967,43 @@ class _CategoryTransactionsScreenState
   }
 
   void _onSearchChanged(String value) {
-    setState(() {
-      _searchQuery = value;
+    setState(() => _searchQuery = value);
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_reloadTransactions(showLoading: false, reset: true));
     });
   }
 
-  void _updateSearchFilters({
-    String? categoryKey,
-    int? accountId,
-    String? tag,
-    DateTimeRange? dateRange,
-    BudgetInclusionFilter? budgetFilter,
-  }) {
-    final normalizedTag = tag?.trim();
+  void _applyFilterState(TransactionListFilterState state) {
+    final normalizedTag = state.normalizedTag;
     setState(() {
-      _searchCategoryKey = categoryKey;
-      _searchAccountId = accountId;
-      _searchTag = (normalizedTag == null || normalizedTag.isEmpty)
-          ? null
-          : normalizedTag;
-      _searchDateRange = dateRange;
-      if (budgetFilter != null) {
-        _searchBudgetFilter = budgetFilter;
-      }
+      _filterState = TransactionListFilterState(
+        categoryKey: state.categoryKey,
+        accountId: state.accountId,
+        tag: normalizedTag,
+        dateRange: state.dateRange,
+        budgetFilter: state.budgetFilter,
+      );
     });
+    unawaited(_persistFilterState());
+    unawaited(_reloadTransactions(showLoading: false, reset: true));
   }
 
   void _clearSearchFilters() {
-    setState(() {
-      _searchCategoryKey = null;
-      _searchAccountId = null;
-      _searchTag = null;
-      _searchDateRange = null;
-      _searchBudgetFilter = BudgetInclusionFilter.all;
-    });
+    _applyFilterState(const TransactionListFilterState());
   }
 
   void _clearSearch() {
     setState(() {
       _searchQuery = '';
-      _searchCategoryKey = null;
-      _searchAccountId = null;
-      _searchTag = null;
-      _searchDateRange = null;
-      _searchBudgetFilter = BudgetInclusionFilter.all;
     });
     _searchController.clear();
     _searchFocus.unfocus();
+    _applyFilterState(const TransactionListFilterState());
   }
 
   bool _hasSearchFilters() {
-    return _searchQuery.trim().isNotEmpty ||
-        _searchCategoryKey != null ||
-        _searchAccountId != null ||
-        (_searchTag?.isNotEmpty ?? false) ||
-        _searchDateRange != null ||
-        _searchBudgetFilter != BudgetInclusionFilter.all;
-  }
-
-  List<JiveTransaction> _applySearch(List<JiveTransaction> entries) {
-    final query = _searchQuery.trim().toLowerCase();
-    final tagQuery = _searchTag?.trim();
-    final amountQuery = double.tryParse(query);
-
-    return entries.where((tx) {
-      if (_searchBudgetFilter != BudgetInclusionFilter.all) {
-        // Budget only applies to expenses; when filtering by budget inclusion,
-        // keep the result focused on expense transactions.
-        if (tx.type != 'expense') return false;
-        final categoryExcluded = tx.categoryKey != null &&
-            (_categoryByKey[tx.categoryKey!]?.excludeFromBudget == true);
-        final subExcluded = tx.subCategoryKey != null &&
-            (_categoryByKey[tx.subCategoryKey!]?.excludeFromBudget == true);
-        final isExcluded = tx.excludeFromBudget || categoryExcluded || subExcluded;
-        if (_searchBudgetFilter == BudgetInclusionFilter.excludedOnly && !isExcluded) {
-          return false;
-        }
-        if (_searchBudgetFilter == BudgetInclusionFilter.includedOnly && isExcluded) {
-          return false;
-        }
-      }
-
-      if (_searchCategoryKey != null) {
-        final key = _searchCategoryKey;
-        final categoryName = _categoryByKey[key!]?.name;
-        final matchesKey = tx.categoryKey == key || tx.subCategoryKey == key;
-        final matchesName =
-            categoryName != null &&
-            (tx.category == categoryName || tx.subCategory == categoryName);
-        if (!matchesKey && !matchesName) return false;
-      }
-
-      if (_searchAccountId != null) {
-        final id = _searchAccountId;
-        if (tx.accountId != id && tx.toAccountId != id) {
-          return false;
-        }
-      }
-
-      if (tagQuery != null && tagQuery.isNotEmpty) {
-        if (!_noteHasTag(tx.note, tagQuery)) {
-          return false;
-        }
-      }
-
-      if (_searchDateRange != null) {
-        if (!_withinDateRange(tx.timestamp, _searchDateRange!)) {
-          return false;
-        }
-      }
-
-      if (query.isEmpty) return true;
-
-      final searchText = _entrySearchText(tx);
-      if (searchText.contains(query)) return true;
-
-      if (amountQuery != null) {
-        final amountText = tx.amount.toStringAsFixed(2);
-        if (amountText.contains(query)) return true;
-      }
-
-      return false;
-    }).toList();
+    return _searchQuery.trim().isNotEmpty || _filterState.hasAnyFilter;
   }
 
   List<JiveTransaction> _sortTransactions(List<JiveTransaction> entries) {
@@ -970,56 +1069,10 @@ class _CategoryTransactionsScreenState
     return '${_sortFieldLabel(_sortField)} ${_sortDirectionLabel(_sortDirection, _sortField)}';
   }
 
-  String _entrySearchText(JiveTransaction tx) {
-    final category = _displayCategoryName(tx.categoryKey, tx.category);
-    final subCategory = _displayCategoryName(tx.subCategoryKey, tx.subCategory);
-    final account = _resolveAccountName(tx.accountId);
-    final counter = _resolveAccountName(tx.toAccountId);
-    final note = tx.note ?? '';
-    final rawText = tx.rawText ?? '';
-    final source = tx.source;
-    final date = DateFormat('yyyy-MM-dd HH:mm').format(tx.timestamp);
-    return [
-      category,
-      subCategory,
-      account,
-      counter,
-      note,
-      rawText,
-      source,
-      date,
-    ].join(' ').toLowerCase();
-  }
-
-  bool _noteHasTag(String? note, String tag) {
-    final raw = note?.trim() ?? '';
-    if (raw.isEmpty) return false;
-    final pattern = RegExp('(^|\\s)${RegExp.escape(tag)}(?=\\s|\$)');
-    return pattern.hasMatch(raw);
-  }
-
   List<String> _extractNoteTags(String? note) {
     final raw = note?.trim() ?? '';
     if (raw.isEmpty) return const [];
     return raw.split(RegExp(r'\\s+')).where((item) => item.isNotEmpty).toList();
-  }
-
-  bool _withinDateRange(DateTime timestamp, DateTimeRange range) {
-    final start = DateTime(
-      range.start.year,
-      range.start.month,
-      range.start.day,
-    );
-    final end = DateTime(
-      range.end.year,
-      range.end.month,
-      range.end.day,
-      23,
-      59,
-      59,
-      999,
-    );
-    return !timestamp.isBefore(start) && !timestamp.isAfter(end);
   }
 
   String _categorySortLabel(JiveTransaction tx) {
@@ -1080,8 +1133,7 @@ class _CategoryTransactionsScreenState
     final parent = (tx.subCategory ?? '').isNotEmpty ? (tx.category ?? '') : '';
     final note = (tx.note ?? '').trim();
     final hasNote = note.isNotEmpty;
-    final showSmartBadge =
-        _showSmartTagBadge && tx.smartTagKeys.isNotEmpty;
+    final showSmartBadge = _showSmartTagBadge && tx.smartTagKeys.isNotEmpty;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -1137,7 +1189,10 @@ class _CategoryTransactionsScreenState
                           ].join(' · '),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ),
                       if (showSmartBadge) ...[
@@ -1178,7 +1233,9 @@ class _CategoryTransactionsScreenState
       decoration: BoxDecoration(
         color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
         shape: BoxShape.circle,
-        border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.4)),
+        border: Border.all(
+          color: JiveTheme.primaryGreen.withValues(alpha: 0.4),
+        ),
       ),
       child: const Icon(
         Icons.auto_awesome,

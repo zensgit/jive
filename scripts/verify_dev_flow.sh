@@ -19,6 +19,7 @@ OUT_DIR="/tmp/jive-verify-${STAMP}"
 mkdir -p "${OUT_DIR}"
 ORIG_ACCELEROMETER_ROTATION=""
 ORIG_USER_ROTATION=""
+AUTO_DIALOG_DISMISSED=0
 
 log() {
   echo "[verify] $*"
@@ -220,6 +221,30 @@ tap_title_with_scroll_small() {
   return 1
 }
 
+tap_nth_calendar_day_cell() {
+  local xml="$1"
+  local rank="${2:-1}"
+  local line bounds x1 y1 x2 y2 cx cy
+
+  line="$(grep 'content-desc="星期[^"]*日"' "${xml}" | sed -n "${rank}p" || true)"
+  if [[ -z "${line}" ]]; then
+    line="$(grep 'content-desc="星期[^"]*"' "${xml}" | sed -n "${rank}p" || true)"
+  fi
+  if [[ -z "${line}" ]]; then
+    return 1
+  fi
+
+  bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\[([0-9]+),([0-9]+)\]\[([0-9]+),([0-9]+)\]".*/\1 \2 \3 \4/p')"
+  if [[ -z "${bounds}" ]]; then
+    return 1
+  fi
+  read -r x1 y1 x2 y2 <<<"${bounds}"
+  cx="$(((x1 + x2) / 2))"
+  cy="$(((y1 + y2) / 2))"
+  tap_xy "${cx}" "${cy}"
+  return 0
+}
+
 tap_top_right_clickable() {
   local xml="$1"
   local best=""
@@ -276,6 +301,67 @@ tap_top_bar_clickable_rank_from_right() {
   fi
 
   read -r _ x1 y1 x2 y2 <<<"${candidate}"
+  tap_xy "$(((x1 + x2) / 2))" "$(((y1 + y2) / 2))"
+  return 0
+}
+
+tap_bottom_bar_clickable_rank_from_right() {
+  # Tap the Nth clickable element in the bottom tools bar area.
+  local xml="$1"
+  local rank="${2:-1}"
+  local candidate bounds x1 y1 x2 y2 h
+
+  candidate="$(
+    grep 'clickable="true"' "${xml}" 2>/dev/null \
+      | while IFS= read -r line; do
+          bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\\[([0-9]+),([0-9]+)\\]\\[([0-9]+),([0-9]+)\\]".*/\\1 \\2 \\3 \\4/p')"
+          if [[ -z "${bounds}" ]]; then
+            continue
+          fi
+          read -r x1 y1 x2 y2 <<<"${bounds}"
+          h="$((y2 - y1))"
+          if (( y1 >= 1850 )) && (( h >= 70 )); then
+            echo "${x2} ${x1} ${y1} ${x2} ${y2}"
+          fi
+        done \
+      | sort -nr -k1,1 \
+      | sed -n "${rank}p"
+  )"
+
+  if [[ -z "${candidate}" ]]; then
+    return 1
+  fi
+
+  read -r _ x1 y1 x2 y2 <<<"${candidate}"
+  tap_xy "$(((x1 + x2) / 2))" "$(((y1 + y2) / 2))"
+  return 0
+}
+
+tap_all_tx_filter_button() {
+  # On 全部账单 page the filter button sits inside the search bar, right side.
+  local xml="$1"
+  local candidate bounds x1 y1 x2 y2
+
+  candidate="$(
+    grep 'class="android.widget.Button"' "${xml}" 2>/dev/null \
+      | while IFS= read -r line; do
+          bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\\[([0-9]+),([0-9]+)\\]\\[([0-9]+),([0-9]+)\\]".*/\\1 \\2 \\3 \\4/p')"
+          if [[ -z "${bounds}" ]]; then
+            continue
+          fi
+          read -r x1 y1 x2 y2 <<<"${bounds}"
+          if (( y1 >= 2450 )) && (( y2 <= 2760 )) && (( x1 >= 700 )) && (( x2 <= 1050 )); then
+            echo "${x1} ${y1} ${x2} ${y2}"
+            break
+          fi
+        done
+  )"
+
+  if [[ -z "${candidate}" ]]; then
+    return 1
+  fi
+
+  read -r x1 y1 x2 y2 <<<"${candidate}"
   tap_xy "$(((x1 + x2) / 2))" "$(((y1 + y2) / 2))"
   return 0
 }
@@ -429,12 +515,90 @@ if grep -q "自动记账权限未开启" "${OUT_DIR}/01_home.nodes.xml"; then
   if ! tap_text_once "稍后" "${OUT_DIR}/01_home.nodes.xml"; then
     tap_text_once "关闭" "${OUT_DIR}/01_home.nodes.xml" || true
   fi
+  AUTO_DIALOG_DISMISSED=1
   sleep 1
   cap "01_home_after_dialog"
   dump_ui "01_home_after_dialog"
   if grep -q "自动记账权限未开启" "${OUT_DIR}/01_home_after_dialog.nodes.xml"; then
     fail "auto permission dialog still visible after dismiss"
   fi
+fi
+
+log "smoke verify: 全部账单筛选日期范围 + 清空"
+dump_ui "01_home_for_all_tx"
+if ! tap_text_once "View All" "${OUT_DIR}/01_home_for_all_tx.nodes.xml"; then
+  fail "cannot open 全部账单 from home"
+fi
+sleep 1
+cap "01_all_tx_list"
+dump_ui "01_all_tx_list"
+assert_text_exists "全部账单" "01_all_tx_list"
+
+if ! tap_all_tx_filter_button "${OUT_DIR}/01_all_tx_list.nodes.xml"; then
+  if ! tap_bottom_bar_clickable_rank_from_right "${OUT_DIR}/01_all_tx_list.nodes.xml" 2; then
+    tap_xy 900 2640
+  fi
+fi
+sleep 1
+cap "01_all_tx_filter_sheet"
+dump_ui "01_all_tx_filter_sheet"
+assert_text_exists "查找账单（按条件）" "01_all_tx_filter_sheet"
+
+if ! tap_text_once "日期范围" "${OUT_DIR}/01_all_tx_filter_sheet.nodes.xml"; then
+  tap_xy 220 1100
+fi
+sleep 1
+cap "01_all_tx_date_picker"
+dump_ui "01_all_tx_date_picker"
+assert_text_exists "选择日历范围" "01_all_tx_date_picker"
+
+if ! tap_nth_calendar_day_cell "${OUT_DIR}/01_all_tx_date_picker.nodes.xml" 2; then
+  tap_text_once "星期二, 2026年2月10日" "${OUT_DIR}/01_all_tx_date_picker.nodes.xml" || true
+fi
+sleep 1
+dump_ui "01_all_tx_date_picker_after_start"
+if ! tap_nth_calendar_day_cell "${OUT_DIR}/01_all_tx_date_picker_after_start.nodes.xml" 6; then
+  tap_text_once "星期五, 2026年2月13日" "${OUT_DIR}/01_all_tx_date_picker_after_start.nodes.xml" || true
+fi
+sleep 1
+dump_ui "01_all_tx_date_picker_after_end"
+
+if grep -q "选择日历范围" "${OUT_DIR}/01_all_tx_date_picker_after_end.nodes.xml"; then
+  adb shell input keyevent 4
+  sleep 1
+fi
+
+cap "01_all_tx_filter_after_range"
+dump_ui "01_all_tx_filter_after_range"
+
+has_range_in_picker=0
+if grep -Eq "[0-9]{4}-[0-9]{2}-[0-9]{2} - [0-9]{4}-[0-9]{2}-[0-9]{2}" "${OUT_DIR}/01_all_tx_date_picker_after_end.nodes.xml"; then
+  has_range_in_picker=1
+fi
+if ! grep -Eq "[0-9]{4}-[0-9]{2}-[0-9]{2} - [0-9]{4}-[0-9]{2}-[0-9]{2}" "${OUT_DIR}/01_all_tx_filter_after_range.nodes.xml" && (( has_range_in_picker == 0 )); then
+  fail "date range was not applied in transaction filter sheet"
+fi
+
+tap_text_once "全部清除" "${OUT_DIR}/01_all_tx_filter_after_range.nodes.xml" || fail "cannot tap 全部清除"
+sleep 1
+cap "01_all_tx_filter_after_clear"
+dump_ui "01_all_tx_filter_after_clear"
+assert_text_exists "不限" "01_all_tx_filter_after_clear"
+
+if ! tap_text_once "关闭" "${OUT_DIR}/01_all_tx_filter_after_clear.nodes.xml"; then
+  adb shell input keyevent 4
+fi
+sleep 1
+cap "01_all_tx_after_filter_close"
+dump_ui "01_all_tx_after_filter_close"
+assert_text_exists "全部账单" "01_all_tx_after_filter_close"
+
+adb shell input keyevent 4
+sleep 1
+cap "01_home_after_all_tx"
+dump_ui "01_home_after_all_tx"
+if (( AUTO_DIALOG_DISMISSED == 1 )) && grep -q "自动记账权限未开启" "${OUT_DIR}/01_home_after_all_tx.nodes.xml"; then
+  fail "auto permission dialog repeated too soon after tapping 稍后"
 fi
 
 dump_ui "01_home_for_menu"
