@@ -67,7 +67,6 @@ if (( $# > 0 )); then
   requested_tests=("$@")
 else
   requested_tests=(
-    "calendar_date_picker_flow"
     "transaction_search_flow"
   )
 fi

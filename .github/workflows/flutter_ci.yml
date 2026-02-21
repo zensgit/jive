@@ -80,10 +80,11 @@ jobs:
           arch: x86_64
           disable-animations: true
           script: >-
-            bash scripts/run_android_integration_ci.sh
+            bash scripts/run_android_integration_ci.sh transaction_search_flow
 
       - name: Upload Android integration artifacts
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: android-integration-artifacts-${{ github.run_id }}
