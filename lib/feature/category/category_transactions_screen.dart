@@ -199,6 +199,7 @@ class _CategoryTransactionsScreenState
     final items = _buildListItems(visible);
     final bottomInset = _floatingBarHeight + 32;
     return Stack(
+      key: const Key('transactions_screen_ready'),
       children: [
         if (_transactions.isEmpty)
           ListView(

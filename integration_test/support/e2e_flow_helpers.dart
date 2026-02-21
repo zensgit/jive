@@ -72,10 +72,12 @@ Future<void> openAllTransactionsScreen(
   int maxAttempts = 2,
 }) async {
   final homeViewAllButton = find.byKey(const Key('home_view_all_button'));
+  final screenReadyMarker = find.byKey(const Key('transactions_screen_ready'));
   final filterButton = find.byKey(const Key('transaction_filter_open_button'));
 
   for (var attempt = 1; attempt <= maxAttempts; attempt++) {
-    if (find.text(pageTitle).evaluate().isEmpty &&
+    if (screenReadyMarker.evaluate().isEmpty &&
+        find.text(pageTitle).evaluate().isEmpty &&
         homeViewAllButton.evaluate().isNotEmpty) {
       await tapWhenVisible(
         tester,
@@ -84,6 +86,11 @@ Future<void> openAllTransactionsScreen(
       );
     }
 
+    final hasReadyMarker = await waitForFinderMaybe(
+      tester,
+      screenReadyMarker,
+      timeout: pageReadyTimeout,
+    );
     final hasPageTitle = await waitForFinderMaybe(
       tester,
       find.text(pageTitle),
@@ -95,7 +102,7 @@ Future<void> openAllTransactionsScreen(
       timeout: filterReadyTimeout,
     );
 
-    if (hasPageTitle && hasFilterButton) {
+    if ((hasReadyMarker || hasPageTitle) && hasFilterButton) {
       return;
     }
     await pumpUntilSettled(tester, maxSteps: 80);
@@ -103,7 +110,7 @@ Future<void> openAllTransactionsScreen(
 
   fail(
     'Timed out entering all-transactions screen '
-    '(missing title or filter button).',
+    '(missing ready marker/title or filter button).',
   );
 }
 

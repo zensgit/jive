@@ -32,6 +32,8 @@ ALLOW_EMULATOR_REBOOT="${FLUTTER_DEVICE_RECOVERY_ALLOW_EMULATOR_REBOOT:-0}"
 TIMEOUT_RECOVERY_RERUNS="${FLUTTER_TIMEOUT_RECOVERY_RERUNS:-0}"
 TEST_CASE_TIMEOUT="${FLUTTER_TEST_CASE_TIMEOUT:-}"
 IGNORE_TEST_TIMEOUTS="${FLUTTER_TEST_IGNORE_TIMEOUTS:-0}"
+PUB_GET_ONCE="${FLUTTER_TEST_PUB_GET_ONCE:-1}"
+PUB_GET_TIMEOUT_SECONDS="${FLUTTER_TEST_PUB_GET_TIMEOUT_SECONDS:-300}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
@@ -51,6 +53,10 @@ Options:
                          Pass through to 'flutter test --timeout'. Example: 20m.
   --ignore-test-timeouts
                          Pass through to 'flutter test --ignore-timeouts'.
+  --pub-get-once          Run 'flutter pub get' once before test suite and use '--no-pub' for each test (default).
+  --no-pub-get-once       Run flutter test without '--no-pub' (pub resolution per invocation).
+  --pub-get-timeout <seconds>
+                         Timeout for the one-time 'flutter pub get'. 0 disables timeout. Default: 300.
   --device-recovery      Enable adb device liveness recovery. Default: enabled.
   --no-device-recovery   Disable adb device liveness recovery.
   --device-recovery-retry <count>
@@ -76,6 +82,8 @@ Env:
   FLUTTER_TEST_TIMEOUT_SECONDS
   FLUTTER_TEST_CASE_TIMEOUT
   FLUTTER_TEST_IGNORE_TIMEOUTS
+  FLUTTER_TEST_PUB_GET_ONCE
+  FLUTTER_TEST_PUB_GET_TIMEOUT_SECONDS
   FLUTTER_ADB_TIMEOUT_SECONDS
   FLUTTER_DEVICE_RECOVERY_ENABLED
   FLUTTER_DEVICE_RECOVERY_RETRY_COUNT
@@ -155,6 +163,20 @@ while [[ $# -gt 0 ]]; do
       ;;
     --ignore-test-timeouts)
       IGNORE_TEST_TIMEOUTS=1
+      ;;
+    --pub-get-once)
+      PUB_GET_ONCE=1
+      ;;
+    --no-pub-get-once)
+      PUB_GET_ONCE=0
+      ;;
+    --pub-get-timeout)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "missing value for --pub-get-timeout" >&2
+        exit 2
+      fi
+      PUB_GET_TIMEOUT_SECONDS="$1"
       ;;
     --device-recovery)
       DEVICE_RECOVERY_ENABLED=1
@@ -266,6 +288,16 @@ if ! [[ "${IGNORE_TEST_TIMEOUTS}" =~ ^[01]$ ]]; then
   exit 2
 fi
 
+if ! [[ "${PUB_GET_ONCE}" =~ ^[01]$ ]]; then
+  echo "pub-get-once flag must be 0 or 1, got: ${PUB_GET_ONCE}" >&2
+  exit 2
+fi
+
+if ! [[ "${PUB_GET_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
+  echo "pub-get-timeout must be a non-negative integer, got: ${PUB_GET_TIMEOUT_SECONDS}" >&2
+  exit 2
+fi
+
 if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
   echo "no integration tests selected" >&2
   exit 2
@@ -304,6 +336,9 @@ run_flutter_test() {
   if [[ -n "${TEST_CASE_TIMEOUT}" ]]; then
     cmd+=(--timeout "${TEST_CASE_TIMEOUT}")
   fi
+  if (( PUB_GET_ONCE == 1 )); then
+    cmd+=(--no-pub)
+  fi
   if (( IGNORE_TEST_TIMEOUTS == 1 )); then
     cmd+=(--ignore-timeouts)
   fi
@@ -315,6 +350,15 @@ run_flutter_test() {
     "${TIMEOUT_BIN}" --signal=TERM --kill-after=30s "${TEST_TIMEOUT_SECONDS}s" "${cmd[@]}" 2>&1 | tee "${log_file}"
   else
     "${cmd[@]}" 2>&1 | tee "${log_file}"
+  fi
+}
+
+run_pub_get_once() {
+  log "running flutter pub get once before integration suite"
+  if [[ -n "${TIMEOUT_BIN}" ]] && (( PUB_GET_TIMEOUT_SECONDS > 0 )); then
+    "${TIMEOUT_BIN}" --signal=TERM --kill-after=15s "${PUB_GET_TIMEOUT_SECONDS}s" flutter pub get
+  else
+    flutter pub get
   fi
 }
 
@@ -668,6 +712,9 @@ print_timing_summary() {
 }
 
 FAILED_TESTS=()
+if (( PUB_GET_ONCE == 1 )); then
+  run_pub_get_once
+fi
 for test_file in "${TEST_FILES[@]}"; do
   if ! run_test_with_retry "${test_file}"; then
     FAILED_TESTS+=("${test_file}")
