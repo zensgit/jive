@@ -25,6 +25,9 @@ DART_DEFINE="${FLUTTER_TEST_DART_DEFINE:-JIVE_E2E=true}"
 RETRY_COUNT="${FLUTTER_TEST_RETRY_COUNT:-0}"
 TEST_TIMEOUT_SECONDS="${FLUTTER_TEST_TIMEOUT_SECONDS:-0}"
 ADB_TIMEOUT_SECONDS="${FLUTTER_ADB_TIMEOUT_SECONDS:-20}"
+DEVICE_RECOVERY_ENABLED="${FLUTTER_DEVICE_RECOVERY_ENABLED:-1}"
+DEVICE_RECOVERY_RETRY_COUNT="${FLUTTER_DEVICE_RECOVERY_RETRY_COUNT:-2}"
+DEVICE_RECOVERY_WAIT_SECONDS="${FLUTTER_DEVICE_RECOVERY_WAIT_SECONDS:-20}"
 TEST_CASE_TIMEOUT="${FLUTTER_TEST_CASE_TIMEOUT:-}"
 IGNORE_TEST_TIMEOUTS="${FLUTTER_TEST_IGNORE_TIMEOUTS:-0}"
 COLLECT_ON_FAIL=1
@@ -44,6 +47,12 @@ Options:
                          Pass through to 'flutter test --timeout'. Example: 20m.
   --ignore-test-timeouts
                          Pass through to 'flutter test --ignore-timeouts'.
+  --device-recovery      Enable adb device liveness recovery. Default: enabled.
+  --no-device-recovery   Disable adb device liveness recovery.
+  --device-recovery-retry <count>
+                         Number of recovery rounds when device is offline. Default: 2.
+  --device-recovery-timeout <seconds>
+                         Wait timeout for each recovery round. 0 disables waiting. Default: 20.
   --artifact-dir <path>  Directory to store test logs/artifacts.
   --no-collect-on-fail   Disable adb artifact collection on failure.
   --list                 Print default integration test files and exit.
@@ -58,6 +67,9 @@ Env:
   FLUTTER_TEST_CASE_TIMEOUT
   FLUTTER_TEST_IGNORE_TIMEOUTS
   FLUTTER_ADB_TIMEOUT_SECONDS
+  FLUTTER_DEVICE_RECOVERY_ENABLED
+  FLUTTER_DEVICE_RECOVERY_RETRY_COUNT
+  FLUTTER_DEVICE_RECOVERY_WAIT_SECONDS
   FLUTTER_TEST_ARTIFACT_DIR
 EOF
 }
@@ -122,6 +134,28 @@ while [[ $# -gt 0 ]]; do
     --ignore-test-timeouts)
       IGNORE_TEST_TIMEOUTS=1
       ;;
+    --device-recovery)
+      DEVICE_RECOVERY_ENABLED=1
+      ;;
+    --no-device-recovery)
+      DEVICE_RECOVERY_ENABLED=0
+      ;;
+    --device-recovery-retry)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "missing value for --device-recovery-retry" >&2
+        exit 2
+      fi
+      DEVICE_RECOVERY_RETRY_COUNT="$1"
+      ;;
+    --device-recovery-timeout)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "missing value for --device-recovery-timeout" >&2
+        exit 2
+      fi
+      DEVICE_RECOVERY_WAIT_SECONDS="$1"
+      ;;
     --no-collect-on-fail)
       COLLECT_ON_FAIL=0
       ;;
@@ -166,6 +200,21 @@ if ! [[ "${ADB_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
+if ! [[ "${DEVICE_RECOVERY_ENABLED}" =~ ^[01]$ ]]; then
+  echo "device recovery enabled flag must be 0 or 1, got: ${DEVICE_RECOVERY_ENABLED}" >&2
+  exit 2
+fi
+
+if ! [[ "${DEVICE_RECOVERY_RETRY_COUNT}" =~ ^[0-9]+$ ]]; then
+  echo "device recovery retry count must be a non-negative integer, got: ${DEVICE_RECOVERY_RETRY_COUNT}" >&2
+  exit 2
+fi
+
+if ! [[ "${DEVICE_RECOVERY_WAIT_SECONDS}" =~ ^[0-9]+$ ]]; then
+  echo "device recovery timeout must be a non-negative integer, got: ${DEVICE_RECOVERY_WAIT_SECONDS}" >&2
+  exit 2
+fi
+
 if ! [[ "${IGNORE_TEST_TIMEOUTS}" =~ ^[01]$ ]]; then
   echo "FLUTTER_TEST_IGNORE_TIMEOUTS must be 0 or 1, got: ${IGNORE_TEST_TIMEOUTS}" >&2
   exit 2
@@ -179,13 +228,16 @@ fi
 mkdir -p "${ARTIFACT_DIR}"
 
 TIMEOUT_BIN=""
-if (( TEST_TIMEOUT_SECONDS > 0 )); then
-  if command -v timeout >/dev/null 2>&1; then
-    TIMEOUT_BIN="timeout"
-  elif command -v gtimeout >/dev/null 2>&1; then
-    TIMEOUT_BIN="gtimeout"
-  else
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="gtimeout"
+else
+  if (( TEST_TIMEOUT_SECONDS > 0 )); then
     log "timeout command not found; --timeout ignored"
+  fi
+  if (( ADB_TIMEOUT_SECONDS > 0 || DEVICE_RECOVERY_WAIT_SECONDS > 0 )); then
+    log "timeout command not found; adb timeout controls are best-effort only"
   fi
 fi
 
@@ -213,7 +265,7 @@ run_flutter_test() {
     cmd+=(-d "${DEVICE_ID}")
   fi
 
-  if [[ -n "${TIMEOUT_BIN}" ]]; then
+  if [[ -n "${TIMEOUT_BIN}" ]] && (( TEST_TIMEOUT_SECONDS > 0 )); then
     "${TIMEOUT_BIN}" --signal=TERM --kill-after=30s "${TEST_TIMEOUT_SECONDS}s" "${cmd[@]}" 2>&1 | tee "${log_file}"
   else
     "${cmd[@]}" 2>&1 | tee "${log_file}"
@@ -227,6 +279,168 @@ run_adb() {
   else
     "${cmd[@]}"
   fi
+}
+
+run_adb_raw() {
+  local cmd=(adb "$@")
+  if [[ -n "${TIMEOUT_BIN}" ]] && (( ADB_TIMEOUT_SECONDS > 0 )); then
+    "${TIMEOUT_BIN}" --signal=TERM --kill-after=5s "${ADB_TIMEOUT_SECONDS}s" "${cmd[@]}"
+  else
+    "${cmd[@]}"
+  fi
+}
+
+device_is_ready() {
+  if ! command -v adb >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ -n "${DEVICE_ID}" ]]; then
+    local state=""
+    set +e
+    state="$(run_adb_raw -s "${DEVICE_ID}" get-state 2>/dev/null)"
+    local state_rc=$?
+    set -e
+    state="$(echo "${state}" | tr -d '\r\n')"
+    if (( state_rc == 0 )) && [[ "${state}" == "device" ]]; then
+      return 0
+    fi
+    return 1
+  fi
+
+  local devices_output=""
+  set +e
+  devices_output="$(run_adb_raw devices 2>/dev/null)"
+  local devices_rc=$?
+  set -e
+  if (( devices_rc != 0 )); then
+    return 1
+  fi
+
+  if grep -Eq $'\tdevice$' <<< "${devices_output}"; then
+    return 0
+  fi
+
+  return 1
+}
+
+log_adb_devices_snapshot() {
+  if ! command -v adb >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local devices_output=""
+  set +e
+  devices_output="$(run_adb_raw devices 2>&1)"
+  set -e
+  while IFS= read -r line; do
+    log "adb devices: ${line}"
+  done <<< "${devices_output}"
+}
+
+wait_for_target_device() {
+  local cmd=(adb)
+  if [[ -n "${DEVICE_ID}" ]]; then
+    cmd+=(-s "${DEVICE_ID}")
+  fi
+  cmd+=(wait-for-device)
+
+  if [[ -n "${TIMEOUT_BIN}" ]] && (( DEVICE_RECOVERY_WAIT_SECONDS > 0 )); then
+    "${TIMEOUT_BIN}" --signal=TERM --kill-after=5s "${DEVICE_RECOVERY_WAIT_SECONDS}s" "${cmd[@]}"
+    return $?
+  fi
+
+  if (( DEVICE_RECOVERY_WAIT_SECONDS == 0 )); then
+    device_is_ready
+    return $?
+  fi
+
+  local waited=0
+  while (( waited < DEVICE_RECOVERY_WAIT_SECONDS )); do
+    if device_is_ready; then
+      return 0
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+
+  return 1
+}
+
+recover_device_liveness() {
+  if (( DEVICE_RECOVERY_ENABLED == 0 )); then
+    return 1
+  fi
+
+  if ! command -v adb >/dev/null 2>&1; then
+    log "adb not found; cannot perform device recovery"
+    return 1
+  fi
+
+  local round=1
+  while (( round <= DEVICE_RECOVERY_RETRY_COUNT )); do
+    log "device recovery round ${round}/${DEVICE_RECOVERY_RETRY_COUNT}"
+    run_adb_raw reconnect >/dev/null 2>&1 || true
+    run_adb_raw kill-server >/dev/null 2>&1 || true
+    run_adb_raw start-server >/dev/null 2>&1 || true
+
+    if wait_for_target_device && device_is_ready; then
+      log "device is online after recovery round ${round}"
+      return 0
+    fi
+
+    log "device still not ready after recovery round ${round}"
+    log_adb_devices_snapshot
+    round=$((round + 1))
+  done
+
+  return 1
+}
+
+ensure_device_ready_for_run() {
+  if device_is_ready; then
+    return 0
+  fi
+
+  log "device not ready before test run"
+  log_adb_devices_snapshot
+
+  if (( DEVICE_RECOVERY_ENABLED == 0 )); then
+    log "device recovery disabled; run will fail without recovery"
+    return 1
+  fi
+
+  if recover_device_liveness; then
+    return 0
+  fi
+
+  log "device recovery failed"
+  return 1
+}
+
+is_disconnect_failure_log() {
+  local log_file="$1"
+  if [[ ! -f "${log_file}" ]]; then
+    return 1
+  fi
+
+  grep -Eiq \
+    "no supported devices|no devices connected|no devices are connected|device offline|adb:.*device.*offline|adb:.*no devices|lost connection to device|unable to find devices|error: device .* not found" \
+    "${log_file}"
+}
+
+run_single_test_invocation() {
+  local file="$1"
+  local log_file="$2"
+
+  : > "${log_file}"
+  if ! ensure_device_ready_for_run; then
+    echo "[integration] device not ready before running ${file}" | tee -a "${log_file}" >/dev/null
+    return 1
+  fi
+
+  run_adb logcat -c >/dev/null 2>&1 || true
+  run_flutter_test "${file}" "${log_file}"
 }
 
 collect_failure_artifacts() {
@@ -261,13 +475,28 @@ run_test_with_retry() {
 
   while (( attempt <= max_attempts )); do
     local log_file="${ARTIFACT_DIR}/${safe_name}.attempt${attempt}.test.log"
+    local rerun_log_file="${ARTIFACT_DIR}/${safe_name}.attempt${attempt}.recovery-rerun.test.log"
     local exit_code=0
+    local recovered_rerun=0
     log "running: ${file} (attempt ${attempt}/${max_attempts})"
-    run_adb logcat -c >/dev/null 2>&1 || true
     set +e
-    run_flutter_test "${file}" "${log_file}"
+    run_single_test_invocation "${file}" "${log_file}"
     exit_code=$?
     set -e
+
+    if (( exit_code != 0 )) && (( DEVICE_RECOVERY_ENABLED == 1 )) && (( recovered_rerun == 0 )) && is_disconnect_failure_log "${log_file}"; then
+      log "device disconnect pattern detected for ${file}; recovering and rerunning same attempt"
+      if recover_device_liveness; then
+        recovered_rerun=1
+        set +e
+        run_single_test_invocation "${file}" "${rerun_log_file}"
+        exit_code=$?
+        set -e
+      else
+        log "recovery did not restore a ready device for same-attempt rerun"
+      fi
+    fi
+
     if (( exit_code == 0 )); then
       log "passed: ${file} (attempt ${attempt})"
       return 0

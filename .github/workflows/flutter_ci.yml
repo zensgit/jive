@@ -47,7 +47,7 @@ jobs:
 
   android_integration_test:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     if: >-
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_android_e2e == 'true') ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e'))
@@ -90,6 +90,11 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
           ls -l /dev/kvm || true
+
+      - name: Prewarm Android build toolchain
+        run: |
+          set -euo pipefail
+          timeout 900 flutter build apk --debug --flavor dev --dart-define=JIVE_E2E=true
 
       - name: Run Android integration_test (emulator)
         uses: reactivecircus/android-emulator-runner@v2
