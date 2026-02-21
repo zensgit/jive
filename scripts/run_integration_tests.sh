@@ -29,6 +29,7 @@ DEVICE_RECOVERY_ENABLED="${FLUTTER_DEVICE_RECOVERY_ENABLED:-1}"
 DEVICE_RECOVERY_RETRY_COUNT="${FLUTTER_DEVICE_RECOVERY_RETRY_COUNT:-2}"
 DEVICE_RECOVERY_WAIT_SECONDS="${FLUTTER_DEVICE_RECOVERY_WAIT_SECONDS:-20}"
 ALLOW_EMULATOR_REBOOT="${FLUTTER_DEVICE_RECOVERY_ALLOW_EMULATOR_REBOOT:-0}"
+TIMEOUT_RECOVERY_RERUNS="${FLUTTER_TIMEOUT_RECOVERY_RERUNS:-0}"
 TEST_CASE_TIMEOUT="${FLUTTER_TEST_CASE_TIMEOUT:-}"
 IGNORE_TEST_TIMEOUTS="${FLUTTER_TEST_IGNORE_TIMEOUTS:-0}"
 COLLECT_ON_FAIL=1
@@ -58,6 +59,8 @@ Options:
                          Allow adb reboot for emulator-* devices during recovery. Default: disabled.
   --no-allow-emulator-reboot
                          Disable emulator reboot during recovery.
+  --timeout-recovery-rerun <count>
+                         Rerun same attempt on timeout/termination up to <count> times. Default: 0.
   --artifact-dir <path>  Directory to store test logs/artifacts.
   --no-collect-on-fail   Disable adb artifact collection on failure.
   --list                 Print default integration test files and exit.
@@ -76,6 +79,7 @@ Env:
   FLUTTER_DEVICE_RECOVERY_RETRY_COUNT
   FLUTTER_DEVICE_RECOVERY_WAIT_SECONDS
   FLUTTER_DEVICE_RECOVERY_ALLOW_EMULATOR_REBOOT
+  FLUTTER_TIMEOUT_RECOVERY_RERUNS
   FLUTTER_TEST_ARTIFACT_DIR
 EOF
 }
@@ -168,6 +172,14 @@ while [[ $# -gt 0 ]]; do
     --no-allow-emulator-reboot)
       ALLOW_EMULATOR_REBOOT=0
       ;;
+    --timeout-recovery-rerun)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "missing value for --timeout-recovery-rerun" >&2
+        exit 2
+      fi
+      TIMEOUT_RECOVERY_RERUNS="$1"
+      ;;
     --no-collect-on-fail)
       COLLECT_ON_FAIL=0
       ;;
@@ -229,6 +241,11 @@ fi
 
 if ! [[ "${ALLOW_EMULATOR_REBOOT}" =~ ^[01]$ ]]; then
   echo "allow emulator reboot flag must be 0 or 1, got: ${ALLOW_EMULATOR_REBOOT}" >&2
+  exit 2
+fi
+
+if ! [[ "${TIMEOUT_RECOVERY_RERUNS}" =~ ^[0-9]+$ ]]; then
+  echo "timeout recovery rerun count must be a non-negative integer, got: ${TIMEOUT_RECOVERY_RERUNS}" >&2
   exit 2
 fi
 
@@ -557,6 +574,7 @@ run_test_with_retry() {
     local rerun_log_file="${ARTIFACT_DIR}/${safe_name}.attempt${attempt}.recovery-rerun.test.log"
     local exit_code=0
     local recovered_rerun=0
+    local timeout_reruns_done=0
     log "running: ${file} (attempt ${attempt}/${max_attempts})"
     set +e
     run_single_test_invocation "${file}" "${log_file}"
@@ -567,7 +585,7 @@ run_test_with_retry() {
       local rerun_reason=""
       if is_disconnect_failure_log "${log_file}"; then
         rerun_reason="device disconnect"
-      elif is_timeout_exit_code "${exit_code}"; then
+      elif is_timeout_exit_code "${exit_code}" && (( timeout_reruns_done < TIMEOUT_RECOVERY_RERUNS )); then
         rerun_reason="timeout/termination"
       fi
 
@@ -575,6 +593,9 @@ run_test_with_retry() {
         log "${rerun_reason} detected for ${file}; recovering and rerunning same attempt"
         if recover_device_liveness; then
           recovered_rerun=1
+          if [[ "${rerun_reason}" == "timeout/termination" ]]; then
+            timeout_reruns_done=$((timeout_reruns_done + 1))
+          fi
           set +e
           run_single_test_invocation "${file}" "${rerun_log_file}"
           exit_code=$?
