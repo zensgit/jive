@@ -81,8 +81,39 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/gradle.properties', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Install Dependencies
         run: flutter pub get
+
+      - name: Pre-install Android SDK components
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER_BIN="${SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "${SDKMANAGER_BIN}" ]; then
+            if command -v sdkmanager >/dev/null 2>&1; then
+              SDKMANAGER_BIN="$(command -v sdkmanager)"
+            else
+              echo "::warning::sdkmanager not found; skipping explicit SDK component pre-install."
+              exit 0
+            fi
+          fi
+          yes | "${SDKMANAGER_BIN}" --licenses >/dev/null || true
+          timeout 900 "${SDKMANAGER_BIN}" \
+            "platform-tools" \
+            "platforms;android-30" \
+            "platforms;android-33" \
+            "build-tools;34.0.0" \
+            "ndk;27.0.12077973"
 
       - name: Enable KVM for emulator
         run: |
