@@ -1,17 +1,18 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v8
+# CI 并行开发报告：1+2（Prewarm + Recovery）v9
 
 日期：2026-02-23
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`f5608b16d0450fff879faf3fcc9aa92f396d8edd`
-- 最新通过 Run：`22310492003`
+- 最新验证 Head：`ff0c19156fcaa3dd42f0e7d1ff42d77ec1cb4aad`
+- 最新通过 Run：`22312570907`
 
 ## 1. 本轮继续开发目标
 
 1. 继续提高 Android integration 流程的抗波动能力。
 2. 让 prewarm 不再成为阻断后续真实测试执行的单点失败。
+3. 减少 emulator 阶段的环境安装抖动（SDK 组件与 Gradle 依赖准备）。
 
 ## 2. 本轮新增改动
 
@@ -21,6 +22,13 @@
   - prewarm 构建执行后读取退出码。
   - 非 0 时输出 warning 并继续进入 emulator 测试步骤。
 - 目的：避免 prewarm 偶发失败直接终止 pipeline；由 step9 进行真实可观测验证。
+
+2. `ci(e2e): pre-install sdk components and cache gradle in android job`（`ff0c191`）
+- 文件：`.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - 新增 `Cache Gradle`（`~/.gradle/caches`、`~/.gradle/wrapper`）。
+  - 新增 `Pre-install Android SDK components`（`platform-tools`、`platforms;android-30`、`platforms;android-33`、`build-tools;34.0.0`、`ndk;27.0.12077973`）。
+- 目的：在 emulator 启动前主动完成高波动依赖准备，降低测试阶段额外下载干扰。
 
 ## 3. 关键验证链路
 
@@ -40,8 +48,25 @@
   - `[integration] suite elapsed: 9m25s`
   - `[integration] all integration tests passed`
 
+### 3.3 本轮 SDK/Gradle 准备优化验证
+- Run：`22312570907`
+- head：`ff0c191`
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `23m48s`）
+- 关键日志：
+  - `Cache Gradle`：`Cache not found for input keys: Linux-gradle-..., Linux-gradle-`（首次 key 未命中，行为符合预期）
+  - `Pre-install Android SDK components`：执行了 `platforms;android-30`、`platforms;android-33`、`build-tools;34.0.0`、`ndk;27.0.12077973`
+  - `Prewarm Android build toolchain`：`Running Gradle task 'assembleDevDebug'... 560.4s`，随后成功构建 APK
+  - `Run Android integration_test (emulator)`：`combined_suite(2 files): PASS in 8m30s`，`suite elapsed: 8m30s`
+
+步骤耗时分解（`22312570907`）：
+- `Pre-install Android SDK components`：`38s`
+- `Prewarm Android build toolchain`：`564s`
+- `Run Android integration_test (emulator)`：`694s`
+
 ## 4. 结论
 
 1. 继续开发已完成并通过远端完整验证。
 2. prewarm best-effort 策略已上线，流程韧性提升（即使 prewarm 异常也不会提前中断）。
-3. 当前时长在 hosted runner 上存在波动（8m49s ~ 9m25s），但路径已稳定全绿。
+3. `Gradle cache + SDK 预安装` 已上线并在完整链路验证通过，为后续缓存热启动提供基础。
+4. 当前关键用例时长在 hosted runner 上存在波动，但连续多轮均全绿，稳定性达到预期。
