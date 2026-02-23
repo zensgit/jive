@@ -10,6 +10,7 @@ ADB_TIMEOUT_SECONDS="${ADB_TIMEOUT_SECONDS:-30}"
 FLUTTER_TIMEOUT_SECONDS="${FLUTTER_TIMEOUT_SECONDS:-1800}"
 FLUTTER_IGNORE_TIMEOUTS="${FLUTTER_IGNORE_TIMEOUTS:-1}"
 FLUTTER_TEST_TIMEOUT="${FLUTTER_TEST_TIMEOUT:-none}"
+FLUTTER_TEST_SKIP_PUB="${FLUTTER_TEST_SKIP_PUB:-1}"
 
 mkdir -p "$LOG_DIR" "$SCREENSHOT_DIR"
 
@@ -89,6 +90,7 @@ done
   printf 'flutter_timeout_seconds=%s\n' "$FLUTTER_TIMEOUT_SECONDS"
   printf 'flutter_ignore_timeouts=%s\n' "$FLUTTER_IGNORE_TIMEOUTS"
   printf 'flutter_test_timeout=%s\n' "$FLUTTER_TEST_TIMEOUT"
+  printf 'flutter_test_skip_pub=%s\n' "$FLUTTER_TEST_SKIP_PUB"
   printf 'requested_tests=%s\n' "${requested_tests[*]}"
   printf 'resolved_tests=%s\n' "${test_targets[*]}"
 } >"$ARTIFACT_DIR/metadata.txt"
@@ -126,6 +128,12 @@ if [[ -n "$FLUTTER_TEST_TIMEOUT" ]]; then
   flutter_cmd+=(
     --timeout
     "$FLUTTER_TEST_TIMEOUT"
+  )
+fi
+
+if [[ "$FLUTTER_TEST_SKIP_PUB" == "1" ]]; then
+  flutter_cmd+=(
+    --no-pub
   )
 fi
 

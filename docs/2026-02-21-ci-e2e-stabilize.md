@@ -106,3 +106,13 @@ Date: 2026-02-21
   - Increased script guard env `FLUTTER_TIMEOUT_SECONDS` from `2700` to `4200`.
 - Expected effect:
   - Keep timeout protection while leaving enough post-test teardown buffer for a fully green completion state.
+
+## Runtime Reduction Follow-up (2026-02-23)
+
+- Trigger: repeated CI logs showed duplicated dependency resolution inside `flutter test` despite workflow already running `flutter pub get`.
+- Change:
+  - Added `FLUTTER_TEST_SKIP_PUB` (default `1`) in `scripts/run_android_integration_ci.sh`.
+  - Runner appends `--no-pub` when this flag is enabled.
+  - Wired `FLUTTER_TEST_SKIP_PUB=1` in workflow env for Android integration step.
+- Expected effect:
+  - Remove redundant pub resolution during integration test execution and recover several minutes of runtime budget.
