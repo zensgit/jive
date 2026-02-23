@@ -85,3 +85,14 @@ Date: 2026-02-21
   - Increased script outer guard via workflow env `FLUTTER_TIMEOUT_SECONDS=2700`.
 - Expected effect:
   - Keep hard-stop safety while providing enough budget for cold boot + dependency install + debug assemble + test execution.
+
+## ADB Animation Toggle Follow-up (2026-02-23)
+
+- Trigger: workflow run `22309250248` failed after emulator boot with:
+  - `cmd: Failure calling service settings: Broken pipe (32)`
+  - `/usr/local/lib/android/sdk/platform-tools/adb` exit code `224`
+- Root cause: emulator-runner's animation disabling step can fail on unstable ADB transport right after long cold boot.
+- Change:
+  - Set `disable-animations: false` in `android_emulator_runner` configuration.
+- Expected effect:
+  - Remove the fragile `adb shell settings put global ...` path and proceed directly to scripted integration execution.
