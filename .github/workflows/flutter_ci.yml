@@ -95,7 +95,7 @@ jobs:
         run: |
           set -euo pipefail
           export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
-          timeout 1200 flutter build apk --debug --flavor dev --dart-define=JIVE_E2E=true
+          timeout 1200 flutter build apk --debug --flavor dev --dart-define=JIVE_E2E=true --no-pub
 
       - name: Run Android integration_test (emulator)
         uses: reactivecircus/android-emulator-runner@v2
@@ -120,4 +120,4 @@ jobs:
           script: |
             export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
             flutter devices
-            timeout 1800 bash scripts/run_integration_tests.sh --combined-suite --retry 0 --timeout 720 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 2 --device-recovery-timeout 60 --allow-emulator-reboot emulator-5554
+            timeout 1800 bash scripts/run_integration_tests.sh --combined-suite --skip-pub-get --retry 0 --timeout 720 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 2 --device-recovery-timeout 60 --allow-emulator-reboot emulator-5554

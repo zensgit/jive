@@ -34,6 +34,7 @@ TEST_CASE_TIMEOUT="${FLUTTER_TEST_CASE_TIMEOUT:-}"
 IGNORE_TEST_TIMEOUTS="${FLUTTER_TEST_IGNORE_TIMEOUTS:-0}"
 PUB_GET_ONCE="${FLUTTER_TEST_PUB_GET_ONCE:-1}"
 PUB_GET_TIMEOUT_SECONDS="${FLUTTER_TEST_PUB_GET_TIMEOUT_SECONDS:-300}"
+SKIP_PUB_GET_ONCE="${FLUTTER_TEST_SKIP_PUB_GET:-0}"
 COMBINED_SUITE_MODE="${FLUTTER_TEST_COMBINED_SUITE_MODE:-0}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -58,6 +59,8 @@ Options:
   --no-pub-get-once       Run flutter test without '--no-pub' (pub resolution per invocation).
   --pub-get-timeout <seconds>
                          Timeout for the one-time 'flutter pub get'. 0 disables timeout. Default: 300.
+  --skip-pub-get         Skip one-time 'flutter pub get' (requires pre-resolved dependencies).
+  --no-skip-pub-get      Do not skip one-time 'flutter pub get' (default).
   --combined-suite        Run all selected test files in one flutter test invocation per attempt.
   --no-combined-suite     Run selected tests file-by-file (default).
   --device-recovery      Enable adb device liveness recovery. Default: enabled.
@@ -87,6 +90,7 @@ Env:
   FLUTTER_TEST_IGNORE_TIMEOUTS
   FLUTTER_TEST_PUB_GET_ONCE
   FLUTTER_TEST_PUB_GET_TIMEOUT_SECONDS
+  FLUTTER_TEST_SKIP_PUB_GET
   FLUTTER_TEST_COMBINED_SUITE_MODE
   FLUTTER_ADB_TIMEOUT_SECONDS
   FLUTTER_DEVICE_RECOVERY_ENABLED
@@ -181,6 +185,12 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       PUB_GET_TIMEOUT_SECONDS="$1"
+      ;;
+    --skip-pub-get)
+      SKIP_PUB_GET_ONCE=1
+      ;;
+    --no-skip-pub-get)
+      SKIP_PUB_GET_ONCE=0
       ;;
     --combined-suite)
       COMBINED_SUITE_MODE=1
@@ -308,6 +318,11 @@ if ! [[ "${PUB_GET_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
+if ! [[ "${SKIP_PUB_GET_ONCE}" =~ ^[01]$ ]]; then
+  echo "skip-pub-get flag must be 0 or 1, got: ${SKIP_PUB_GET_ONCE}" >&2
+  exit 2
+fi
+
 if ! [[ "${COMBINED_SUITE_MODE}" =~ ^[01]$ ]]; then
   echo "combined-suite flag must be 0 or 1, got: ${COMBINED_SUITE_MODE}" >&2
   exit 2
@@ -372,6 +387,15 @@ run_flutter_test() {
 }
 
 run_pub_get_once() {
+  if (( SKIP_PUB_GET_ONCE == 1 )); then
+    if [[ ! -f ".dart_tool/package_config.json" ]]; then
+      echo "skip-pub-get requested but .dart_tool/package_config.json is missing" >&2
+      return 2
+    fi
+    log "skipping flutter pub get once (requested)"
+    return 0
+  fi
+
   log "running flutter pub get once before integration suite"
   if [[ -n "${TIMEOUT_BIN}" ]] && (( PUB_GET_TIMEOUT_SECONDS > 0 )); then
     "${TIMEOUT_BIN}" --signal=TERM --kill-after=15s "${PUB_GET_TIMEOUT_SECONDS}s" flutter pub get
