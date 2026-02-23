@@ -96,3 +96,13 @@ Date: 2026-02-21
   - Set `disable-animations: false` in `android_emulator_runner` configuration.
 - Expected effect:
   - Remove the fragile `adb shell settings put global ...` path and proceed directly to scripted integration execution.
+
+## Final Budget Follow-up (2026-02-23)
+
+- Trigger: workflow run `22310006019` reached test success log (`✅ Transaction list supports search + filter + date range clear flow`) but was canceled before step completion.
+- Root cause: end-to-end runtime still exceeded configured job timeout margin (boot + setup + assemble + install + test + cleanup).
+- Change:
+  - Increased `android_integration_test.timeout-minutes` from `60` to `75`.
+  - Increased script guard env `FLUTTER_TIMEOUT_SECONDS` from `2700` to `4200`.
+- Expected effect:
+  - Keep timeout protection while leaving enough post-test teardown buffer for a fully green completion state.
