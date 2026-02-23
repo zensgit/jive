@@ -34,6 +34,7 @@ TEST_CASE_TIMEOUT="${FLUTTER_TEST_CASE_TIMEOUT:-}"
 IGNORE_TEST_TIMEOUTS="${FLUTTER_TEST_IGNORE_TIMEOUTS:-0}"
 PUB_GET_ONCE="${FLUTTER_TEST_PUB_GET_ONCE:-1}"
 PUB_GET_TIMEOUT_SECONDS="${FLUTTER_TEST_PUB_GET_TIMEOUT_SECONDS:-300}"
+COMBINED_SUITE_MODE="${FLUTTER_TEST_COMBINED_SUITE_MODE:-0}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
@@ -57,6 +58,8 @@ Options:
   --no-pub-get-once       Run flutter test without '--no-pub' (pub resolution per invocation).
   --pub-get-timeout <seconds>
                          Timeout for the one-time 'flutter pub get'. 0 disables timeout. Default: 300.
+  --combined-suite        Run all selected test files in one flutter test invocation per attempt.
+  --no-combined-suite     Run selected tests file-by-file (default).
   --device-recovery      Enable adb device liveness recovery. Default: enabled.
   --no-device-recovery   Disable adb device liveness recovery.
   --device-recovery-retry <count>
@@ -84,6 +87,7 @@ Env:
   FLUTTER_TEST_IGNORE_TIMEOUTS
   FLUTTER_TEST_PUB_GET_ONCE
   FLUTTER_TEST_PUB_GET_TIMEOUT_SECONDS
+  FLUTTER_TEST_COMBINED_SUITE_MODE
   FLUTTER_ADB_TIMEOUT_SECONDS
   FLUTTER_DEVICE_RECOVERY_ENABLED
   FLUTTER_DEVICE_RECOVERY_RETRY_COUNT
@@ -177,6 +181,12 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       PUB_GET_TIMEOUT_SECONDS="$1"
+      ;;
+    --combined-suite)
+      COMBINED_SUITE_MODE=1
+      ;;
+    --no-combined-suite)
+      COMBINED_SUITE_MODE=0
       ;;
     --device-recovery)
       DEVICE_RECOVERY_ENABLED=1
@@ -298,6 +308,11 @@ if ! [[ "${PUB_GET_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 
+if ! [[ "${COMBINED_SUITE_MODE}" =~ ^[01]$ ]]; then
+  echo "combined-suite flag must be 0 or 1, got: ${COMBINED_SUITE_MODE}" >&2
+  exit 2
+fi
+
 if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
   echo "no integration tests selected" >&2
   exit 2
@@ -325,14 +340,17 @@ if [[ -n "${DEVICE_ID}" ]]; then
 fi
 
 run_flutter_test() {
-  local file="$1"
-  local log_file="$2"
+  local log_file="$1"
+  shift
+  local test_path
   local cmd=(
     flutter test
-    "${file}"
     --flavor "${FLAVOR}"
     --dart-define="${DART_DEFINE}"
   )
+  for test_path in "$@"; do
+    cmd+=("${test_path}")
+  done
   if [[ -n "${TEST_CASE_TIMEOUT}" ]]; then
     cmd+=(--timeout "${TEST_CASE_TIMEOUT}")
   fi
@@ -592,7 +610,20 @@ run_single_test_invocation() {
   fi
 
   run_adb logcat -c >/dev/null 2>&1 || true
-  run_flutter_test "${file}" "${log_file}"
+  run_flutter_test "${log_file}" "${file}"
+}
+
+run_combined_suite_invocation() {
+  local log_file="$1"
+
+  : > "${log_file}"
+  if ! ensure_device_ready_for_run; then
+    echo "[integration] device not ready before running combined suite" | tee -a "${log_file}" >/dev/null
+    return 1
+  fi
+
+  run_adb logcat -c >/dev/null 2>&1 || true
+  run_flutter_test "${log_file}" "${TEST_FILES[@]}"
 }
 
 collect_failure_artifacts() {
@@ -697,6 +728,83 @@ run_test_with_retry() {
   return 1
 }
 
+run_combined_suite_with_retry() {
+  local max_attempts=$((RETRY_COUNT + 1))
+  local attempt=1
+  local suite_started_at
+  suite_started_at="$(date +%s)"
+  local suite_label="combined_suite"
+
+  while (( attempt <= max_attempts )); do
+    local log_file="${ARTIFACT_DIR}/${suite_label}.attempt${attempt}.test.log"
+    local rerun_log_file="${ARTIFACT_DIR}/${suite_label}.attempt${attempt}.recovery-rerun.test.log"
+    local exit_code=0
+    local recovered_rerun=0
+    local timeout_reruns_done=0
+    log "running: ${suite_label} (${#TEST_FILES[@]} files, attempt ${attempt}/${max_attempts})"
+    set +e
+    run_combined_suite_invocation "${log_file}"
+    exit_code=$?
+    set -e
+
+    if (( exit_code != 0 )) && (( DEVICE_RECOVERY_ENABLED == 1 )) && (( recovered_rerun == 0 )); then
+      local rerun_reason=""
+      if is_disconnect_failure_log "${log_file}"; then
+        rerun_reason="device disconnect"
+      elif is_timeout_exit_code "${exit_code}" && (( timeout_reruns_done < TIMEOUT_RECOVERY_RERUNS )); then
+        rerun_reason="timeout/termination"
+      fi
+
+      if [[ -n "${rerun_reason}" ]]; then
+        log "${rerun_reason} detected for ${suite_label}; recovering and rerunning same attempt"
+        if recover_device_liveness; then
+          recovered_rerun=1
+          if [[ "${rerun_reason}" == "timeout/termination" ]]; then
+            timeout_reruns_done=$((timeout_reruns_done + 1))
+          fi
+          set +e
+          run_combined_suite_invocation "${rerun_log_file}"
+          exit_code=$?
+          set -e
+        else
+          log "recovery did not restore a ready device for same-attempt rerun"
+        fi
+      fi
+    fi
+
+    if (( exit_code == 0 )); then
+      local elapsed_seconds=$(( $(date +%s) - suite_started_at ))
+      local elapsed_label
+      elapsed_label="$(format_duration "${elapsed_seconds}")"
+      TEST_RUN_SUMMARY+=("${suite_label}(${#TEST_FILES[@]} files): PASS in ${elapsed_label} (attempt ${attempt}/${max_attempts})")
+      log "duration: ${suite_label} => ${elapsed_label}"
+      log "passed: ${suite_label} (attempt ${attempt})"
+      return 0
+    fi
+    if is_timeout_exit_code "${exit_code}"; then
+      local timeout_label="configured timeout"
+      if (( TEST_TIMEOUT_SECONDS > 0 )); then
+        timeout_label="${TEST_TIMEOUT_SECONDS}s"
+      fi
+      log "timed out or terminated: ${suite_label} after ${timeout_label} (attempt ${attempt}, exit=${exit_code})"
+    fi
+    log "failed: ${suite_label} (attempt ${attempt})"
+    collect_failure_artifacts "${suite_label}" "${attempt}"
+    if (( attempt < max_attempts )); then
+      log "retrying: ${suite_label}"
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  local elapsed_seconds=$(( $(date +%s) - suite_started_at ))
+  local elapsed_label
+  elapsed_label="$(format_duration "${elapsed_seconds}")"
+  TEST_RUN_SUMMARY+=("${suite_label}(${#TEST_FILES[@]} files): FAIL in ${elapsed_label} (${max_attempts} attempts)")
+  log "duration: ${suite_label} => ${elapsed_label}"
+
+  return 1
+}
+
 print_timing_summary() {
   local suite_elapsed=$(( $(date +%s) - SUITE_STARTED_AT ))
   log "timing summary:"
@@ -715,11 +823,18 @@ FAILED_TESTS=()
 if (( PUB_GET_ONCE == 1 )); then
   run_pub_get_once
 fi
-for test_file in "${TEST_FILES[@]}"; do
-  if ! run_test_with_retry "${test_file}"; then
-    FAILED_TESTS+=("${test_file}")
+if (( COMBINED_SUITE_MODE == 1 )); then
+  log "combined suite mode enabled (${#TEST_FILES[@]} files)"
+  if ! run_combined_suite_with_retry; then
+    FAILED_TESTS+=("${TEST_FILES[@]}")
   fi
-done
+else
+  for test_file in "${TEST_FILES[@]}"; do
+    if ! run_test_with_retry "${test_file}"; then
+      FAILED_TESTS+=("${test_file}")
+    fi
+  done
+fi
 
 print_timing_summary
 
