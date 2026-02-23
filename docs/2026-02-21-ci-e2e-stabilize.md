@@ -63,3 +63,12 @@ Date: 2026-02-21
   - Extended `metadata.txt` to include timeout-related runtime config for postmortem.
 - Expected effect:
   - Avoid false failures from Flutter internal timeout while preserving hard-stop protection at script level.
+
+## Emulator Boot Timeout Follow-up (2026-02-23)
+
+- Trigger: workflow run `22307125615` failed before entering script execution.
+- Root cause: `reactivecircus/android-emulator-runner` hit default boot timeout (10m) and aborted with `Timeout waiting for emulator to boot`.
+- Change:
+  - Set `emulator-boot-timeout: 1200` in `.github/workflows/flutter_ci.yml` for `android_integration_test`.
+- Expected effect:
+  - Allow slower hosted runner cold boots to finish and reach the scripted integration test stage.
