@@ -1,55 +1,47 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v7
+# CI 并行开发报告：1+2（Prewarm + Recovery）v8
 
 日期：2026-02-23
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`876496a7e2f6a14a629be9505b6892d33b6fd1b2`
-- 最新通过 Run：`22307870910`
+- 最新验证 Head：`f5608b16d0450fff879faf3fcc9aa92f396d8edd`
+- 最新通过 Run：`22310492003`
 
 ## 1. 本轮继续开发目标
 
-1. 进一步压缩 Android integration suite 执行时长。
-2. 在 strict-failure 前提下移除 CI 中重复 pub 解析路径。
+1. 继续提高 Android integration 流程的抗波动能力。
+2. 让 prewarm 不再成为阻断后续真实测试执行的单点失败。
 
 ## 2. 本轮新增改动
 
-1. `ci(e2e): skip redundant pub get in emulator execution path`（`876496a`）
-- `scripts/run_integration_tests.sh`
-  - 新增：`--skip-pub-get` / `--no-skip-pub-get`
-  - 新增环境变量：`FLUTTER_TEST_SKIP_PUB_GET`
-  - 当启用时，跳过 suite 内 one-time `flutter pub get`。
-- `.github/workflows/flutter_ci.yml`
-  - prewarm 使用 `flutter build ... --no-pub`
-  - emulator 运行脚本增加 `--skip-pub-get`
+1. `ci(e2e): make prewarm best-effort before emulator run`（`f5608b1`）
+- 文件：`.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - prewarm 构建执行后读取退出码。
+  - 非 0 时输出 warning 并继续进入 emulator 测试步骤。
+- 目的：避免 prewarm 偶发失败直接终止 pipeline；由 step9 进行真实可观测验证。
 
 ## 3. 关键验证链路
 
-### 3.1 combined-suite 基线
-- Run：`22306626056`
-- 结果：success
-- 关键数据：`suite elapsed: 9m04s`
+### 3.1 优化基线
+- `22306626056`：combined-suite，`suite elapsed 9m04s`
+- `22307870910`：combined-suite + skip-pub-get，`suite elapsed 8m49s`
 
-### 3.2 skip-pub-get + no-pub
-- Run：`22307870910`
-- 结果：success
+### 3.2 本轮 best-effort 验证
+- Run：`22310492003`
+- head：`f5608b1`
+- `analyze_and_test`：success
+- `android_integration_test`：success
 - 关键日志：
   - `[integration] skipping flutter pub get once (requested)`
   - `[integration] combined suite mode enabled (2 files)`
-  - `[integration]   - combined_suite(2 files): PASS in 8m49s (attempt 1/1)`
-  - `[integration] suite elapsed: 8m49s`
+  - `[integration]   - combined_suite(2 files): PASS in 9m24s (attempt 1/1)`
+  - `[integration] suite elapsed: 9m25s`
   - `[integration] all integration tests passed`
 
-## 4. 对比结论
+## 4. 结论
 
-1. 分文件模式：`9m15s`（`22257862912`）
-2. combined-suite：`9m04s`（`22306626056`）
-3. combined-suite + skip-pub-get：`8m49s`（`22307870910`）
-
-结论：本轮继续开发获得持续时长下降，并维持稳定全绿。
-
-## 5. 后续方向
-
-1. 进一步优化 prewarm 长尾（SDK/NDK 组件准备）是下一阶段主要收益点。
-2. 可考虑将稳定的 Android E2E 路径拆成 nightly 深测与 PR 轻量烟测组合。
+1. 继续开发已完成并通过远端完整验证。
+2. prewarm best-effort 策略已上线，流程韧性提升（即使 prewarm 异常也不会提前中断）。
+3. 当前时长在 hosted runner 上存在波动（8m49s ~ 9m25s），但路径已稳定全绿。
