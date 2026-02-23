@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v9，2026-02-23）
+# CI 验证记录：并行开发 1+2（v10，2026-02-23）
 
 ## 1. 本地验证
 
@@ -39,17 +39,38 @@
     - `[integration] suite elapsed: 8m30s`
     - `[integration] all integration tests passed`
 
+3. `22313642147`（head `247d820`，热缓存验证）
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `18m14s`）
+- 关键日志证据：
+  - `Cache Gradle`：`Cache restored from key: Linux-gradle-a2e627...`
+  - `Post Cache Gradle`：`Cache hit occurred on the primary key Linux-gradle-a2e627...`
+  - `Prewarm Android build toolchain`：步骤耗时 `175s`（上轮同步骤 `564s`）
+  - `Run Android integration_test (emulator)`：
+    - `[integration] skipping flutter pub get once (requested)`
+    - `[integration] combined suite mode enabled (2 files)`
+    - `[integration]   - combined_suite(2 files): PASS in 10m00s (attempt 1/1)`
+    - `[integration] suite elapsed: 10m00s`
+    - `[integration] all integration tests passed`
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
 - `22307870910`：`suite elapsed 8m49s`
 - `22310492003`：`suite elapsed 9m25s`
 - `22312570907`：`suite elapsed 8m30s`
+- `22313642147`：`suite elapsed 10m00s`
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
 - `Prewarm Android build toolchain`：`564s`
 - `Run Android integration_test (emulator)`：`694s`
+
+`22313642147` 步骤耗时分解（热缓存）：
+- `Cache Gradle`：`51s`
+- `Pre-install Android SDK components`：`33s`
+- `Prewarm Android build toolchain`：`175s`
+- `Run Android integration_test (emulator)`：`787s`
 
 注：时长受 hosted runner 抖动影响，但策略链路稳定，连续多轮均全绿。
 
@@ -60,4 +81,4 @@
 
 ## 5. 结论
 
-继续开发任务完成：新增 `Gradle cache + SDK 预安装` 已上线并经远端验证通过，且与既有 `combined-suite + skip-pub-get + prewarm best-effort` 策略兼容稳定。
+继续开发任务完成：新增 `Gradle cache + SDK 预安装` 已完成冷缓存与热缓存两轮远端验证；热缓存命中后 prewarm 显著缩短，整体链路稳定全绿。
