@@ -72,3 +72,16 @@ Date: 2026-02-21
   - Set `emulator-boot-timeout: 1200` in `.github/workflows/flutter_ci.yml` for `android_integration_test`.
 - Expected effect:
   - Allow slower hosted runner cold boots to finish and reach the scripted integration test stage.
+
+## Job Budget Follow-up (2026-02-23)
+
+- Trigger: workflow run `22307818273` still ended `cancelled` at ~35 minutes.
+- Evidence:
+  - Emulator boot completed in ~899s (`Boot completed in 898776 ms`).
+  - `assembleDevDebug` alone took ~1017s.
+  - Job reached APK install phase, then was canceled by workflow timeout window.
+- Change:
+  - Increased `android_integration_test.timeout-minutes` from `35` to `60`.
+  - Increased script outer guard via workflow env `FLUTTER_TIMEOUT_SECONDS=2700`.
+- Expected effect:
+  - Keep hard-stop safety while providing enough budget for cold boot + dependency install + debug assemble + test execution.
