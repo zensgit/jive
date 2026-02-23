@@ -74,6 +74,10 @@ jobs:
 
       - name: Run Android integration_test (emulator)
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          FLUTTER_IGNORE_TIMEOUTS: "1"
+          FLUTTER_TEST_TIMEOUT: "none"
+          FLUTTER_TIMEOUT_SECONDS: "1800"
         with:
           api-level: 34
           target: google_apis

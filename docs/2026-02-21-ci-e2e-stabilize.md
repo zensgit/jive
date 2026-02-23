@@ -22,6 +22,7 @@ Date: 2026-02-21
 - Updated `.github/workflows/flutter_ci.yml`:
   - Kept existing job gating unchanged.
   - Replaced inline `flutter test` invocation with `bash scripts/run_android_integration_ci.sh transaction_search_flow`.
+  - Added explicit step env for timeout policy (`FLUTTER_IGNORE_TIMEOUTS=1`, `FLUTTER_TEST_TIMEOUT=none`).
   - Added an `actions/upload-artifact@v4` step (`if: always()`) for `ci_artifacts/android_integration`.
   - Added `continue-on-error: true` to artifact upload step to avoid masking test result when Actions artifact quota is exhausted.
 
@@ -48,5 +49,17 @@ Date: 2026-02-21
   - `48:  android_integration_test:`
   - `52:      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_android_e2e == 'true') ||`
   - `53:      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e'))`
-  - `83:            bash scripts/run_android_integration_ci.sh`
-  - `87:        uses: actions/upload-artifact@v4`
+  - `87:            bash scripts/run_android_integration_ci.sh transaction_search_flow`
+  - `92:        uses: actions/upload-artifact@v4`
+
+## Timeout Guard Follow-up (2026-02-23)
+
+- Trigger: after PR #56 (`run_android_integration_ci.sh transaction_search_flow`), CI still failed due Flutter test default suite timeout in cold-start emulator path.
+- Root cause: outer command timeout existed, but Flutter internal timeout (`12 minutes`) could still fail first.
+- Change:
+  - Added `FLUTTER_IGNORE_TIMEOUTS` (default `1`) and `FLUTTER_TEST_TIMEOUT` (default `none`) to `scripts/run_android_integration_ci.sh`.
+  - Runner now appends `--ignore-timeouts --timeout none` to `flutter test` by default.
+  - Keeps existing outer guard via `FLUTTER_TIMEOUT_SECONDS` to prevent infinite hangs.
+  - Extended `metadata.txt` to include timeout-related runtime config for postmortem.
+- Expected effect:
+  - Avoid false failures from Flutter internal timeout while preserving hard-stop protection at script level.

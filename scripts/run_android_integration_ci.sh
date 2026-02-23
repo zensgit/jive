@@ -8,6 +8,8 @@ SCREENSHOT_DIR="$ARTIFACT_DIR/screenshots"
 DEVICE_SERIAL="${ANDROID_DEVICE_SERIAL:-emulator-5554}"
 ADB_TIMEOUT_SECONDS="${ADB_TIMEOUT_SECONDS:-30}"
 FLUTTER_TIMEOUT_SECONDS="${FLUTTER_TIMEOUT_SECONDS:-1800}"
+FLUTTER_IGNORE_TIMEOUTS="${FLUTTER_IGNORE_TIMEOUTS:-1}"
+FLUTTER_TEST_TIMEOUT="${FLUTTER_TEST_TIMEOUT:-none}"
 
 mkdir -p "$LOG_DIR" "$SCREENSHOT_DIR"
 
@@ -85,6 +87,8 @@ done
   printf 'device_serial=%s\n' "$DEVICE_SERIAL"
   printf 'adb_timeout_seconds=%s\n' "$ADB_TIMEOUT_SECONDS"
   printf 'flutter_timeout_seconds=%s\n' "$FLUTTER_TIMEOUT_SECONDS"
+  printf 'flutter_ignore_timeouts=%s\n' "$FLUTTER_IGNORE_TIMEOUTS"
+  printf 'flutter_test_timeout=%s\n' "$FLUTTER_TEST_TIMEOUT"
   printf 'requested_tests=%s\n' "${requested_tests[*]}"
   printf 'resolved_tests=%s\n' "${test_targets[*]}"
 } >"$ARTIFACT_DIR/metadata.txt"
@@ -111,6 +115,19 @@ flutter_cmd=(
   dev
   --dart-define=JIVE_E2E=true
 )
+
+if [[ "$FLUTTER_IGNORE_TIMEOUTS" == "1" ]]; then
+  flutter_cmd+=(
+    --ignore-timeouts
+  )
+fi
+
+if [[ -n "$FLUTTER_TEST_TIMEOUT" ]]; then
+  flutter_cmd+=(
+    --timeout
+    "$FLUTTER_TEST_TIMEOUT"
+  )
+fi
 
 printf '%q ' "${flutter_cmd[@]}" >"$LOG_DIR/flutter_command.sh"
 printf '\n' >>"$LOG_DIR/flutter_command.sh"
