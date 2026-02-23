@@ -95,7 +95,13 @@ jobs:
         run: |
           set -euo pipefail
           export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
+          set +e
           timeout 1200 flutter build apk --debug --flavor dev --dart-define=JIVE_E2E=true --no-pub
+          PREWARM_EXIT=$?
+          set -e
+          if [ "${PREWARM_EXIT}" -ne 0 ]; then
+            echo "::warning::Prewarm failed with exit ${PREWARM_EXIT}; continuing to emulator test run."
+          fi
 
       - name: Run Android integration_test (emulator)
         uses: reactivecircus/android-emulator-runner@v2
