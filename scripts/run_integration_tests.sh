@@ -39,6 +39,7 @@ COMBINED_SUITE_MODE="${FLUTTER_TEST_COMBINED_SUITE_MODE:-0}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
+SUMMARY_FILE="${FLUTTER_TEST_SUMMARY_FILE:-}"
 SUITE_STARTED_AT="$(date +%s)"
 TEST_RUN_SUMMARY=()
 
@@ -76,6 +77,7 @@ Options:
   --timeout-recovery-rerun <count>
                          Rerun same attempt on timeout/termination up to <count> times. Default: 0.
   --artifact-dir <path>  Directory to store test logs/artifacts.
+  --summary-file <path>  Path to write suite summary file. Default: <artifact-dir>/suite-summary.txt.
   --no-collect-on-fail   Disable adb artifact collection on failure.
   --list                 Print default integration test files and exit.
   -h, --help             Show this help message.
@@ -99,6 +101,7 @@ Env:
   FLUTTER_DEVICE_RECOVERY_ALLOW_EMULATOR_REBOOT
   FLUTTER_TIMEOUT_RECOVERY_RERUNS
   FLUTTER_TEST_ARTIFACT_DIR
+  FLUTTER_TEST_SUMMARY_FILE
 EOF
 }
 
@@ -160,6 +163,14 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       TEST_TIMEOUT_SECONDS="$1"
+      ;;
+    --summary-file)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "missing value for --summary-file" >&2
+        exit 2
+      fi
+      SUMMARY_FILE="$1"
       ;;
     --test-case-timeout)
       shift
@@ -331,6 +342,10 @@ fi
 if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
   echo "no integration tests selected" >&2
   exit 2
+fi
+
+if [[ -z "${SUMMARY_FILE}" ]]; then
+  SUMMARY_FILE="${ARTIFACT_DIR}/suite-summary.txt"
 fi
 
 mkdir -p "${ARTIFACT_DIR}"
@@ -843,6 +858,44 @@ print_timing_summary() {
   log "suite elapsed: $(format_duration "${suite_elapsed}")"
 }
 
+write_suite_summary_file() {
+  local suite_finished_at
+  local suite_elapsed
+  suite_finished_at="$(date +%s)"
+  suite_elapsed=$(( suite_finished_at - SUITE_STARTED_AT ))
+
+  if [[ -n "${SUMMARY_FILE}" ]]; then
+    mkdir -p "$(dirname "${SUMMARY_FILE}")"
+  fi
+
+  {
+    echo "suite_started_at=${SUITE_STARTED_AT}"
+    echo "suite_finished_at=${suite_finished_at}"
+    echo "suite_elapsed_seconds=${suite_elapsed}"
+    echo "suite_elapsed_human=$(format_duration "${suite_elapsed}")"
+    echo "combined_suite_mode=${COMBINED_SUITE_MODE}"
+    echo "retry_count=${RETRY_COUNT}"
+    echo "test_files_count=${#TEST_FILES[@]}"
+    local test_file
+    for test_file in "${TEST_FILES[@]}"; do
+      echo "test_file=${test_file}"
+    done
+    echo "summary_entries_count=${#TEST_RUN_SUMMARY[@]}"
+    local summary_line
+    for summary_line in "${TEST_RUN_SUMMARY[@]}"; do
+      echo "summary_entry=${summary_line}"
+    done
+    echo "failed_tests_count=${#FAILED_TESTS[@]}"
+    local failed
+    for failed in "${FAILED_TESTS[@]}"; do
+      echo "failed_test=${failed}"
+    done
+    echo "artifacts_dir=${ARTIFACT_DIR}"
+  } > "${SUMMARY_FILE}"
+
+  log "suite summary file: ${SUMMARY_FILE}"
+}
+
 FAILED_TESTS=()
 if (( PUB_GET_ONCE == 1 )); then
   run_pub_get_once
@@ -861,6 +914,7 @@ else
 fi
 
 print_timing_summary
+write_suite_summary_file
 
 if [[ "${#FAILED_TESTS[@]}" -gt 0 ]]; then
   log "failed test files:"

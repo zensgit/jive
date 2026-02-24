@@ -33,6 +33,14 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
       - name: Flutter Version
         run: flutter --version
 
@@ -80,6 +88,14 @@ jobs:
           flutter-version: 3.35.5
           channel: stable
           cache: true
+
+      - name: Cache Pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -158,5 +174,33 @@ jobs:
           disable-animations: true
           script: |
             export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
+            INTEGRATION_ARTIFACT_DIR="${RUNNER_TEMP}/jive-integration"
+            mkdir -p "${INTEGRATION_ARTIFACT_DIR}"
             flutter devices
-            timeout 1800 bash scripts/run_integration_tests.sh --combined-suite --skip-pub-get --retry 0 --timeout 720 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 2 --device-recovery-timeout 60 --allow-emulator-reboot emulator-5554
+            timeout 1800 bash scripts/run_integration_tests.sh --combined-suite --skip-pub-get --retry 0 --timeout 720 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 2 --device-recovery-timeout 60 --allow-emulator-reboot --artifact-dir "${INTEGRATION_ARTIFACT_DIR}" --summary-file "${INTEGRATION_ARTIFACT_DIR}/suite-summary.txt" emulator-5554
+
+      - name: Append Android integration summary
+        if: always()
+        run: |
+          SUMMARY_FILE="${RUNNER_TEMP}/jive-integration/suite-summary.txt"
+          {
+            echo "## Android integration summary"
+            if [ -f "${SUMMARY_FILE}" ]; then
+              echo ""
+              echo '```text'
+              cat "${SUMMARY_FILE}"
+              echo '```'
+            else
+              echo ""
+              echo "summary file not found: ${SUMMARY_FILE}"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Upload Android integration artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-integration-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/jive-integration
+          if-no-files-found: warn
+          retention-days: 7
