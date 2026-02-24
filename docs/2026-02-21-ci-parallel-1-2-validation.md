@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v13，2026-02-24）
+# CI 验证记录：并行开发 1+2（v14，2026-02-24）
 
 ## 1. 本地验证
 
@@ -12,6 +12,10 @@
 - 结果：通过，包含：
   - `--skip-pub-get`
   - `--combined-suite`
+  - `--summary-file`
+
+4. `bash scripts/run_integration_tests.sh --test integration_test/transaction_search_flow_test.dart --no-pub-get-once --no-device-recovery --retry 0 --artifact-dir <tmp> --summary-file <tmp>/suite-summary.txt emulator-5554`
+- 结果：在失败路径下仍输出 `suite-summary.txt`，包含 `suite_elapsed_*`、`summary_entry`、`failed_tests_count` 等字段。
 
 ## 2. 远端验证
 
@@ -106,6 +110,39 @@
 - 说明：
   - 该 run 对应文档提交 head（无 workflow 代码变化），用于确认“回退后稳定路径”在最新分支头部仍可全链路通过。
 
+9. `22345150767`（head `1b895df`，接入 summary/artifact 首轮）
+- `analyze_and_test`：success
+- `android_integration_test`：failure
+- 关键日志证据：
+  - `Prewarm Android build toolchain`：success
+  - `Run Android integration_test (emulator)`：failure，错误为：
+    - `mkdir: cannot create directory ‘’: No such file or directory`
+  - `Append Android integration summary`：success
+  - `Upload Android integration artifacts`：warning（路径为空导致无文件）
+- 根因：`android-emulator-runner` 的 `script` 按行执行，行内变量未在后续行保留。
+- 处理：改为直接使用 `${{ runner.temp }}/jive-integration` 字面路径，不依赖跨行 shell 变量。
+
+10. `22345625297`（head `2af12fe`，修复路径后复验）
+- `analyze_and_test`：success
+- `android_integration_test`：failure
+- 关键日志证据：
+  - `Run Android integration_test (emulator)`：success
+  - `Append Android integration summary`：success
+  - `Upload Android integration artifacts`：failure，注解：
+    - `Failed to CreateArtifact: Artifact storage quota has been hit.`
+- 根因：GitHub Actions artifact 存储配额不足（平台侧限制）。
+- 处理：为上传步骤增加 `continue-on-error: true`，避免平台配额波动阻断主验证链路。
+
+11. `22346306100`（head `f585392`，配额容错后终验）
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `19m11s`）
+- 关键步骤：
+  - `Cache Pub dependencies`：两条 job 均 success
+  - `Prewarm Android build toolchain`：`165s`（`10:15:56 -> 10:18:41`）
+  - `Run Android integration_test (emulator)`：`842s`（`10:18:41 -> 10:32:43`）
+  - `Append Android integration summary`：success
+  - `Upload Android integration artifacts`：success（配额异常被容错，不再导致 job 失败）
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -117,6 +154,9 @@
 - `22338299455`：`suite elapsed 7m22s`
 - `22339561892`：`suite elapsed 7m35s`
 - `22343824918`：success（未纳入性能统计样本）
+- `22345150767`：failure（emulator step 内路径变量作用域问题）
+- `22345625297`：failure（artifact 配额耗尽）
+- `22346306100`：success（summary + artifact 容错链路终验）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -147,6 +187,12 @@
 - `Prewarm Android build toolchain`：`179s`
 - `Run Android integration_test (emulator)`：`641s`
 
+`22346306100` 步骤耗时分解：
+- `Cache Gradle`：`54s`
+- `Pre-install Android SDK components`：`34s`
+- `Prewarm Android build toolchain`：`165s`
+- `Run Android integration_test (emulator)`：`842s`
+
 3-run 统计（样本：`22337941629`、`22338299455`、`22339561892`，百分位采用 nearest-rank）：
 - `android_integration_test` 总时长：P50=`949s`，P90=`957s`
 - `suite elapsed`：P50=`442s`（`7m22s`），P90=`455s`（`7m35s`）
@@ -165,4 +211,5 @@
 继续开发任务完成：
 - 稳定 runner 路径完成 3-run 连续全绿，关键套件耗时分布收敛（P50 `7m22s` / P90 `7m35s`）。
 - 手动 emulator 去除安装开销方案在 hosted runner 上不稳定，已回退到稳定实现并保持全绿。
-- 最新 head（`41b545d`）已追加复验并通过，当前分支状态可继续推进后续优化。
+- 新增 `suite-summary` 与 artifact 链路已接入并完成闭环修复（路径作用域 + 配额容错）。
+- 最新 head（`f585392`）复验通过（run `22346306100`），当前分支可继续推进下一轮性能优化。
