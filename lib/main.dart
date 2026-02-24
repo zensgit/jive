@@ -1929,6 +1929,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ),
           ),
           GestureDetector(
+            key: const Key('home_view_all_button'),
             onTap: () {
               Navigator.push(
                 context,

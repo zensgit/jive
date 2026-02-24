@@ -44,6 +44,31 @@ Future<void> _dismissAutoPermissionDialogIfPresent(WidgetTester tester) async {
   }
 }
 
+Future<void> _openAllTransactionsFromHome(WidgetTester tester) async {
+  final viewAllByKey = find.byKey(const Key('home_view_all_button'));
+  if (viewAllByKey.evaluate().isNotEmpty) {
+    await tester.tap(viewAllByKey.first);
+    await _pumpUntilSettled(tester);
+    return;
+  }
+
+  final viewAllByText = find.text('View All');
+  if (viewAllByText.evaluate().isNotEmpty) {
+    await tester.tap(viewAllByText.first);
+    await _pumpUntilSettled(tester);
+    return;
+  }
+
+  final viewAllZhText = find.text('查看全部');
+  if (viewAllZhText.evaluate().isNotEmpty) {
+    await tester.tap(viewAllZhText.first);
+    await _pumpUntilSettled(tester);
+    return;
+  }
+
+  fail('Unable to locate home View All entry point.');
+}
+
 Future<void> _selectMonth(
   WidgetTester tester, {
   required int year,
@@ -81,8 +106,7 @@ void main() {
     await _dismissAutoPermissionDialogIfPresent(tester);
 
     // Home -> View All (全部账单)
-    await tester.tap(find.text('View All'));
-    await _pumpUntilSettled(tester);
+    await _openAllTransactionsFromHome(tester);
 
     // Open transaction filter sheet.
     await tester.tap(find.byKey(const Key('transaction_filter_open_button')));
