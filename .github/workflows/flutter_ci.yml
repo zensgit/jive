@@ -173,12 +173,17 @@ jobs:
             --device "Nexus 6" \
             --sdcard "512M"
 
-          {
-            echo "hw.cpu.ncore=4"
-            echo "hw.ramSize=4096"
-            echo "hw.heapSize=1024"
-            echo "disk.dataPartition.size=4096M"
-          } >> "${HOME}/.android/avd/${AVD_NAME}.avd/config.ini"
+          AVD_CONFIG="${HOME}/.android/avd/${AVD_NAME}.avd/config.ini"
+          if [ -f "${AVD_CONFIG}" ]; then
+            {
+              echo "hw.cpu.ncore=4"
+              echo "hw.ramSize=4096"
+              echo "hw.heapSize=1024"
+              echo "disk.dataPartition.size=4096M"
+            } >> "${AVD_CONFIG}"
+          else
+            echo "::warning::AVD config not found at ${AVD_CONFIG}; continuing without config patch."
+          fi
 
           "${EMULATOR_BIN}" \
             -port 5554 \
