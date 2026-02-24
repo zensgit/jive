@@ -115,8 +115,6 @@ jobs:
             "build-tools;34.0.0" \
             "build-tools;35.0.0" \
             "cmake;3.22.1" \
-            "emulator" \
-            "system-images;android-33;google_apis;x86_64" \
             "ndk;27.0.12077973"
 
       - name: Enable KVM for emulator
@@ -138,96 +136,27 @@ jobs:
             echo "::warning::Prewarm failed with exit ${PREWARM_EXIT}; continuing to emulator test run."
           fi
 
-      - name: Run Android integration_test (emulator, manual)
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          AVD_NAME="test"
-          EMULATOR_SERIAL="emulator-5554"
-
-          AVDMANAGER_BIN="${SDK_ROOT}/cmdline-tools/latest/bin/avdmanager"
-          EMULATOR_BIN="${SDK_ROOT}/emulator/emulator"
-          if [ ! -x "${AVDMANAGER_BIN}" ]; then
-            AVDMANAGER_BIN="$(command -v avdmanager)"
-          fi
-          if [ ! -x "${EMULATOR_BIN}" ]; then
-            EMULATOR_BIN="$(command -v emulator)"
-          fi
-
-          export PATH="${SDK_ROOT}/platform-tools:${SDK_ROOT}/emulator:${PATH}"
-
-          cleanup() {
-            adb -s "${EMULATOR_SERIAL}" emu kill >/dev/null 2>&1 || true
-            pkill -f "emulator.*-avd ${AVD_NAME}" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
-
-          adb kill-server || true
-          adb start-server
-          adb devices
-
-          echo no | "${AVDMANAGER_BIN}" create avd --force \
-            -n "${AVD_NAME}" \
-            --abi "google_apis/x86_64" \
-            --package "system-images;android-33;google_apis;x86_64" \
-            --device "Nexus 6" \
-            --sdcard "512M"
-
-          AVAILABLE_AVDS="$("${EMULATOR_BIN}" -list-avds || true)"
-          echo "[integration] available avds:"
-          echo "${AVAILABLE_AVDS}"
-          if ! echo "${AVAILABLE_AVDS}" | grep -Fxq "${AVD_NAME}"; then
-            FALLBACK_AVD="$(echo "${AVAILABLE_AVDS}" | head -n 1 | tr -d '\r')"
-            if [ -n "${FALLBACK_AVD}" ]; then
-              echo "::warning::Requested AVD ${AVD_NAME} not found; fallback to ${FALLBACK_AVD}."
-              AVD_NAME="${FALLBACK_AVD}"
-            else
-              echo "::error::No available AVD after avdmanager create."
-              exit 1
-            fi
-          fi
-
-          AVD_CONFIG="${HOME}/.android/avd/${AVD_NAME}.avd/config.ini"
-          if [ -f "${AVD_CONFIG}" ]; then
-            {
-              echo "hw.cpu.ncore=4"
-              echo "hw.ramSize=4096"
-              echo "hw.heapSize=1024"
-              echo "disk.dataPartition.size=4096M"
-            } >> "${AVD_CONFIG}"
-          else
-            echo "::warning::AVD config not found at ${AVD_CONFIG}; continuing without config patch."
-          fi
-
-          "${EMULATOR_BIN}" \
-            -port 5554 \
-            -avd "${AVD_NAME}" \
-            -no-window \
-            -no-snapshot \
-            -noaudio \
-            -no-boot-anim \
-            -no-metrics \
-            -gpu swiftshader_indirect \
-            -cores 4 \
-            -memory 4096 \
-            >/tmp/android-emulator.log 2>&1 &
-
-          BOOT_DEADLINE=$((SECONDS + 420))
-          until adb -s "${EMULATOR_SERIAL}" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' | grep -q '^1$'; do
-            if [ "${SECONDS}" -ge "${BOOT_DEADLINE}" ]; then
-              echo "::error::Emulator boot timeout"
-              tail -n 200 /tmp/android-emulator.log || true
-              exit 1
-            fi
-            sleep 5
-          done
-
-          adb -s "${EMULATOR_SERIAL}" wait-for-device
-          adb -s "${EMULATOR_SERIAL}" shell settings put global window_animation_scale 0 || true
-          adb -s "${EMULATOR_SERIAL}" shell settings put global transition_animation_scale 0 || true
-          adb -s "${EMULATOR_SERIAL}" shell settings put global animator_duration_scale 0 || true
-          adb -s "${EMULATOR_SERIAL}" shell settings put secure spell_checker_enabled 0 || true
-
-          export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
-          flutter devices
-          timeout 1800 bash scripts/run_integration_tests.sh --combined-suite --skip-pub-get --retry 0 --timeout 720 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 2 --device-recovery-timeout 60 --allow-emulator-reboot "${EMULATOR_SERIAL}"
+      - name: Run Android integration_test (emulator)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: Nexus 6
+          cores: 4
+          ram-size: 4096M
+          heap-size: 1024M
+          sdcard-path-or-size: 512M
+          disk-size: 4096M
+          emulator-boot-timeout: 420
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim -no-metrics -gpu swiftshader_indirect
+          disable-linux-hw-accel: false
+          pre-emulator-launch-script: |
+            adb kill-server || true
+            adb start-server
+            adb devices
+          disable-animations: true
+          script: |
+            export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
+            flutter devices
+            timeout 1800 bash scripts/run_integration_tests.sh --combined-suite --skip-pub-get --retry 0 --timeout 720 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 2 --device-recovery-timeout 60 --allow-emulator-reboot emulator-5554
