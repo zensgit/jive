@@ -182,10 +182,27 @@ jobs:
         if: always()
         run: |
           SUMMARY_FILE="${RUNNER_TEMP}/jive-integration/suite-summary.txt"
+          extract_single() {
+            local key="$1"
+            awk -F= -v k="${key}" '$1==k{print substr($0, index($0, "=")+1); exit}' "${SUMMARY_FILE}"
+          }
+
           {
             echo "## Android integration summary"
             if [ -f "${SUMMARY_FILE}" ]; then
               echo ""
+              SCRIPT_RESULT="$(extract_single script_result)"
+              SCRIPT_EXIT_CODE="$(extract_single script_exit_code)"
+              SUITE_ELAPSED="$(extract_single suite_elapsed_human)"
+              FAILED_COUNT="$(extract_single failed_tests_count)"
+              ARTIFACTS_DIR="$(extract_single artifacts_dir)"
+
+              echo "- Result: \`${SCRIPT_RESULT:-unknown}\` (exit \`${SCRIPT_EXIT_CODE:-unknown}\`)"
+              echo "- Suite elapsed: \`${SUITE_ELAPSED:-unknown}\`"
+              echo "- Failed tests: \`${FAILED_COUNT:-unknown}\`"
+              echo "- Artifacts dir: \`${ARTIFACTS_DIR:-unknown}\`"
+              echo ""
+              echo "### Raw summary"
               echo '```text'
               cat "${SUMMARY_FILE}"
               echo '```'

@@ -42,6 +42,10 @@ ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
 SUMMARY_FILE="${FLUTTER_TEST_SUMMARY_FILE:-}"
 SUITE_STARTED_AT="$(date +%s)"
 TEST_RUN_SUMMARY=()
+FAILED_TESTS=()
+SUMMARY_WRITTEN=0
+SCRIPT_EXIT_CODE=0
+INTERRUPTED_REASON=""
 
 usage() {
   cat <<'EOF'
@@ -859,6 +863,10 @@ print_timing_summary() {
 }
 
 write_suite_summary_file() {
+  if (( SUMMARY_WRITTEN == 1 )); then
+    return 0
+  fi
+
   local suite_finished_at
   local suite_elapsed
   suite_finished_at="$(date +%s)"
@@ -873,6 +881,15 @@ write_suite_summary_file() {
     echo "suite_finished_at=${suite_finished_at}"
     echo "suite_elapsed_seconds=${suite_elapsed}"
     echo "suite_elapsed_human=$(format_duration "${suite_elapsed}")"
+    echo "script_exit_code=${SCRIPT_EXIT_CODE}"
+    if (( SCRIPT_EXIT_CODE == 0 )); then
+      echo "script_result=success"
+    else
+      echo "script_result=failure"
+    fi
+    if [[ -n "${INTERRUPTED_REASON}" ]]; then
+      echo "interrupted_reason=${INTERRUPTED_REASON}"
+    fi
     echo "combined_suite_mode=${COMBINED_SUITE_MODE}"
     echo "retry_count=${RETRY_COUNT}"
     echo "test_files_count=${#TEST_FILES[@]}"
@@ -893,10 +910,29 @@ write_suite_summary_file() {
     echo "artifacts_dir=${ARTIFACT_DIR}"
   } > "${SUMMARY_FILE}"
 
+  SUMMARY_WRITTEN=1
   log "suite summary file: ${SUMMARY_FILE}"
 }
 
-FAILED_TESTS=()
+on_script_signal() {
+  local signal_name="$1"
+  local signal_exit="$2"
+  INTERRUPTED_REASON="${signal_name}"
+  exit "${signal_exit}"
+}
+
+finalize_summary_on_exit() {
+  local exit_code="${1:-0}"
+  SCRIPT_EXIT_CODE="${exit_code}"
+  set +e
+  write_suite_summary_file
+  set -e
+}
+
+trap 'on_script_signal SIGTERM 143' TERM
+trap 'on_script_signal SIGINT 130' INT
+trap 'finalize_summary_on_exit $?' EXIT
+
 if (( PUB_GET_ONCE == 1 )); then
   run_pub_get_once
 fi
@@ -914,7 +950,6 @@ else
 fi
 
 print_timing_summary
-write_suite_summary_file
 
 if [[ "${#FAILED_TESTS[@]}" -gt 0 ]]; then
   log "failed test files:"
