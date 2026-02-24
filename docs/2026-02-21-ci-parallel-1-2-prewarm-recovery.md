@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v10
+# CI 并行开发报告：1+2（Prewarm + Recovery）v11
 
-日期：2026-02-23
+日期：2026-02-24
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`247d8200b63becef1eac101b536cd1e7529856ad`
-- 最新通过 Run：`22313642147`
+- 最新验证 Head：`7320b181c3685eea513bc15a5b0f2c423c3a4b45`
+- 最新通过 Run：`22338299455`
 
 ## 1. 本轮继续开发目标
 
@@ -29,6 +29,12 @@
   - 新增 `Cache Gradle`（`~/.gradle/caches`、`~/.gradle/wrapper`）。
   - 新增 `Pre-install Android SDK components`（`platform-tools`、`platforms;android-30`、`platforms;android-33`、`build-tools;34.0.0`、`ndk;27.0.12077973`）。
 - 目的：在 emulator 启动前主动完成高波动依赖准备，降低测试阶段额外下载干扰。
+
+3. `ci(e2e): preinstall cmake and build-tools 35 for android job`（`7320b18`）
+- 文件：`.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - 在 SDK 预安装中追加 `build-tools;35.0.0`、`cmake;3.22.1`。
+- 目的：减少后续步骤按需安装，进一步压缩 Android e2e 总时长。
 
 ## 3. 关键验证链路
 
@@ -81,9 +87,33 @@
 - `Prewarm Android build toolchain`：`175s`
 - `Run Android integration_test (emulator)`：`787s`
 
+### 3.5 补齐 SDK 组件后的连续复验
+- Run：`22337941629`
+- head：`7320b18`
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `15m16s`）
+- 关键日志：
+  - `Cache Gradle` 命中主 key
+  - `Pre-install Android SDK components` 包含 `build-tools;35.0.0`、`cmake;3.22.1`
+  - `Prewarm Android build toolchain`：`174s`
+  - `Run Android integration_test (emulator)`：`combined_suite(2 files): PASS in 7m14s`
+
+- Run：`22338299455`（同 head 复验）
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `15m49s`）
+- 关键日志：
+  - `Cache Gradle` 持续命中主 key
+  - `Prewarm Android build toolchain`：`178s`
+  - `Run Android integration_test (emulator)`：`combined_suite(2 files): PASS in 7m22s`
+
+步骤耗时分解：
+- `22337941629`：`Cache 52s`、`Pre-install 41s`、`Prewarm 174s`、`Run step 602s`
+- `22338299455`：`Cache 59s`、`Pre-install 40s`、`Prewarm 178s`、`Run step 618s`
+
 ## 4. 结论
 
 1. 继续开发已完成并通过远端完整验证。
 2. prewarm best-effort 策略已上线，流程韧性提升（即使 prewarm 异常也不会提前中断）。
-3. `Gradle cache + SDK 预安装` 已完成冷缓存与热缓存双轮验证，缓存命中后 prewarm 从 `564s` 降至 `175s`。
-4. 当前关键用例时长在 hosted runner 上仍有波动，但连续多轮均全绿，稳定性达到预期。
+3. `Gradle cache + SDK 预安装` 已完成冷缓存与热缓存多轮验证，缓存命中后 prewarm 从 `564s` 稳定到 `174s ~ 178s`。
+4. 补齐 `build-tools;35.0.0 + cmake;3.22.1` 后，连续两轮 `android_integration_test` 收敛到 `15m16s / 15m49s`，且关键套件耗时为 `7m14s / 7m22s`。
+5. 现阶段链路连续全绿，稳定性达标；下一步可聚焦 emulator-runner 内部 SDK install 残余开销。
