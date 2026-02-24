@@ -47,7 +47,7 @@ jobs:
 
   android_integration_test:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     if: >-
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_android_e2e == 'true') ||
       (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e'))
@@ -72,7 +72,9 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Run Android integration_test (emulator)
+      - name: Run Android integration_test (emulator) - attempt 1
+        id: android_e2e_attempt_1
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         env:
           FLUTTER_IGNORE_TIMEOUTS: "1"
@@ -80,14 +82,46 @@ jobs:
           FLUTTER_TEST_SKIP_PUB: "1"
           FLUTTER_TEST_RETRY_INSTALL_FAILURE: "1"
           FLUTTER_TIMEOUT_SECONDS: "6600"
+          CI_ARTIFACT_DIR: "ci_artifacts/android_integration/attempt1"
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
+          cores: 4
           emulator-boot-timeout: 1200
           disable-animations: false
           script: >-
             bash scripts/run_android_integration_ci.sh transaction_search_flow
+
+      - name: Run Android integration_test (emulator) - attempt 2
+        id: android_e2e_attempt_2
+        if: steps.android_e2e_attempt_1.outcome == 'failure'
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          FLUTTER_IGNORE_TIMEOUTS: "1"
+          FLUTTER_TEST_TIMEOUT: "none"
+          FLUTTER_TEST_SKIP_PUB: "1"
+          FLUTTER_TEST_RETRY_INSTALL_FAILURE: "1"
+          FLUTTER_TIMEOUT_SECONDS: "6600"
+          CI_ARTIFACT_DIR: "ci_artifacts/android_integration/attempt2"
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          cores: 4
+          emulator-boot-timeout: 1200
+          disable-animations: false
+          script: >-
+            bash scripts/run_android_integration_ci.sh transaction_search_flow
+
+      - name: Fail Android integration job if all attempts failed
+        if: >-
+          steps.android_e2e_attempt_1.outcome == 'failure' &&
+          (steps.android_e2e_attempt_2.outcome == 'failure' || steps.android_e2e_attempt_2.outcome == 'skipped')
+        run: |
+          echo "Android integration test failed in all attempts."
+          exit 1
 
       - name: Upload Android integration artifacts
         if: always()

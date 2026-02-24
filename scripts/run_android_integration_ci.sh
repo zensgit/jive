@@ -88,11 +88,23 @@ wait_for_package_manager_ready() {
 run_flutter_test_attempt() {
   local attempt="$1"
   local attempt_log="$LOG_DIR/flutter_test_output_attempt${attempt}.log"
+  local attempt_start_epoch
+  attempt_start_epoch="$(date +%s)"
+
+  echo "Running flutter integration attempt ${attempt}..."
 
   set +e
   run_with_timeout "$FLUTTER_TIMEOUT_SECONDS" "${flutter_cmd[@]}" 2>&1 | tee "$attempt_log"
   local exit_code=${PIPESTATUS[0]}
   set -e
+
+  local attempt_end_epoch
+  attempt_end_epoch="$(date +%s)"
+  local attempt_elapsed=$((attempt_end_epoch - attempt_start_epoch))
+  echo "Flutter integration attempt ${attempt} finished with exit code ${exit_code} after ${attempt_elapsed}s."
+  if (( exit_code == 124 )) && [[ -n "$TIMEOUT_BIN" ]]; then
+    echo "Flutter integration attempt ${attempt} hit timeout guard (${FLUTTER_TIMEOUT_SECONDS}s)." | tee -a "$attempt_log"
+  fi
 
   if [[ "$attempt" == "1" ]]; then
     cp "$attempt_log" "$LOG_DIR/flutter_test_output.log"
@@ -212,5 +224,16 @@ if (( flutter_exit_code != 0 )) && [[ "$FLUTTER_TEST_RETRY_INSTALL_FAILURE" == "
 fi
 
 collect_device_artifacts
+
+if (( flutter_exit_code != 0 )); then
+  {
+    echo "flutter test failed with exit code $flutter_exit_code"
+    if (( flutter_exit_code == 124 )) && [[ -n "$TIMEOUT_BIN" ]]; then
+      echo "reason=timeout_guard"
+      echo "timeout_seconds=$FLUTTER_TIMEOUT_SECONDS"
+    fi
+    echo "resolved_tests=${test_targets[*]}"
+  } | tee "$LOG_DIR/failure_reason.log" >&2
+fi
 
 exit "$flutter_exit_code"

@@ -166,3 +166,30 @@ Date: 2026-02-21
   - Workflow env adds `FLUTTER_TEST_RETRY_INSTALL_FAILURE=1` (explicit).
 - Expected effect:
   - Convert emulator-side transient install failures into auto-recovered retries without masking real deterministic test failures.
+
+## Emulator Crash/No-Trace Follow-up (2026-02-24)
+
+- Trigger: workflow run `22343795400` failed after long `android_emulator_runner` execution with:
+  - `detected a hanging thread 'QEMU2 main loop'`
+  - crashpad ptrace errors near teardown
+  - no explicit flutter assertion in action summary
+- Risk:
+  - single-attempt emulator execution makes infra-level emulator crashes look like deterministic test regressions.
+  - missing step-level error annotation reduces triage speed.
+- Change:
+  - increased Android integration job timeout to `180` minutes to safely hold two full emulator attempts on slow runners.
+  - split Android integration execution into two `android-emulator-runner` attempts:
+    - attempt 1: `id=android_e2e_attempt_1`, `continue-on-error: true`
+    - attempt 2: conditional on attempt 1 failure, fresh emulator instance
+  - added explicit final guard step that fails the job only when all attempts fail.
+  - increased emulator cores from `2` to `4` for both attempts.
+  - isolated artifacts by attempt using:
+    - `CI_ARTIFACT_DIR=ci_artifacts/android_integration/attempt1`
+    - `CI_ARTIFACT_DIR=ci_artifacts/android_integration/attempt2`
+  - improved script diagnostics in `run_android_integration_ci.sh`:
+    - prints per-attempt start/end and elapsed seconds
+    - records explicit timeout-hit message for exit `124`
+    - writes `failure_reason.log` with exit code and resolved targets on final failure
+- Expected effect:
+  - absorb transient emulator process instability via fresh-emulator retry.
+  - guarantee structured failure reason in artifacts when retries are exhausted.
