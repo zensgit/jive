@@ -124,14 +124,33 @@ jobs:
             fi
           fi
           yes | "${SDKMANAGER_BIN}" --licenses >/dev/null || true
-          timeout 900 "${SDKMANAGER_BIN}" \
-            "platform-tools" \
-            "platforms;android-30" \
-            "platforms;android-33" \
-            "build-tools;34.0.0" \
-            "build-tools;35.0.0" \
-            "cmake;3.22.1" \
+          APP_COMPILE_SDK="$(awk -F'=' '/compileSdk[[:space:]]*=/{gsub(/[^0-9]/, "", $2); if ($2 != "") { print $2; exit }}' android/app/build.gradle.kts || true)"
+          MANDATORY_PACKAGES=(
+            "platform-tools"
+            "platforms;android-33"
+            "build-tools;35.0.0"
+            "cmake;3.22.1"
             "ndk;27.0.12077973"
+          )
+          OPTIONAL_PACKAGES=()
+          if [[ "${APP_COMPILE_SDK}" =~ ^[0-9]+$ ]]; then
+            OPTIONAL_PACKAGES+=("platforms;android-${APP_COMPILE_SDK}")
+            OPTIONAL_PACKAGES+=("build-tools;${APP_COMPILE_SDK}.0.0")
+          fi
+
+          echo "Mandatory SDK packages: ${MANDATORY_PACKAGES[*]}"
+          timeout 900 "${SDKMANAGER_BIN}" "${MANDATORY_PACKAGES[@]}"
+
+          if ((${#OPTIONAL_PACKAGES[@]} > 0)); then
+            echo "Optional SDK packages: ${OPTIONAL_PACKAGES[*]}"
+            set +e
+            timeout 600 "${SDKMANAGER_BIN}" "${OPTIONAL_PACKAGES[@]}"
+            OPTIONAL_EXIT=$?
+            set -e
+            if [ "${OPTIONAL_EXIT}" -ne 0 ]; then
+              echo "::warning::Optional compileSdk SDK packages install failed (exit ${OPTIONAL_EXIT}); Gradle will resolve missing pieces on demand."
+            fi
+          fi
 
       - name: Enable KVM for emulator
         run: |
