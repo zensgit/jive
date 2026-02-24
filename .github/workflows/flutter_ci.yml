@@ -174,10 +174,9 @@ jobs:
           disable-animations: true
           script: |
             export GRADLE_OPTS="-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2"
-            INTEGRATION_ARTIFACT_DIR="${RUNNER_TEMP}/jive-integration"
-            mkdir -p "${INTEGRATION_ARTIFACT_DIR}"
+            mkdir -p "${{ runner.temp }}/jive-integration"
             flutter devices
-            timeout 1800 bash scripts/run_integration_tests.sh --combined-suite --skip-pub-get --retry 0 --timeout 720 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 2 --device-recovery-timeout 60 --allow-emulator-reboot --artifact-dir "${INTEGRATION_ARTIFACT_DIR}" --summary-file "${INTEGRATION_ARTIFACT_DIR}/suite-summary.txt" emulator-5554
+            timeout 1800 bash scripts/run_integration_tests.sh --combined-suite --skip-pub-get --retry 0 --timeout 720 --test-case-timeout 20m --ignore-test-timeouts --device-recovery-retry 2 --device-recovery-timeout 60 --allow-emulator-reboot --artifact-dir "${{ runner.temp }}/jive-integration" --summary-file "${{ runner.temp }}/jive-integration/suite-summary.txt" emulator-5554
 
       - name: Append Android integration summary
         if: always()
