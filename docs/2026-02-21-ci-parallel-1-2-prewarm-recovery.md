@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v15
+# CI 并行开发报告：1+2（Prewarm + Recovery）v16
 
 日期：2026-02-24
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`6f8db00ea99d477316c6d734f9629e1a8614cc90`
-- 最新通过 Run：`22348636097`
+- 最新验证 Head：`0aaf0694dfa8b0012f31d890bd6be64cda4ca86c`
+- 最新通过 Run：`22354318216`
 
 ## 1. 本轮继续开发目标
 
@@ -70,6 +70,18 @@
     - `interrupted_reason`（若有）
   - `Append Android integration summary` 改为结构化 Markdown 输出（Result / Suite elapsed / Failed tests / Artifacts dir + raw summary）。
 - 目的：让失败和中断场景具备稳定可观测性，减少仅靠长日志排查。
+
+8. `ci(e2e): align sdk preinstall with compileSdk and make optional packages best-effort`（`0aaf069`）
+- 文件：`.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - 删除固定旧包预装（`platforms;android-30`、`build-tools;34.0.0`）。
+  - 读取 `android/app/build.gradle.kts` 的 `compileSdk`，动态追加：
+    - `platforms;android-<compileSdk>`
+    - `build-tools;<compileSdk>.0.0`
+  - 采用分层安装：
+    - mandatory 包失败即失败；
+    - compileSdk 相关 optional 包失败仅 warning，不阻断主链路。
+- 目的：减少不必要安装并兼顾未来 compileSdk 演进的稳定性。
 
 ## 3. 关键验证链路
 
@@ -227,6 +239,20 @@
 - 额外本地验证：
   - 人工发送 `SIGTERM` 至脚本进程，summary 成功写出 `interrupted_reason=SIGTERM` 与 `script_exit_code=143`。
 
+### 3.11 compileSdk 对齐 SDK 预装验证
+
+- run `22354318216`（head `0aaf069`）
+- 结果：`analyze_and_test` success，`android_integration_test` success（总耗时 `15m04s`）。
+- 关键步骤：
+  - `Pre-install Android SDK components`：`34s`
+  - `Prewarm Android build toolchain`：`171s`
+  - `Run Android integration_test (emulator)`：`577s`
+  - `Append Android integration summary`：success
+  - `Upload Android integration artifacts`：success（步骤不阻断）
+- 对比（上一轮 `22348636097`）：
+  - `Pre-install`：`53s -> 34s`（下降 `19s`）
+  - `android_integration_test` 总时长：`16m30s -> 15m04s`（下降 `86s`）
+
 ## 4. 结论
 
 1. 继续开发已完成并通过远端完整验证。
@@ -236,5 +262,6 @@
 5. 手动 emulator 方案在 hosted runner 上稳定性不足，已明确回退到稳定 runner；当前主分支链路恢复并保持全绿。
 6. summary 文件落盘、Step Summary 展示、artifact 上传已落地；其中平台配额异常已做非阻断处理。
 7. summary 在异常退出场景也可稳定落盘，并可在 CI 页面直接看到结构化结果摘要。
-8. 最新 head 复验（`22348636097`）已通过，当前状态可在稳定 runner 基线下继续做增量优化。
-9. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
+8. SDK 预装已与 `compileSdk` 对齐，并通过 optional 包容错降低版本漂移导致的阻断风险。
+9. 最新 head 复验（`22354318216`）已通过，当前状态可在稳定 runner 基线下继续做增量优化。
+10. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。

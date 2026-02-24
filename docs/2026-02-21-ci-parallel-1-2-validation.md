@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v15，2026-02-24）
+# CI 验证记录：并行开发 1+2（v16，2026-02-24）
 
 ## 1. 本地验证
 
@@ -159,6 +159,18 @@
 - 注解：
   - 仍可见平台注解 `Failed to CreateArtifact: Artifact storage quota has been hit`；因已启用 `continue-on-error`，不会将 job 判失败。
 
+13. `22354318216`（head `0aaf069`，compileSdk 对齐 SDK 预装）
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `15m04s`）
+- 关键步骤：
+  - `Pre-install Android SDK components`：`34s`（`14:08:27 -> 14:09:01`）
+  - `Prewarm Android build toolchain`：`171s`（`14:09:01 -> 14:11:52`）
+  - `Run Android integration_test (emulator)`：`577s`（`14:11:52 -> 14:21:29`）
+  - `Append Android integration summary`：success
+  - `Upload Android integration artifacts`：success（步骤不阻断）
+- 注解：
+  - 仍可见平台注解 `Failed to CreateArtifact: Artifact storage quota has been hit`；但已不影响 job 结果。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -174,6 +186,7 @@
 - `22345625297`：failure（artifact 配额耗尽）
 - `22346306100`：success（summary + artifact 容错链路终验）
 - `22348636097`：success（signal-safe summary + 结构化 Step Summary）
+- `22354318216`：success（compileSdk 对齐 SDK 预装）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -216,6 +229,12 @@
 - `Prewarm Android build toolchain`：`168s`
 - `Run Android integration_test (emulator)`：`669s`
 
+`22354318216` 步骤耗时分解：
+- `Cache Gradle`：`57s`
+- `Pre-install Android SDK components`：`34s`
+- `Prewarm Android build toolchain`：`171s`
+- `Run Android integration_test (emulator)`：`577s`
+
 3-run 统计（样本：`22337941629`、`22338299455`、`22339561892`，百分位采用 nearest-rank）：
 - `android_integration_test` 总时长：P50=`949s`，P90=`957s`
 - `suite elapsed`：P50=`442s`（`7m22s`），P90=`455s`（`7m35s`）
@@ -236,4 +255,5 @@
 - 手动 emulator 去除安装开销方案在 hosted runner 上不稳定，已回退到稳定实现并保持全绿。
 - 新增 `suite-summary` 与 artifact 链路已接入并完成闭环修复（路径作用域 + 配额容错）。
 - 新增 `EXIT/TERM` 兜底写摘要与结构化 Step Summary，异常退出可追踪性增强。
-- 最新 head（`6f8db00`）复验通过（run `22348636097`），当前分支可继续推进下一轮性能优化。
+- SDK 预装已与 `compileSdk` 对齐，兼容可选包安装失败场景并保持主链路稳定。
+- 最新 head（`0aaf069`）复验通过（run `22354318216`），当前分支可继续推进下一轮性能优化。
