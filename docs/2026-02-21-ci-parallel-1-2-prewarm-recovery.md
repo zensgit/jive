@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v14
+# CI 并行开发报告：1+2（Prewarm + Recovery）v15
 
 日期：2026-02-24
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`f5853925cb15349d9d90443000d09a1d7390f99b`
-- 最新通过 Run：`22346306100`
+- 最新验证 Head：`6f8db00ea99d477316c6d734f9629e1a8614cc90`
+- 最新通过 Run：`22348636097`
 
 ## 1. 本轮继续开发目标
 
@@ -58,6 +58,18 @@
 - 逻辑：
   - `Upload Android integration artifacts` 增加 `continue-on-error: true`。
 - 目的：将 GitHub artifact 配额耗尽降级为非阻断告警，避免平台配额波动导致主验证链路判红。
+
+7. `ci(e2e): persist suite summary on signal exits and format step summary`（`6f8db00`）
+- 文件：
+  - `scripts/run_integration_tests.sh`
+  - `.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - `run_integration_tests.sh` 新增 `EXIT/TERM/INT` trap，在 `SIGTERM`/超时/异常退出时也会落盘 `suite-summary.txt`，并记录：
+    - `script_exit_code`
+    - `script_result`
+    - `interrupted_reason`（若有）
+  - `Append Android integration summary` 改为结构化 Markdown 输出（Result / Suite elapsed / Failed tests / Artifacts dir + raw summary）。
+- 目的：让失败和中断场景具备稳定可观测性，减少仅靠长日志排查。
 
 ## 3. 关键验证链路
 
@@ -200,6 +212,21 @@
   - `Upload Android integration artifacts`：success（配额异常被容错，不再阻断）。
 - 结论：summary + artifact 能力在稳定 runner 基线下已完成闭环并通过终验。
 
+### 3.10 signal-safe summary 与结构化摘要终验
+
+- run `22348636097`（head `6f8db00`）
+- 结果：`analyze_and_test` success，`android_integration_test` success（总耗时 `16m30s`）。
+- 关键步骤：
+  - `Prewarm Android build toolchain`：`168s`
+  - `Run Android integration_test (emulator)`：`669s`
+  - `Append Android integration summary`：success（结构化摘要已执行）
+  - `Upload Android integration artifacts`：success（非阻断）
+- 注解：
+  - 仍会出现平台注解 `Failed to CreateArtifact: Artifact storage quota has been hit`；
+  - 因上传步骤已 `continue-on-error`，不会把 job 判为失败。
+- 额外本地验证：
+  - 人工发送 `SIGTERM` 至脚本进程，summary 成功写出 `interrupted_reason=SIGTERM` 与 `script_exit_code=143`。
+
 ## 4. 结论
 
 1. 继续开发已完成并通过远端完整验证。
@@ -208,5 +235,6 @@
 4. 补齐 `build-tools;35.0.0 + cmake;3.22.1` 后，稳定路径 3-run 已收敛：`15m16s / 15m49s / 15m57s`，关键套件耗时 `7m14s ~ 7m35s`。
 5. 手动 emulator 方案在 hosted runner 上稳定性不足，已明确回退到稳定 runner；当前主分支链路恢复并保持全绿。
 6. summary 文件落盘、Step Summary 展示、artifact 上传已落地；其中平台配额异常已做非阻断处理。
-7. 最新 head 复验（`22346306100`）已通过，当前状态可在稳定 runner 基线下继续做增量优化。
-8. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
+7. summary 在异常退出场景也可稳定落盘，并可在 CI 页面直接看到结构化结果摘要。
+8. 最新 head 复验（`22348636097`）已通过，当前状态可在稳定 runner 基线下继续做增量优化。
+9. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。

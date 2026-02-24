@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v14，2026-02-24）
+# CI 验证记录：并行开发 1+2（v15，2026-02-24）
 
 ## 1. 本地验证
 
@@ -16,6 +16,12 @@
 
 4. `bash scripts/run_integration_tests.sh --test integration_test/transaction_search_flow_test.dart --no-pub-get-once --no-device-recovery --retry 0 --artifact-dir <tmp> --summary-file <tmp>/suite-summary.txt emulator-5554`
 - 结果：在失败路径下仍输出 `suite-summary.txt`，包含 `suite_elapsed_*`、`summary_entry`、`failed_tests_count` 等字段。
+
+5. `bash scripts/run_integration_tests.sh ... & kill -TERM <pid>`（SIGTERM 场景）
+- 结果：脚本退出码为 `143`，并写出：
+  - `script_exit_code=143`
+  - `script_result=failure`
+  - `interrupted_reason=SIGTERM`
 
 ## 2. 远端验证
 
@@ -143,6 +149,16 @@
   - `Append Android integration summary`：success
   - `Upload Android integration artifacts`：success（配额异常被容错，不再导致 job 失败）
 
+12. `22348636097`（head `6f8db00`，异常退出 summary + 结构化 summary 终验）
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `16m30s`）
+- 关键步骤：
+  - `Run Android integration_test (emulator)`：success（`11:26:57 -> 11:38:06`）
+  - `Append Android integration summary`：success（结构化 Markdown 摘要已写入）
+  - `Upload Android integration artifacts`：success（步骤不阻断）
+- 注解：
+  - 仍可见平台注解 `Failed to CreateArtifact: Artifact storage quota has been hit`；因已启用 `continue-on-error`，不会将 job 判失败。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -157,6 +173,7 @@
 - `22345150767`：failure（emulator step 内路径变量作用域问题）
 - `22345625297`：failure（artifact 配额耗尽）
 - `22346306100`：success（summary + artifact 容错链路终验）
+- `22348636097`：success（signal-safe summary + 结构化 Step Summary）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -193,6 +210,12 @@
 - `Prewarm Android build toolchain`：`165s`
 - `Run Android integration_test (emulator)`：`842s`
 
+`22348636097` 步骤耗时分解：
+- `Cache Gradle`：`53s`
+- `Pre-install Android SDK components`：`53s`
+- `Prewarm Android build toolchain`：`168s`
+- `Run Android integration_test (emulator)`：`669s`
+
 3-run 统计（样本：`22337941629`、`22338299455`、`22339561892`，百分位采用 nearest-rank）：
 - `android_integration_test` 总时长：P50=`949s`，P90=`957s`
 - `suite elapsed`：P50=`442s`（`7m22s`），P90=`455s`（`7m35s`）
@@ -212,4 +235,5 @@
 - 稳定 runner 路径完成 3-run 连续全绿，关键套件耗时分布收敛（P50 `7m22s` / P90 `7m35s`）。
 - 手动 emulator 去除安装开销方案在 hosted runner 上不稳定，已回退到稳定实现并保持全绿。
 - 新增 `suite-summary` 与 artifact 链路已接入并完成闭环修复（路径作用域 + 配额容错）。
-- 最新 head（`f585392`）复验通过（run `22346306100`），当前分支可继续推进下一轮性能优化。
+- 新增 `EXIT/TERM` 兜底写摘要与结构化 Step Summary，异常退出可追踪性增强。
+- 最新 head（`6f8db00`）复验通过（run `22348636097`），当前分支可继续推进下一轮性能优化。
