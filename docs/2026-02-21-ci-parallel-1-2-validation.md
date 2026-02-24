@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v11，2026-02-24）
+# CI 验证记录：并行开发 1+2（v12，2026-02-24）
 
 ## 1. 本地验证
 
@@ -77,6 +77,29 @@
     - `[integration] suite elapsed: 7m22s`
     - `[integration] all integration tests passed`
 
+6. `22339561892`（head `93a41aa`，稳定 runner 第 3 样本）
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `15m57s`）
+- 关键日志证据：
+  - `Cache Gradle`：`Cache restored from key: Linux-gradle-a2e627...`
+  - `Pre-install Android SDK components`：包含 `build-tools;35.0.0`、`cmake;3.22.1`
+  - `Prewarm Android build toolchain`：步骤耗时 `179s`
+  - `Run Android integration_test (emulator)`：
+    - `[integration]   - combined_suite(2 files): PASS in 7m35s (attempt 1/1)`
+    - `[integration] suite elapsed: 7m35s`
+    - `[integration] all integration tests passed`
+
+7. 手动 emulator 消除安装开销实验（失败回退）
+- 失败 run：
+  - `22338788876`（head `466fdbe`）
+  - `22338966526`（head `715aa15`）
+  - `22339361672`（head `d878dd3`）
+- 主要失败模式：
+  - `Unknown AVD name`
+  - `No available AVD after avdmanager create`
+  - `Emulator boot timeout`
+- 处理：已回退到稳定 `reactivecircus/android-emulator-runner@v2`（head `93a41aa`）。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -86,6 +109,7 @@
 - `22313642147`：`suite elapsed 10m00s`
 - `22337941629`：`suite elapsed 7m14s`
 - `22338299455`：`suite elapsed 7m22s`
+- `22339561892`：`suite elapsed 7m35s`
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -110,6 +134,18 @@
 - `Prewarm Android build toolchain`：`178s`
 - `Run Android integration_test (emulator)`：`618s`
 
+`22339561892` 步骤耗时分解：
+- `Cache Gradle`：`50s`
+- `Pre-install Android SDK components`：`36s`
+- `Prewarm Android build toolchain`：`179s`
+- `Run Android integration_test (emulator)`：`641s`
+
+3-run 统计（样本：`22337941629`、`22338299455`、`22339561892`，百分位采用 nearest-rank）：
+- `android_integration_test` 总时长：P50=`949s`，P90=`957s`
+- `suite elapsed`：P50=`442s`（`7m22s`），P90=`455s`（`7m35s`）
+- `Prewarm Android build toolchain`：P50=`178s`，P90=`179s`
+- `Run Android integration_test (emulator)`：P50=`618s`，P90=`641s`
+
 注：时长受 hosted runner 抖动影响，但策略链路稳定，连续多轮均全绿。
 
 ## 4. PR
@@ -119,4 +155,6 @@
 
 ## 5. 结论
 
-继续开发任务完成：新增 `build-tools;35.0.0 + cmake;3.22.1` 预安装后，连续两轮远端复验全绿；关键套件耗时稳定在 `7m14s ~ 7m22s`，链路稳定。
+继续开发任务完成：
+- 稳定 runner 路径完成 3-run 连续全绿，关键套件耗时分布收敛（P50 `7m22s` / P90 `7m35s`）。
+- 手动 emulator 去除安装开销方案在 hosted runner 上不稳定，已回退到稳定实现并保持全绿。

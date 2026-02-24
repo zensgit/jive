@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v11
+# CI 并行开发报告：1+2（Prewarm + Recovery）v12
 
 日期：2026-02-24
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`7320b181c3685eea513bc15a5b0f2c423c3a4b45`
-- 最新通过 Run：`22338299455`
+- 最新验证 Head：`93a41aae85f363d1f2a9803d43d33ac1a168498c`
+- 最新通过 Run：`22339561892`
 
 ## 1. 本轮继续开发目标
 
@@ -110,10 +110,43 @@
 - `22337941629`：`Cache 52s`、`Pre-install 41s`、`Prewarm 174s`、`Run step 602s`
 - `22338299455`：`Cache 59s`、`Pre-install 40s`、`Prewarm 178s`、`Run step 618s`
 
+### 3.6 第 3 样本与统计收敛
+- Run：`22339561892`
+- head：`93a41aa`（稳定 runner）
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `15m57s`）
+- 关键日志：
+  - `Cache Gradle` 命中主 key
+  - `Pre-install Android SDK components` 包含 `build-tools;35.0.0`、`cmake;3.22.1`
+  - `Prewarm Android build toolchain`：`179s`
+  - `Run Android integration_test (emulator)`：`combined_suite(2 files): PASS in 7m35s`
+
+3-run 统计（`22337941629`、`22338299455`、`22339561892`，nearest-rank）：
+- `android_integration_test` 总时长：P50=`949s`，P90=`957s`
+- `suite elapsed`：P50=`442s`（`7m22s`），P90=`455s`（`7m35s`）
+- `Prewarm Android build toolchain`：P50=`178s`，P90=`179s`
+- `Run Android integration_test (emulator)`：P50=`618s`，P90=`641s`
+
+### 3.7 手动 emulator 消除安装开销实验与回退
+- 实验提交：
+  - `466fdbe`（手动 emulator 启动路径）
+  - `715aa15`（AVD config 容错）
+  - `d878dd3`（AVD 名称回退）
+- 对应失败 run：
+  - `22338788876`
+  - `22338966526`
+  - `22339361672`
+- 主要失败模式：
+  - `Unknown AVD name`
+  - `No available AVD after avdmanager create`
+  - `Emulator boot timeout`
+- 回退提交：`93a41aa`（恢复 `reactivecircus/android-emulator-runner@v2` 稳定路径）
+
 ## 4. 结论
 
 1. 继续开发已完成并通过远端完整验证。
 2. prewarm best-effort 策略已上线，流程韧性提升（即使 prewarm 异常也不会提前中断）。
 3. `Gradle cache + SDK 预安装` 已完成冷缓存与热缓存多轮验证，缓存命中后 prewarm 从 `564s` 稳定到 `174s ~ 178s`。
-4. 补齐 `build-tools;35.0.0 + cmake;3.22.1` 后，连续两轮 `android_integration_test` 收敛到 `15m16s / 15m49s`，且关键套件耗时为 `7m14s / 7m22s`。
-5. 现阶段链路连续全绿，稳定性达标；下一步可聚焦 emulator-runner 内部 SDK install 残余开销。
+4. 补齐 `build-tools;35.0.0 + cmake;3.22.1` 后，稳定路径 3-run 已收敛：`15m16s / 15m49s / 15m57s`，关键套件耗时 `7m14s ~ 7m35s`。
+5. 手动 emulator 方案在 hosted runner 上稳定性不足，已明确回退到稳定 runner；当前主分支链路恢复并保持全绿。
+6. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
