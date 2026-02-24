@@ -116,3 +116,12 @@ Date: 2026-02-21
   - Wired `FLUTTER_TEST_SKIP_PUB=1` in workflow env for Android integration step.
 - Expected effect:
   - Remove redundant pub resolution during integration test execution and recover several minutes of runtime budget.
+
+## Long-tail Timeout Follow-up (2026-02-23)
+
+- Trigger: workflow run `22312898972` still canceled at 75-minute boundary while APK install was in progress.
+- Change:
+  - Increased `android_integration_test.timeout-minutes` from `75` to `120`.
+  - Increased workflow env `FLUTTER_TIMEOUT_SECONDS` from `4200` to `6600`.
+- Rationale:
+  - Cold hosted runners show high variance in boot + build + install duration; extended budget prevents false negatives caused by infrastructure slowness.
