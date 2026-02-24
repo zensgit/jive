@@ -78,6 +78,7 @@ jobs:
           FLUTTER_IGNORE_TIMEOUTS: "1"
           FLUTTER_TEST_TIMEOUT: "none"
           FLUTTER_TEST_SKIP_PUB: "1"
+          FLUTTER_TEST_RETRY_INSTALL_FAILURE: "1"
           FLUTTER_TIMEOUT_SECONDS: "6600"
         with:
           api-level: 34

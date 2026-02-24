@@ -125,3 +125,44 @@ Date: 2026-02-21
   - Increased workflow env `FLUTTER_TIMEOUT_SECONDS` from `4200` to `6600`.
 - Rationale:
   - Cold hosted runners show high variance in boot + build + install duration; extended budget prevents false negatives caused by infrastructure slowness.
+
+## Home Entry Selector Follow-up (2026-02-24)
+
+- Trigger: workflow run `22334017333` failed in integration stage with:
+  - `integration_test/transaction_search_flow_test.dart:56`
+  - `Finder: Found 0 widgets with text "View All"`
+- Root cause:
+  - Integration flows depended on a locale-specific `find.text('View All')` selector for the home entry into `全部账单`.
+  - On non-English/home variants this selector is brittle.
+- Change:
+  - Added stable key `home_view_all_button` to the home "View All" tap target in `lib/main.dart`.
+  - Updated:
+    - `integration_test/transaction_search_flow_test.dart`
+    - `integration_test/calendar_date_picker_flow_test.dart`
+  - Both tests now open the page via fallback order:
+    1) key `home_view_all_button`
+    2) text `View All`
+    3) text `查看全部`
+- Verification:
+  - `flutter analyze --no-fatal-infos` -> PASS
+  - Workflow-dispatch rerun started on head `eaeb93e`:
+    - run id: `22337649712`
+    - url: `https://github.com/zensgit/jive/actions/runs/22337649712`
+
+## Emulator Install Flake Follow-up (2026-02-24)
+
+- Trigger: workflow run `22337649712` failed in Android integration job even before test case execution.
+- Failure signature:
+  - `adb: failed to install ... app-dev-debug.apk`
+  - `java.lang.NullPointerException ... StorageManager.getVolumes()`
+  - `Failed to load ... Unable to start the app on the device.`
+- Root cause:
+  - Emulator package installer occasionally fails with a transient storage service NPE after long cold boot/build phases.
+- Change:
+  - `scripts/run_android_integration_ci.sh` now:
+    - waits for `pm list packages` readiness before running `flutter test`;
+    - retries `flutter test` once when log matches install/start transient signatures;
+    - records retry reason and per-attempt logs (`flutter_test_output_attempt*.log`).
+  - Workflow env adds `FLUTTER_TEST_RETRY_INSTALL_FAILURE=1` (explicit).
+- Expected effect:
+  - Convert emulator-side transient install failures into auto-recovered retries without masking real deterministic test failures.
