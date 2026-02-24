@@ -193,10 +193,15 @@ run_flutter_test_attempt 1
 flutter_exit_code=$?
 set -e
 
-if (( flutter_exit_code != 0 )) &&
-  [[ "$FLUTTER_TEST_RETRY_INSTALL_FAILURE" == "1" ]] &&
-  is_retryable_flutter_failure "$LOG_DIR/flutter_test_output_attempt1.log"; then
-  echo "Retrying flutter test once after transient install/start failure." | tee "$LOG_DIR/retry_reason.log"
+if (( flutter_exit_code != 0 )) && [[ "$FLUTTER_TEST_RETRY_INSTALL_FAILURE" == "1" ]]; then
+  retry_reason="First attempt failed."
+  if is_retryable_flutter_failure "$LOG_DIR/flutter_test_output_attempt1.log"; then
+    retry_reason="Retrying flutter test once after transient install/start failure."
+  else
+    retry_reason="Retrying flutter test once after first attempt failure (defensive retry)."
+  fi
+  echo "$retry_reason" | tee "$LOG_DIR/retry_reason.log"
+
   run_with_timeout "$ADB_TIMEOUT_SECONDS" adb -s "$DEVICE_SERIAL" wait-for-device >"$LOG_DIR/adb_wait_for_retry.log" 2>&1 || true
   wait_for_package_manager_ready >/dev/null 2>&1 || true
 

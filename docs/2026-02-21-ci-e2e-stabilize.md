@@ -161,7 +161,7 @@ Date: 2026-02-21
 - Change:
   - `scripts/run_android_integration_ci.sh` now:
     - waits for `pm list packages` readiness before running `flutter test`;
-    - retries `flutter test` once when log matches install/start transient signatures;
+    - retries `flutter test` once after first failure (transient signature or defensive fallback);
     - records retry reason and per-attempt logs (`flutter_test_output_attempt*.log`).
   - Workflow env adds `FLUTTER_TEST_RETRY_INSTALL_FAILURE=1` (explicit).
 - Expected effect:
