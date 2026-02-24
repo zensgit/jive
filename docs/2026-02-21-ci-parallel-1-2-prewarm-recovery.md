@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v12
+# CI 并行开发报告：1+2（Prewarm + Recovery）v13
 
 日期：2026-02-24
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`93a41aae85f363d1f2a9803d43d33ac1a168498c`
-- 最新通过 Run：`22339561892`
+- 最新验证 Head：`41b545d53a651339d825f35b8bec48fc9a10d244`
+- 最新通过 Run：`22343824918`
 
 ## 1. 本轮继续开发目标
 
@@ -142,6 +142,13 @@
   - `Emulator boot timeout`
 - 回退提交：`93a41aa`（恢复 `reactivecircus/android-emulator-runner@v2` 稳定路径）
 
+### 3.8 最新 head 复验
+- Run：`22343824918`
+- head：`41b545d`（文档提交，workflow 逻辑未变）
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `19m53s`）
+- 结论：稳定 runner 路径在最新分支头部继续保持全链路通过。
+
 ## 4. 结论
 
 1. 继续开发已完成并通过远端完整验证。
@@ -149,4 +156,5 @@
 3. `Gradle cache + SDK 预安装` 已完成冷缓存与热缓存多轮验证，缓存命中后 prewarm 从 `564s` 稳定到 `174s ~ 178s`。
 4. 补齐 `build-tools;35.0.0 + cmake;3.22.1` 后，稳定路径 3-run 已收敛：`15m16s / 15m49s / 15m57s`，关键套件耗时 `7m14s ~ 7m35s`。
 5. 手动 emulator 方案在 hosted runner 上稳定性不足，已明确回退到稳定 runner；当前主分支链路恢复并保持全绿。
-6. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
+6. 最新 head 复验（`22343824918`）已通过，当前状态可在稳定 runner 基线下继续做增量优化。
+7. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。

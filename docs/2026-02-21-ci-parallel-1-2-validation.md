@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v12，2026-02-24）
+# CI 验证记录：并行开发 1+2（v13，2026-02-24）
 
 ## 1. 本地验证
 
@@ -100,6 +100,12 @@
   - `Emulator boot timeout`
 - 处理：已回退到稳定 `reactivecircus/android-emulator-runner@v2`（head `93a41aa`）。
 
+8. `22343824918`（head `41b545d`，最新 head 复验）
+- `analyze_and_test`：success
+- `android_integration_test`：success（总耗时 `19m53s`）
+- 说明：
+  - 该 run 对应文档提交 head（无 workflow 代码变化），用于确认“回退后稳定路径”在最新分支头部仍可全链路通过。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -110,6 +116,7 @@
 - `22337941629`：`suite elapsed 7m14s`
 - `22338299455`：`suite elapsed 7m22s`
 - `22339561892`：`suite elapsed 7m35s`
+- `22343824918`：success（未纳入性能统计样本）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -158,3 +165,4 @@
 继续开发任务完成：
 - 稳定 runner 路径完成 3-run 连续全绿，关键套件耗时分布收敛（P50 `7m22s` / P90 `7m35s`）。
 - 手动 emulator 去除安装开销方案在 hosted runner 上不稳定，已回退到稳定实现并保持全绿。
+- 最新 head（`41b545d`）已追加复验并通过，当前分支状态可继续推进后续优化。
