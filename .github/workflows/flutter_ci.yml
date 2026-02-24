@@ -142,7 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
-          AVD_NAME="ci_api33_google_apis_x86_64"
+          AVD_NAME="test"
           EMULATOR_SERIAL="emulator-5554"
 
           AVDMANAGER_BIN="${SDK_ROOT}/cmdline-tools/latest/bin/avdmanager"
@@ -172,6 +172,20 @@ jobs:
             --package "system-images;android-33;google_apis;x86_64" \
             --device "Nexus 6" \
             --sdcard "512M"
+
+          AVAILABLE_AVDS="$("${EMULATOR_BIN}" -list-avds || true)"
+          echo "[integration] available avds:"
+          echo "${AVAILABLE_AVDS}"
+          if ! echo "${AVAILABLE_AVDS}" | grep -Fxq "${AVD_NAME}"; then
+            FALLBACK_AVD="$(echo "${AVAILABLE_AVDS}" | head -n 1 | tr -d '\r')"
+            if [ -n "${FALLBACK_AVD}" ]; then
+              echo "::warning::Requested AVD ${AVD_NAME} not found; fallback to ${FALLBACK_AVD}."
+              AVD_NAME="${FALLBACK_AVD}"
+            else
+              echo "::error::No available AVD after avdmanager create."
+              exit 1
+            fi
+          fi
 
           AVD_CONFIG="${HOME}/.android/avd/${AVD_NAME}.avd/config.ini"
           if [ -f "${AVD_CONFIG}" ]; then
