@@ -348,6 +348,13 @@ if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
   exit 2
 fi
 
+for test_file in "${TEST_FILES[@]}"; do
+  if [[ ! -f "${test_file}" ]]; then
+    echo "integration test file not found: ${test_file}" >&2
+    exit 2
+  fi
+done
+
 if [[ -z "${SUMMARY_FILE}" ]]; then
   SUMMARY_FILE="${ARTIFACT_DIR}/suite-summary.txt"
 fi

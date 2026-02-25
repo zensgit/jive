@@ -83,7 +83,7 @@ bash "${RUNNER_SCRIPT}" \
   --no-collect-on-fail \
   --artifact-dir "${RUN_DIR}" \
   --summary-file "${SUMMARY_FILE}" \
-  --test integration_test/signal_smoke_flow_test.dart \
+  --test integration_test/calendar_date_picker_flow_test.dart \
   emulator-5554 \
   > "${RUN_LOG}" 2>&1 &
 RUN_PID=$!

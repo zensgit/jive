@@ -31,7 +31,7 @@ fi
 
 if [[ "${1:-}" == "test" ]]; then
   for arg in "$@"; do
-    if [[ "${arg}" == *"should_fail"* ]]; then
+    if [[ "${arg}" == *"transaction_search_flow_test.dart"* ]]; then
       echo "mock flutter test failure for ${arg}" >&2
       exit 1
     fi
@@ -113,7 +113,7 @@ bash "${RUNNER_SCRIPT}" \
   --no-collect-on-fail \
   --artifact-dir "${FAIL_DIR}" \
   --summary-file "${FAIL_SUMMARY}" \
-  --test integration_test/should_fail_flow_test.dart \
+  --test integration_test/transaction_search_flow_test.dart \
   emulator-5554
 FAIL_EXIT=$?
 set -e
@@ -125,7 +125,7 @@ fi
 
 grep -q '^script_result=failure$' "${FAIL_SUMMARY}"
 grep -q '^failed_tests_count=1$' "${FAIL_SUMMARY}"
-grep -q '^failed_test=integration_test/should_fail_flow_test.dart$' "${FAIL_SUMMARY}"
+grep -q '^failed_test=integration_test/transaction_search_flow_test.dart$' "${FAIL_SUMMARY}"
 grep -q '^summary_entry=combined_suite(1 files): FAIL in ' "${FAIL_SUMMARY}"
 
 echo "integration runner smoke: OK"
