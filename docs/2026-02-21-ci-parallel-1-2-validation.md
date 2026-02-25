@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v34，2026-02-25）
+# CI 验证记录：并行开发 1+2（v35，2026-02-25）
 
 ## 1. 本地验证
 
@@ -97,6 +97,12 @@
   - 新增 `--dry-run` 后可在不执行 `flutter/adb` 的情况下完成参数与配置校验。
   - dry-run 输出可展示解析后的 `effective config` 与去重后的 `test_files_count`。
   - summary 文件可写出 `config_entry=dry_run=1`、`summary_entry=dry_run(...): SKIPPED (validation only)`。
+
+22. `run_integration_tests.sh` summary json 与聚合校验回归
+- 结果：通过，验证项：
+  - 新增 `--print-summary-json` 后，脚本退出时可输出机器可解析 JSON 摘要（`jq` 校验通过）。
+  - dry-run + summary-json 场景可写出 `config_entry=print_summary_json=1`，并在 stdout JSON 中包含 `summary_entries`。
+  - 参数校验已改为聚合输出；多项错误会一次性返回（示例包含 `--retry`、`--timeout`、`FLUTTER_TEST_IGNORE_TIMEOUTS`、`pub-get-once`、缺失 test file）。
 
 ## 2. 远端验证
 
@@ -379,6 +385,13 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，dry-run 增强提交后的复验仍不可用。
 
+33. `22402394776`（head `e828255`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，summary-json + 聚合校验增强提交后的复验仍不可用。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -415,6 +428,7 @@
 - `22401367675`：failure（Actions budget 阻断，主 job 未启动）
 - `22401502483`：failure（Actions budget 阻断，主 job 未启动）
 - `22401694121`：failure（Actions budget 阻断，主 job 未启动）
+- `22402394776`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -496,4 +510,5 @@
 - `run_integration_tests.sh` 对 `dart-define` 的敏感 key（token/secret/password/auth 等）已做 summary 脱敏，避免泄露风险。
 - `render_integration_summary` 已支持 raw summary 行数上限（默认 200，可通过 `SUMMARY_RAW_MAX_LINES` 配置，0 表示不截断），并配套 limits smoke 回归。
 - `run_integration_tests.sh` 已支持 `--dry-run` 快速回归模式，可在预算受限时做参数/配置与 summary 落盘验证。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5`、`2f19500`、`b2aa0b5`、`0d3b892` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- `run_integration_tests.sh` 已支持 `--print-summary-json`，并将参数校验升级为聚合错误输出，提升脚本可诊断性与自动化集成能力。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5`、`2f19500`、`b2aa0b5`、`0d3b892`、`e828255` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
