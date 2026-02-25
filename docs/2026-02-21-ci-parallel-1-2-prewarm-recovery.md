@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v21
+# CI 并行开发报告：1+2（Prewarm + Recovery）v22
 
 日期：2026-02-25
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`957f1f8876492f85bd3010c910640c17225a1e6a`
-- 最新通过 Run：`22354318216`（后续七次 run 因 Actions budget 阻断）
+- 最新验证 Head：`10eac1a1b377bed9903bd03266d1043c77748334`
+- 最新通过 Run：`22354318216`（后续八次 run 因 Actions budget 阻断）
 
 ## 1. 本轮继续开发目标
 
@@ -115,6 +115,18 @@
   - 在 `analyze_and_test` 增加 `Validate CI helper scripts`，执行语法检查与本地自检脚本。
   - 自检覆盖 placeholder 初始化与 summary 渲染关键路径。
 - 目的：进一步降低 workflow 内联脚本风险，并把摘要链路回归前移到 CI 静态阶段。
+
+13. `ci(e2e): add integration runner smoke self-check`（`10eac1a`）
+- 文件：
+  - `scripts/test_run_integration_runner_smoke.sh`
+  - `.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - 新增 mock `flutter/adb` smoke 脚本，覆盖 `run_integration_tests.sh` 成功/失败路径与 summary 落盘字段。
+  - 在 `Validate CI helper scripts` 增加：
+    - `bash -n scripts/run_integration_tests.sh`
+    - `bash -n scripts/test_run_integration_runner_smoke.sh`
+    - `bash scripts/test_run_integration_runner_smoke.sh`
+- 目的：把 integration runner 的关键回归从 emulator 真机链路前移到静态/脚本层，降低预算受限期间的回归盲区。
 
 ## 3. 关键验证链路
 
@@ -288,10 +300,10 @@
 
 ### 3.12 Actions budget 阻断记录
 
-- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）与 run `22382843780`（head `957f1f8`）
+- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）、run `22382843780`（head `957f1f8`）与 run `22384016101`（head `10eac1a`）
 - 现象：
   - 前四次 run 中 `analyze_and_test` 与 `android_integration_test` 均在几秒内结束，job 未启动。
-  - 后三次 run（`22379833732`、`22382836852`、`22382843780`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
+  - 后四次 run（`22379833732`、`22382836852`、`22382843780`、`22384016101`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
 - 平台注解：
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：
@@ -310,5 +322,5 @@
 8. SDK 预装已与 `compileSdk` 对齐，并通过 optional 包容错降低版本漂移导致的阻断风险。
 9. summary 占位初始化与结构化列表展示已落地，且解析逻辑已去除 `mapfile` 依赖。
 10. summary 渲染、占位初始化与本地自检逻辑已抽离为独立脚本，提升了本地可验证性与维护性。
-11. 受 Actions budget 限制，最新七次 run 无法完成远端验证；待预算恢复后补远端验证即可。
+11. 受 Actions budget 限制，最新八次 run 无法完成远端验证；待预算恢复后补远端验证即可。
 12. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
