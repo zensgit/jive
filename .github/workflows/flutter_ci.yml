@@ -49,17 +49,8 @@ jobs:
 
       - name: Validate CI helper scripts
         run: |
-          chmod +x scripts/init_integration_summary_placeholder.sh scripts/render_integration_summary.sh scripts/test_integration_summary_tools.sh scripts/test_run_integration_runner_smoke.sh scripts/test_run_integration_runner_signal_smoke.sh scripts/test_run_integration_runner_args_smoke.sh
-          bash -n scripts/init_integration_summary_placeholder.sh
-          bash -n scripts/render_integration_summary.sh
-          bash -n scripts/run_integration_tests.sh
-          bash -n scripts/test_run_integration_runner_smoke.sh
-          bash -n scripts/test_run_integration_runner_signal_smoke.sh
-          bash -n scripts/test_run_integration_runner_args_smoke.sh
-          bash scripts/test_integration_summary_tools.sh
-          bash scripts/test_run_integration_runner_smoke.sh
-          bash scripts/test_run_integration_runner_signal_smoke.sh
-          bash scripts/test_run_integration_runner_args_smoke.sh
+          chmod +x scripts/test_ci_helper_scripts.sh
+          bash scripts/test_ci_helper_scripts.sh
 
       - name: Analyze
         run: flutter analyze
