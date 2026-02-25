@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v33
+# CI 并行开发报告：1+2（Prewarm + Recovery）v34
 
 日期：2026-02-25
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`b2aa0b5a3bae13775297d0285b074767db3c250b`
-- 最新通过 Run：`22354318216`（后续十九次 run 因 Actions budget 阻断）
+- 最新验证 Head：`0d3b89240579f5cd95d47b4c962563cf44f7f8e1`
+- 最新通过 Run：`22354318216`（后续二十次 run 因 Actions budget 阻断）
 
 ## 1. 本轮继续开发目标
 
@@ -212,6 +212,16 @@
   - 新增 limits smoke，并接入统一 helper 自检入口。
 - 目的：控制 Step Summary 体积，避免原始摘要过长影响可读性与稳定性。
 
+22. `ci(e2e): add dry-run mode for integration runner`（`0d3b892`）
+- 文件：
+  - `scripts/run_integration_tests.sh`
+  - `scripts/test_run_integration_runner_args_smoke.sh`
+- 逻辑：
+  - `run_integration_tests.sh` 新增 `--dry-run` 与 `FLUTTER_TEST_DRY_RUN`，仅做参数/配置校验并落盘 summary，不执行 `flutter/adb`。
+  - dry-run 会输出 `effective config`，并在 summary 中写入 `config_entry=dry_run=1` 与 `summary_entry=dry_run(...): SKIPPED (validation only)`。
+  - args smoke 新增 dry-run 场景，覆盖 test 去重、敏感 `dart-define` 脱敏与 summary 落盘断言。
+- 目的：在预算受限或本地快速回归场景下降低验证成本，提升脚本可验证性。
+
 ## 3. 关键验证链路
 
 ### 3.1 优化基线
@@ -384,10 +394,10 @@
 
 ### 3.12 Actions budget 阻断记录
 
-- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）、run `22382843780`（head `957f1f8`）、run `22384016101`（head `10eac1a`）、run `22384084422`（head `46a36e0`）、run `22388584445`（head `9fdeb48`）、run `22388638142`（head `6248250`）、run `22391634299`（head `4f030ba`）、run `22391741600`（head `d9c5a75`）、run `22394058502`（head `545d51c`）、run `22394113804`（head `7c5bc55`）、run `22396318360`（head `c0ea763`）、run `22396554550`（head `479aaa5`）、run `22401367675`（head `2f19500`）与 run `22401502483`（head `b2aa0b5`）
+- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）、run `22382843780`（head `957f1f8`）、run `22384016101`（head `10eac1a`）、run `22384084422`（head `46a36e0`）、run `22388584445`（head `9fdeb48`）、run `22388638142`（head `6248250`）、run `22391634299`（head `4f030ba`）、run `22391741600`（head `d9c5a75`）、run `22394058502`（head `545d51c`）、run `22394113804`（head `7c5bc55`）、run `22396318360`（head `c0ea763`）、run `22396554550`（head `479aaa5`）、run `22401367675`（head `2f19500`）、run `22401502483`（head `b2aa0b5`）与 run `22401694121`（head `0d3b892`）
 - 现象：
   - 前四次 run 中 `analyze_and_test` 与 `android_integration_test` 均在几秒内结束，job 未启动。
-  - 后十五次 run（`22379833732`、`22382836852`、`22382843780`、`22384016101`、`22384084422`、`22388584445`、`22388638142`、`22391634299`、`22391741600`、`22394058502`、`22394113804`、`22396318360`、`22396554550`、`22401367675`、`22401502483`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
+  - 后十六次 run（`22379833732`、`22382836852`、`22382843780`、`22384016101`、`22384084422`、`22388584445`、`22388638142`、`22391634299`、`22391741600`、`22394058502`、`22394113804`、`22396318360`、`22396554550`、`22401367675`、`22401502483`、`22401694121`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
 - 平台注解：
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：
@@ -406,6 +416,7 @@
 8. SDK 预装已与 `compileSdk` 对齐，并通过 optional 包容错降低版本漂移导致的阻断风险。
 9. summary 占位初始化与结构化列表展示已落地，且解析逻辑已去除 `mapfile` 依赖。
 10. summary 渲染、占位初始化与本地自检逻辑已抽离为独立脚本，提升了本地可验证性与维护性。
-11. 受 Actions budget 限制，最新十九次 run 无法完成远端验证；待预算恢复后补远端验证即可。
+11. 受 Actions budget 限制，最新二十次 run 无法完成远端验证；待预算恢复后补远端验证即可。
 12. `Raw summary` 已支持行数上限（默认 `200` 行）与截断提示，可通过 `SUMMARY_RAW_MAX_LINES` 按需调节。
-13. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
+13. `run_integration_tests.sh` 已支持 `--dry-run` 快速验证路径，可在不依赖 emulator 的前提下完成参数与摘要链路回归。
+14. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
