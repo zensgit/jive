@@ -219,3 +219,19 @@ Date: 2026-02-21
 - Expected effect:
   - first-attempt failures now correctly flow into retry logic.
   - failure classification and artifact writing run reliably after retries.
+
+## CI Budget Blocker (2026-02-25)
+
+- Latest verification runs on this branch:
+  - `22382862065` (pull_request)
+  - `22382867788` (workflow_dispatch)
+  - `22388635399` (pull_request)
+- Result:
+  - GitHub Actions annotation reports: `The job was not started because an Actions budget is preventing further use.`
+  - blocker is external quota; not a repository workflow syntax/runtime regression.
+- Local fallback verification (physical Android device):
+  - command:
+    - `ANDROID_DEVICE_SERIAL=EP0110MZ0BC110087W CI_ARTIFACT_DIR=/tmp/jive-ci-local-run-20260225-162547 FLUTTER_TIMEOUT_SECONDS=2400 FLUTTER_TEST_RETRY_INSTALL_FAILURE=1 bash scripts/run_android_integration_ci.sh transaction_search_flow`
+  - outcome:
+    - retry flow executes as expected (`attempt 1` fail -> `attempt 2` run).
+    - final `failure_reason.log` is emitted with exit code and resolved target.
