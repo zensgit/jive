@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SUMMARY_FILE="${1:-}"
+RAW_SUMMARY_MAX_LINES="${SUMMARY_RAW_MAX_LINES:-200}"
 
 print_missing_summary() {
   echo "## Android integration summary"
@@ -29,6 +30,10 @@ fi
 if [[ ! -f "${SUMMARY_FILE}" ]]; then
   print_missing_summary
   exit 0
+fi
+
+if ! [[ "${RAW_SUMMARY_MAX_LINES}" =~ ^[0-9]+$ ]]; then
+  RAW_SUMMARY_MAX_LINES=200
 fi
 
 SCRIPT_RESULT="$(extract_single script_result)"
@@ -81,5 +86,19 @@ fi
 
 echo "### Raw summary"
 echo '```text'
-cat "${SUMMARY_FILE}"
+TOTAL_SUMMARY_LINES="$(wc -l < "${SUMMARY_FILE}")"
+TOTAL_SUMMARY_LINES="${TOTAL_SUMMARY_LINES//[[:space:]]/}"
+RAW_SUMMARY_TRUNCATED=0
+if (( RAW_SUMMARY_MAX_LINES == 0 )); then
+  cat "${SUMMARY_FILE}"
+elif (( TOTAL_SUMMARY_LINES > RAW_SUMMARY_MAX_LINES )); then
+  head -n "${RAW_SUMMARY_MAX_LINES}" "${SUMMARY_FILE}"
+  RAW_SUMMARY_TRUNCATED=1
+else
+  cat "${SUMMARY_FILE}"
+fi
 echo '```'
+
+if (( RAW_SUMMARY_TRUNCATED == 1 )); then
+  echo "_Raw summary truncated: showing first ${RAW_SUMMARY_MAX_LINES} of ${TOTAL_SUMMARY_LINES} lines._"
+fi
