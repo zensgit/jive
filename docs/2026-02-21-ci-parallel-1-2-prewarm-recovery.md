@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v18
+# CI 并行开发报告：1+2（Prewarm + Recovery）v19
 
-日期：2026-02-24
+日期：2026-02-25
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`44df02a8e60e725f65725ae3017944e639d59bc2`
-- 最新通过 Run：`22354318216`（后续三次 run 因 Actions budget 未启动）
+- 最新验证 Head：`73f422b33671a02bf37cb2678f044766177273ab`
+- 最新通过 Run：`22354318216`（后续四次 run 因 Actions budget 未启动）
 
 ## 1. 本轮继续开发目标
 
@@ -104,6 +104,17 @@
   - 将 `Append Android integration summary` 的渲染逻辑抽离到独立脚本。
   - workflow 仅调用脚本并写入 `GITHUB_STEP_SUMMARY`。
 - 目的：让 summary 渲染可本地独立回归，降低 workflow 内联脚本复杂度。
+
+12. `ci(e2e): add reusable summary placeholder initializer and local renderer self-check`（`73f422b`）
+- 文件：
+  - `scripts/init_integration_summary_placeholder.sh`
+  - `scripts/test_integration_summary_tools.sh`
+  - `.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - 将占位摘要初始化抽离为复用脚本，workflow 直接调用。
+  - 在 `analyze_and_test` 增加 `Validate CI helper scripts`，执行语法检查与本地自检脚本。
+  - 自检覆盖 placeholder 初始化与 summary 渲染关键路径。
+- 目的：进一步降低 workflow 内联脚本风险，并把摘要链路回归前移到 CI 静态阶段。
 
 ## 3. 关键验证链路
 
@@ -277,14 +288,14 @@
 
 ### 3.12 Actions budget 阻断记录
 
-- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）与 run `22377470427`（head `44df02a`）
+- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）与 run `22379761651`（head `73f422b`）
 - 现象：
   - `analyze_and_test` 与 `android_integration_test` 均在几秒内结束，job 未启动。
 - 平台注解：
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：
   - 这是平台预算限制，不是 workflow 逻辑回归。
-  - 已完成本地验证（YAML + summary 解析 + placeholder 行为 + renderer 脚本回归），待预算恢复后补一轮远端绿跑即可闭环。
+  - 已完成本地验证（YAML + placeholder 初始化脚本 + summary 渲染脚本 + helper 自检脚本回归），待预算恢复后补一轮远端绿跑即可闭环。
 
 ## 4. 结论
 
@@ -297,6 +308,6 @@
 7. summary 在异常退出场景也可稳定落盘，并可在 CI 页面直接看到结构化结果摘要。
 8. SDK 预装已与 `compileSdk` 对齐，并通过 optional 包容错降低版本漂移导致的阻断风险。
 9. summary 占位初始化与结构化列表展示已落地，且解析逻辑已去除 `mapfile` 依赖。
-10. summary 渲染逻辑已抽离到独立脚本，提升了本地可验证性与维护性。
-11. 受 Actions budget 限制，最新三次 run 无法启动；待预算恢复后补远端验证即可。
+10. summary 渲染、占位初始化与本地自检逻辑已抽离为独立脚本，提升了本地可验证性与维护性。
+11. 受 Actions budget 限制，最新四次 run 无法启动；待预算恢复后补远端验证即可。
 12. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
