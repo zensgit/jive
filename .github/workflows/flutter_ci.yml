@@ -47,6 +47,13 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Validate CI helper scripts
+        run: |
+          chmod +x scripts/init_integration_summary_placeholder.sh scripts/render_integration_summary.sh scripts/test_integration_summary_tools.sh
+          bash -n scripts/init_integration_summary_placeholder.sh
+          bash -n scripts/render_integration_summary.sh
+          bash scripts/test_integration_summary_tools.sh
+
       - name: Analyze
         run: flutter analyze
 
@@ -161,22 +168,10 @@ jobs:
 
       - name: Initialize Android integration summary placeholder
         run: |
-          mkdir -p "${{ runner.temp }}/jive-integration"
-          cat > "${{ runner.temp }}/jive-integration/suite-summary.txt" <<EOF
-          suite_started_at=0
-          suite_finished_at=0
-          suite_elapsed_seconds=0
-          suite_elapsed_human=unknown
-          script_exit_code=999
-          script_result=unknown
-          interrupted_reason=not_started_or_emulator_boot_failure
-          combined_suite_mode=1
-          retry_count=0
-          test_files_count=0
-          summary_entries_count=0
-          failed_tests_count=0
-          artifacts_dir=${{ runner.temp }}/jive-integration
-          EOF
+          chmod +x scripts/init_integration_summary_placeholder.sh scripts/render_integration_summary.sh
+          bash scripts/init_integration_summary_placeholder.sh \
+            "${{ runner.temp }}/jive-integration/suite-summary.txt" \
+            "${{ runner.temp }}/jive-integration"
 
       - name: Prewarm Android build toolchain
         run: |
