@@ -90,13 +90,19 @@ run_flutter_test_attempt() {
   local attempt_log="$LOG_DIR/flutter_test_output_attempt${attempt}.log"
   local attempt_start_epoch
   attempt_start_epoch="$(date +%s)"
+  local errexit_was_on=0
+  if [[ $- == *e* ]]; then
+    errexit_was_on=1
+  fi
 
   echo "Running flutter integration attempt ${attempt}..."
 
   set +e
   run_with_timeout "$FLUTTER_TIMEOUT_SECONDS" "${flutter_cmd[@]}" 2>&1 | tee "$attempt_log"
   local exit_code=${PIPESTATUS[0]}
-  set -e
+  if (( errexit_was_on == 1 )); then
+    set -e
+  fi
 
   local attempt_end_epoch
   attempt_end_epoch="$(date +%s)"

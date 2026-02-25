@@ -207,3 +207,15 @@ Date: 2026-02-21
 - Expected effect:
   - lower runner pressure and avoid agent disconnect.
   - force earlier deterministic timeout/hand-off to retry path when emulator hangs.
+
+## Retry Control-Flow Fix Follow-up (2026-02-25)
+
+- Trigger: local run on connected Android device exited after attempt 1 (`exit 79`) without entering retry path.
+- Root cause:
+  - `run_flutter_test_attempt` toggled `set -e` internally and returned non-zero while `errexit` was re-enabled.
+  - this caused the script to terminate before the retry branch could execute.
+- Change:
+  - preserved/restore `errexit` state inside `run_flutter_test_attempt` instead of unconditionally forcing `set -e`.
+- Expected effect:
+  - first-attempt failures now correctly flow into retry logic.
+  - failure classification and artifact writing run reliably after retries.
