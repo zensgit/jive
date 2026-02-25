@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v23，2026-02-25）
+# CI 验证记录：并行开发 1+2（v24，2026-02-25）
 
 ## 1. 本地验证
 
@@ -60,12 +60,18 @@
 14. `bash scripts/test_run_integration_runner_smoke.sh`
 - 结果：通过，验证项：
   - mock 成功路径可写出 `script_result=success` 与 `summary_entry=... PASS ...`
-  - mock 失败路径可写出 `script_result=failure`、`failed_tests_count=1` 与 `failed_test=integration_test/should_fail_flow_test.dart`
+  - mock 失败路径可写出 `script_result=failure`、`failed_tests_count=1` 与 `failed_test=integration_test/transaction_search_flow_test.dart`
 
 15. `bash -n scripts/test_run_integration_runner_signal_smoke.sh && bash scripts/test_run_integration_runner_signal_smoke.sh`
 - 结果：通过，验证项：
   - runner 被 `SIGTERM` 中断后返回码为 `143`
   - summary 包含 `script_exit_code=143`、`script_result=failure`、`interrupted_reason=SIGTERM`
+
+16. `bash -n scripts/test_run_integration_runner_args_smoke.sh && bash scripts/test_run_integration_runner_args_smoke.sh`
+- 结果：通过，验证项：
+  - `--retry invalid` 返回参数错误（exit `2`）
+  - `--test integration_test/does_not_exist_smoke.dart` 返回 `integration test file not found`（exit `2`）
+  - `--does-not-exist` 返回 unknown option（exit `2`）
 
 ## 2. 远端验证
 
@@ -271,6 +277,13 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，新增 signal smoke 自检提交后的复验仍不可用。
 
+22. `22388584445`（head `9fdeb48`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，新增 args smoke 与 test-file preflight 提交后的复验仍不可用。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -296,6 +309,7 @@
 - `22382843780`：failure（Actions budget 阻断，主 job 未启动）
 - `22384016101`：failure（Actions budget 阻断，主 job 未启动）
 - `22384084422`：failure（Actions budget 阻断，主 job 未启动）
+- `22388584445`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -369,4 +383,5 @@
 - summary 占位初始化与自检能力已抽离为独立脚本（`scripts/init_integration_summary_placeholder.sh`、`scripts/test_integration_summary_tools.sh`），并完成本地回归。
 - `run_integration_tests.sh` 已新增 mock smoke 自检脚本（`scripts/test_run_integration_runner_smoke.sh`），并完成成功/失败摘要落盘本地回归。
 - `run_integration_tests.sh` 已新增 `SIGTERM` smoke 自检（`scripts/test_run_integration_runner_signal_smoke.sh`），中断场景摘要落盘可验证。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- `run_integration_tests.sh` 已新增参数边界 smoke 与 test-file preflight（`scripts/test_run_integration_runner_args_smoke.sh` + 文件存在性校验），参数错误可快速失败。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
