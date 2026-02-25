@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v28，2026-02-25）
+# CI 验证记录：并行开发 1+2（v29，2026-02-25）
 
 ## 1. 本地验证
 
@@ -316,6 +316,13 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，测试目标去重与 args smoke 扩展提交后的复验仍不可用。
 
+27. `22394113804`（head `7c5bc55`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，v28 文档提交后的复验仍不可用。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -346,6 +353,7 @@
 - `22391634299`：failure（Actions budget 阻断，主 job 未启动）
 - `22391741600`：failure（Actions budget 阻断，主 job 未启动）
 - `22394058502`：failure（Actions budget 阻断，主 job 未启动）
+- `22394113804`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -423,4 +431,4 @@
 - CI helper 校验入口已统一到 `scripts/test_ci_helper_scripts.sh`，降低了 workflow 内联脚本复杂度。
 - CI helper 校验脚本已增加可选 `shellcheck` 静态检查（有工具则执行，无工具则提示跳过），在不增加硬依赖的前提下增强脚本质量基线。
 - `run_integration_tests.sh` 已新增测试目标去重逻辑，避免重复 `--test` 参数导致重复执行。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
