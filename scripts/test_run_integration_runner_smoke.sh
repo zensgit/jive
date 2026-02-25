@@ -75,6 +75,7 @@ chmod +x "${MOCK_BIN}/adb"
 
 export PATH="${MOCK_BIN}:${PATH}"
 export FLUTTER_ADB_TIMEOUT_SECONDS=0
+export FLUTTER_TEST_DART_DEFINE="API_TOKEN=abc123,JIVE_E2E=true"
 
 SUCCESS_DIR="${WORK_DIR}/success"
 SUCCESS_SUMMARY="${SUCCESS_DIR}/suite-summary.txt"
@@ -97,6 +98,7 @@ bash "${RUNNER_SCRIPT}" \
 grep -q '^script_result=success$' "${SUCCESS_SUMMARY}"
 grep -q '^failed_tests_count=0$' "${SUCCESS_SUMMARY}"
 grep -q '^test_files_count=1$' "${SUCCESS_SUMMARY}"
+grep -q '^config_entry=dart_define=API_TOKEN=<redacted>,JIVE_E2E=true$' "${SUCCESS_SUMMARY}"
 grep -q '^summary_entries_count=1$' "${SUCCESS_SUMMARY}"
 grep -q '^summary_entry=combined_suite(1 files): PASS in ' "${SUCCESS_SUMMARY}"
 

@@ -123,6 +123,92 @@ format_duration() {
   printf "%dm%02ds" "${minutes}" "${seconds}"
 }
 
+trim_spaces() {
+  local text="$1"
+  # trim leading spaces
+  text="${text#"${text%%[![:space:]]*}"}"
+  # trim trailing spaces
+  text="${text%"${text##*[![:space:]]}"}"
+  printf "%s" "${text}"
+}
+
+truncate_for_summary() {
+  local value="$1"
+  local max_len="${2:-80}"
+  if (( ${#value} > max_len )); then
+    printf "%s..." "${value:0:max_len}"
+    return 0
+  fi
+  printf "%s" "${value}"
+}
+
+is_sensitive_config_key() {
+  local key="$1"
+  local key_upper
+  key_upper="$(printf "%s" "${key}" | tr '[:lower:]' '[:upper:]')"
+  [[ "${key_upper}" == *"TOKEN"* ]] || \
+    [[ "${key_upper}" == *"SECRET"* ]] || \
+    [[ "${key_upper}" == *"PASSWORD"* ]] || \
+    [[ "${key_upper}" == *"PASS"* ]] || \
+    [[ "${key_upper}" == *"API_KEY"* ]] || \
+    [[ "${key_upper}" == *"AUTH"* ]] || \
+    [[ "${key_upper}" == *"CREDENTIAL"* ]]
+}
+
+format_dart_define_for_summary() {
+  local raw="$1"
+  if [[ -z "${raw}" ]]; then
+    echo "unset"
+    return 0
+  fi
+
+  local normalized="${raw}"
+  normalized="${normalized//, /,}"
+  normalized="${normalized// ,/,}"
+
+  local define_parts=()
+  IFS=',' read -r -a define_parts <<< "${normalized}"
+
+  local rendered_parts=()
+  local define_part=""
+  for define_part in "${define_parts[@]}"; do
+    define_part="$(trim_spaces "${define_part}")"
+    if [[ -z "${define_part}" ]]; then
+      continue
+    fi
+
+    if [[ "${define_part}" == *"="* ]]; then
+      local define_key="${define_part%%=*}"
+      local define_value="${define_part#*=}"
+      define_key="$(trim_spaces "${define_key}")"
+      define_value="$(trim_spaces "${define_value}")"
+      if is_sensitive_config_key "${define_key}"; then
+        rendered_parts+=("${define_key}=<redacted>")
+      else
+        rendered_parts+=("${define_key}=$(truncate_for_summary "${define_value}")")
+      fi
+    else
+      rendered_parts+=("$(truncate_for_summary "${define_part}")")
+    fi
+  done
+
+  if [[ "${#rendered_parts[@]}" -eq 0 ]]; then
+    echo "unset"
+    return 0
+  fi
+
+  local joined=""
+  local rendered_part=""
+  for rendered_part in "${rendered_parts[@]}"; do
+    if [[ -z "${joined}" ]]; then
+      joined="${rendered_part}"
+    else
+      joined="${joined},${rendered_part}"
+    fi
+  done
+  echo "${joined}"
+}
+
 list_tests() {
   local test_file
   for test_file in "${DEFAULT_TEST_FILES[@]}"; do
@@ -927,7 +1013,7 @@ write_suite_summary_file() {
     done
     echo "config_entry=device_id=${DEVICE_ID:-auto}"
     echo "config_entry=flavor=${FLAVOR}"
-    echo "config_entry=dart_define=${DART_DEFINE}"
+    echo "config_entry=dart_define=$(format_dart_define_for_summary "${DART_DEFINE}")"
     echo "config_entry=test_timeout_seconds=${TEST_TIMEOUT_SECONDS}"
     echo "config_entry=test_case_timeout=${TEST_CASE_TIMEOUT:-unset}"
     echo "config_entry=ignore_test_timeouts=${IGNORE_TEST_TIMEOUTS}"
