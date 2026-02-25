@@ -159,6 +159,25 @@ jobs:
           sudo udevadm trigger --name-match=kvm
           ls -l /dev/kvm || true
 
+      - name: Initialize Android integration summary placeholder
+        run: |
+          mkdir -p "${{ runner.temp }}/jive-integration"
+          cat > "${{ runner.temp }}/jive-integration/suite-summary.txt" <<EOF
+          suite_started_at=0
+          suite_finished_at=0
+          suite_elapsed_seconds=0
+          suite_elapsed_human=unknown
+          script_exit_code=999
+          script_result=unknown
+          interrupted_reason=not_started_or_emulator_boot_failure
+          combined_suite_mode=1
+          retry_count=0
+          test_files_count=0
+          summary_entries_count=0
+          failed_tests_count=0
+          artifacts_dir=${{ runner.temp }}/jive-integration
+          EOF
+
       - name: Prewarm Android build toolchain
         run: |
           set -euo pipefail
@@ -221,6 +240,24 @@ jobs:
               echo "- Failed tests: \`${FAILED_COUNT:-unknown}\`"
               echo "- Artifacts dir: \`${ARTIFACTS_DIR:-unknown}\`"
               echo ""
+              mapfile -t SUMMARY_ENTRIES < <(grep '^summary_entry=' "${SUMMARY_FILE}" | sed 's/^summary_entry=//')
+              if ((${#SUMMARY_ENTRIES[@]} > 0)); then
+                echo "### Test timing"
+                for entry in "${SUMMARY_ENTRIES[@]}"; do
+                  echo "- ${entry}"
+                done
+                echo ""
+              fi
+
+              mapfile -t FAILED_TESTS < <(grep '^failed_test=' "${SUMMARY_FILE}" | sed 's/^failed_test=//')
+              if ((${#FAILED_TESTS[@]} > 0)); then
+                echo "### Failed tests"
+                for test_name in "${FAILED_TESTS[@]}"; do
+                  echo "- ${test_name}"
+                done
+                echo ""
+              fi
+
               echo "### Raw summary"
               echo '```text'
               cat "${SUMMARY_FILE}"
