@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v29，2026-02-25）
+# CI 验证记录：并行开发 1+2（v30，2026-02-25）
 
 ## 1. 本地验证
 
@@ -76,6 +76,11 @@
 
 17. `bash scripts/test_ci_helper_scripts.sh`
 - 结果：通过，输出 `ci helper scripts: OK`（若环境缺少 `shellcheck`，则以提示信息跳过该静态检查，不影响其余自检）。
+
+18. `scripts/run_integration_tests.sh` summary config 回归
+- 结果：通过，验证项：
+  - summary 文件新增 `config_entry=*` 字段（`device_id`、`flavor`、`dart_define`、timeout 与 recovery 参数）
+  - `scripts/render_integration_summary.sh` 可渲染 `### Runtime config` 区块
 
 ## 2. 远端验证
 
@@ -323,6 +328,13 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，v28 文档提交后的复验仍不可用。
 
+28. `22396318360`（head `c0ea763`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，summary runtime config 增强提交后的复验仍不可用。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -354,6 +366,7 @@
 - `22391741600`：failure（Actions budget 阻断，主 job 未启动）
 - `22394058502`：failure（Actions budget 阻断，主 job 未启动）
 - `22394113804`：failure（Actions budget 阻断，主 job 未启动）
+- `22396318360`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -431,4 +444,5 @@
 - CI helper 校验入口已统一到 `scripts/test_ci_helper_scripts.sh`，降低了 workflow 内联脚本复杂度。
 - CI helper 校验脚本已增加可选 `shellcheck` 静态检查（有工具则执行，无工具则提示跳过），在不增加硬依赖的前提下增强脚本质量基线。
 - `run_integration_tests.sh` 已新增测试目标去重逻辑，避免重复 `--test` 参数导致重复执行。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- `run_integration_tests.sh` summary 已增加 runtime config 信息并在 Step Summary 展示，远端排障上下文更完整。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
