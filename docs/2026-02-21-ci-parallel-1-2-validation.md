@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v31，2026-02-25）
+# CI 验证记录：并行开发 1+2（v32，2026-02-25）
 
 ## 1. 本地验证
 
@@ -86,6 +86,11 @@
 - 结果：通过，验证项：
   - 当 `FLUTTER_TEST_DART_DEFINE=API_TOKEN=abc123,JIVE_E2E=true` 时，summary 写出：
     - `config_entry=dart_define=API_TOKEN=<redacted>,JIVE_E2E=true`
+
+20. `render_integration_summary` Raw summary 截断回归
+- 结果：通过，验证项：
+  - `SUMMARY_RAW_MAX_LINES=40` 时输出截断提示并仅展示前 40 行 raw summary
+  - `SUMMARY_RAW_MAX_LINES=0` 时不截断，可完整展示 raw summary（包含尾部行）
 
 ## 2. 远端验证
 
@@ -347,6 +352,13 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，dart-define 脱敏增强提交后的复验仍不可用。
 
+30. `22401367675`（head `2f19500`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，raw summary 截断增强提交后的复验仍不可用。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -380,6 +392,7 @@
 - `22394113804`：failure（Actions budget 阻断，主 job 未启动）
 - `22396318360`：failure（Actions budget 阻断，主 job 未启动）
 - `22396554550`：failure（Actions budget 阻断，主 job 未启动）
+- `22401367675`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -459,4 +472,5 @@
 - `run_integration_tests.sh` 已新增测试目标去重逻辑，避免重复 `--test` 参数导致重复执行。
 - `run_integration_tests.sh` summary 已增加 runtime config 信息并在 Step Summary 展示，远端排障上下文更完整。
 - `run_integration_tests.sh` 对 `dart-define` 的敏感 key（token/secret/password/auth 等）已做 summary 脱敏，避免泄露风险。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- `render_integration_summary` 已支持 raw summary 行数上限（默认 200，可通过 `SUMMARY_RAW_MAX_LINES` 配置，0 表示不截断），并配套 limits smoke 回归。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5`、`2f19500` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
