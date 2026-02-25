@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v24，2026-02-25）
+# CI 验证记录：并行开发 1+2（v25，2026-02-25）
 
 ## 1. 本地验证
 
@@ -284,6 +284,13 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，新增 args smoke 与 test-file preflight 提交后的复验仍不可用。
 
+23. `22388638142`（head `6248250`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，v24 文档提交后的复验仍不可用。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -310,6 +317,7 @@
 - `22384016101`：failure（Actions budget 阻断，主 job 未启动）
 - `22384084422`：failure（Actions budget 阻断，主 job 未启动）
 - `22388584445`：failure（Actions budget 阻断，主 job 未启动）
+- `22388638142`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -384,4 +392,4 @@
 - `run_integration_tests.sh` 已新增 mock smoke 自检脚本（`scripts/test_run_integration_runner_smoke.sh`），并完成成功/失败摘要落盘本地回归。
 - `run_integration_tests.sh` 已新增 `SIGTERM` smoke 自检（`scripts/test_run_integration_runner_signal_smoke.sh`），中断场景摘要落盘可验证。
 - `run_integration_tests.sh` 已新增参数边界 smoke 与 test-file preflight（`scripts/test_run_integration_runner_args_smoke.sh` + 文件存在性校验），参数错误可快速失败。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。

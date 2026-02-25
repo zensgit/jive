@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v24
+# CI 并行开发报告：1+2（Prewarm + Recovery）v25
 
 日期：2026-02-25
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`9fdeb48508bff5ab29cf1fb17e5f432009ccd669`
-- 最新通过 Run：`22354318216`（后续十次 run 因 Actions budget 阻断）
+- 最新验证 Head：`6248250aa01049dea2152c777fdee4cee0e03ce9`
+- 最新通过 Run：`22354318216`（后续十一次 run 因 Actions budget 阻断）
 
 ## 1. 本轮继续开发目标
 
@@ -325,10 +325,10 @@
 
 ### 3.12 Actions budget 阻断记录
 
-- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）、run `22382843780`（head `957f1f8`）、run `22384016101`（head `10eac1a`）、run `22384084422`（head `46a36e0`）与 run `22388584445`（head `9fdeb48`）
+- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）、run `22382843780`（head `957f1f8`）、run `22384016101`（head `10eac1a`）、run `22384084422`（head `46a36e0`）、run `22388584445`（head `9fdeb48`）与 run `22388638142`（head `6248250`）
 - 现象：
   - 前四次 run 中 `analyze_and_test` 与 `android_integration_test` 均在几秒内结束，job 未启动。
-  - 后六次 run（`22379833732`、`22382836852`、`22382843780`、`22384016101`、`22384084422`、`22388584445`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
+  - 后七次 run（`22379833732`、`22382836852`、`22382843780`、`22384016101`、`22384084422`、`22388584445`、`22388638142`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
 - 平台注解：
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：
@@ -347,5 +347,5 @@
 8. SDK 预装已与 `compileSdk` 对齐，并通过 optional 包容错降低版本漂移导致的阻断风险。
 9. summary 占位初始化与结构化列表展示已落地，且解析逻辑已去除 `mapfile` 依赖。
 10. summary 渲染、占位初始化与本地自检逻辑已抽离为独立脚本，提升了本地可验证性与维护性。
-11. 受 Actions budget 限制，最新十次 run 无法完成远端验证；待预算恢复后补远端验证即可。
+11. 受 Actions budget 限制，最新十一次 run 无法完成远端验证；待预算恢复后补远端验证即可。
 12. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
