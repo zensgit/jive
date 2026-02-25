@@ -81,13 +81,13 @@ jobs:
           FLUTTER_TEST_TIMEOUT: "none"
           FLUTTER_TEST_SKIP_PUB: "1"
           FLUTTER_TEST_RETRY_INSTALL_FAILURE: "1"
-          FLUTTER_TIMEOUT_SECONDS: "6600"
+          FLUTTER_TIMEOUT_SECONDS: "2400"
           CI_ARTIFACT_DIR: "ci_artifacts/android_integration/attempt1"
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
-          cores: 4
+          cores: 2
           emulator-boot-timeout: 1200
           disable-animations: false
           script: >-
@@ -103,13 +103,13 @@ jobs:
           FLUTTER_TEST_TIMEOUT: "none"
           FLUTTER_TEST_SKIP_PUB: "1"
           FLUTTER_TEST_RETRY_INSTALL_FAILURE: "1"
-          FLUTTER_TIMEOUT_SECONDS: "6600"
+          FLUTTER_TIMEOUT_SECONDS: "2400"
           CI_ARTIFACT_DIR: "ci_artifacts/android_integration/attempt2"
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
-          cores: 4
+          cores: 2
           emulator-boot-timeout: 1200
           disable-animations: false
           script: >-

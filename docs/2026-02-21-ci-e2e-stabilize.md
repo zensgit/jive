@@ -193,3 +193,17 @@ Date: 2026-02-21
 - Expected effect:
   - absorb transient emulator process instability via fresh-emulator retry.
   - guarantee structured failure reason in artifacts when retries are exhausted.
+
+## Hosted Runner Disconnect Follow-up (2026-02-24)
+
+- Trigger: workflow run `22354477566` failed with check annotation:
+  - `The hosted runner lost communication with the server...`
+- Observation:
+  - failure occurred during emulator attempt step; step logs were incomplete and later steps never started.
+  - this behavior is consistent with runner resource starvation/crash rather than deterministic test assertion failure.
+- Change:
+  - reduced emulator CPU back to `cores: 2` (from `4`) for both attempts.
+  - reduced `FLUTTER_TIMEOUT_SECONDS` to `2400` (40 min) for both attempts to avoid prolonged hangs inside a single emulator session.
+- Expected effect:
+  - lower runner pressure and avoid agent disconnect.
+  - force earlier deterministic timeout/hand-off to retry path when emulator hangs.
