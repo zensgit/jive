@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v16
+# CI 并行开发报告：1+2（Prewarm + Recovery）v17
 
 日期：2026-02-24
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`0aaf0694dfa8b0012f31d890bd6be64cda4ca86c`
-- 最新通过 Run：`22354318216`
+- 最新验证 Head：`5c79ad2751c018d989109a455366dd82b6b1a6c6`
+- 最新通过 Run：`22354318216`（后续两次 run 因 Actions budget 未启动）
 
 ## 1. 本轮继续开发目标
 
@@ -82,6 +82,19 @@
     - mandatory 包失败即失败；
     - compileSdk 相关 optional 包失败仅 warning，不阻断主链路。
 - 目的：减少不必要安装并兼顾未来 compileSdk 演进的稳定性。
+
+9. `ci(e2e): initialize summary placeholder and enrich step summary details`（`9c7f369`）
+- 文件：`.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - 在 emulator runner 前新增 `Initialize Android integration summary placeholder`，先写入占位 `suite-summary.txt`。
+  - Step Summary 增加 `summary_entry` 与 `failed_test` 列表渲染，提升可读性。
+- 目的：即使 emulator boot 失败，仍可在 summary 面板看到可解释状态。
+
+10. `ci(e2e): avoid mapfile dependency in step summary parsing`（`5c79ad2`）
+- 文件：`.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - 将 `mapfile` 解析替换为 `while read`，避免 shell 版本差异导致的兼容性风险。
+- 目的：提升本地与 CI 脚本行为一致性，降低解析逻辑环境依赖。
 
 ## 3. 关键验证链路
 
@@ -253,6 +266,17 @@
   - `Pre-install`：`53s -> 34s`（下降 `19s`）
   - `android_integration_test` 总时长：`16m30s -> 15m04s`（下降 `86s`）
 
+### 3.12 Actions budget 阻断记录
+
+- run `22377190762`（head `9c7f369`）与 run `22377246231`（head `5c79ad2`）
+- 现象：
+  - `analyze_and_test` 与 `android_integration_test` 均在几秒内结束，job 未启动。
+- 平台注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：
+  - 这是平台预算限制，不是 workflow 逻辑回归。
+  - 已完成本地验证（YAML + summary 解析 + placeholder 行为），待预算恢复后补一轮远端绿跑即可闭环。
+
 ## 4. 结论
 
 1. 继续开发已完成并通过远端完整验证。
@@ -263,5 +287,6 @@
 6. summary 文件落盘、Step Summary 展示、artifact 上传已落地；其中平台配额异常已做非阻断处理。
 7. summary 在异常退出场景也可稳定落盘，并可在 CI 页面直接看到结构化结果摘要。
 8. SDK 预装已与 `compileSdk` 对齐，并通过 optional 包容错降低版本漂移导致的阻断风险。
-9. 最新 head 复验（`22354318216`）已通过，当前状态可在稳定 runner 基线下继续做增量优化。
-10. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
+9. summary 占位初始化与结构化列表展示已落地，且解析逻辑已去除 `mapfile` 依赖。
+10. 受 Actions budget 限制，最新两次 run 无法启动；待预算恢复后补远端验证即可。
+11. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。

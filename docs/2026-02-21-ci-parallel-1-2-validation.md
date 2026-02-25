@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v16，2026-02-24）
+# CI 验证记录：并行开发 1+2（v17，2026-02-24）
 
 ## 1. 本地验证
 
@@ -22,6 +22,11 @@
   - `script_exit_code=143`
   - `script_result=failure`
   - `interrupted_reason=SIGTERM`
+
+6. Step Summary 本地渲染校验（placeholder + 列表解析）
+- 结果：通过，验证项：
+  - placeholder 可解析 `script_result=unknown`、`script_exit_code=999`、`interrupted_reason=not_started_or_emulator_boot_failure`
+  - `summary_entry` 与 `failed_test` 可被 `while read` 渲染为列表（不依赖 `mapfile`）
 
 ## 2. 远端验证
 
@@ -171,6 +176,13 @@
 - 注解：
   - 仍可见平台注解 `Failed to CreateArtifact: Artifact storage quota has been hit`；但已不影响 job 结果。
 
+14. `22377190762`（head `9c7f369`）与 `22377246231`（head `5c79ad2`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：failure（job 未启动）
+- 注解一致：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：属于平台预算限制，非 workflow 逻辑失败。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -187,6 +199,8 @@
 - `22346306100`：success（summary + artifact 容错链路终验）
 - `22348636097`：success（signal-safe summary + 结构化 Step Summary）
 - `22354318216`：success（compileSdk 对齐 SDK 预装）
+- `22377190762`：failure（Actions budget 阻断，job 未启动）
+- `22377246231`：failure（Actions budget 阻断，job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -256,4 +270,5 @@
 - 新增 `suite-summary` 与 artifact 链路已接入并完成闭环修复（路径作用域 + 配额容错）。
 - 新增 `EXIT/TERM` 兜底写摘要与结构化 Step Summary，异常退出可追踪性增强。
 - SDK 预装已与 `compileSdk` 对齐，兼容可选包安装失败场景并保持主链路稳定。
-- 最新 head（`0aaf069`）复验通过（run `22354318216`），当前分支可继续推进下一轮性能优化。
+- summary 占位初始化与结构化列表展示已落地，且完成本地渲染验证。
+- 受平台 Actions budget 限制，`9c7f369` 与 `5c79ad2` 的远端 job 未启动；待预算恢复后补一轮绿跑即可完成远端闭环。
