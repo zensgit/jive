@@ -36,6 +36,7 @@ PUB_GET_ONCE="${FLUTTER_TEST_PUB_GET_ONCE:-1}"
 PUB_GET_TIMEOUT_SECONDS="${FLUTTER_TEST_PUB_GET_TIMEOUT_SECONDS:-300}"
 SKIP_PUB_GET_ONCE="${FLUTTER_TEST_SKIP_PUB_GET:-0}"
 COMBINED_SUITE_MODE="${FLUTTER_TEST_COMBINED_SUITE_MODE:-0}"
+DRY_RUN="${FLUTTER_TEST_DRY_RUN:-0}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
@@ -82,6 +83,7 @@ Options:
                          Rerun same attempt on timeout/termination up to <count> times. Default: 0.
   --artifact-dir <path>  Directory to store test logs/artifacts.
   --summary-file <path>  Path to write suite summary file. Default: <artifact-dir>/suite-summary.txt.
+  --dry-run              Validate inputs/config, write summary, and exit without running flutter/adb.
   --no-collect-on-fail   Disable adb artifact collection on failure.
   --list                 Print default integration test files and exit.
   -h, --help             Show this help message.
@@ -98,6 +100,7 @@ Env:
   FLUTTER_TEST_PUB_GET_TIMEOUT_SECONDS
   FLUTTER_TEST_SKIP_PUB_GET
   FLUTTER_TEST_COMBINED_SUITE_MODE
+  FLUTTER_TEST_DRY_RUN
   FLUTTER_ADB_TIMEOUT_SECONDS
   FLUTTER_DEVICE_RECOVERY_ENABLED
   FLUTTER_DEVICE_RECOVERY_RETRY_COUNT
@@ -216,6 +219,33 @@ list_tests() {
   done
 }
 
+log_effective_config() {
+  log "effective config:"
+  log "  - device_id=${DEVICE_ID:-auto}"
+  log "  - flavor=${FLAVOR}"
+  log "  - dart_define=$(format_dart_define_for_summary "${DART_DEFINE}")"
+  log "  - retry_count=${RETRY_COUNT}"
+  log "  - test_timeout_seconds=${TEST_TIMEOUT_SECONDS}"
+  log "  - test_case_timeout=${TEST_CASE_TIMEOUT:-unset}"
+  log "  - ignore_test_timeouts=${IGNORE_TEST_TIMEOUTS}"
+  log "  - pub_get_once=${PUB_GET_ONCE}"
+  log "  - skip_pub_get_once=${SKIP_PUB_GET_ONCE}"
+  log "  - combined_suite_mode=${COMBINED_SUITE_MODE}"
+  log "  - dry_run=${DRY_RUN}"
+  log "  - timeout_recovery_reruns=${TIMEOUT_RECOVERY_RERUNS}"
+  log "  - device_recovery_enabled=${DEVICE_RECOVERY_ENABLED}"
+  log "  - device_recovery_retry_count=${DEVICE_RECOVERY_RETRY_COUNT}"
+  log "  - device_recovery_wait_seconds=${DEVICE_RECOVERY_WAIT_SECONDS}"
+  log "  - allow_emulator_reboot=${ALLOW_EMULATOR_REBOOT}"
+  log "  - artifacts_dir=${ARTIFACT_DIR}"
+  log "  - summary_file=${SUMMARY_FILE}"
+  log "  - test_files_count=${#TEST_FILES[@]}"
+  local test_file
+  for test_file in "${TEST_FILES[@]}"; do
+    log "  - test_file=${test_file}"
+  done
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --test)
@@ -261,6 +291,9 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       SUMMARY_FILE="$1"
+      ;;
+    --dry-run)
+      DRY_RUN=1
       ;;
     --test-case-timeout)
       shift
@@ -426,6 +459,11 @@ fi
 
 if ! [[ "${COMBINED_SUITE_MODE}" =~ ^[01]$ ]]; then
   echo "combined-suite flag must be 0 or 1, got: ${COMBINED_SUITE_MODE}" >&2
+  exit 2
+fi
+
+if ! [[ "${DRY_RUN}" =~ ^[01]$ ]]; then
+  echo "dry-run flag must be 0 or 1, got: ${DRY_RUN}" >&2
   exit 2
 fi
 
@@ -1012,6 +1050,7 @@ write_suite_summary_file() {
       echo "test_file=${test_file}"
     done
     echo "config_entry=device_id=${DEVICE_ID:-auto}"
+    echo "config_entry=dry_run=${DRY_RUN}"
     echo "config_entry=flavor=${FLAVOR}"
     echo "config_entry=dart_define=$(format_dart_define_for_summary "${DART_DEFINE}")"
     echo "config_entry=test_timeout_seconds=${TEST_TIMEOUT_SECONDS}"
@@ -1059,6 +1098,16 @@ finalize_summary_on_exit() {
 trap 'on_script_signal SIGTERM 143' TERM
 trap 'on_script_signal SIGINT 130' INT
 trap 'finalize_summary_on_exit $?' EXIT
+
+if (( DRY_RUN == 1 )); then
+  log "dry-run mode enabled: validation only (skip flutter/adb execution)"
+  TEST_RUN_SUMMARY+=("dry_run(${#TEST_FILES[@]} files): SKIPPED (validation only)")
+  log_effective_config
+  print_timing_summary
+  log "all integration tests passed (dry-run)"
+  log "artifacts: ${ARTIFACT_DIR}"
+  exit 0
+fi
 
 if (( PUB_GET_ONCE == 1 )); then
   run_pub_get_once

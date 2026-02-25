@@ -90,4 +90,48 @@ if ! echo "${LIST_OUTPUT}" | grep -Fq "integration_test/transaction_search_flow_
   exit 1
 fi
 
+DRY_RUN_SUMMARY="${WORK_DIR}/dry-run-summary.txt"
+DRY_RUN_ARTIFACT_DIR="${WORK_DIR}/dry-run-artifacts"
+DRY_RUN_STDOUT="${WORK_DIR}/dry-run.stdout"
+DRY_RUN_STDERR="${WORK_DIR}/dry-run.stderr"
+set +e
+(
+  cd "${ROOT_DIR}"
+  FLUTTER_TEST_DART_DEFINE="API_TOKEN=abc123,JIVE_E2E=true" \
+  bash "${RUNNER_SCRIPT}" \
+    --dry-run \
+    --test integration_test/calendar_date_picker_flow_test.dart \
+    --test integration_test/calendar_date_picker_flow_test.dart \
+    --summary-file "${DRY_RUN_SUMMARY}" \
+    --artifact-dir "${DRY_RUN_ARTIFACT_DIR}" \
+    emulator-5554
+) > "${DRY_RUN_STDOUT}" 2> "${DRY_RUN_STDERR}"
+DRY_RUN_RC=$?
+set -e
+
+if [[ "${DRY_RUN_RC}" -ne 0 ]]; then
+  echo "expected --dry-run path to succeed, got ${DRY_RUN_RC}" >&2
+  cat "${DRY_RUN_STDERR}" >&2 || true
+  exit 1
+fi
+if ! grep -Fq "dry-run mode enabled" "${DRY_RUN_STDOUT}"; then
+  echo "expected dry-run log to be present" >&2
+  cat "${DRY_RUN_STDOUT}" >&2 || true
+  exit 1
+fi
+if ! grep -Fq "test_files_count=1" "${DRY_RUN_STDOUT}"; then
+  echo "expected dry-run log to show deduplicated test count" >&2
+  cat "${DRY_RUN_STDOUT}" >&2 || true
+  exit 1
+fi
+if [[ ! -f "${DRY_RUN_SUMMARY}" ]]; then
+  echo "expected dry-run summary file: ${DRY_RUN_SUMMARY}" >&2
+  exit 1
+fi
+grep -Fq "script_result=success" "${DRY_RUN_SUMMARY}"
+grep -Fq "config_entry=dry_run=1" "${DRY_RUN_SUMMARY}"
+grep -Fq "test_files_count=1" "${DRY_RUN_SUMMARY}"
+grep -Fq "summary_entry=dry_run(1 files): SKIPPED (validation only)" "${DRY_RUN_SUMMARY}"
+grep -Fq "config_entry=dart_define=API_TOKEN=<redacted>,JIVE_E2E=true" "${DRY_RUN_SUMMARY}"
+
 echo "integration runner args smoke: OK"
