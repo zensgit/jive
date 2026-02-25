@@ -27,6 +27,12 @@ for script_path in "${CHECK_SCRIPTS[@]}"; do
   bash -n "${script_path}"
 done
 
+if command -v shellcheck >/dev/null 2>&1; then
+  shellcheck -x "${CHECK_SCRIPTS[@]}"
+else
+  echo "shellcheck not found; skipping shellcheck pass"
+fi
+
 bash scripts/test_integration_summary_tools.sh
 bash scripts/test_run_integration_runner_smoke.sh
 bash scripts/test_run_integration_runner_signal_smoke.sh
