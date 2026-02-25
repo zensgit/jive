@@ -80,6 +80,34 @@ run_expect_exit2 "missing_test_file" "integration test file not found" \
 run_expect_exit2 "unknown_option" "unknown option: --does-not-exist" \
   --does-not-exist
 
+MULTI_INVALID_ERR="${WORK_DIR}/multi_invalid.stderr"
+set +e
+(
+  cd "${ROOT_DIR}"
+  FLUTTER_TEST_TIMEOUT_SECONDS=bad \
+  FLUTTER_TEST_IGNORE_TIMEOUTS=9 \
+  FLUTTER_TEST_PUB_GET_ONCE=9 \
+  bash "${RUNNER_SCRIPT}" \
+    --dry-run \
+    --test integration_test/does_not_exist_smoke.dart \
+    --retry invalid \
+    emulator-5554
+) > /dev/null 2> "${MULTI_INVALID_ERR}"
+MULTI_INVALID_RC=$?
+set -e
+
+if [[ "${MULTI_INVALID_RC}" -ne 2 ]]; then
+  echo "expected exit 2 for multi_invalid_validation, got ${MULTI_INVALID_RC}" >&2
+  cat "${MULTI_INVALID_ERR}" >&2 || true
+  exit 1
+fi
+grep -Fq "configuration validation failed (5):" "${MULTI_INVALID_ERR}"
+grep -Fq -- "--retry must be a non-negative integer, got: invalid" "${MULTI_INVALID_ERR}"
+grep -Fq -- "--timeout must be a non-negative integer, got: bad" "${MULTI_INVALID_ERR}"
+grep -Fq "FLUTTER_TEST_IGNORE_TIMEOUTS must be 0 or 1, got: 9" "${MULTI_INVALID_ERR}"
+grep -Fq "pub-get-once flag must be 0 or 1, got: 9" "${MULTI_INVALID_ERR}"
+grep -Fq "integration test file not found: integration_test/does_not_exist_smoke.dart" "${MULTI_INVALID_ERR}"
+
 LIST_OUTPUT="$(run_expect_success_with_output "list_defaults" --list)"
 if ! echo "${LIST_OUTPUT}" | grep -Fq "integration_test/calendar_date_picker_flow_test.dart"; then
   echo "expected --list to contain calendar_date_picker_flow_test.dart" >&2
@@ -100,6 +128,7 @@ set +e
   FLUTTER_TEST_DART_DEFINE="API_TOKEN=abc123,JIVE_E2E=true" \
   bash "${RUNNER_SCRIPT}" \
     --dry-run \
+    --print-summary-json \
     --test integration_test/calendar_date_picker_flow_test.dart \
     --test integration_test/calendar_date_picker_flow_test.dart \
     --summary-file "${DRY_RUN_SUMMARY}" \
@@ -130,8 +159,13 @@ if [[ ! -f "${DRY_RUN_SUMMARY}" ]]; then
 fi
 grep -Fq "script_result=success" "${DRY_RUN_SUMMARY}"
 grep -Fq "config_entry=dry_run=1" "${DRY_RUN_SUMMARY}"
+grep -Fq "config_entry=print_summary_json=1" "${DRY_RUN_SUMMARY}"
 grep -Fq "test_files_count=1" "${DRY_RUN_SUMMARY}"
 grep -Fq "summary_entry=dry_run(1 files): SKIPPED (validation only)" "${DRY_RUN_SUMMARY}"
 grep -Fq "config_entry=dart_define=API_TOKEN=<redacted>,JIVE_E2E=true" "${DRY_RUN_SUMMARY}"
+grep -Fq "\"script_result\":\"success\"" "${DRY_RUN_STDOUT}"
+grep -Fq "\"dry_run\":\"1\"" "${DRY_RUN_STDOUT}"
+grep -Fq "\"print_summary_json\":\"1\"" "${DRY_RUN_STDOUT}"
+grep -Fq "\"summary_entries\":[\"dry_run(1 files): SKIPPED (validation only)\"]" "${DRY_RUN_STDOUT}"
 
 echo "integration runner args smoke: OK"

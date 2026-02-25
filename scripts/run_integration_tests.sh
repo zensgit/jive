@@ -37,6 +37,7 @@ PUB_GET_TIMEOUT_SECONDS="${FLUTTER_TEST_PUB_GET_TIMEOUT_SECONDS:-300}"
 SKIP_PUB_GET_ONCE="${FLUTTER_TEST_SKIP_PUB_GET:-0}"
 COMBINED_SUITE_MODE="${FLUTTER_TEST_COMBINED_SUITE_MODE:-0}"
 DRY_RUN="${FLUTTER_TEST_DRY_RUN:-0}"
+PRINT_SUMMARY_JSON="${FLUTTER_TEST_PRINT_SUMMARY_JSON:-0}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
@@ -47,6 +48,8 @@ FAILED_TESTS=()
 SUMMARY_WRITTEN=0
 SCRIPT_EXIT_CODE=0
 INTERRUPTED_REASON=""
+SUITE_FINISHED_AT=0
+SUITE_ELAPSED_SECONDS=0
 
 usage() {
   cat <<'EOF'
@@ -84,6 +87,7 @@ Options:
   --artifact-dir <path>  Directory to store test logs/artifacts.
   --summary-file <path>  Path to write suite summary file. Default: <artifact-dir>/suite-summary.txt.
   --dry-run              Validate inputs/config, write summary, and exit without running flutter/adb.
+  --print-summary-json   Print machine-readable JSON summary to stdout at exit.
   --no-collect-on-fail   Disable adb artifact collection on failure.
   --list                 Print default integration test files and exit.
   -h, --help             Show this help message.
@@ -101,6 +105,7 @@ Env:
   FLUTTER_TEST_SKIP_PUB_GET
   FLUTTER_TEST_COMBINED_SUITE_MODE
   FLUTTER_TEST_DRY_RUN
+  FLUTTER_TEST_PRINT_SUMMARY_JSON
   FLUTTER_ADB_TIMEOUT_SECONDS
   FLUTTER_DEVICE_RECOVERY_ENABLED
   FLUTTER_DEVICE_RECOVERY_RETRY_COUNT
@@ -232,6 +237,7 @@ log_effective_config() {
   log "  - skip_pub_get_once=${SKIP_PUB_GET_ONCE}"
   log "  - combined_suite_mode=${COMBINED_SUITE_MODE}"
   log "  - dry_run=${DRY_RUN}"
+  log "  - print_summary_json=${PRINT_SUMMARY_JSON}"
   log "  - timeout_recovery_reruns=${TIMEOUT_RECOVERY_RERUNS}"
   log "  - device_recovery_enabled=${DEVICE_RECOVERY_ENABLED}"
   log "  - device_recovery_retry_count=${DEVICE_RECOVERY_RETRY_COUNT}"
@@ -244,6 +250,81 @@ log_effective_config() {
   for test_file in "${TEST_FILES[@]}"; do
     log "  - test_file=${test_file}"
   done
+}
+
+json_escape() {
+  local raw="$1"
+  raw="${raw//\\/\\\\}"
+  raw="${raw//\"/\\\"}"
+  raw="${raw//$'\n'/\\n}"
+  raw="${raw//$'\r'/\\r}"
+  raw="${raw//$'\t'/\\t}"
+  printf "%s" "${raw}"
+}
+
+json_array_from_args() {
+  local first=1
+  local item=""
+  printf "["
+  for item in "$@"; do
+    if (( first == 0 )); then
+      printf ","
+    fi
+    printf "\"%s\"" "$(json_escape "${item}")"
+    first=0
+  done
+  printf "]"
+}
+
+print_suite_summary_json() {
+  local script_result="failure"
+  if (( SCRIPT_EXIT_CODE == 0 )); then
+    script_result="success"
+  fi
+
+  printf "{"
+  printf "\"suite_started_at\":%s," "${SUITE_STARTED_AT}"
+  printf "\"suite_finished_at\":%s," "${SUITE_FINISHED_AT}"
+  printf "\"suite_elapsed_seconds\":%s," "${SUITE_ELAPSED_SECONDS}"
+  printf "\"suite_elapsed_human\":\"%s\"," "$(json_escape "$(format_duration "${SUITE_ELAPSED_SECONDS}")")"
+  printf "\"script_exit_code\":%s," "${SCRIPT_EXIT_CODE}"
+  printf "\"script_result\":\"%s\"," "$(json_escape "${script_result}")"
+  printf "\"interrupted_reason\":"
+  if [[ -n "${INTERRUPTED_REASON}" ]]; then
+    printf "\"%s\"," "$(json_escape "${INTERRUPTED_REASON}")"
+  else
+    printf "null,"
+  fi
+  printf "\"combined_suite_mode\":\"%s\"," "$(json_escape "${COMBINED_SUITE_MODE}")"
+  printf "\"retry_count\":\"%s\"," "$(json_escape "${RETRY_COUNT}")"
+  printf "\"dry_run\":\"%s\"," "$(json_escape "${DRY_RUN}")"
+  printf "\"print_summary_json\":\"%s\"," "$(json_escape "${PRINT_SUMMARY_JSON}")"
+  printf "\"test_files_count\":%s," "${#TEST_FILES[@]}"
+  printf "\"failed_tests_count\":%s," "${#FAILED_TESTS[@]}"
+  printf "\"test_files\":"
+  json_array_from_args "${TEST_FILES[@]}"
+  printf ",\"summary_entries\":"
+  json_array_from_args "${TEST_RUN_SUMMARY[@]}"
+  printf ",\"failed_tests\":"
+  json_array_from_args "${FAILED_TESTS[@]}"
+  printf ",\"artifacts_dir\":\"%s\"," "$(json_escape "${ARTIFACT_DIR}")"
+  printf "\"summary_file\":\"%s\"," "$(json_escape "${SUMMARY_FILE}")"
+  printf "\"config\":{"
+  printf "\"device_id\":\"%s\"," "$(json_escape "${DEVICE_ID:-auto}")"
+  printf "\"flavor\":\"%s\"," "$(json_escape "${FLAVOR}")"
+  printf "\"dart_define\":\"%s\"," "$(json_escape "$(format_dart_define_for_summary "${DART_DEFINE}")")"
+  printf "\"test_timeout_seconds\":\"%s\"," "$(json_escape "${TEST_TIMEOUT_SECONDS}")"
+  printf "\"test_case_timeout\":\"%s\"," "$(json_escape "${TEST_CASE_TIMEOUT:-unset}")"
+  printf "\"ignore_test_timeouts\":\"%s\"," "$(json_escape "${IGNORE_TEST_TIMEOUTS}")"
+  printf "\"pub_get_once\":\"%s\"," "$(json_escape "${PUB_GET_ONCE}")"
+  printf "\"skip_pub_get_once\":\"%s\"," "$(json_escape "${SKIP_PUB_GET_ONCE}")"
+  printf "\"timeout_recovery_reruns\":\"%s\"," "$(json_escape "${TIMEOUT_RECOVERY_RERUNS}")"
+  printf "\"device_recovery_enabled\":\"%s\"," "$(json_escape "${DEVICE_RECOVERY_ENABLED}")"
+  printf "\"device_recovery_retry_count\":\"%s\"," "$(json_escape "${DEVICE_RECOVERY_RETRY_COUNT}")"
+  printf "\"device_recovery_wait_seconds\":\"%s\"," "$(json_escape "${DEVICE_RECOVERY_WAIT_SECONDS}")"
+  printf "\"allow_emulator_reboot\":\"%s\"" "$(json_escape "${ALLOW_EMULATOR_REBOOT}")"
+  printf "}}"
+  printf "\n"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -294,6 +375,9 @@ while [[ $# -gt 0 ]]; do
       ;;
     --dry-run)
       DRY_RUN=1
+      ;;
+    --print-summary-json)
+      PRINT_SUMMARY_JSON=1
       ;;
     --test-case-timeout)
       shift
@@ -397,79 +481,59 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-if ! [[ "${RETRY_COUNT}" =~ ^[0-9]+$ ]]; then
-  echo "--retry must be a non-negative integer, got: ${RETRY_COUNT}" >&2
-  exit 2
-fi
+VALIDATION_ERRORS=()
 
-if ! [[ "${TEST_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
-  echo "--timeout must be a non-negative integer, got: ${TEST_TIMEOUT_SECONDS}" >&2
-  exit 2
-fi
+add_validation_error() {
+  VALIDATION_ERRORS+=("$1")
+}
 
-if ! [[ "${ADB_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
-  echo "FLUTTER_ADB_TIMEOUT_SECONDS must be a non-negative integer, got: ${ADB_TIMEOUT_SECONDS}" >&2
-  exit 2
-fi
+validate_non_negative_integer() {
+  local value="$1"
+  local message_prefix="$2"
+  if ! [[ "${value}" =~ ^[0-9]+$ ]]; then
+    add_validation_error "${message_prefix}${value}"
+  fi
+}
 
-if ! [[ "${DEVICE_RECOVERY_ENABLED}" =~ ^[01]$ ]]; then
-  echo "device recovery enabled flag must be 0 or 1, got: ${DEVICE_RECOVERY_ENABLED}" >&2
-  exit 2
-fi
+validate_binary_flag() {
+  local value="$1"
+  local message_prefix="$2"
+  if ! [[ "${value}" =~ ^[01]$ ]]; then
+    add_validation_error "${message_prefix}${value}"
+  fi
+}
 
-if ! [[ "${DEVICE_RECOVERY_RETRY_COUNT}" =~ ^[0-9]+$ ]]; then
-  echo "device recovery retry count must be a non-negative integer, got: ${DEVICE_RECOVERY_RETRY_COUNT}" >&2
-  exit 2
-fi
+emit_validation_errors_and_exit() {
+  if (( ${#VALIDATION_ERRORS[@]} == 0 )); then
+    return 0
+  fi
 
-if ! [[ "${DEVICE_RECOVERY_WAIT_SECONDS}" =~ ^[0-9]+$ ]]; then
-  echo "device recovery timeout must be a non-negative integer, got: ${DEVICE_RECOVERY_WAIT_SECONDS}" >&2
+  echo "configuration validation failed (${#VALIDATION_ERRORS[@]}):" >&2
+  local validation_error
+  for validation_error in "${VALIDATION_ERRORS[@]}"; do
+    echo "  - ${validation_error}" >&2
+  done
   exit 2
-fi
+}
 
-if ! [[ "${ALLOW_EMULATOR_REBOOT}" =~ ^[01]$ ]]; then
-  echo "allow emulator reboot flag must be 0 or 1, got: ${ALLOW_EMULATOR_REBOOT}" >&2
-  exit 2
-fi
-
-if ! [[ "${TIMEOUT_RECOVERY_RERUNS}" =~ ^[0-9]+$ ]]; then
-  echo "timeout recovery rerun count must be a non-negative integer, got: ${TIMEOUT_RECOVERY_RERUNS}" >&2
-  exit 2
-fi
-
-if ! [[ "${IGNORE_TEST_TIMEOUTS}" =~ ^[01]$ ]]; then
-  echo "FLUTTER_TEST_IGNORE_TIMEOUTS must be 0 or 1, got: ${IGNORE_TEST_TIMEOUTS}" >&2
-  exit 2
-fi
-
-if ! [[ "${PUB_GET_ONCE}" =~ ^[01]$ ]]; then
-  echo "pub-get-once flag must be 0 or 1, got: ${PUB_GET_ONCE}" >&2
-  exit 2
-fi
-
-if ! [[ "${PUB_GET_TIMEOUT_SECONDS}" =~ ^[0-9]+$ ]]; then
-  echo "pub-get-timeout must be a non-negative integer, got: ${PUB_GET_TIMEOUT_SECONDS}" >&2
-  exit 2
-fi
-
-if ! [[ "${SKIP_PUB_GET_ONCE}" =~ ^[01]$ ]]; then
-  echo "skip-pub-get flag must be 0 or 1, got: ${SKIP_PUB_GET_ONCE}" >&2
-  exit 2
-fi
-
-if ! [[ "${COMBINED_SUITE_MODE}" =~ ^[01]$ ]]; then
-  echo "combined-suite flag must be 0 or 1, got: ${COMBINED_SUITE_MODE}" >&2
-  exit 2
-fi
-
-if ! [[ "${DRY_RUN}" =~ ^[01]$ ]]; then
-  echo "dry-run flag must be 0 or 1, got: ${DRY_RUN}" >&2
-  exit 2
-fi
+validate_non_negative_integer "${RETRY_COUNT}" "--retry must be a non-negative integer, got: "
+validate_non_negative_integer "${TEST_TIMEOUT_SECONDS}" "--timeout must be a non-negative integer, got: "
+validate_non_negative_integer "${ADB_TIMEOUT_SECONDS}" "FLUTTER_ADB_TIMEOUT_SECONDS must be a non-negative integer, got: "
+validate_binary_flag "${DEVICE_RECOVERY_ENABLED}" "device recovery enabled flag must be 0 or 1, got: "
+validate_non_negative_integer "${DEVICE_RECOVERY_RETRY_COUNT}" "device recovery retry count must be a non-negative integer, got: "
+validate_non_negative_integer "${DEVICE_RECOVERY_WAIT_SECONDS}" "device recovery timeout must be a non-negative integer, got: "
+validate_binary_flag "${ALLOW_EMULATOR_REBOOT}" "allow emulator reboot flag must be 0 or 1, got: "
+validate_non_negative_integer "${TIMEOUT_RECOVERY_RERUNS}" "timeout recovery rerun count must be a non-negative integer, got: "
+validate_binary_flag "${IGNORE_TEST_TIMEOUTS}" "FLUTTER_TEST_IGNORE_TIMEOUTS must be 0 or 1, got: "
+validate_binary_flag "${PUB_GET_ONCE}" "pub-get-once flag must be 0 or 1, got: "
+validate_non_negative_integer "${PUB_GET_TIMEOUT_SECONDS}" "pub-get-timeout must be a non-negative integer, got: "
+validate_binary_flag "${SKIP_PUB_GET_ONCE}" "skip-pub-get flag must be 0 or 1, got: "
+validate_binary_flag "${COMBINED_SUITE_MODE}" "combined-suite flag must be 0 or 1, got: "
+validate_binary_flag "${DRY_RUN}" "dry-run flag must be 0 or 1, got: "
+validate_binary_flag "${PRINT_SUMMARY_JSON}" "print-summary-json flag must be 0 or 1, got: "
 
 if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
-  echo "no integration tests selected" >&2
-  exit 2
+  add_validation_error "no integration tests selected"
 fi
 
 DEDUPED_TEST_FILES=()
@@ -495,14 +559,15 @@ TEST_FILES=("${DEDUPED_TEST_FILES[@]}")
 
 for test_file in "${TEST_FILES[@]}"; do
   if [[ ! -f "${test_file}" ]]; then
-    echo "integration test file not found: ${test_file}" >&2
-    exit 2
+    add_validation_error "integration test file not found: ${test_file}"
   fi
 done
 
 if [[ -z "${SUMMARY_FILE}" ]]; then
   SUMMARY_FILE="${ARTIFACT_DIR}/suite-summary.txt"
 fi
+
+emit_validation_errors_and_exit
 
 mkdir -p "${ARTIFACT_DIR}"
 
@@ -1019,10 +1084,8 @@ write_suite_summary_file() {
     return 0
   fi
 
-  local suite_finished_at
-  local suite_elapsed
-  suite_finished_at="$(date +%s)"
-  suite_elapsed=$(( suite_finished_at - SUITE_STARTED_AT ))
+  SUITE_FINISHED_AT="$(date +%s)"
+  SUITE_ELAPSED_SECONDS=$(( SUITE_FINISHED_AT - SUITE_STARTED_AT ))
 
   if [[ -n "${SUMMARY_FILE}" ]]; then
     mkdir -p "$(dirname "${SUMMARY_FILE}")"
@@ -1030,9 +1093,9 @@ write_suite_summary_file() {
 
   {
     echo "suite_started_at=${SUITE_STARTED_AT}"
-    echo "suite_finished_at=${suite_finished_at}"
-    echo "suite_elapsed_seconds=${suite_elapsed}"
-    echo "suite_elapsed_human=$(format_duration "${suite_elapsed}")"
+    echo "suite_finished_at=${SUITE_FINISHED_AT}"
+    echo "suite_elapsed_seconds=${SUITE_ELAPSED_SECONDS}"
+    echo "suite_elapsed_human=$(format_duration "${SUITE_ELAPSED_SECONDS}")"
     echo "script_exit_code=${SCRIPT_EXIT_CODE}"
     if (( SCRIPT_EXIT_CODE == 0 )); then
       echo "script_result=success"
@@ -1051,6 +1114,7 @@ write_suite_summary_file() {
     done
     echo "config_entry=device_id=${DEVICE_ID:-auto}"
     echo "config_entry=dry_run=${DRY_RUN}"
+    echo "config_entry=print_summary_json=${PRINT_SUMMARY_JSON}"
     echo "config_entry=flavor=${FLAVOR}"
     echo "config_entry=dart_define=$(format_dart_define_for_summary "${DART_DEFINE}")"
     echo "config_entry=test_timeout_seconds=${TEST_TIMEOUT_SECONDS}"
@@ -1078,6 +1142,9 @@ write_suite_summary_file() {
 
   SUMMARY_WRITTEN=1
   log "suite summary file: ${SUMMARY_FILE}"
+  if (( PRINT_SUMMARY_JSON == 1 )); then
+    print_suite_summary_json
+  fi
 }
 
 on_script_signal() {
