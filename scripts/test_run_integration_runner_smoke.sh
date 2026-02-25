@@ -91,10 +91,12 @@ bash "${RUNNER_SCRIPT}" \
   --artifact-dir "${SUCCESS_DIR}" \
   --summary-file "${SUCCESS_SUMMARY}" \
   --test integration_test/calendar_date_picker_flow_test.dart \
+  --test integration_test/calendar_date_picker_flow_test.dart \
   emulator-5554
 
 grep -q '^script_result=success$' "${SUCCESS_SUMMARY}"
 grep -q '^failed_tests_count=0$' "${SUCCESS_SUMMARY}"
+grep -q '^test_files_count=1$' "${SUCCESS_SUMMARY}"
 grep -q '^summary_entries_count=1$' "${SUCCESS_SUMMARY}"
 grep -q '^summary_entry=combined_suite(1 files): PASS in ' "${SUCCESS_SUMMARY}"
 

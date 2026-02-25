@@ -348,6 +348,27 @@ if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
   exit 2
 fi
 
+DEDUPED_TEST_FILES=()
+DUPLICATE_TEST_COUNT=0
+for test_file in "${TEST_FILES[@]}"; do
+  is_duplicate=0
+  for existing_test in "${DEDUPED_TEST_FILES[@]}"; do
+    if [[ "${existing_test}" == "${test_file}" ]]; then
+      is_duplicate=1
+      break
+    fi
+  done
+  if (( is_duplicate == 1 )); then
+    DUPLICATE_TEST_COUNT=$((DUPLICATE_TEST_COUNT + 1))
+    continue
+  fi
+  DEDUPED_TEST_FILES+=("${test_file}")
+done
+if (( DUPLICATE_TEST_COUNT > 0 )); then
+  log "deduplicated ${DUPLICATE_TEST_COUNT} duplicate test entries"
+fi
+TEST_FILES=("${DEDUPED_TEST_FILES[@]}")
+
 for test_file in "${TEST_FILES[@]}"; do
   if [[ ! -f "${test_file}" ]]; then
     echo "integration test file not found: ${test_file}" >&2
