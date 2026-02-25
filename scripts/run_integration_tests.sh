@@ -925,6 +925,19 @@ write_suite_summary_file() {
     for test_file in "${TEST_FILES[@]}"; do
       echo "test_file=${test_file}"
     done
+    echo "config_entry=device_id=${DEVICE_ID:-auto}"
+    echo "config_entry=flavor=${FLAVOR}"
+    echo "config_entry=dart_define=${DART_DEFINE}"
+    echo "config_entry=test_timeout_seconds=${TEST_TIMEOUT_SECONDS}"
+    echo "config_entry=test_case_timeout=${TEST_CASE_TIMEOUT:-unset}"
+    echo "config_entry=ignore_test_timeouts=${IGNORE_TEST_TIMEOUTS}"
+    echo "config_entry=pub_get_once=${PUB_GET_ONCE}"
+    echo "config_entry=skip_pub_get_once=${SKIP_PUB_GET_ONCE}"
+    echo "config_entry=timeout_recovery_reruns=${TIMEOUT_RECOVERY_RERUNS}"
+    echo "config_entry=device_recovery_enabled=${DEVICE_RECOVERY_ENABLED}"
+    echo "config_entry=device_recovery_retry_count=${DEVICE_RECOVERY_RETRY_COUNT}"
+    echo "config_entry=device_recovery_wait_seconds=${DEVICE_RECOVERY_WAIT_SECONDS}"
+    echo "config_entry=allow_emulator_reboot=${ALLOW_EMULATOR_REBOOT}"
     echo "summary_entries_count=${#TEST_RUN_SUMMARY[@]}"
     local summary_line
     for summary_line in "${TEST_RUN_SUMMARY[@]}"; do

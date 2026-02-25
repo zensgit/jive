@@ -63,6 +63,14 @@ if grep -q '^summary_entry=' "${SUMMARY_FILE}"; then
   echo ""
 fi
 
+if grep -q '^config_entry=' "${SUMMARY_FILE}"; then
+  echo "### Runtime config"
+  while IFS= read -r line; do
+    echo "- ${line#config_entry=}"
+  done < <(grep '^config_entry=' "${SUMMARY_FILE}")
+  echo ""
+fi
+
 if grep -q '^failed_test=' "${SUMMARY_FILE}"; then
   echo "### Failed tests"
   while IFS= read -r line; do

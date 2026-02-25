@@ -31,6 +31,8 @@ grep -q "summary is placeholder-only" "${PLACEHOLDER_OUT}"
 grep -q "\`unknown\` (exit \`999\`)" "${PLACEHOLDER_OUT}"
 
 cat >> "${SUMMARY_FILE}" <<'EOF'
+config_entry=device_id=emulator-5554
+config_entry=flavor=dev
 summary_entry=combined_suite(2 files): FAIL in 0m01s (1 attempts)
 failed_test=integration_test/transaction_search_flow_test.dart
 EOF
@@ -38,6 +40,8 @@ EOF
 REAL_OUT="${WORK_DIR}/real.out"
 bash "${RENDER_SCRIPT}" "${SUMMARY_FILE}" > "${REAL_OUT}"
 grep -q "### Test timing" "${REAL_OUT}"
+grep -q "### Runtime config" "${REAL_OUT}"
+grep -q "device_id=emulator-5554" "${REAL_OUT}"
 grep -q "### Failed tests" "${REAL_OUT}"
 grep -q "integration_test/transaction_search_flow_test.dart" "${REAL_OUT}"
 
