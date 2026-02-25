@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v20，2026-02-25）
+# CI 验证记录：并行开发 1+2（v21，2026-02-25）
 
 ## 1. 本地验证
 
@@ -230,6 +230,20 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，文档提交后的复验仍不可用。
 
+18. `22382836852`（head `957f1f8`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，首次重试复验仍不可用。
+
+19. `22382843780`（head `957f1f8`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，连续重试后仍未恢复可用预算。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -251,6 +265,8 @@
 - `22377470427`：failure（Actions budget 阻断，job 未启动）
 - `22379761651`：failure（Actions budget 阻断，job 未启动）
 - `22379833732`：failure（Actions budget 阻断，主 job 未启动）
+- `22382836852`：failure（Actions budget 阻断，主 job 未启动）
+- `22382843780`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -322,4 +338,4 @@
 - SDK 预装已与 `compileSdk` 对齐，兼容可选包安装失败场景并保持主链路稳定。
 - summary 渲染逻辑已抽离到 `scripts/render_integration_summary.sh`，占位与列表展示已完成本地回归。
 - summary 占位初始化与自检能力已抽离为独立脚本（`scripts/init_integration_summary_placeholder.sh`、`scripts/test_integration_summary_tools.sh`），并完成本地回归。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
