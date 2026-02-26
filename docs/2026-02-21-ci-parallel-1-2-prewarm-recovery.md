@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v37
+# CI 并行开发报告：1+2（Prewarm + Recovery）v38
 
 日期：2026-02-26
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`6df20bc78104269fb4e5fe5866c135967095bcd8`
-- 最新通过 Run：`22354318216`（后续二十三次 run 因 Actions budget 阻断）
+- 最新验证 Head：`ae89523e5a34896981207deb6c2f1742845ef918`
+- 最新通过 Run：`22354318216`（后续二十四次 run 因 Actions budget 阻断）
 
 ## 1. 本轮继续开发目标
 
@@ -260,6 +260,17 @@
   - 本地回归更新：`integration_summary_tools`/args/schema smoke 均补充版本字段与渲染断言。
 - 目的：建立可演进的摘要契约版本语义，并提升 CI 摘要对 JSON 输出的可观测性。
 
+26. `ci(e2e): initialize placeholder summary json alongside txt`（`ae89523`）
+- 文件：
+  - `scripts/init_integration_summary_placeholder.sh`
+  - `scripts/test_integration_summary_tools.sh`
+  - `.github/workflows/flutter_ci.yml`
+- 逻辑：
+  - 占位初始化脚本新增可选参数 `summary-json-file`，默认按 `suite-summary.txt -> suite-summary.json` 推导并写出占位 JSON。
+  - 占位摘要新增 `summary_schema_version`、`summary_generator_version`、`summary_json_file` config 字段。
+  - workflow 占位步骤显式传入 `suite-summary.json`，确保 emulator 未启动场景也有可消费 JSON。
+- 目的：消除启动前失败场景的 JSON 缺失，提升摘要渲染与下游消费的一致性。
+
 ## 3. 关键验证链路
 
 ### 3.1 优化基线
@@ -432,10 +443,10 @@
 
 ### 3.12 Actions budget 阻断记录
 
-- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）、run `22382843780`（head `957f1f8`）、run `22384016101`（head `10eac1a`）、run `22384084422`（head `46a36e0`）、run `22388584445`（head `9fdeb48`）、run `22388638142`（head `6248250`）、run `22391634299`（head `4f030ba`）、run `22391741600`（head `d9c5a75`）、run `22394058502`（head `545d51c`）、run `22394113804`（head `7c5bc55`）、run `22396318360`（head `c0ea763`）、run `22396554550`（head `479aaa5`）、run `22401367675`（head `2f19500`）、run `22401502483`（head `b2aa0b5`）、run `22401694121`（head `0d3b892`）、run `22402394776`（head `e828255`）、run `22424860242`（head `8f36d90`）与 run `22425027988`（head `6df20bc`）
+- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）、run `22382843780`（head `957f1f8`）、run `22384016101`（head `10eac1a`）、run `22384084422`（head `46a36e0`）、run `22388584445`（head `9fdeb48`）、run `22388638142`（head `6248250`）、run `22391634299`（head `4f030ba`）、run `22391741600`（head `d9c5a75`）、run `22394058502`（head `545d51c`）、run `22394113804`（head `7c5bc55`）、run `22396318360`（head `c0ea763`）、run `22396554550`（head `479aaa5`）、run `22401367675`（head `2f19500`）、run `22401502483`（head `b2aa0b5`）、run `22401694121`（head `0d3b892`）、run `22402394776`（head `e828255`）、run `22424860242`（head `8f36d90`）、run `22425027988`（head `6df20bc`）与 run `22426677104`（head `ae89523`）
 - 现象：
   - 前四次 run 中 `analyze_and_test` 与 `android_integration_test` 均在几秒内结束，job 未启动。
-  - 后十九次 run（`22379833732`、`22382836852`、`22382843780`、`22384016101`、`22384084422`、`22388584445`、`22388638142`、`22391634299`、`22391741600`、`22394058502`、`22394113804`、`22396318360`、`22396554550`、`22401367675`、`22401502483`、`22401694121`、`22402394776`、`22424860242`、`22425027988`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
+  - 后二十次 run（`22379833732`、`22382836852`、`22382843780`、`22384016101`、`22384084422`、`22388584445`、`22388638142`、`22391634299`、`22391741600`、`22394058502`、`22394113804`、`22396318360`、`22396554550`、`22401367675`、`22401502483`、`22401694121`、`22402394776`、`22424860242`、`22425027988`、`22426677104`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
 - 平台注解：
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：
@@ -454,10 +465,11 @@
 8. SDK 预装已与 `compileSdk` 对齐，并通过 optional 包容错降低版本漂移导致的阻断风险。
 9. summary 占位初始化与结构化列表展示已落地，且解析逻辑已去除 `mapfile` 依赖。
 10. summary 渲染、占位初始化与本地自检逻辑已抽离为独立脚本，提升了本地可验证性与维护性。
-11. 受 Actions budget 限制，最新二十三次 run 无法完成远端验证；待预算恢复后补远端验证即可。
+11. 受 Actions budget 限制，最新二十四次 run 无法完成远端验证；待预算恢复后补远端验证即可。
 12. `Raw summary` 已支持行数上限（默认 `200` 行）与截断提示，可通过 `SUMMARY_RAW_MAX_LINES` 按需调节。
 13. `run_integration_tests.sh` 已支持 `--dry-run` 快速验证路径，可在不依赖 emulator 的前提下完成参数与摘要链路回归。
 14. `run_integration_tests.sh` 已支持 `--print-summary-json` 与聚合参数校验，便于自动化脚本快速收敛配置问题。
 15. `run_integration_tests.sh` 已支持 `--summary-json-file` 并新增 JSON schema smoke，摘要输出契约可通过 helper 自检稳定回归。
 16. JSON 摘要已引入 `schema_version` 与 `generator_version`，Step Summary 也可直接渲染 JSON 元数据，便于版本演进期间保持可观测性。
-17. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
+17. placeholder 初始化阶段已可同步生成 JSON 摘要，启动前失败场景不再出现 JSON 缺失。
+18. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
