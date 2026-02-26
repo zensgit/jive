@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v35，2026-02-25）
+# CI 验证记录：并行开发 1+2（v36，2026-02-26）
 
 ## 1. 本地验证
 
@@ -103,6 +103,12 @@
   - 新增 `--print-summary-json` 后，脚本退出时可输出机器可解析 JSON 摘要（`jq` 校验通过）。
   - dry-run + summary-json 场景可写出 `config_entry=print_summary_json=1`，并在 stdout JSON 中包含 `summary_entries`。
   - 参数校验已改为聚合输出；多项错误会一次性返回（示例包含 `--retry`、`--timeout`、`FLUTTER_TEST_IGNORE_TIMEOUTS`、`pub-get-once`、缺失 test file）。
+
+23. `run_integration_tests.sh` summary-json-file 与 schema smoke 回归
+- 结果：通过，验证项：
+  - 新增 `--summary-json-file` / `FLUTTER_TEST_SUMMARY_JSON_FILE`，可稳定落盘 JSON 摘要文件。
+  - `scripts/test_run_integration_runner_summary_json_schema.sh` 校验 JSON 字段结构、类型与关键值（含脱敏与 dry-run）。
+  - 当同时启用 `--print-summary-json` + `--summary-json-file` 时，stdout JSON 与文件 JSON 一致（`cmp` 校验通过）。
 
 ## 2. 远端验证
 
@@ -392,6 +398,13 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，summary-json + 聚合校验增强提交后的复验仍不可用。
 
+34. `22424860242`（head `8f36d90`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，summary-json-file + schema smoke 增强提交后的复验仍不可用。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -429,6 +442,7 @@
 - `22401502483`：failure（Actions budget 阻断，主 job 未启动）
 - `22401694121`：failure（Actions budget 阻断，主 job 未启动）
 - `22402394776`：failure（Actions budget 阻断，主 job 未启动）
+- `22424860242`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -511,4 +525,5 @@
 - `render_integration_summary` 已支持 raw summary 行数上限（默认 200，可通过 `SUMMARY_RAW_MAX_LINES` 配置，0 表示不截断），并配套 limits smoke 回归。
 - `run_integration_tests.sh` 已支持 `--dry-run` 快速回归模式，可在预算受限时做参数/配置与 summary 落盘验证。
 - `run_integration_tests.sh` 已支持 `--print-summary-json`，并将参数校验升级为聚合错误输出，提升脚本可诊断性与自动化集成能力。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5`、`2f19500`、`b2aa0b5`、`0d3b892`、`e828255` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- `run_integration_tests.sh` 已支持 `--summary-json-file` 并新增 summary JSON schema smoke，提升对下游自动化消费的兼容性保障。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5`、`2f19500`、`b2aa0b5`、`0d3b892`、`e828255`、`8f36d90` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
