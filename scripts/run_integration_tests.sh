@@ -39,6 +39,8 @@ COMBINED_SUITE_MODE="${FLUTTER_TEST_COMBINED_SUITE_MODE:-0}"
 DRY_RUN="${FLUTTER_TEST_DRY_RUN:-0}"
 PRINT_SUMMARY_JSON="${FLUTTER_TEST_PRINT_SUMMARY_JSON:-0}"
 SUMMARY_JSON_FILE="${FLUTTER_TEST_SUMMARY_JSON_FILE:-}"
+SUMMARY_SCHEMA_VERSION="1"
+SUMMARY_GENERATOR_VERSION="run_integration_tests.sh@v1"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
@@ -250,6 +252,8 @@ log_effective_config() {
   log "  - artifacts_dir=${ARTIFACT_DIR}"
   log "  - summary_file=${SUMMARY_FILE}"
   log "  - summary_json_file=${SUMMARY_JSON_FILE:-unset}"
+  log "  - summary_schema_version=${SUMMARY_SCHEMA_VERSION}"
+  log "  - summary_generator_version=${SUMMARY_GENERATOR_VERSION}"
   log "  - test_files_count=${#TEST_FILES[@]}"
   local test_file
   for test_file in "${TEST_FILES[@]}"; do
@@ -288,6 +292,8 @@ print_suite_summary_json() {
   fi
 
   printf "{"
+  printf "\"schema_version\":%s," "${SUMMARY_SCHEMA_VERSION}"
+  printf "\"generator_version\":\"%s\"," "$(json_escape "${SUMMARY_GENERATOR_VERSION}")"
   printf "\"suite_started_at\":%s," "${SUITE_STARTED_AT}"
   printf "\"suite_finished_at\":%s," "${SUITE_FINISHED_AT}"
   printf "\"suite_elapsed_seconds\":%s," "${SUITE_ELAPSED_SECONDS}"
@@ -333,7 +339,9 @@ print_suite_summary_json() {
   printf "\"device_recovery_enabled\":\"%s\"," "$(json_escape "${DEVICE_RECOVERY_ENABLED}")"
   printf "\"device_recovery_retry_count\":\"%s\"," "$(json_escape "${DEVICE_RECOVERY_RETRY_COUNT}")"
   printf "\"device_recovery_wait_seconds\":\"%s\"," "$(json_escape "${DEVICE_RECOVERY_WAIT_SECONDS}")"
-  printf "\"allow_emulator_reboot\":\"%s\"" "$(json_escape "${ALLOW_EMULATOR_REBOOT}")"
+  printf "\"allow_emulator_reboot\":\"%s\"," "$(json_escape "${ALLOW_EMULATOR_REBOOT}")"
+  printf "\"summary_schema_version\":\"%s\"," "$(json_escape "${SUMMARY_SCHEMA_VERSION}")"
+  printf "\"summary_generator_version\":\"%s\"" "$(json_escape "${SUMMARY_GENERATOR_VERSION}")"
   printf "}}"
   printf "\n"
 }
@@ -1135,6 +1143,8 @@ write_suite_summary_file() {
     echo "config_entry=dry_run=${DRY_RUN}"
     echo "config_entry=print_summary_json=${PRINT_SUMMARY_JSON}"
     echo "config_entry=summary_json_file=${SUMMARY_JSON_FILE:-unset}"
+    echo "config_entry=summary_schema_version=${SUMMARY_SCHEMA_VERSION}"
+    echo "config_entry=summary_generator_version=${SUMMARY_GENERATOR_VERSION}"
     echo "config_entry=flavor=${FLAVOR}"
     echo "config_entry=dart_define=$(format_dart_define_for_summary "${DART_DEFINE}")"
     echo "config_entry=test_timeout_seconds=${TEST_TIMEOUT_SECONDS}"

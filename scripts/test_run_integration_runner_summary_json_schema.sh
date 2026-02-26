@@ -63,6 +63,8 @@ jq -e \
   --arg summary_json_file "${SUMMARY_JSON_FILE}" \
   --arg artifact_dir "${ARTIFACT_DIR}" \
   '
+  (.schema_version == 1) and
+  (.generator_version == "run_integration_tests.sh@v1") and
   (.suite_started_at | type == "number") and
   (.suite_finished_at | type == "number") and
   (.suite_elapsed_seconds | type == "number") and
@@ -84,10 +86,14 @@ jq -e \
   (.config | type == "object") and
   (.config.device_id == "emulator-5554") and
   (.config.flavor == "dev") and
-  (.config.dart_define == "API_TOKEN=<redacted>,JIVE_E2E=true")
+  (.config.dart_define == "API_TOKEN=<redacted>,JIVE_E2E=true") and
+  (.config.summary_schema_version == "1") and
+  (.config.summary_generator_version == "run_integration_tests.sh@v1")
   ' \
   "${SUMMARY_JSON_FILE}" >/dev/null
 
 grep -Fq "config_entry=summary_json_file=${SUMMARY_JSON_FILE}" "${SUMMARY_FILE}"
+grep -Fq "config_entry=summary_schema_version=1" "${SUMMARY_FILE}"
+grep -Fq "config_entry=summary_generator_version=run_integration_tests.sh@v1" "${SUMMARY_FILE}"
 
 echo "integration runner summary json schema smoke: OK"

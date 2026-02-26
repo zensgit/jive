@@ -2,7 +2,9 @@
 set -euo pipefail
 
 SUMMARY_FILE="${1:-}"
+SUMMARY_JSON_FILE="${2:-${SUMMARY_JSON_FILE:-}}"
 RAW_SUMMARY_MAX_LINES="${SUMMARY_RAW_MAX_LINES:-200}"
+JQ_BIN="$(command -v jq || true)"
 
 print_missing_summary() {
   echo "## Android integration summary"
@@ -23,13 +25,20 @@ extract_single() {
 }
 
 if [[ -z "${SUMMARY_FILE}" ]]; then
-  echo "usage: bash scripts/render_integration_summary.sh <suite-summary-file>" >&2
+  echo "usage: bash scripts/render_integration_summary.sh <suite-summary-file> [suite-summary-json-file]" >&2
   exit 2
 fi
 
 if [[ ! -f "${SUMMARY_FILE}" ]]; then
   print_missing_summary
   exit 0
+fi
+
+if [[ -z "${SUMMARY_JSON_FILE}" ]]; then
+  SUMMARY_JSON_CANDIDATE="${SUMMARY_FILE%.txt}.json"
+  if [[ "${SUMMARY_JSON_CANDIDATE}" != "${SUMMARY_FILE}" ]]; then
+    SUMMARY_JSON_FILE="${SUMMARY_JSON_CANDIDATE}"
+  fi
 fi
 
 if ! [[ "${RAW_SUMMARY_MAX_LINES}" =~ ^[0-9]+$ ]]; then
@@ -81,6 +90,27 @@ if grep -q '^failed_test=' "${SUMMARY_FILE}"; then
   while IFS= read -r line; do
     echo "- ${line#failed_test=}"
   done < <(grep '^failed_test=' "${SUMMARY_FILE}")
+  echo ""
+fi
+
+if [[ -n "${SUMMARY_JSON_FILE}" ]]; then
+  echo "### Summary JSON"
+  if [[ ! -f "${SUMMARY_JSON_FILE}" ]]; then
+    echo "- JSON summary file not found: \`${SUMMARY_JSON_FILE}\`"
+  elif [[ -z "${JQ_BIN}" ]]; then
+    echo "- JSON summary file: \`${SUMMARY_JSON_FILE}\`"
+    echo "- \`jq\` not found; skipping JSON field rendering."
+  else
+    JSON_SCHEMA_VERSION="$("${JQ_BIN}" -r '.schema_version // "unknown"' "${SUMMARY_JSON_FILE}" 2>/dev/null || echo "unknown")"
+    JSON_GENERATOR_VERSION="$("${JQ_BIN}" -r '.generator_version // "unknown"' "${SUMMARY_JSON_FILE}" 2>/dev/null || echo "unknown")"
+    JSON_DRY_RUN="$("${JQ_BIN}" -r '.dry_run // "unknown"' "${SUMMARY_JSON_FILE}" 2>/dev/null || echo "unknown")"
+    JSON_PRINT_SUMMARY="$("${JQ_BIN}" -r '.print_summary_json // "unknown"' "${SUMMARY_JSON_FILE}" 2>/dev/null || echo "unknown")"
+    echo "- JSON summary file: \`${SUMMARY_JSON_FILE}\`"
+    echo "- Schema version: \`${JSON_SCHEMA_VERSION}\`"
+    echo "- Generator version: \`${JSON_GENERATOR_VERSION}\`"
+    echo "- dry_run: \`${JSON_DRY_RUN}\`"
+    echo "- print_summary_json: \`${JSON_PRINT_SUMMARY}\`"
+  fi
   echo ""
 fi
 

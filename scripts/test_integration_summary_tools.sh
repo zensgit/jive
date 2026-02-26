@@ -16,6 +16,7 @@ WORK_DIR="$(mktemp -d /tmp/jive-summary-tools-test.XXXXXX)"
 trap 'rm -rf "${WORK_DIR}"' EXIT
 
 SUMMARY_FILE="${WORK_DIR}/suite-summary.txt"
+SUMMARY_JSON_FILE="${WORK_DIR}/suite-summary.json"
 ARTIFACTS_DIR="${WORK_DIR}/artifacts"
 
 bash "${INIT_SCRIPT}" "${SUMMARY_FILE}" "${ARTIFACTS_DIR}"
@@ -37,12 +38,19 @@ summary_entry=combined_suite(2 files): FAIL in 0m01s (1 attempts)
 failed_test=integration_test/transaction_search_flow_test.dart
 EOF
 
+cat > "${SUMMARY_JSON_FILE}" <<EOF
+{"schema_version":1,"generator_version":"run_integration_tests.sh@v1","dry_run":"0","print_summary_json":"0"}
+EOF
+
 REAL_OUT="${WORK_DIR}/real.out"
-bash "${RENDER_SCRIPT}" "${SUMMARY_FILE}" > "${REAL_OUT}"
+bash "${RENDER_SCRIPT}" "${SUMMARY_FILE}" "${SUMMARY_JSON_FILE}" > "${REAL_OUT}"
 grep -q "### Test timing" "${REAL_OUT}"
 grep -q "### Runtime config" "${REAL_OUT}"
 grep -q "device_id=emulator-5554" "${REAL_OUT}"
 grep -q "### Failed tests" "${REAL_OUT}"
 grep -q "integration_test/transaction_search_flow_test.dart" "${REAL_OUT}"
+grep -q "### Summary JSON" "${REAL_OUT}"
+grep -q "Schema version: \`1\`" "${REAL_OUT}"
+grep -q "Generator version: \`run_integration_tests.sh@v1\`" "${REAL_OUT}"
 
 echo "integration summary tools: OK"

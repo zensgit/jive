@@ -170,13 +170,17 @@ grep -Fq "script_result=success" "${DRY_RUN_SUMMARY}"
 grep -Fq "config_entry=dry_run=1" "${DRY_RUN_SUMMARY}"
 grep -Fq "config_entry=print_summary_json=1" "${DRY_RUN_SUMMARY}"
 grep -Fq "config_entry=summary_json_file=${DRY_RUN_SUMMARY_JSON}" "${DRY_RUN_SUMMARY}"
+grep -Fq "config_entry=summary_schema_version=1" "${DRY_RUN_SUMMARY}"
+grep -Fq "config_entry=summary_generator_version=run_integration_tests.sh@v1" "${DRY_RUN_SUMMARY}"
 grep -Fq "test_files_count=1" "${DRY_RUN_SUMMARY}"
 grep -Fq "summary_entry=dry_run(1 files): SKIPPED (validation only)" "${DRY_RUN_SUMMARY}"
 grep -Fq "config_entry=dart_define=API_TOKEN=<redacted>,JIVE_E2E=true" "${DRY_RUN_SUMMARY}"
+grep -Fq "\"schema_version\":1" "${DRY_RUN_STDOUT}"
+grep -Fq "\"generator_version\":\"run_integration_tests.sh@v1\"" "${DRY_RUN_STDOUT}"
 grep -Fq "\"script_result\":\"success\"" "${DRY_RUN_STDOUT}"
 grep -Fq "\"dry_run\":\"1\"" "${DRY_RUN_STDOUT}"
 grep -Fq "\"print_summary_json\":\"1\"" "${DRY_RUN_STDOUT}"
 grep -Fq "\"summary_entries\":[\"dry_run(1 files): SKIPPED (validation only)\"]" "${DRY_RUN_STDOUT}"
-jq -e '.summary_json_file == "'"${DRY_RUN_SUMMARY_JSON}"'" and .summary_file == "'"${DRY_RUN_SUMMARY}"'" and .script_result == "success"' "${DRY_RUN_SUMMARY_JSON}" >/dev/null
+jq -e '.summary_json_file == "'"${DRY_RUN_SUMMARY_JSON}"'" and .summary_file == "'"${DRY_RUN_SUMMARY}"'" and .script_result == "success" and .schema_version == 1 and .generator_version == "run_integration_tests.sh@v1"' "${DRY_RUN_SUMMARY_JSON}" >/dev/null
 
 echo "integration runner args smoke: OK"
