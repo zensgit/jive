@@ -24,6 +24,18 @@ extract_single() {
   echo "${value}"
 }
 
+extract_config_entry() {
+  local key="$1"
+  local fallback="${2:-}"
+  local value=""
+  value="$(grep "^config_entry=${key}=" "${SUMMARY_FILE}" | head -n 1 | sed "s/^config_entry=${key}=//" || true)"
+  if [[ -z "${value}" || "${value}" == "unset" ]]; then
+    echo "${fallback}"
+    return 0
+  fi
+  echo "${value}"
+}
+
 if [[ -z "${SUMMARY_FILE}" ]]; then
   echo "usage: bash scripts/render_integration_summary.sh <suite-summary-file> [suite-summary-json-file]" >&2
   exit 2
@@ -32,6 +44,10 @@ fi
 if [[ ! -f "${SUMMARY_FILE}" ]]; then
   print_missing_summary
   exit 0
+fi
+
+if [[ -z "${SUMMARY_JSON_FILE}" ]]; then
+  SUMMARY_JSON_FILE="$(extract_config_entry summary_json_file "")"
 fi
 
 if [[ -z "${SUMMARY_JSON_FILE}" ]]; then
@@ -100,6 +116,9 @@ if [[ -n "${SUMMARY_JSON_FILE}" ]]; then
   elif [[ -z "${JQ_BIN}" ]]; then
     echo "- JSON summary file: \`${SUMMARY_JSON_FILE}\`"
     echo "- \`jq\` not found; skipping JSON field rendering."
+  elif ! "${JQ_BIN}" -e . "${SUMMARY_JSON_FILE}" >/dev/null 2>&1; then
+    echo "- JSON summary file: \`${SUMMARY_JSON_FILE}\`"
+    echo "- invalid JSON content; skipping JSON field rendering."
   else
     JSON_SCHEMA_VERSION="$("${JQ_BIN}" -r '.schema_version // "unknown"' "${SUMMARY_JSON_FILE}" 2>/dev/null || echo "unknown")"
     JSON_GENERATOR_VERSION="$("${JQ_BIN}" -r '.generator_version // "unknown"' "${SUMMARY_JSON_FILE}" 2>/dev/null || echo "unknown")"

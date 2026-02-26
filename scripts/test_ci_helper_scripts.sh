@@ -8,6 +8,7 @@ CHECK_SCRIPTS=(
   "scripts/init_integration_summary_placeholder.sh"
   "scripts/render_integration_summary.sh"
   "scripts/test_render_integration_summary_limits.sh"
+  "scripts/test_render_integration_summary_json_fallback.sh"
   "scripts/run_integration_tests.sh"
   "scripts/test_integration_summary_tools.sh"
   "scripts/test_run_integration_runner_smoke.sh"
@@ -37,6 +38,7 @@ fi
 
 bash scripts/test_integration_summary_tools.sh
 bash scripts/test_render_integration_summary_limits.sh
+bash scripts/test_render_integration_summary_json_fallback.sh
 bash scripts/test_run_integration_runner_smoke.sh
 bash scripts/test_run_integration_runner_signal_smoke.sh
 bash scripts/test_run_integration_runner_args_smoke.sh
