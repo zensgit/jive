@@ -84,6 +84,10 @@ run_expect_exit2 "unknown_option" "unknown option: --does-not-exist" \
   --does-not-exist
 
 MULTI_INVALID_ERR="${WORK_DIR}/multi_invalid.stderr"
+MULTI_INVALID_OUT="${WORK_DIR}/multi_invalid.stdout"
+MULTI_INVALID_SUMMARY="${WORK_DIR}/multi-invalid-summary.txt"
+MULTI_INVALID_SUMMARY_JSON="${WORK_DIR}/multi-invalid-summary.json"
+MULTI_INVALID_ARTIFACT_DIR="${WORK_DIR}/multi-invalid-artifacts"
 set +e
 (
   cd "${ROOT_DIR}"
@@ -92,10 +96,14 @@ set +e
   FLUTTER_TEST_PUB_GET_ONCE=9 \
   bash "${RUNNER_SCRIPT}" \
     --dry-run \
+    --print-summary-json \
+    --summary-file "${MULTI_INVALID_SUMMARY}" \
+    --summary-json-file "${MULTI_INVALID_SUMMARY_JSON}" \
+    --artifact-dir "${MULTI_INVALID_ARTIFACT_DIR}" \
     --test integration_test/does_not_exist_smoke.dart \
     --retry invalid \
     emulator-5554
-) > /dev/null 2> "${MULTI_INVALID_ERR}"
+) > "${MULTI_INVALID_OUT}" 2> "${MULTI_INVALID_ERR}"
 MULTI_INVALID_RC=$?
 set -e
 
@@ -110,6 +118,31 @@ grep -Fq -- "--timeout must be a non-negative integer, got: bad" "${MULTI_INVALI
 grep -Fq "FLUTTER_TEST_IGNORE_TIMEOUTS must be 0 or 1, got: 9" "${MULTI_INVALID_ERR}"
 grep -Fq "pub-get-once flag must be 0 or 1, got: 9" "${MULTI_INVALID_ERR}"
 grep -Fq "integration test file not found: integration_test/does_not_exist_smoke.dart" "${MULTI_INVALID_ERR}"
+if [[ ! -f "${MULTI_INVALID_SUMMARY}" ]]; then
+  echo "expected validation failure summary file: ${MULTI_INVALID_SUMMARY}" >&2
+  exit 1
+fi
+if [[ ! -f "${MULTI_INVALID_SUMMARY_JSON}" ]]; then
+  echo "expected validation failure summary json file: ${MULTI_INVALID_SUMMARY_JSON}" >&2
+  exit 1
+fi
+grep -Fq "script_exit_code=2" "${MULTI_INVALID_SUMMARY}"
+grep -Fq "script_result=failure" "${MULTI_INVALID_SUMMARY}"
+grep -Fq "interrupted_reason=configuration_validation_failed" "${MULTI_INVALID_SUMMARY}"
+grep -Fq "summary_entry=validation_failed(5 errors): FAIL (preflight)" "${MULTI_INVALID_SUMMARY}"
+grep -Fq "validation_errors_count=5" "${MULTI_INVALID_SUMMARY}"
+grep -Fq "validation_error=--retry must be a non-negative integer, got: invalid" "${MULTI_INVALID_SUMMARY}"
+jq -e \
+  '
+  (.script_exit_code == 2) and
+  (.script_result == "failure") and
+  (.interrupted_reason == "configuration_validation_failed") and
+  (.validation_errors_count == 5) and
+  (.validation_errors | type == "array" and length == 5) and
+  (.summary_entries | type == "array" and .[0] == "validation_failed(5 errors): FAIL (preflight)")
+  ' \
+  "${MULTI_INVALID_SUMMARY_JSON}" >/dev/null
+tail -n 1 "${MULTI_INVALID_OUT}" | jq -e '.script_exit_code == 2 and .validation_errors_count == 5' >/dev/null
 
 LIST_OUTPUT="$(run_expect_success_with_output "list_defaults" --list)"
 if ! echo "${LIST_OUTPUT}" | grep -Fq "integration_test/calendar_date_picker_flow_test.dart"; then

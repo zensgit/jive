@@ -48,6 +48,7 @@ SUMMARY_FILE="${FLUTTER_TEST_SUMMARY_FILE:-}"
 SUITE_STARTED_AT="$(date +%s)"
 TEST_RUN_SUMMARY=()
 FAILED_TESTS=()
+VALIDATION_ERRORS=()
 SUMMARY_WRITTEN=0
 SCRIPT_EXIT_CODE=0
 INTERRUPTED_REASON=""
@@ -312,12 +313,15 @@ print_suite_summary_json() {
   printf "\"print_summary_json\":\"%s\"," "$(json_escape "${PRINT_SUMMARY_JSON}")"
   printf "\"test_files_count\":%s," "${#TEST_FILES[@]}"
   printf "\"failed_tests_count\":%s," "${#FAILED_TESTS[@]}"
+  printf "\"validation_errors_count\":%s," "${#VALIDATION_ERRORS[@]}"
   printf "\"test_files\":"
   json_array_from_args "${TEST_FILES[@]}"
   printf ",\"summary_entries\":"
   json_array_from_args "${TEST_RUN_SUMMARY[@]}"
   printf ",\"failed_tests\":"
   json_array_from_args "${FAILED_TESTS[@]}"
+  printf ",\"validation_errors\":"
+  json_array_from_args "${VALIDATION_ERRORS[@]}"
   printf ",\"artifacts_dir\":\"%s\"," "$(json_escape "${ARTIFACT_DIR}")"
   printf "\"summary_file\":\"%s\"," "$(json_escape "${SUMMARY_FILE}")"
   printf "\"summary_json_file\":"
@@ -508,8 +512,6 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-VALIDATION_ERRORS=()
-
 add_validation_error() {
   VALIDATION_ERRORS+=("$1")
 }
@@ -535,6 +537,8 @@ emit_validation_errors_and_exit() {
     return 0
   fi
 
+  INTERRUPTED_REASON="configuration_validation_failed"
+  TEST_RUN_SUMMARY=("validation_failed(${#VALIDATION_ERRORS[@]} errors): FAIL (preflight)")
   echo "configuration validation failed (${#VALIDATION_ERRORS[@]}):" >&2
   local validation_error
   for validation_error in "${VALIDATION_ERRORS[@]}"; do
@@ -592,29 +596,6 @@ done
 
 if [[ -z "${SUMMARY_FILE}" ]]; then
   SUMMARY_FILE="${ARTIFACT_DIR}/suite-summary.txt"
-fi
-
-emit_validation_errors_and_exit
-
-mkdir -p "${ARTIFACT_DIR}"
-
-TIMEOUT_BIN=""
-if command -v timeout >/dev/null 2>&1; then
-  TIMEOUT_BIN="timeout"
-elif command -v gtimeout >/dev/null 2>&1; then
-  TIMEOUT_BIN="gtimeout"
-else
-  if (( TEST_TIMEOUT_SECONDS > 0 )); then
-    log "timeout command not found; --timeout ignored"
-  fi
-  if (( ADB_TIMEOUT_SECONDS > 0 || DEVICE_RECOVERY_WAIT_SECONDS > 0 )); then
-    log "timeout command not found; adb timeout controls are best-effort only"
-  fi
-fi
-
-adb_args=()
-if [[ -n "${DEVICE_ID}" ]]; then
-  adb_args=(-s "${DEVICE_ID}")
 fi
 
 run_flutter_test() {
@@ -1167,6 +1148,11 @@ write_suite_summary_file() {
     for failed in "${FAILED_TESTS[@]}"; do
       echo "failed_test=${failed}"
     done
+    echo "validation_errors_count=${#VALIDATION_ERRORS[@]}"
+    local validation_error
+    for validation_error in "${VALIDATION_ERRORS[@]}"; do
+      echo "validation_error=${validation_error}"
+    done
     echo "artifacts_dir=${ARTIFACT_DIR}"
   } > "${SUMMARY_FILE}"
 
@@ -1200,6 +1186,29 @@ finalize_summary_on_exit() {
 trap 'on_script_signal SIGTERM 143' TERM
 trap 'on_script_signal SIGINT 130' INT
 trap 'finalize_summary_on_exit $?' EXIT
+
+emit_validation_errors_and_exit
+
+mkdir -p "${ARTIFACT_DIR}"
+
+TIMEOUT_BIN=""
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_BIN="gtimeout"
+else
+  if (( TEST_TIMEOUT_SECONDS > 0 )); then
+    log "timeout command not found; --timeout ignored"
+  fi
+  if (( ADB_TIMEOUT_SECONDS > 0 || DEVICE_RECOVERY_WAIT_SECONDS > 0 )); then
+    log "timeout command not found; adb timeout controls are best-effort only"
+  fi
+fi
+
+adb_args=()
+if [[ -n "${DEVICE_ID}" ]]; then
+  adb_args=(-s "${DEVICE_ID}")
+fi
 
 if (( DRY_RUN == 1 )); then
   log "dry-run mode enabled: validation only (skip flutter/adb execution)"
