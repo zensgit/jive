@@ -19,17 +19,27 @@ SUMMARY_FILE="${WORK_DIR}/suite-summary.txt"
 SUMMARY_JSON_FILE="${WORK_DIR}/suite-summary.json"
 ARTIFACTS_DIR="${WORK_DIR}/artifacts"
 
-bash "${INIT_SCRIPT}" "${SUMMARY_FILE}" "${ARTIFACTS_DIR}"
+bash "${INIT_SCRIPT}" "${SUMMARY_FILE}" "${ARTIFACTS_DIR}" "${SUMMARY_JSON_FILE}"
 
 grep -q '^script_result=unknown$' "${SUMMARY_FILE}"
 grep -q '^script_exit_code=999$' "${SUMMARY_FILE}"
 grep -q '^interrupted_reason=not_started_or_emulator_boot_failure$' "${SUMMARY_FILE}"
 grep -q "^artifacts_dir=${ARTIFACTS_DIR}$" "${SUMMARY_FILE}"
+grep -q "^config_entry=summary_schema_version=1$" "${SUMMARY_FILE}"
+grep -q "^config_entry=summary_generator_version=init_integration_summary_placeholder.sh@v1$" "${SUMMARY_FILE}"
+grep -q "^config_entry=summary_json_file=${SUMMARY_JSON_FILE}$" "${SUMMARY_FILE}"
+if [[ ! -f "${SUMMARY_JSON_FILE}" ]]; then
+  echo "expected placeholder summary json file: ${SUMMARY_JSON_FILE}" >&2
+  exit 1
+fi
 
 PLACEHOLDER_OUT="${WORK_DIR}/placeholder.out"
-bash "${RENDER_SCRIPT}" "${SUMMARY_FILE}" > "${PLACEHOLDER_OUT}"
+bash "${RENDER_SCRIPT}" "${SUMMARY_FILE}" "${SUMMARY_JSON_FILE}" > "${PLACEHOLDER_OUT}"
 grep -q "summary is placeholder-only" "${PLACEHOLDER_OUT}"
 grep -q "\`unknown\` (exit \`999\`)" "${PLACEHOLDER_OUT}"
+grep -q "### Summary JSON" "${PLACEHOLDER_OUT}"
+grep -q "Schema version: \`1\`" "${PLACEHOLDER_OUT}"
+grep -q "Generator version: \`init_integration_summary_placeholder.sh@v1\`" "${PLACEHOLDER_OUT}"
 
 cat >> "${SUMMARY_FILE}" <<'EOF'
 config_entry=device_id=emulator-5554

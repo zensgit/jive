@@ -169,7 +169,8 @@ jobs:
           chmod +x scripts/init_integration_summary_placeholder.sh scripts/render_integration_summary.sh
           bash scripts/init_integration_summary_placeholder.sh \
             "${{ runner.temp }}/jive-integration/suite-summary.txt" \
-            "${{ runner.temp }}/jive-integration"
+            "${{ runner.temp }}/jive-integration" \
+            "${{ runner.temp }}/jive-integration/suite-summary.json"
 
       - name: Prewarm Android build toolchain
         run: |
