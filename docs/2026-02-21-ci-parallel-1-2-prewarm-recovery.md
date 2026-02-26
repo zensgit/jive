@@ -1,12 +1,12 @@
-# CI 并行开发报告：1+2（Prewarm + Recovery）v40
+# CI 并行开发报告：1+2（Prewarm + Recovery）v41
 
 日期：2026-02-26
 
 - 仓库：`Jive`
 - 分支：`codex/next-batch-stability-core-v3`
 - PR：`https://github.com/zensgit/jive/pull/50`
-- 最新验证 Head：`c44f8606a8f30da095873b91f56cc826fa45285a`
-- 最新通过 Run：`22354318216`（后续二十六次 run 因 Actions budget 阻断）
+- 最新验证 Head：`a9862dabbf5c1f12646b863179d83104a2042fd8`
+- 最新通过 Run：`22354318216`（后续二十七次 run 因 Actions budget 阻断）
 
 ## 1. 本轮继续开发目标
 
@@ -282,6 +282,16 @@
   - 新增 `test_render_integration_summary_json_fallback.sh` 并接入统一 helper 自检入口。
 - 目的：提升 Step Summary 渲染对 JSON 缺失/损坏场景的可诊断性，降低排障成本。
 
+28. `ci(e2e): persist validation-failure summary output`（`a9862da`）
+- 文件：
+  - `scripts/run_integration_tests.sh`
+  - `scripts/test_run_integration_runner_args_smoke.sh`
+- 逻辑：
+  - 参数校验失败路径（exit `2`）改为经由统一退出收尾写摘要，确保仍生成 `suite-summary.txt` / `suite-summary.json`。
+  - 摘要增加 `validation_errors_count` 与 `validation_errors` 字段，并在文本摘要中写入 `validation_error=*` 明细。
+  - args smoke 新增断言：校验失败时也能产出 txt/json 摘要，并包含 `configuration_validation_failed` 标记与结构化错误列表。
+- 目的：让 preflight 配置错误在预算受限场景下也具备稳定可观测性与机器可消费性。
+
 ## 3. 关键验证链路
 
 ### 3.1 优化基线
@@ -454,10 +464,10 @@
 
 ### 3.12 Actions budget 阻断记录
 
-- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）、run `22382843780`（head `957f1f8`）、run `22384016101`（head `10eac1a`）、run `22384084422`（head `46a36e0`）、run `22388584445`（head `9fdeb48`）、run `22388638142`（head `6248250`）、run `22391634299`（head `4f030ba`）、run `22391741600`（head `d9c5a75`）、run `22394058502`（head `545d51c`）、run `22394113804`（head `7c5bc55`）、run `22396318360`（head `c0ea763`）、run `22396554550`（head `479aaa5`）、run `22401367675`（head `2f19500`）、run `22401502483`（head `b2aa0b5`）、run `22401694121`（head `0d3b892`）、run `22402394776`（head `e828255`）、run `22424860242`（head `8f36d90`）、run `22425027988`（head `6df20bc`）、run `22426677104`（head `ae89523`）、run `22428255458`（head `2abeb94`）与 run `22428337135`（head `c44f860`）
+- run `22377190762`（head `9c7f369`）、run `22377246231`（head `5c79ad2`）、run `22377470427`（head `44df02a`）、run `22379761651`（head `73f422b`）、run `22379833732`（head `f906d26`）、run `22382836852`（head `957f1f8`）、run `22382843780`（head `957f1f8`）、run `22384016101`（head `10eac1a`）、run `22384084422`（head `46a36e0`）、run `22388584445`（head `9fdeb48`）、run `22388638142`（head `6248250`）、run `22391634299`（head `4f030ba`）、run `22391741600`（head `d9c5a75`）、run `22394058502`（head `545d51c`）、run `22394113804`（head `7c5bc55`）、run `22396318360`（head `c0ea763`）、run `22396554550`（head `479aaa5`）、run `22401367675`（head `2f19500`）、run `22401502483`（head `b2aa0b5`）、run `22401694121`（head `0d3b892`）、run `22402394776`（head `e828255`）、run `22424860242`（head `8f36d90`）、run `22425027988`（head `6df20bc`）、run `22426677104`（head `ae89523`）、run `22428255458`（head `2abeb94`）、run `22428337135`（head `c44f860`）与 run `22428445676`（head `a9862da`）
 - 现象：
   - 前四次 run 中 `analyze_and_test` 与 `android_integration_test` 均在几秒内结束，job 未启动。
-  - 后二十二次 run（`22379833732`、`22382836852`、`22382843780`、`22384016101`、`22384084422`、`22388584445`、`22388638142`、`22391634299`、`22391741600`、`22394058502`、`22394113804`、`22396318360`、`22396554550`、`22401367675`、`22401502483`、`22401694121`、`22402394776`、`22424860242`、`22425027988`、`22426677104`、`22428255458`、`22428337135`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
+  - 后二十三次 run（`22379833732`、`22382836852`、`22382843780`、`22384016101`、`22384084422`、`22388584445`、`22388638142`、`22391634299`、`22391741600`、`22394058502`、`22394113804`、`22396318360`、`22396554550`、`22401367675`、`22401502483`、`22401694121`、`22402394776`、`22424860242`、`22425027988`、`22426677104`、`22428255458`、`22428337135`、`22428445676`）均表现为 `analyze_and_test` 因预算阻断失败，`android_integration_test` 因依赖失败被跳过。
 - 平台注解：
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：
@@ -476,7 +486,7 @@
 8. SDK 预装已与 `compileSdk` 对齐，并通过 optional 包容错降低版本漂移导致的阻断风险。
 9. summary 占位初始化与结构化列表展示已落地，且解析逻辑已去除 `mapfile` 依赖。
 10. summary 渲染、占位初始化与本地自检逻辑已抽离为独立脚本，提升了本地可验证性与维护性。
-11. 受 Actions budget 限制，最新二十六次 run 无法完成远端验证；待预算恢复后补远端验证即可。
+11. 受 Actions budget 限制，最新二十七次 run 无法完成远端验证；待预算恢复后补远端验证即可。
 12. `Raw summary` 已支持行数上限（默认 `200` 行）与截断提示，可通过 `SUMMARY_RAW_MAX_LINES` 按需调节。
 13. `run_integration_tests.sh` 已支持 `--dry-run` 快速验证路径，可在不依赖 emulator 的前提下完成参数与摘要链路回归。
 14. `run_integration_tests.sh` 已支持 `--print-summary-json` 与聚合参数校验，便于自动化脚本快速收敛配置问题。
@@ -485,3 +495,4 @@
 17. placeholder 初始化阶段已可同步生成 JSON 摘要，启动前失败场景不再出现 JSON 缺失。
 18. 下一步优化应在稳定 runner 框架内进行（例如缩短 `Run Android integration_test` 主段业务执行时长），避免高风险替换启动栈。
 19. summary 渲染器已支持从 `config_entry=summary_json_file` 自动回落定位 JSON，并在无效 JSON 场景输出显式诊断，提升摘要链路可观测性。
+20. 参数校验失败路径已可稳定落盘 txt/json 摘要，并输出结构化 `validation_errors`，提升 preflight 失败的自动化集成与排障效率。

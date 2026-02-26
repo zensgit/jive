@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v40，2026-02-26）
+# CI 验证记录：并行开发 1+2（v41，2026-02-26）
 
 ## 1. 本地验证
 
@@ -127,6 +127,12 @@
   - 未显式传入 JSON 路径时，可从 `config_entry=summary_json_file=*` 自动回落定位摘要 JSON。
   - JSON 文件内容无效时，会输出 `invalid JSON content; skipping JSON field rendering.` 提示并继续渲染其余摘要。
   - JSON 文件缺失时，会输出 `summary JSON file not found` 提示，不影响主摘要渲染。
+
+27. `run_integration_tests.sh` 参数校验失败摘要落盘回归
+- 结果：通过，验证项：
+  - 参数校验失败（exit `2`）时，仍会写出 `suite-summary.txt` 与 `suite-summary.json`。
+  - 摘要包含 `interrupted_reason=configuration_validation_failed`、`summary_entry=validation_failed(...): FAIL (preflight)`。
+  - JSON 摘要新增 `validation_errors_count` 与 `validation_errors`，可被 `jq` 结构化消费。
 
 ## 2. 远端验证
 
@@ -451,6 +457,13 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，v39 文档提交后的复验仍不可用。
 
+39. `22428445676`（head `a9862da`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，参数校验失败摘要落盘增强提交后的复验仍不可用。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -493,6 +506,7 @@
 - `22426677104`：failure（Actions budget 阻断，主 job 未启动）
 - `22428255458`：failure（Actions budget 阻断，主 job 未启动）
 - `22428337135`：failure（Actions budget 阻断，主 job 未启动）
+- `22428445676`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -579,4 +593,5 @@
 - `run_integration_tests.sh` JSON 摘要已加入 schema/generator version 字段，`render_integration_summary.sh` 也可直接消费 JSON 并展示元数据。
 - `init_integration_summary_placeholder.sh` 已可同步生成占位 JSON 摘要，确保启动失败场景下的 JSON 可观测性与渲染一致性。
 - `render_integration_summary.sh` 已支持从 `config_entry=summary_json_file` 自动回落定位 JSON，并可对无效 JSON 输出显式诊断，降低摘要渲染静默降级风险。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5`、`2f19500`、`b2aa0b5`、`0d3b892`、`e828255`、`8f36d90`、`6df20bc`、`ae89523`、`2abeb94`、`c44f860` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- `run_integration_tests.sh` 已支持在参数校验失败时落盘 txt/json 摘要，并输出结构化 `validation_errors`，提升 preflight 错误的自动化消费能力。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5`、`2f19500`、`b2aa0b5`、`0d3b892`、`e828255`、`8f36d90`、`6df20bc`、`ae89523`、`2abeb94`、`c44f860`、`a9862da` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
