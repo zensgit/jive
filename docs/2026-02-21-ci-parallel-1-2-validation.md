@@ -1,4 +1,4 @@
-# CI 验证记录：并行开发 1+2（v38，2026-02-26）
+# CI 验证记录：并行开发 1+2（v39，2026-02-26）
 
 ## 1. 本地验证
 
@@ -121,6 +121,12 @@
   - `scripts/init_integration_summary_placeholder.sh` 可在初始化 `suite-summary.txt` 时同步写出 `suite-summary.json`。
   - 占位摘要包含 `summary_schema_version=1`、`summary_generator_version=init_integration_summary_placeholder.sh@v1`、`summary_json_file=*`。
   - `render_integration_summary.sh` 在 placeholder 场景可直接渲染 `### Summary JSON`，不再出现 JSON 文件缺失提示。
+
+26. `render_integration_summary` summary-json-file 回落与无效 JSON 处理回归
+- 结果：通过，验证项：
+  - 未显式传入 JSON 路径时，可从 `config_entry=summary_json_file=*` 自动回落定位摘要 JSON。
+  - JSON 文件内容无效时，会输出 `invalid JSON content; skipping JSON field rendering.` 提示并继续渲染其余摘要。
+  - JSON 文件缺失时，会输出 `summary JSON file not found` 提示，不影响主摘要渲染。
 
 ## 2. 远端验证
 
@@ -431,6 +437,13 @@
   - `The job was not started because an Actions budget is preventing further use.`
 - 结论：预算限制仍在，placeholder summary JSON 初始化增强提交后的复验仍不可用。
 
+37. `22428255458`（head `2abeb94`）
+- `analyze_and_test`：failure（job 未启动）
+- `android_integration_test`：skipped（依赖前置 job）
+- 注解：
+  - `The job was not started because an Actions budget is preventing further use.`
+- 结论：预算限制仍在，summary JSON 回落与无效 JSON 诊断增强提交后的复验仍不可用。
+
 ## 3. 对比观察
 
 - `22306626056`：`suite elapsed 9m04s`
@@ -471,6 +484,7 @@
 - `22424860242`：failure（Actions budget 阻断，主 job 未启动）
 - `22425027988`：failure（Actions budget 阻断，主 job 未启动）
 - `22426677104`：failure（Actions budget 阻断，主 job 未启动）
+- `22428255458`：failure（Actions budget 阻断，主 job 未启动）
 
 `22312570907` 步骤耗时分解：
 - `Pre-install Android SDK components`：`38s`
@@ -556,4 +570,5 @@
 - `run_integration_tests.sh` 已支持 `--summary-json-file` 并新增 summary JSON schema smoke，提升对下游自动化消费的兼容性保障。
 - `run_integration_tests.sh` JSON 摘要已加入 schema/generator version 字段，`render_integration_summary.sh` 也可直接消费 JSON 并展示元数据。
 - `init_integration_summary_placeholder.sh` 已可同步生成占位 JSON 摘要，确保启动失败场景下的 JSON 可观测性与渲染一致性。
-- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5`、`2f19500`、`b2aa0b5`、`0d3b892`、`e828255`、`8f36d90`、`6df20bc`、`ae89523` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
+- `render_integration_summary.sh` 已支持从 `config_entry=summary_json_file` 自动回落定位 JSON，并可对无效 JSON 输出显式诊断，降低摘要渲染静默降级风险。
+- 受平台 Actions budget 限制，`9c7f369`、`5c79ad2`、`44df02a`、`73f422b`、`f906d26`、`957f1f8`、`10eac1a`、`46a36e0`、`9fdeb48`、`6248250`、`4f030ba`、`d9c5a75`、`545d51c`、`7c5bc55`、`c0ea763`、`479aaa5`、`2f19500`、`b2aa0b5`、`0d3b892`、`e828255`、`8f36d90`、`6df20bc`、`ae89523`、`2abeb94` 的远端复验均未完整启动；待预算恢复后补一轮绿跑即可完成远端闭环。
