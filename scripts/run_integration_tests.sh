@@ -38,6 +38,7 @@ SKIP_PUB_GET_ONCE="${FLUTTER_TEST_SKIP_PUB_GET:-0}"
 COMBINED_SUITE_MODE="${FLUTTER_TEST_COMBINED_SUITE_MODE:-0}"
 DRY_RUN="${FLUTTER_TEST_DRY_RUN:-0}"
 PRINT_SUMMARY_JSON="${FLUTTER_TEST_PRINT_SUMMARY_JSON:-0}"
+SUMMARY_JSON_FILE="${FLUTTER_TEST_SUMMARY_JSON_FILE:-}"
 COLLECT_ON_FAIL=1
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_DIR="${FLUTTER_TEST_ARTIFACT_DIR:-/tmp/jive-integration-${STAMP}}"
@@ -86,6 +87,8 @@ Options:
                          Rerun same attempt on timeout/termination up to <count> times. Default: 0.
   --artifact-dir <path>  Directory to store test logs/artifacts.
   --summary-file <path>  Path to write suite summary file. Default: <artifact-dir>/suite-summary.txt.
+  --summary-json-file <path>
+                         Path to write machine-readable JSON summary. Optional.
   --dry-run              Validate inputs/config, write summary, and exit without running flutter/adb.
   --print-summary-json   Print machine-readable JSON summary to stdout at exit.
   --no-collect-on-fail   Disable adb artifact collection on failure.
@@ -106,6 +109,7 @@ Env:
   FLUTTER_TEST_COMBINED_SUITE_MODE
   FLUTTER_TEST_DRY_RUN
   FLUTTER_TEST_PRINT_SUMMARY_JSON
+  FLUTTER_TEST_SUMMARY_JSON_FILE
   FLUTTER_ADB_TIMEOUT_SECONDS
   FLUTTER_DEVICE_RECOVERY_ENABLED
   FLUTTER_DEVICE_RECOVERY_RETRY_COUNT
@@ -245,6 +249,7 @@ log_effective_config() {
   log "  - allow_emulator_reboot=${ALLOW_EMULATOR_REBOOT}"
   log "  - artifacts_dir=${ARTIFACT_DIR}"
   log "  - summary_file=${SUMMARY_FILE}"
+  log "  - summary_json_file=${SUMMARY_JSON_FILE:-unset}"
   log "  - test_files_count=${#TEST_FILES[@]}"
   local test_file
   for test_file in "${TEST_FILES[@]}"; do
@@ -309,6 +314,12 @@ print_suite_summary_json() {
   json_array_from_args "${FAILED_TESTS[@]}"
   printf ",\"artifacts_dir\":\"%s\"," "$(json_escape "${ARTIFACT_DIR}")"
   printf "\"summary_file\":\"%s\"," "$(json_escape "${SUMMARY_FILE}")"
+  printf "\"summary_json_file\":"
+  if [[ -n "${SUMMARY_JSON_FILE}" ]]; then
+    printf "\"%s\"," "$(json_escape "${SUMMARY_JSON_FILE}")"
+  else
+    printf "null,"
+  fi
   printf "\"config\":{"
   printf "\"device_id\":\"%s\"," "$(json_escape "${DEVICE_ID:-auto}")"
   printf "\"flavor\":\"%s\"," "$(json_escape "${FLAVOR}")"
@@ -372,6 +383,14 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       SUMMARY_FILE="$1"
+      ;;
+    --summary-json-file)
+      shift
+      if [[ $# -eq 0 ]]; then
+        echo "missing value for --summary-json-file" >&2
+        exit 2
+      fi
+      SUMMARY_JSON_FILE="$1"
       ;;
     --dry-run)
       DRY_RUN=1
@@ -1115,6 +1134,7 @@ write_suite_summary_file() {
     echo "config_entry=device_id=${DEVICE_ID:-auto}"
     echo "config_entry=dry_run=${DRY_RUN}"
     echo "config_entry=print_summary_json=${PRINT_SUMMARY_JSON}"
+    echo "config_entry=summary_json_file=${SUMMARY_JSON_FILE:-unset}"
     echo "config_entry=flavor=${FLAVOR}"
     echo "config_entry=dart_define=$(format_dart_define_for_summary "${DART_DEFINE}")"
     echo "config_entry=test_timeout_seconds=${TEST_TIMEOUT_SECONDS}"
@@ -1142,6 +1162,11 @@ write_suite_summary_file() {
 
   SUMMARY_WRITTEN=1
   log "suite summary file: ${SUMMARY_FILE}"
+  if [[ -n "${SUMMARY_JSON_FILE}" ]]; then
+    mkdir -p "$(dirname "${SUMMARY_JSON_FILE}")"
+    print_suite_summary_json > "${SUMMARY_JSON_FILE}"
+    log "suite summary json file: ${SUMMARY_JSON_FILE}"
+  fi
   if (( PRINT_SUMMARY_JSON == 1 )); then
     print_suite_summary_json
   fi

@@ -73,6 +73,9 @@ run_expect_exit2 "missing_test_value" "missing value for --test" \
 run_expect_exit2 "missing_retry_value" "missing value for --retry" \
   --retry
 
+run_expect_exit2 "missing_summary_json_file_value" "missing value for --summary-json-file" \
+  --summary-json-file
+
 run_expect_exit2 "missing_test_file" "integration test file not found" \
   --test integration_test/does_not_exist_smoke.dart \
   emulator-5554
@@ -119,6 +122,7 @@ if ! echo "${LIST_OUTPUT}" | grep -Fq "integration_test/transaction_search_flow_
 fi
 
 DRY_RUN_SUMMARY="${WORK_DIR}/dry-run-summary.txt"
+DRY_RUN_SUMMARY_JSON="${WORK_DIR}/dry-run-summary.json"
 DRY_RUN_ARTIFACT_DIR="${WORK_DIR}/dry-run-artifacts"
 DRY_RUN_STDOUT="${WORK_DIR}/dry-run.stdout"
 DRY_RUN_STDERR="${WORK_DIR}/dry-run.stderr"
@@ -132,6 +136,7 @@ set +e
     --test integration_test/calendar_date_picker_flow_test.dart \
     --test integration_test/calendar_date_picker_flow_test.dart \
     --summary-file "${DRY_RUN_SUMMARY}" \
+    --summary-json-file "${DRY_RUN_SUMMARY_JSON}" \
     --artifact-dir "${DRY_RUN_ARTIFACT_DIR}" \
     emulator-5554
 ) > "${DRY_RUN_STDOUT}" 2> "${DRY_RUN_STDERR}"
@@ -157,9 +162,14 @@ if [[ ! -f "${DRY_RUN_SUMMARY}" ]]; then
   echo "expected dry-run summary file: ${DRY_RUN_SUMMARY}" >&2
   exit 1
 fi
+if [[ ! -f "${DRY_RUN_SUMMARY_JSON}" ]]; then
+  echo "expected dry-run summary json file: ${DRY_RUN_SUMMARY_JSON}" >&2
+  exit 1
+fi
 grep -Fq "script_result=success" "${DRY_RUN_SUMMARY}"
 grep -Fq "config_entry=dry_run=1" "${DRY_RUN_SUMMARY}"
 grep -Fq "config_entry=print_summary_json=1" "${DRY_RUN_SUMMARY}"
+grep -Fq "config_entry=summary_json_file=${DRY_RUN_SUMMARY_JSON}" "${DRY_RUN_SUMMARY}"
 grep -Fq "test_files_count=1" "${DRY_RUN_SUMMARY}"
 grep -Fq "summary_entry=dry_run(1 files): SKIPPED (validation only)" "${DRY_RUN_SUMMARY}"
 grep -Fq "config_entry=dart_define=API_TOKEN=<redacted>,JIVE_E2E=true" "${DRY_RUN_SUMMARY}"
@@ -167,5 +177,6 @@ grep -Fq "\"script_result\":\"success\"" "${DRY_RUN_STDOUT}"
 grep -Fq "\"dry_run\":\"1\"" "${DRY_RUN_STDOUT}"
 grep -Fq "\"print_summary_json\":\"1\"" "${DRY_RUN_STDOUT}"
 grep -Fq "\"summary_entries\":[\"dry_run(1 files): SKIPPED (validation only)\"]" "${DRY_RUN_STDOUT}"
+jq -e '.summary_json_file == "'"${DRY_RUN_SUMMARY_JSON}"'" and .summary_file == "'"${DRY_RUN_SUMMARY}"'" and .script_result == "success"' "${DRY_RUN_SUMMARY_JSON}" >/dev/null
 
 echo "integration runner args smoke: OK"

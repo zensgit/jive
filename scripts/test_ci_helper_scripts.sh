@@ -13,6 +13,7 @@ CHECK_SCRIPTS=(
   "scripts/test_run_integration_runner_smoke.sh"
   "scripts/test_run_integration_runner_signal_smoke.sh"
   "scripts/test_run_integration_runner_args_smoke.sh"
+  "scripts/test_run_integration_runner_summary_json_schema.sh"
 )
 
 for script_path in "${CHECK_SCRIPTS[@]}"; do
@@ -39,5 +40,6 @@ bash scripts/test_render_integration_summary_limits.sh
 bash scripts/test_run_integration_runner_smoke.sh
 bash scripts/test_run_integration_runner_signal_smoke.sh
 bash scripts/test_run_integration_runner_args_smoke.sh
+bash scripts/test_run_integration_runner_summary_json_schema.sh
 
 echo "ci helper scripts: OK"
