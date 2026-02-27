@@ -5,11 +5,13 @@ import 'package:path_provider/path_provider.dart';
 
 import '../database/account_model.dart';
 import '../database/auto_draft_model.dart';
+import '../database/bill_relation_model.dart';
 import '../database/budget_model.dart';
 import '../database/category_model.dart';
 import '../database/currency_model.dart';
 import '../database/import_job_model.dart';
 import '../database/import_job_record_model.dart';
+import '../database/installment_model.dart';
 import '../database/project_model.dart';
 import '../database/recurring_rule_model.dart';
 import '../database/tag_conversion_log.dart';
@@ -30,8 +32,10 @@ class DatabaseService {
     JiveCategoryOverrideSchema,
     JiveAccountSchema,
     JiveAutoDraftSchema,
+    JiveBillRelationSchema,
     JiveImportJobSchema,
     JiveImportJobRecordSchema,
+    JiveInstallmentSchema,
     JiveBudgetSchema,
     JiveBudgetUsageSchema,
     JiveTemplateSchema,
