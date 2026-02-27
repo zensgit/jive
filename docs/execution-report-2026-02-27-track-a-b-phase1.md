@@ -47,9 +47,26 @@
 1. `flutter test test/installment_reimbursement_service_test.dart` -> Passed  
 2. `flutter test test/budget_service_test.dart` -> Passed
 
+## 5) 第二批补充（可见入口）
+- 新增页面：`/Users/huazhou/Downloads/Github/Jive/app-next-batch/lib/feature/installment/installment_manage_screen.dart`
+  - 分期列表
+  - 新建分期（MVP 表单）
+  - 执行到期分期
+  - 提前结清
+- 新增页面：`/Users/huazhou/Downloads/Github/Jive/app-next-batch/lib/feature/transactions/reimbursement_lab_screen.dart`
+  - 最近账单列表
+  - 快速创建报销/退款
+  - 关联汇总展示（报销/退款笔数与金额）
+- 设置页入口接入：`/Users/huazhou/Downloads/Github/Jive/app-next-batch/lib/feature/settings/settings_screen.dart`
+  - 分期管理（MVP）
+  - 报销退款工作台（MVP）
+
+第二批验证：
+1. `flutter test test/installment_reimbursement_service_test.dart` -> Passed  
+2. `flutter test test/widget_test.dart` -> Passed
+
 ## 下一步（建议）
 
 1. 轨道 A 第二期：分期 UI（创建向导/详情页）与提前还款规则。  
 2. 轨道 B 第二期：交易详情页展示“关联报销/退款”时间线与操作入口。  
 3. 口径联动：统计页新增“支出（含退款）/报销净额”指标。  
-
