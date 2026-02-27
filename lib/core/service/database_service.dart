@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../database/account_model.dart';
 import '../database/auto_draft_model.dart';
+import '../database/bill_relation_model.dart';
 import '../database/budget_model.dart';
 import '../database/category_model.dart';
 import '../database/currency_model.dart';
@@ -39,8 +40,10 @@ class DatabaseService {
     JiveCategoryOverrideSchema,
     JiveAccountSchema,
     JiveAutoDraftSchema,
+    JiveBillRelationSchema,
     JiveImportJobSchema,
     JiveImportJobRecordSchema,
+    JiveInstallmentSchema,
     JiveBudgetSchema,
     JiveBudgetUsageSchema,
     JiveTemplateSchema,
