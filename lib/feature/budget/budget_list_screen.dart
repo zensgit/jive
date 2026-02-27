@@ -156,6 +156,107 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
     unawaited(_openBudgetExclude());
   }
 
+  Future<DateTime?> _pickMonth({
+    required String title,
+    required DateTime initialMonth,
+  }) async {
+    DateTime? picked;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: false,
+      backgroundColor: JiveTheme.cardColor(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return _BudgetMonthPickerSheet(
+          title: title,
+          initialMonth: initialMonth,
+          onPick: (month) {
+            picked = month;
+            Navigator.pop(ctx);
+          },
+        );
+      },
+    );
+    return picked;
+  }
+
+  String _monthLabel(DateTime month) => '${month.year}年${month.month}月';
+
+  Future<void> _copyFromOtherMonth() async {
+    final budgetService = _budgetService;
+    if (budgetService == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('预算服务尚未准备好，请稍后重试')));
+      return;
+    }
+
+    final now = DateTime.now();
+    final targetMonth = DateTime(now.year, now.month, 1);
+    final sourceInitial = DateTime(targetMonth.year, targetMonth.month - 1, 1);
+    final sourceMonth = await _pickMonth(
+      title: '选择来源月份',
+      initialMonth: sourceInitial,
+    );
+    if (sourceMonth == null || !mounted) return;
+
+    if (sourceMonth.year == targetMonth.year &&
+        sourceMonth.month == targetMonth.month) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('来源月份不能是当前月份')));
+      return;
+    }
+
+    final overwrite = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('复制预算'),
+          content: Text(
+            '将${_monthLabel(sourceMonth)}的月度预算复制到${_monthLabel(targetMonth)}。\n\n'
+            '合并复制：保留当前月同类预算。\n'
+            '覆盖同类：用来源月配置替换当前月同类预算。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('合并复制'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('覆盖同类'),
+            ),
+          ],
+        );
+      },
+    );
+    if (overwrite == null || !mounted) return;
+
+    final result = await budgetService.copyMonthlyBudgetsFromMonth(
+      fromMonth: sourceMonth,
+      toMonth: targetMonth,
+      overwriteExisting: overwrite,
+    );
+    if (!mounted) return;
+
+    await _loadData();
+    if (!mounted) return;
+
+    final copyMode = overwrite ? '覆盖同类' : '合并复制';
+    final summary =
+        '$copyMode完成：新增 ${result.createdCount}，覆盖 ${result.updatedCount}，跳过 ${result.skippedCount}';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(summary)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -166,6 +267,11 @@ class _BudgetListScreenState extends State<BudgetListScreen> {
             tooltip: '刷新',
             onPressed: _loadData,
             icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: '复制其它月份',
+            onPressed: _copyFromOtherMonth,
+            icon: const Icon(Icons.content_copy_outlined),
           ),
           IconButton(
             tooltip: '预算设置',
@@ -1538,6 +1644,76 @@ class _BudgetDetailSheet extends StatelessWidget {
   }
 }
 
+class _BudgetMonthPickerSheet extends StatelessWidget {
+  final String title;
+  final DateTime initialMonth;
+  final ValueChanged<DateTime> onPick;
+
+  const _BudgetMonthPickerSheet({
+    required this.title,
+    required this.initialMonth,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final base = DateTime(initialMonth.year, initialMonth.month, 1);
+    final months = <DateTime>[];
+    for (var offset = -24; offset <= 24; offset++) {
+      months.add(DateTime(base.year, base.month + offset, 1));
+    }
+    months.sort((a, b) => b.compareTo(a));
+
+    return SafeArea(
+      child: SizedBox(
+        height: 460,
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.separated(
+                itemCount: months.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final m = months[index];
+                  final isSelected =
+                      m.year == initialMonth.year &&
+                      m.month == initialMonth.month;
+                  return ListTile(
+                    title: Text('${m.year}年${m.month}月'),
+                    trailing: isSelected
+                        ? Icon(Icons.check, color: JiveTheme.primaryGreen)
+                        : null,
+                    onTap: () => onPick(m),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _BudgetTrendChartSection extends StatefulWidget {
   final JiveBudget budget;
   final BudgetService budgetService;
@@ -1710,15 +1886,15 @@ class _BudgetTrendChartSectionState extends State<_BudgetTrendChartSection> {
     final series = _showCumulative ? cumulative : daily;
     final remaining = _showCumulative
         ? cumulative
-            .map(
-              (e) => BudgetDailySpending(
-                day: e.day,
-                amount: (widget.effectiveAmount - e.amount) < 0
-                    ? 0
-                    : (widget.effectiveAmount - e.amount),
-              ),
-            )
-            .toList()
+              .map(
+                (e) => BudgetDailySpending(
+                  day: e.day,
+                  amount: (widget.effectiveAmount - e.amount) < 0
+                      ? 0
+                      : (widget.effectiveAmount - e.amount),
+                ),
+              )
+              .toList()
         : const <BudgetDailySpending>[];
 
     double maxY = 0;

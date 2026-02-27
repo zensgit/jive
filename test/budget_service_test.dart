@@ -1285,4 +1285,180 @@ void main() {
       expect(febFood.positionWeight, 7);
     },
   );
+
+  test(
+    'copyMonthlyBudgetsFromMonth merges by default (skip existing)',
+    () async {
+      final (janStart, janEnd) = BudgetService.getPeriodDateRange(
+        BudgetPeriod.monthly,
+        referenceDate: DateTime(2024, 1, 15),
+      );
+      final (febStart, febEnd) = BudgetService.getPeriodDateRange(
+        BudgetPeriod.monthly,
+        referenceDate: DateTime(2024, 2, 15),
+      );
+
+      await budgetService.createBudget(
+        name: '总预算',
+        amount: 1000,
+        currency: 'CNY',
+        startDate: janStart,
+        endDate: janEnd,
+        period: 'monthly',
+      );
+      await budgetService.createBudget(
+        name: '餐饮',
+        amount: 300,
+        currency: 'CNY',
+        categoryKey: 'food',
+        startDate: janStart,
+        endDate: janEnd,
+        period: 'monthly',
+      );
+
+      // 目标月已存在同类分类预算，默认应跳过。
+      await budgetService.createBudget(
+        name: '餐饮-当前',
+        amount: 180,
+        currency: 'CNY',
+        categoryKey: 'food',
+        startDate: febStart,
+        endDate: febEnd,
+        period: 'monthly',
+      );
+
+      final result = await budgetService.copyMonthlyBudgetsFromMonth(
+        fromMonth: DateTime(2024, 1, 1),
+        toMonth: DateTime(2024, 2, 1),
+        overwriteExisting: false,
+      );
+
+      expect(result.sourceCount, 2);
+      expect(result.createdCount, 1);
+      expect(result.updatedCount, 0);
+      expect(result.skippedCount, 1);
+
+      final startDayEnd = DateTime(
+        febStart.year,
+        febStart.month,
+        febStart.day,
+        23,
+        59,
+        59,
+        999,
+      );
+      final endDayStart = DateTime(febEnd.year, febEnd.month, febEnd.day);
+      final endDayEnd = DateTime(
+        febEnd.year,
+        febEnd.month,
+        febEnd.day,
+        23,
+        59,
+        59,
+        999,
+      );
+      final febBudgets = await isar.jiveBudgets
+          .filter()
+          .periodEqualTo('monthly')
+          .startDateBetween(febStart, startDayEnd)
+          .endDateBetween(endDayStart, endDayEnd)
+          .findAll();
+
+      final febTotal = febBudgets.firstWhere(
+        (b) => b.categoryKey == null || b.categoryKey!.isEmpty,
+      );
+      final febFood = febBudgets.firstWhere((b) => b.categoryKey == 'food');
+      expect(febTotal.amount, 1000);
+      expect(febTotal.carryoverAmount, 0);
+      // Existing target budget should stay unchanged in merge mode.
+      expect(febFood.name, '餐饮-当前');
+      expect(febFood.amount, 180);
+    },
+  );
+
+  test(
+    'copyMonthlyBudgetsFromMonth overwrites matching budgets when enabled',
+    () async {
+      final (marStart, marEnd) = BudgetService.getPeriodDateRange(
+        BudgetPeriod.monthly,
+        referenceDate: DateTime(2024, 3, 15),
+      );
+      final (aprStart, aprEnd) = BudgetService.getPeriodDateRange(
+        BudgetPeriod.monthly,
+        referenceDate: DateTime(2024, 4, 15),
+      );
+
+      await budgetService.createBudget(
+        name: '餐饮-来源',
+        amount: 260,
+        currency: 'CNY',
+        carryoverAmount: 88,
+        categoryKey: 'food',
+        startDate: marStart,
+        endDate: marEnd,
+        period: 'monthly',
+        alertEnabled: true,
+        alertThreshold: 75,
+      );
+
+      await budgetService.createBudget(
+        name: '餐饮-目标',
+        amount: 120,
+        currency: 'CNY',
+        carryoverAmount: -10,
+        categoryKey: 'food',
+        startDate: aprStart,
+        endDate: aprEnd,
+        period: 'monthly',
+        alertEnabled: false,
+        alertThreshold: null,
+      );
+
+      final result = await budgetService.copyMonthlyBudgetsFromMonth(
+        fromMonth: DateTime(2024, 3, 1),
+        toMonth: DateTime(2024, 4, 1),
+        overwriteExisting: true,
+      );
+
+      expect(result.sourceCount, 1);
+      expect(result.createdCount, 0);
+      expect(result.updatedCount, 1);
+      expect(result.skippedCount, 0);
+
+      final startDayEnd = DateTime(
+        aprStart.year,
+        aprStart.month,
+        aprStart.day,
+        23,
+        59,
+        59,
+        999,
+      );
+      final endDayStart = DateTime(aprEnd.year, aprEnd.month, aprEnd.day);
+      final endDayEnd = DateTime(
+        aprEnd.year,
+        aprEnd.month,
+        aprEnd.day,
+        23,
+        59,
+        59,
+        999,
+      );
+      final aprFood = await isar.jiveBudgets
+          .filter()
+          .periodEqualTo('monthly')
+          .startDateBetween(aprStart, startDayEnd)
+          .endDateBetween(endDayStart, endDayEnd)
+          .categoryKeyEqualTo('food')
+          .findFirst();
+
+      expect(aprFood, isNotNull);
+      expect(aprFood!.name, '餐饮-来源');
+      expect(aprFood.amount, 260);
+      // Copy config only: carryover should always reset.
+      expect(aprFood.carryoverAmount, 0);
+      expect(aprFood.alertEnabled, isTrue);
+      expect(aprFood.alertThreshold, 75);
+    },
+  );
 }
