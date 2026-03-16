@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_release_smoke:
+        description: "Run release smoke lane on host"
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -45,12 +50,52 @@ jobs:
       - name: Test
         run: flutter test
 
+  release_smoke_host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_release_smoke == 'true') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-smoke')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.5
+          channel: stable
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Run Release Smoke Lane
+        run: bash scripts/run_release_smoke.sh
+
+      - name: Summarize Release Reports
+        if: always()
+        run: bash scripts/render_release_report_summary.sh host
+
+      - name: Upload Host Smoke Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-smoke-host-${{ github.run_id }}
+          path: |
+            build/android-e2e-smoke/**
+            build/reports/**
+          if-no-files-found: ignore
+
   android_integration_test:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     if: >-
       (github.event_name == 'workflow_dispatch' && github.event.inputs.run_android_e2e == 'true') ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e'))
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'e2e')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
 
     steps:
       - name: Checkout
@@ -79,9 +124,25 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
+          emulator-options: -no-window -no-snapshot -noaudio -no-boot-anim
           script: >-
-            flutter test integration_test/calendar_date_picker_flow_test.dart
-            integration_test/transaction_search_flow_test.dart
-            -d emulator-5554
-            --flavor dev
-            --dart-define=JIVE_E2E=true
+            bash scripts/run_release_regression_suite.sh &&
+            JIVE_ANDROID_E2E_DEVICE=emulator-5554
+            JIVE_ANDROID_E2E_FLAVOR=dev
+            JIVE_ANDROID_E2E_BOOT_TIMEOUT_SECONDS=300
+            JIVE_ANDROID_E2E_ADB_COMMAND_TIMEOUT_SECONDS=30
+            bash scripts/run_android_e2e_smoke.sh
+
+      - name: Summarize Android Release Reports
+        if: always()
+        run: bash scripts/render_release_report_summary.sh android
+
+      - name: Upload Android E2E Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-e2e-smoke-${{ github.run_id }}
+          path: |
+            build/android-e2e-smoke/**
+            build/reports/**
+          if-no-files-found: ignore

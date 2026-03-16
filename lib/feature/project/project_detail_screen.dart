@@ -10,6 +10,7 @@ import '../../core/database/project_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/project_service.dart';
+import '../../core/service/transaction_service.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/model/transaction_list_filter_state.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
@@ -2098,6 +2099,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         final tx = await _isar!.jiveTransactions.get(id);
         if (tx != null) {
           tx.projectId = _project!.id;
+          TransactionService.touchSyncMetadata(tx);
           await _isar!.jiveTransactions.put(tx);
         }
       }
@@ -2315,6 +2317,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
   Future<void> _unlinkTransaction(JiveTransaction tx) async {
     await _isar!.writeTxn(() async {
       tx.projectId = null;
+      TransactionService.touchSyncMetadata(tx);
       await _isar!.jiveTransactions.put(tx);
     });
 
@@ -2890,6 +2893,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         final tx = await _isar!.jiveTransactions.get(id);
         if (tx != null) {
           tx.projectId = null;
+          TransactionService.touchSyncMetadata(tx);
           await _isar!.jiveTransactions.put(tx);
         }
       }
@@ -3752,6 +3756,7 @@ class _ProjectTransactionsPageState extends State<_ProjectTransactionsPage> {
         final tx = await widget.isar.jiveTransactions.get(id);
         if (tx != null) {
           tx.projectId = null;
+          TransactionService.touchSyncMetadata(tx);
           await widget.isar.jiveTransactions.put(tx);
         }
       }

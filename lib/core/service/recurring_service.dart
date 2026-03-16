@@ -4,6 +4,7 @@ import '../database/auto_draft_model.dart';
 import '../database/recurring_rule_model.dart';
 import '../database/transaction_model.dart';
 import '../service/tag_service.dart';
+import 'transaction_service.dart';
 
 class RecurringProcessResult {
   final int generatedDrafts;
@@ -210,6 +211,7 @@ class RecurringService {
         ..smartTagKeys = []
         ..recurringRuleId = rule.id
         ..recurringKey = recurringKey;
+      TransactionService.touchSyncMetadata(tx);
       await isar.collection<JiveTransaction>().put(tx);
       createdTx = tx;
       generated = _RecurringGenerated.commit;

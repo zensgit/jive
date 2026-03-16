@@ -24,6 +24,7 @@ import '../../core/service/database_service.dart';
 import '../../core/service/tag_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_rule_service.dart';
+import '../../core/service/transaction_service.dart';
 import '../../core/widgets/jive_calendar/jive_calendar.dart';
 import '../../core/database/category_model.dart';
 import '../../core/utils/logger_util.dart';
@@ -1138,6 +1139,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       tx.smartTagKeys = tx.smartTagKeys.where(tx.tagKeys.contains).toList();
     }
 
+    TransactionService.touchSyncMetadata(tx);
     await _isar.writeTxn(() async {
       await _isar.jiveTransactions.put(tx);
     });

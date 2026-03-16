@@ -12,6 +12,7 @@ import '../../core/design_system/theme.dart';
 import '../../core/model/transaction_list_filter_state.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/reconcile_service.dart';
+import '../../core/service/transaction_service.dart';
 import '../../core/widgets/jive_calendar/jive_calendar.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../transactions/transaction_detail_screen.dart';
@@ -333,6 +334,7 @@ class _AccountReconcileScreenState extends State<AccountReconcileScreen> {
       }
     }
 
+    TransactionService.touchSyncMetadataForAll(inserts);
     await isar.writeTxn(() async {
       await isar.jiveTransactions.putAll(inserts);
     });
