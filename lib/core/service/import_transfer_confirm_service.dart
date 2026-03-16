@@ -2,6 +2,13 @@ import 'import_service.dart';
 
 enum ImportTransferConfirmIssueSeverity { review, block }
 
+class ImportTransferKnownAccount {
+  const ImportTransferKnownAccount({required this.name, this.id});
+
+  final int? id;
+  final String name;
+}
+
 class ImportTransferConfirmIssue {
   const ImportTransferConfirmIssue({
     required this.lineNumber,
@@ -57,12 +64,20 @@ class ImportTransferConfirmService {
 
   ImportTransferConfirmResult evaluate({
     required List<ImportParsedRecord> records,
+    Iterable<ImportTransferKnownAccount> knownAccounts =
+        const <ImportTransferKnownAccount>[],
     Iterable<String> knownAccountNames = const <String>[],
   }) {
-    final normalizedAccounts = knownAccountNames
-        .map(_normalizeName)
-        .where((value) => value.isNotEmpty)
-        .toSet();
+    final resolvedAccounts =
+        [
+              ...knownAccounts,
+              if (knownAccounts.isEmpty)
+                ...knownAccountNames.map(
+                  (name) => ImportTransferKnownAccount(name: name),
+                ),
+            ]
+            .where((account) => account.name.trim().isNotEmpty)
+            .toList(growable: false);
     final issues = <ImportTransferConfirmIssue>[];
     var transferCount = 0;
     var readyCount = 0;
@@ -79,6 +94,8 @@ class ImportTransferConfirmService {
       final targetName = (record.toAccountName ?? '').trim();
       final normalizedSource = _normalizeName(sourceName);
       final normalizedTarget = _normalizeName(targetName);
+      final resolvedSource = _resolveAccount(resolvedAccounts, sourceName);
+      final resolvedTarget = _resolveAccount(resolvedAccounts, targetName);
 
       if (!record.isValid) {
         lineIssues.add(
@@ -111,6 +128,16 @@ class ImportTransferConfirmService {
             message: '转出账户与转入账户重复',
           ),
         );
+      } else if (resolvedSource?.id != null &&
+          resolvedSource!.id == resolvedTarget?.id) {
+        lineIssues.add(
+          ImportTransferConfirmIssue(
+            lineNumber: record.lineNumber,
+            severity: ImportTransferConfirmIssueSeverity.block,
+            code: 'same_account',
+            message: '转出账户与转入账户重复',
+          ),
+        );
       }
       if (sourceName.isEmpty) {
         lineIssues.add(
@@ -121,8 +148,7 @@ class ImportTransferConfirmService {
             message: '未显式提供转出账户，将依赖自动识别',
           ),
         );
-      } else if (normalizedAccounts.isNotEmpty &&
-          !normalizedAccounts.contains(normalizedSource)) {
+      } else if (resolvedAccounts.isNotEmpty && resolvedSource == null) {
         lineIssues.add(
           ImportTransferConfirmIssue(
             lineNumber: record.lineNumber,
@@ -133,12 +159,12 @@ class ImportTransferConfirmService {
         );
       }
       if (targetName.isNotEmpty &&
-          normalizedAccounts.isNotEmpty &&
-          !normalizedAccounts.contains(normalizedTarget)) {
+          resolvedAccounts.isNotEmpty &&
+          resolvedTarget == null) {
         lineIssues.add(
           ImportTransferConfirmIssue(
             lineNumber: record.lineNumber,
-            severity: ImportTransferConfirmIssueSeverity.review,
+            severity: ImportTransferConfirmIssueSeverity.block,
             code: 'unknown_target_account',
             message: '转入账户未在当前账户列表中命中: $targetName',
           ),
@@ -182,5 +208,23 @@ class ImportTransferConfirmService {
 
   static String _normalizeName(String value) {
     return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  }
+
+  static ImportTransferKnownAccount? _resolveAccount(
+    List<ImportTransferKnownAccount> accounts,
+    String rawName,
+  ) {
+    final normalized = rawName.trim();
+    if (normalized.isEmpty) return null;
+    for (final account in accounts) {
+      if (account.name.trim() == normalized) return account;
+    }
+    for (final account in accounts) {
+      if (account.name.contains(normalized) ||
+          normalized.contains(account.name)) {
+        return account;
+      }
+    }
+    return null;
   }
 }

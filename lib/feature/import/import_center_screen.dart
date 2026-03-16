@@ -609,6 +609,12 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     final accounts = await AccountService(service.isar).getActiveAccounts();
     final report = _transferConfirmService.evaluate(
       records: records,
+      knownAccounts: accounts
+          .map(
+            (account) =>
+                ImportTransferKnownAccount(id: account.id, name: account.name),
+          )
+          .toList(growable: false),
       knownAccountNames: accounts.map((account) => account.name),
     );
     if (report.transferCount <= 0) return true;

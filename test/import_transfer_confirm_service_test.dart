@@ -58,22 +58,47 @@ void main() {
           lineNumber: 3,
         ),
       ],
-      knownAccountNames: const ['微信', '招商银行'],
+      knownAccounts: const [
+        ImportTransferKnownAccount(id: 1, name: '微信'),
+        ImportTransferKnownAccount(id: 2, name: '招商银行'),
+      ],
     );
 
     expect(result.transferCount, 1);
-    expect(result.blockCount, 0);
-    expect(result.reviewCount, 1);
+    expect(result.blockCount, 1);
+    expect(result.reviewCount, 0);
     expect(result.readyCount, 0);
-    expect(result.hasReview, isTrue);
+    expect(result.hasBlock, isTrue);
     expect(
       result.issues.map((issue) => issue.code),
-      containsAll([
-        'unknown_source_account',
-        'unknown_target_account',
-        'high_service_charge',
-      ]),
+      containsAll(['unknown_target_account', 'high_service_charge']),
     );
+  });
+
+  test('evaluate resolves fuzzy source names against known accounts', () {
+    final result = service.evaluate(
+      records: [
+        ImportParsedRecord(
+          amount: 20,
+          source: 'Import',
+          timestamp: DateTime(2026, 3, 15, 11, 30),
+          rawText: '微信零钱转到银行卡',
+          type: 'transfer',
+          accountName: '微信零钱',
+          toAccountName: '招商银行',
+          lineNumber: 5,
+        ),
+      ],
+      knownAccounts: const [
+        ImportTransferKnownAccount(id: 1, name: '微信'),
+        ImportTransferKnownAccount(id: 2, name: '招商银行'),
+      ],
+    );
+
+    expect(result.transferCount, 1);
+    expect(result.readyCount, 1);
+    expect(result.reviewCount, 0);
+    expect(result.blockCount, 0);
   });
 
   test('evaluate keeps valid transfer rows ready', () {
