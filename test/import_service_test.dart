@@ -13,6 +13,7 @@ import 'package:jive/core/database/tag_model.dart';
 import 'package:jive/core/database/tag_rule_model.dart';
 import 'package:jive/core/database/transaction_model.dart';
 import 'package:jive/core/service/import_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   late Isar isar;
@@ -43,6 +44,7 @@ void main() {
   });
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
     dir = await Directory.systemTemp.createTemp('jive_import_service_test_');
     isar = await Isar.open([
       JiveAutoDraftSchema,
@@ -79,6 +81,38 @@ void main() {
     expect(records.first.source, 'WeChat');
     expect(records.first.type, 'expense');
     expect(records.first.rawText, '早餐');
+  });
+
+  test(
+    'parseText keeps structured csv fields for account/category/tag hints',
+    () {
+      const text =
+          '账本,账户,一级分类,二级分类,date,amount,type,note,tags\n'
+          '家庭账本,微信,餐饮,早餐,2026-02-14 09:30,18.80,expense,早餐,工作日 早餐';
+
+      final records = service.parseText(text, sourceType: ImportSourceType.csv);
+
+      expect(records, hasLength(1));
+      expect(records.first.accountBookName, '家庭账本');
+      expect(records.first.accountName, '微信');
+      expect(records.first.parentCategoryName, '餐饮');
+      expect(records.first.childCategoryName, '早餐');
+      expect(records.first.tagNames, ['工作日', '早餐']);
+    },
+  );
+
+  test('parseText keeps transfer csv fields for target account and fee', () {
+    const text =
+        '账户,转入账户,date,amount,手续费,note\n'
+        '微信,招商银行,2026-02-14 09:30,188.80,1.50,转账到储蓄卡';
+
+    final records = service.parseText(text, sourceType: ImportSourceType.csv);
+
+    expect(records, hasLength(1));
+    expect(records.first.type, 'transfer');
+    expect(records.first.accountName, '微信');
+    expect(records.first.toAccountName, '招商银行');
+    expect(records.first.serviceCharge, 1.5);
   });
 
   test('parseText parses loose wechat text lines', () {
@@ -181,6 +215,150 @@ void main() {
       expect(job.totalCount, 1);
       expect(job.insertedCount, 0);
       expect(job.invalidCount, 1);
+    },
+  );
+
+  test(
+    'importPreparedRecords prefers structured account/category/tag hints',
+    () async {
+      final parent = JiveCategory()
+        ..key = 'cat_food'
+        ..name = '餐饮'
+        ..iconName = 'restaurant'
+        ..parentKey = null
+        ..order = 0
+        ..isSystem = false
+        ..isHidden = false
+        ..isIncome = false
+        ..updatedAt = DateTime(2026, 3, 15);
+      final child = JiveCategory()
+        ..key = 'cat_food_breakfast'
+        ..name = '早餐'
+        ..iconName = 'coffee'
+        ..parentKey = parent.key
+        ..order = 0
+        ..isSystem = false
+        ..isHidden = false
+        ..isIncome = false
+        ..updatedAt = DateTime(2026, 3, 15);
+      final account = JiveAccount()
+        ..key = 'acct_wechat_custom'
+        ..name = '微信'
+        ..type = 'asset'
+        ..currency = 'CNY'
+        ..iconName = 'wallet'
+        ..order = 0
+        ..includeInBalance = true
+        ..isHidden = false
+        ..isArchived = false
+        ..updatedAt = DateTime(2026, 3, 15);
+      final tag = JiveTag()
+        ..key = 'tag_breakfast'
+        ..name = '早餐'
+        ..order = 0
+        ..isArchived = false
+        ..usageCount = 0
+        ..createdAt = DateTime(2026, 3, 15)
+        ..updatedAt = DateTime(2026, 3, 15);
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveCategory>().putAll([parent, child]);
+        await isar.collection<JiveAccount>().put(account);
+        await isar.collection<JiveTag>().put(tag);
+      });
+
+      final result = await service.importPreparedRecords(
+        records: [
+          ImportParsedRecord(
+            amount: 18.8,
+            source: 'Import',
+            timestamp: DateTime(2026, 3, 15, 8),
+            rawText: '早餐导入',
+            type: 'expense',
+            accountName: '微信',
+            parentCategoryName: '餐饮',
+            childCategoryName: '早餐',
+            tagNames: const ['早餐'],
+            lineNumber: 1,
+          ),
+        ],
+        payloadText: 'debug payload',
+        sourceType: ImportSourceType.csv,
+        entryType: ImportEntryType.text,
+      );
+
+      expect(result.errorMessage, isNull, reason: result.errorMessage);
+      expect(result.insertedCount, 1);
+      final drafts = await isar.collection<JiveAutoDraft>().where().findAll();
+      expect(drafts, hasLength(1));
+      expect(drafts.first.accountId, account.id);
+      expect(drafts.first.category, '餐饮');
+      expect(drafts.first.subCategory, '早餐');
+      expect(drafts.first.categoryKey, 'cat_food');
+      expect(drafts.first.subCategoryKey, 'cat_food_breakfast');
+      expect(drafts.first.tagKeys, ['tag_breakfast']);
+    },
+  );
+
+  test(
+    'importPreparedRecords keeps transfer target account and service charge metadata',
+    () async {
+      final fromAccount = JiveAccount()
+        ..key = 'acct_wechat'
+        ..name = '微信'
+        ..type = 'asset'
+        ..currency = 'CNY'
+        ..iconName = 'wallet'
+        ..order = 0
+        ..includeInBalance = true
+        ..isHidden = false
+        ..isArchived = false
+        ..updatedAt = DateTime(2026, 3, 15);
+      final toAccount = JiveAccount()
+        ..key = 'acct_bank'
+        ..name = '招商银行'
+        ..type = 'asset'
+        ..currency = 'CNY'
+        ..iconName = 'bank'
+        ..order = 1
+        ..includeInBalance = true
+        ..isHidden = false
+        ..isArchived = false
+        ..updatedAt = DateTime(2026, 3, 15);
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveAccount>().putAll([fromAccount, toAccount]);
+      });
+
+      final result = await service.importPreparedRecords(
+        records: [
+          ImportParsedRecord(
+            amount: 188.8,
+            source: 'Import',
+            timestamp: DateTime(2026, 3, 15, 9),
+            rawText: '转账到储蓄卡',
+            type: 'transfer',
+            accountName: '微信',
+            toAccountName: '招商银行',
+            serviceCharge: 1.5,
+            lineNumber: 1,
+          ),
+        ],
+        payloadText: 'transfer payload',
+        sourceType: ImportSourceType.csv,
+        entryType: ImportEntryType.text,
+      );
+
+      expect(result.errorMessage, isNull, reason: result.errorMessage);
+      expect(result.insertedCount, 1);
+      final drafts = await isar.collection<JiveAutoDraft>().where().findAll();
+      expect(drafts, hasLength(1));
+      expect(drafts.first.type, 'transfer');
+      expect(drafts.first.accountId, fromAccount.id);
+      expect(drafts.first.toAccountId, toAccount.id);
+      final metadata = jsonDecode(drafts.first.metadataJson!);
+      expect(metadata['transferToAccountName'], '招商银行');
+      expect(metadata['transferServiceCharge'], 1.5);
     },
   );
 

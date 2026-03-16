@@ -342,7 +342,7 @@ void main() {
     expect(find.text('导入预览（先勾选，再导入）'), findsOneWidget);
     expect(find.text('导出复核清单'), findsOneWidget);
 
-    await tester.tap(find.text('导出复核清单'));
+    await _tapVisibleText(tester, '导出复核清单');
     await tester.pumpAndSettle();
 
     expect(requests, hasLength(1));
@@ -354,11 +354,182 @@ void main() {
     expect(
       request.csv,
       contains(
-        'lineNumber,selected,isValid,amount,timestamp,type,source,confidence,duplicateRisk,warnings,rawText',
+        'lineNumber,selected,isValid,amount,timestamp,type,source,accountBookName,accountName,toAccountName,parentCategoryName,childCategoryName,serviceCharge,tagNames,confidence,duplicateRisk,warnings,rawText',
       ),
     );
     expect(request.csv, contains('1,yes,yes,23.50'));
     expect(request.csv, contains('2,no,no,0.00'));
+  });
+
+  testWidgets('column mapping review can repair preview mapping in UI', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    const payload =
+        '总额,交易时间,渠道,收支类型,备注\n'
+        '12.50,2026-02-17 09:00,WeChat,支出,早餐';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ImportCenterScreen(
+          debugJobs: const [],
+          debugPreviewData: ImportCenterDebugPreviewData(
+            records: [
+              ImportParsedRecord(
+                amount: 0,
+                source: 'Import',
+                timestamp: DateTime(2026, 2, 17, 9),
+                rawText: '早餐',
+                type: null,
+                lineNumber: 2,
+              ),
+            ],
+            selected: const [false],
+            payloadText: payload,
+            sourceType: ImportSourceType.csv,
+            entryType: ImportEntryType.text,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('无效 1'), findsOneWidget);
+    expect(find.text('列映射阻断导入'), findsOneWidget);
+    expect(find.textContaining('金额列未映射'), findsOneWidget);
+
+    await tester.tap(find.text('检查/修复列映射'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('列映射阻断导入'),
+      ),
+      findsOneWidget,
+    );
+
+    final amountField = find.byWidgetPredicate(
+      (widget) =>
+          widget is DropdownButtonFormField &&
+          widget.decoration.labelText == '金额列',
+    );
+    expect(amountField, findsOneWidget);
+    await tester.tap(amountField);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('col 1: 总额').last);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('列映射已就绪'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('应用到预览'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('无效 0'), findsOneWidget);
+    expect(find.text('可导入 1'), findsOneWidget);
+    expect(find.text('已选择 1'), findsOneWidget);
+    expect(find.text('已将列映射修复应用到当前预览'), findsOneWidget);
+  });
+
+  testWidgets('edit record can fan out structured repair to similar rows', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ImportCenterScreen(
+          debugJobs: const [],
+          debugPreviewData: ImportCenterDebugPreviewData(
+            records: [
+              _buildPreviewRecord(
+                lineNumber: 1,
+                amount: 12.5,
+                source: 'WeChat',
+                rawText: '麦当劳早餐',
+              ),
+              _buildPreviewRecord(
+                lineNumber: 2,
+                amount: 18.8,
+                source: 'WeChat',
+                rawText: '麦当劳早餐(重复)',
+              ),
+            ],
+            selected: const [true, true],
+            payloadText: 'debug preview payload',
+            sourceType: ImportSourceType.csv,
+            entryType: ImportEntryType.text,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.edit_outlined).first);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (widget) => widget is TextField && widget.decoration?.labelText == '账户',
+      ),
+      '微信',
+    );
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.labelText == '一级分类',
+      ),
+      '餐饮',
+    );
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is TextField && widget.decoration?.labelText == '二级分类',
+      ),
+      '早餐',
+    );
+    await tester.enterText(
+      find.byWidgetPredicate(
+        (widget) => widget is TextField && widget.decoration?.labelText == '标签',
+      ),
+      '工作日 早餐',
+    );
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is CheckboxListTile &&
+            widget.title is Text &&
+            (widget.title as Text).data == '将结构化修复批量应用到相似记录',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已将结构化修复同步到 2 条相似记录'), findsOneWidget);
+    expect(find.text('一级 餐饮'), findsNWidgets(2));
+    expect(find.text('二级 早餐'), findsNWidgets(2));
+    expect(find.text('账户 微信'), findsNWidgets(2));
+    expect(find.text('标签 工作日'), findsNWidgets(2));
   });
 
   testWidgets(
@@ -730,13 +901,20 @@ ImportParsedRecord _buildPreviewRecord({
   required double amount,
   required String source,
   required String rawText,
+  String type = 'expense',
+  String? accountName,
+  String? toAccountName,
+  double? serviceCharge,
 }) {
   return ImportParsedRecord(
     amount: amount,
     source: source,
     timestamp: DateTime(2026, 2, 17, 9, lineNumber),
     rawText: rawText,
-    type: 'expense',
+    type: type,
+    accountName: accountName,
+    toAccountName: toAccountName,
+    serviceCharge: serviceCharge,
     lineNumber: lineNumber,
     confidence: 1,
   );

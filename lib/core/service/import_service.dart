@@ -8,6 +8,7 @@ import '../database/auto_draft_model.dart';
 import '../database/import_job_model.dart';
 import '../database/import_job_record_model.dart';
 import '../database/transaction_model.dart';
+import '../repository/import_job_history_repository.dart';
 import 'auto_draft_service.dart';
 import 'auto_settings.dart';
 import 'data_reload_bus.dart';
@@ -22,11 +23,20 @@ enum ImportJobStatus { pending, running, review, failed }
 enum ImportDuplicatePolicy { keepLatest, keepAll, skipAll }
 
 class ImportParsedRecord {
+  static const Object _unsetValue = Object();
+
   final double amount;
   final String source;
   final DateTime timestamp;
   final String? rawText;
   final String? type;
+  final String? accountBookName;
+  final String? accountName;
+  final String? toAccountName;
+  final String? parentCategoryName;
+  final String? childCategoryName;
+  final double? serviceCharge;
+  final List<String> tagNames;
   final int lineNumber;
   final double confidence;
   final List<String> warnings;
@@ -37,6 +47,13 @@ class ImportParsedRecord {
     required this.timestamp,
     required this.rawText,
     required this.type,
+    this.accountBookName,
+    this.accountName,
+    this.toAccountName,
+    this.parentCategoryName,
+    this.childCategoryName,
+    this.serviceCharge,
+    this.tagNames = const [],
     required this.lineNumber,
     this.confidence = 1,
     this.warnings = const [],
@@ -49,8 +66,15 @@ class ImportParsedRecord {
     double? amount,
     String? source,
     DateTime? timestamp,
-    String? rawText,
-    String? type,
+    Object? rawText = _unsetValue,
+    Object? type = _unsetValue,
+    Object? accountBookName = _unsetValue,
+    Object? accountName = _unsetValue,
+    Object? toAccountName = _unsetValue,
+    Object? parentCategoryName = _unsetValue,
+    Object? childCategoryName = _unsetValue,
+    Object? serviceCharge = _unsetValue,
+    Object? tagNames = _unsetValue,
     int? lineNumber,
     double? confidence,
     List<String>? warnings,
@@ -59,8 +83,31 @@ class ImportParsedRecord {
       amount: amount ?? this.amount,
       source: source ?? this.source,
       timestamp: timestamp ?? this.timestamp,
-      rawText: rawText ?? this.rawText,
-      type: type ?? this.type,
+      rawText: identical(rawText, _unsetValue)
+          ? this.rawText
+          : rawText as String?,
+      type: identical(type, _unsetValue) ? this.type : type as String?,
+      accountBookName: identical(accountBookName, _unsetValue)
+          ? this.accountBookName
+          : accountBookName as String?,
+      accountName: identical(accountName, _unsetValue)
+          ? this.accountName
+          : accountName as String?,
+      toAccountName: identical(toAccountName, _unsetValue)
+          ? this.toAccountName
+          : toAccountName as String?,
+      parentCategoryName: identical(parentCategoryName, _unsetValue)
+          ? this.parentCategoryName
+          : parentCategoryName as String?,
+      childCategoryName: identical(childCategoryName, _unsetValue)
+          ? this.childCategoryName
+          : childCategoryName as String?,
+      serviceCharge: identical(serviceCharge, _unsetValue)
+          ? this.serviceCharge
+          : serviceCharge as double?,
+      tagNames: identical(tagNames, _unsetValue)
+          ? this.tagNames
+          : List<String>.from(tagNames as List<String>),
       lineNumber: lineNumber ?? this.lineNumber,
       confidence: confidence ?? this.confidence,
       warnings: warnings ?? this.warnings,
@@ -211,22 +258,22 @@ class _ImportRecordIngestOutcome {
 }
 
 class ImportService {
-  ImportService(this.isar, {OcrService? ocrService})
-    : _ocrService = ocrService ?? OcrService();
+  ImportService(
+    this.isar, {
+    OcrService? ocrService,
+    ImportJobHistoryRepository? jobHistoryRepository,
+  }) : _ocrService = ocrService ?? OcrService(),
+       _jobHistoryRepository =
+           jobHistoryRepository ?? ImportJobHistoryRepository(isar);
 
   final Isar isar;
   final OcrService _ocrService;
+  final ImportJobHistoryRepository _jobHistoryRepository;
 
   static const int _maxPayloadChars = 20000;
 
   Future<List<JiveImportJob>> listRecentJobs({int limit = 20}) async {
-    final jobs = await isar
-        .collection<JiveImportJob>()
-        .where()
-        .sortByCreatedAtDesc()
-        .limit(limit.clamp(1, 200))
-        .findAll();
-    return jobs;
+    return _jobHistoryRepository.listRecentJobs(limit: limit);
   }
 
   Future<List<JiveImportJobRecord>> listJobRecords(
@@ -236,34 +283,13 @@ class ImportService {
     int limit = 200,
     int offset = 0,
   }) async {
-    final records = await isar
-        .collection<JiveImportJobRecord>()
-        .filter()
-        .jobIdEqualTo(jobId)
-        .findAll();
-    final filtered = records.where((record) {
-      if (decision != null &&
-          decision.trim().isNotEmpty &&
-          decision != 'all' &&
-          record.decision != decision) {
-        return false;
-      }
-      if (riskLevel != null &&
-          riskLevel.trim().isNotEmpty &&
-          riskLevel != 'all' &&
-          record.riskLevel != riskLevel) {
-        return false;
-      }
-      return true;
-    }).toList();
-    filtered.sort((a, b) {
-      final lineComp = a.sourceLineNumber.compareTo(b.sourceLineNumber);
-      if (lineComp != 0) return lineComp;
-      return a.id.compareTo(b.id);
-    });
-    if (offset >= filtered.length) return const [];
-    final end = (offset + limit).clamp(0, filtered.length);
-    return filtered.sublist(offset, end);
+    return _jobHistoryRepository.listJobRecords(
+      jobId,
+      decision: decision,
+      riskLevel: riskLevel,
+      limit: limit,
+      offset: offset,
+    );
   }
 
   Future<ImportJobDetailSummary> getJobDetailSummary(int jobId) async {
@@ -413,7 +439,7 @@ class ImportService {
   }
 
   Future<ImportIngestResult> retryJob(int jobId) async {
-    final job = await isar.collection<JiveImportJob>().get(jobId);
+    final job = await _jobHistoryRepository.getJob(jobId);
     if (job == null) {
       throw StateError('导入任务不存在: $jobId');
     }
@@ -517,33 +543,27 @@ class ImportService {
     int? retryFromJobId,
   }) async {
     final createdAt = DateTime.now();
-    final job = JiveImportJob()
-      ..createdAt = createdAt
-      ..updatedAt = createdAt
-      ..status = _jobStatusName(ImportJobStatus.pending)
-      ..sourceType = _sourceTypeName(sourceType)
-      ..entryType = _entryTypeName(entryType)
-      ..filePath = filePath
-      ..fileName = fileName
-      ..payloadText = _trimPayload(payloadText)
-      ..duplicatePolicy = _duplicatePolicyName(duplicatePolicy)
-      ..retryFromJobId = retryFromJobId;
-
-    await isar.writeTxn(() async {
-      final newId = await isar.collection<JiveImportJob>().put(job);
-      job.id = newId;
-    });
+    final jobId = await _jobHistoryRepository.createPendingJob(
+      createdAt: createdAt,
+      sourceType: _sourceTypeName(sourceType),
+      entryType: _entryTypeName(entryType),
+      filePath: filePath,
+      fileName: fileName,
+      payloadText: _trimPayload(payloadText),
+      duplicatePolicy: _duplicatePolicyName(duplicatePolicy),
+      retryFromJobId: retryFromJobId,
+    );
 
     try {
-      await _updateJobStatus(job.id, ImportJobStatus.running);
+      await _updateJobStatus(jobId, ImportJobStatus.running);
       final ingest = await _importRecords(
         records,
-        jobId: job.id,
+        jobId: jobId,
         duplicatePolicy: duplicatePolicy,
       );
 
       await _finishJob(
-        jobId: job.id,
+        jobId: jobId,
         status: ImportJobStatus.review,
         totalCount: ingest.totalCount,
         insertedCount: ingest.insertedCount,
@@ -556,7 +576,7 @@ class ImportService {
       );
 
       return ImportIngestResult(
-        jobId: job.id,
+        jobId: jobId,
         totalCount: ingest.totalCount,
         insertedCount: ingest.insertedCount,
         duplicateCount: ingest.duplicateCount,
@@ -572,7 +592,7 @@ class ImportService {
         'error': message,
       });
       await _finishJob(
-        jobId: job.id,
+        jobId: jobId,
         status: ImportJobStatus.failed,
         totalCount: records.length,
         insertedCount: 0,
@@ -584,7 +604,7 @@ class ImportService {
         errorMessage: message,
       );
       return ImportIngestResult(
-        jobId: job.id,
+        jobId: jobId,
         totalCount: records.length,
         insertedCount: 0,
         duplicateCount: 0,
@@ -663,6 +683,13 @@ class ImportService {
         rawText: record.rawText,
         timestamp: record.timestamp,
         type: record.type,
+        accountBookName: record.accountBookName,
+        accountName: record.accountName,
+        toAccountName: record.toAccountName,
+        parentCategoryName: record.parentCategoryName,
+        childCategoryName: record.childCategoryName,
+        serviceCharge: record.serviceCharge,
+        tagNames: record.tagNames,
       );
 
       final result = await autoDraftService.ingestCapture(
@@ -719,16 +746,9 @@ class ImportService {
       );
     }
 
-    var recordWriteFailed = false;
-    if (jobRecords.isNotEmpty) {
-      try {
-        await isar.writeTxn(() async {
-          await isar.collection<JiveImportJobRecord>().putAll(jobRecords);
-        });
-      } catch (_) {
-        recordWriteFailed = true;
-      }
-    }
+    final recordWriteFailed = !await _jobHistoryRepository.saveJobRecords(
+      jobRecords,
+    );
 
     if (insertedCount > 0) {
       DataReloadBus.notify();
@@ -836,16 +856,55 @@ class ImportService {
         warnings.add('来源未识别，使用默认来源');
       }
 
+      final accountBookName = _pickValue(cells, headerMap, _accountBookAliases);
+      final accountName = _pickValue(cells, headerMap, _assetAliases);
+      final toAccountName = _pickValue(cells, headerMap, _toAssetAliases);
+      final parentCategoryName = _pickValue(
+        cells,
+        headerMap,
+        _parentCategoryAliases,
+      );
+      final childCategoryName = _pickValue(
+        cells,
+        headerMap,
+        _childCategoryAliases,
+      );
+      final tagNames = _splitTagNames(
+        _pickValue(cells, headerMap, _tagAliases),
+      );
+      final serviceChargeText = _pickValue(
+        cells,
+        headerMap,
+        _serviceChargeAliases,
+      );
+      final serviceCharge = _parseAmount(serviceChargeText ?? '');
       final typeText = _pickValue(cells, headerMap, _typeAliases);
       final noteText = _pickValue(cells, headerMap, _textAliases) ?? lines[i];
       final normalizedType = _normalizeType(typeText);
-      final inferredType = _inferTypeFromText(noteText, sourceType);
+      final inferredType =
+          _inferTypeFromCategoryHints(
+            parentCategoryName: parentCategoryName,
+            childCategoryName: childCategoryName,
+          ) ??
+          (((toAccountName ?? '').trim().isNotEmpty || serviceCharge != null)
+              ? 'transfer'
+              : null) ??
+          _inferTypeFromText(noteText, sourceType);
       final resolvedType = normalizedType ?? inferredType;
       if (normalizedType == null && inferredType != null) {
         warnings.add('交易类型为推断值');
       }
       if (resolvedType == null) {
         warnings.add('交易类型未知');
+      }
+      if (resolvedType == 'transfer' &&
+          ((toAccountName ?? '').trim().isEmpty)) {
+        warnings.add('转账缺少转入账户');
+      }
+      if (serviceChargeText != null &&
+          serviceChargeText.trim().isNotEmpty &&
+          serviceCharge == null) {
+        warnings.add('手续费未识别');
       }
 
       rows.add(
@@ -855,6 +914,13 @@ class ImportService {
           timestamp: parsedDate,
           rawText: noteText,
           type: resolvedType,
+          accountBookName: accountBookName,
+          accountName: accountName,
+          toAccountName: toAccountName,
+          parentCategoryName: parentCategoryName,
+          childCategoryName: childCategoryName,
+          serviceCharge: serviceCharge,
+          tagNames: tagNames,
           lineNumber: lineNumber,
           confidence: _estimateConfidence(
             valid: validAmount,
@@ -951,13 +1017,15 @@ class ImportService {
   }
 
   Future<void> _updateJobStatus(int jobId, ImportJobStatus status) async {
-    await isar.writeTxn(() async {
-      final job = await isar.collection<JiveImportJob>().get(jobId);
-      if (job == null) return;
-      job.status = _jobStatusName(status);
-      job.updatedAt = DateTime.now();
-      await isar.collection<JiveImportJob>().put(job);
-    });
+    switch (status) {
+      case ImportJobStatus.running:
+        await _jobHistoryRepository.markJobRunning(jobId);
+        return;
+      case ImportJobStatus.pending:
+      case ImportJobStatus.review:
+      case ImportJobStatus.failed:
+        throw StateError('_updateJobStatus 仅支持 running 状态过渡');
+    }
   }
 
   Future<void> _finishJob({
@@ -972,32 +1040,18 @@ class ImportService {
     String? decisionSummaryJson,
     String? errorMessage,
   }) async {
-    await isar.writeTxn(() async {
-      final job = await isar.collection<JiveImportJob>().get(jobId);
-      if (job == null) return;
-      job.status = _jobStatusName(status);
-      job.updatedAt = DateTime.now();
-      job.finishedAt = DateTime.now();
-      job.totalCount = totalCount;
-      job.insertedCount = insertedCount;
-      job.duplicateCount = duplicateCount;
-      job.invalidCount = invalidCount;
-      job.skippedByDuplicateDecisionCount = skippedByDuplicateDecisionCount;
-      job.duplicatePolicy = duplicatePolicy;
-      job.decisionSummaryJson = decisionSummaryJson;
-      job.errorMessage = errorMessage;
-
-      if (job.retryFromJobId != null) {
-        final parent = await isar.collection<JiveImportJob>().get(
-          job.retryFromJobId!,
-        );
-        if (parent != null) {
-          job.retryCount = parent.retryCount + 1;
-        }
-      }
-
-      await isar.collection<JiveImportJob>().put(job);
-    });
+    await _jobHistoryRepository.finishJob(
+      jobId: jobId,
+      status: _jobStatusName(status),
+      totalCount: totalCount,
+      insertedCount: insertedCount,
+      duplicateCount: duplicateCount,
+      invalidCount: invalidCount,
+      skippedByDuplicateDecisionCount: skippedByDuplicateDecisionCount,
+      duplicatePolicy: duplicatePolicy,
+      decisionSummaryJson: decisionSummaryJson,
+      errorMessage: errorMessage,
+    );
   }
 
   Map<int, _PolicySkipDecision> _buildPolicySkipDecisions({
@@ -1261,6 +1315,13 @@ class ImportService {
       if (_amountAliases.contains(cell) ||
           _dateAliases.contains(cell) ||
           _sourceAliases.contains(cell) ||
+          _accountBookAliases.contains(cell) ||
+          _assetAliases.contains(cell) ||
+          _toAssetAliases.contains(cell) ||
+          _parentCategoryAliases.contains(cell) ||
+          _childCategoryAliases.contains(cell) ||
+          _tagAliases.contains(cell) ||
+          _serviceChargeAliases.contains(cell) ||
           _typeAliases.contains(cell) ||
           _textAliases.contains(cell)) {
         return true;
@@ -1321,8 +1382,68 @@ class ImportService {
     'from',
     '来源',
     '渠道',
+  };
+
+  static const Set<String> _accountBookAliases = {
+    'ledger',
+    'book',
+    'accountbook',
+    '账本',
+    '账本名称',
+    '账簿',
+  };
+
+  static const Set<String> _assetAliases = {
+    'asset',
+    'account',
+    'wallet',
+    'card',
     '账户',
     '支付方式',
+    '资产',
+    '钱包',
+    '银行卡',
+  };
+
+  static const Set<String> _toAssetAliases = {
+    'toaccount',
+    'toasset',
+    'targetaccount',
+    'targetasset',
+    '转入账户',
+    '转入资产',
+    '目标账户',
+    '目标资产',
+    '收款账户',
+    '对方账户',
+  };
+
+  static const Set<String> _parentCategoryAliases = {
+    '一级分类',
+    'parentcategory',
+    'parentcategoryname',
+    'category',
+    '大类',
+    '主类',
+  };
+
+  static const Set<String> _childCategoryAliases = {
+    '二级分类',
+    'childcategory',
+    'childcategoryname',
+    'subcategory',
+    '子类',
+    '明细分类',
+  };
+
+  static const Set<String> _tagAliases = {'tag', 'tags', '标签', '标签列'};
+
+  static const Set<String> _serviceChargeAliases = {
+    'servicecharge',
+    'fee',
+    '手续费',
+    '服务费',
+    '转账手续费',
   };
 
   static const Set<String> _typeAliases = {
@@ -1344,6 +1465,33 @@ class ImportService {
     '备注',
     '商户',
   };
+
+  List<String> _splitTagNames(String? raw) {
+    if (raw == null) return const [];
+    return raw
+        .split(RegExp(r'[,，;；、\s]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  String? _inferTypeFromCategoryHints({
+    required String? parentCategoryName,
+    required String? childCategoryName,
+  }) {
+    final parent = (parentCategoryName ?? '').trim();
+    final child = (childCategoryName ?? '').trim();
+    if (parent == '收入' || child == '收入') {
+      return 'income';
+    }
+    if (parent == '转账' || child == '转账') {
+      return 'transfer';
+    }
+    if (parent.isNotEmpty || child.isNotEmpty) {
+      return 'expense';
+    }
+    return null;
+  }
 
   String _normalizeAlias(String input) {
     return input.trim().toLowerCase().replaceAll(RegExp(r'[\s_\-]'), '');

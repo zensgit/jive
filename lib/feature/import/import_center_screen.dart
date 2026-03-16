@@ -8,8 +8,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/database/import_job_model.dart';
+import '../../core/service/account_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/import_column_mapping_failfast_service.dart';
+import '../../core/service/import_csv_mapping_service.dart';
+import '../../core/service/import_record_repair_fanout_service.dart';
 import '../../core/service/import_service.dart';
+import '../../core/service/import_transfer_confirm_service.dart';
 import '../auto/auto_drafts_screen.dart';
 import 'import_batch_retry_runner.dart';
 import 'import_failure_report_exporter.dart';
@@ -67,6 +72,7 @@ class _PreparedImport {
   final String? fileName;
   final ImportDuplicateEstimate duplicateEstimate;
   final ImportDuplicateReview duplicateReview;
+  final _ImportCsvMappingSession? csvMapping;
 
   const _PreparedImport({
     required this.records,
@@ -77,6 +83,7 @@ class _PreparedImport {
     required this.fileName,
     this.duplicateEstimate = const ImportDuplicateEstimate.empty(),
     this.duplicateReview = const ImportDuplicateReview.empty(),
+    this.csvMapping,
   });
 
   int get validCount => records.where((record) => record.isValid).length;
@@ -93,6 +100,8 @@ class _PreparedImport {
     String? fileName,
     ImportDuplicateEstimate? duplicateEstimate,
     ImportDuplicateReview? duplicateReview,
+    _ImportCsvMappingSession? csvMapping,
+    bool clearCsvMapping = false,
   }) {
     return _PreparedImport(
       records: records ?? this.records,
@@ -103,8 +112,31 @@ class _PreparedImport {
       fileName: fileName ?? this.fileName,
       duplicateEstimate: duplicateEstimate ?? this.duplicateEstimate,
       duplicateReview: duplicateReview ?? this.duplicateReview,
+      csvMapping: clearCsvMapping ? null : (csvMapping ?? this.csvMapping),
     );
   }
+}
+
+class _ImportCsvMappingSession {
+  const _ImportCsvMappingSession({
+    required this.draft,
+    required this.mapping,
+    required this.result,
+  });
+
+  final ImportCsvMappingDraft draft;
+  final ImportCsvColumnMapping mapping;
+  final ImportColumnMappingFailfastResult result;
+}
+
+class _ImportRecordEditResult {
+  const _ImportRecordEditResult({
+    required this.record,
+    required this.applyStructuredRepairToSimilar,
+  });
+
+  final ImportParsedRecord record;
+  final bool applyStructuredRepairToSimilar;
 }
 
 enum _PreviewFilter { all, selected, warning, lowConfidence, invalid }
@@ -239,6 +271,13 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
   final TextEditingController _textController = TextEditingController();
   final TextEditingController _jobSearchController = TextEditingController();
   final ImagePicker _imagePicker = ImagePicker();
+  final ImportCsvMappingService _csvMappingService = ImportCsvMappingService();
+  final ImportColumnMappingFailfastService _columnMappingFailfastService =
+      ImportColumnMappingFailfastService();
+  final ImportRecordRepairFanoutService _repairFanoutService =
+      ImportRecordRepairFanoutService();
+  final ImportTransferConfirmService _transferConfirmService =
+      const ImportTransferConfirmService();
   late final ImportFailureReportExporter _failureReportExporter;
   late final ImportReviewChecklistExporter _reviewChecklistExporter;
 
@@ -305,6 +344,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
               fileName: debugPreview.fileName,
               duplicateEstimate: debugPreview.duplicateEstimate,
               duplicateReview: debugPreview.duplicateReview,
+              csvMapping: _inspectCsvMapping(debugPreview.payloadText),
             );
       if (!mounted) return;
       setState(() {
@@ -464,6 +504,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       final prepared = preparedWithTemplate.copyWith(
         duplicateEstimate: estimate,
         duplicateReview: review,
+        csvMapping: _inspectCsvMapping(preparedWithTemplate.payloadText),
       );
       if (!mounted) return;
       final selected = prepared.records
@@ -503,6 +544,12 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       _showMessage('请至少选择 1 条有效记录');
       return;
     }
+
+    final canProceed = await _reviewTransferImportBeforeConfirm(
+      service: service,
+      records: selectedRecords,
+    );
+    if (!canProceed) return;
 
     await _runImport(
       () => service.importPreparedRecords(
@@ -553,6 +600,79 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
         });
       }
     }
+  }
+
+  Future<bool> _reviewTransferImportBeforeConfirm({
+    required ImportService service,
+    required List<ImportParsedRecord> records,
+  }) async {
+    final accounts = await AccountService(service.isar).getActiveAccounts();
+    final report = _transferConfirmService.evaluate(
+      records: records,
+      knownAccountNames: accounts.map((account) => account.name),
+    );
+    if (report.transferCount <= 0) return true;
+    if (!mounted) return false;
+
+    if (report.hasBlock) {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('转账导入校验'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('存在 ${report.blockCount} 条阻断项，需先修复后再导入。'),
+                const SizedBox(height: 8),
+                for (final line in report.summaryLines()) Text('• $line'),
+              ],
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('返回检查'),
+              ),
+            ],
+          );
+        },
+      );
+      return false;
+    }
+
+    if (!report.hasReview) {
+      return true;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('转账导入校验'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('存在 ${report.reviewCount} 条待确认项，建议先检查。'),
+              const SizedBox(height: 8),
+              for (final line in report.summaryLines()) Text('• $line'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('返回检查'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('继续导入'),
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed == true;
   }
 
   Future<void> _openDrafts() async {
@@ -935,10 +1055,32 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     );
     final sourceController = TextEditingController(text: record.source);
     final rawTextController = TextEditingController(text: record.rawText ?? '');
+    final accountBookController = TextEditingController(
+      text: record.accountBookName ?? '',
+    );
+    final accountController = TextEditingController(
+      text: record.accountName ?? '',
+    );
+    final toAccountController = TextEditingController(
+      text: record.toAccountName ?? '',
+    );
+    final parentCategoryController = TextEditingController(
+      text: record.parentCategoryName ?? '',
+    );
+    final childCategoryController = TextEditingController(
+      text: record.childCategoryName ?? '',
+    );
+    final serviceChargeController = TextEditingController(
+      text: record.serviceCharge?.toStringAsFixed(2) ?? '',
+    );
+    final tagsController = TextEditingController(
+      text: record.tagNames.join(', '),
+    );
     var typeValue = record.type ?? 'unknown';
+    var applyStructuredRepairToSimilar = false;
     String? errorText;
 
-    final edited = await showDialog<ImportParsedRecord>(
+    final edited = await showDialog<_ImportRecordEditResult>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
@@ -990,6 +1132,52 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                       maxLines: 3,
                       decoration: const InputDecoration(labelText: '原文'),
                     ),
+                    TextField(
+                      controller: accountBookController,
+                      decoration: const InputDecoration(labelText: '账本'),
+                    ),
+                    TextField(
+                      controller: accountController,
+                      decoration: const InputDecoration(labelText: '账户'),
+                    ),
+                    TextField(
+                      controller: toAccountController,
+                      decoration: const InputDecoration(labelText: '转入账户'),
+                    ),
+                    TextField(
+                      controller: parentCategoryController,
+                      decoration: const InputDecoration(labelText: '一级分类'),
+                    ),
+                    TextField(
+                      controller: childCategoryController,
+                      decoration: const InputDecoration(labelText: '二级分类'),
+                    ),
+                    TextField(
+                      controller: serviceChargeController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(labelText: '手续费'),
+                    ),
+                    TextField(
+                      controller: tagsController,
+                      decoration: const InputDecoration(
+                        labelText: '标签',
+                        helperText: '多个标签用逗号、空格或顿号分隔',
+                      ),
+                    ),
+                    CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      value: applyStructuredRepairToSimilar,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          applyStructuredRepairToSimilar = value ?? false;
+                        });
+                      },
+                      title: const Text('将结构化修复批量应用到相似记录'),
+                      subtitle: const Text('仅同步来源/类型/账户/分类/标签，不复制金额和时间'),
+                    ),
                     if (errorText != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
@@ -1030,16 +1218,65 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
 
                     final source = sourceController.text.trim();
                     final rawText = rawTextController.text.trim();
+                    final accountBookName = accountBookController.text.trim();
+                    final accountName = accountController.text.trim();
+                    final toAccountName = toAccountController.text.trim();
+                    final parentCategoryName = parentCategoryController.text
+                        .trim();
+                    final childCategoryName = childCategoryController.text
+                        .trim();
+                    final serviceCharge = _parseOptionalAmount(
+                      serviceChargeController.text,
+                    );
+                    if (serviceChargeController.text.trim().isNotEmpty &&
+                        serviceCharge == null) {
+                      setDialogState(() {
+                        errorText = '手续费格式无效';
+                      });
+                      return;
+                    }
+                    final resolvedType = typeValue == 'unknown'
+                        ? _inferTypeFromStructuredHints(
+                            parentCategoryName: parentCategoryName,
+                            childCategoryName: childCategoryName,
+                            toAccountName: toAccountName,
+                            serviceCharge: serviceCharge,
+                          )
+                        : typeValue;
                     final updated = _recomputeRecordQuality(
                       record.copyWith(
                         amount: amount.abs(),
                         timestamp: parsedDate,
                         source: source.isEmpty ? 'Import' : source,
-                        type: typeValue == 'unknown' ? null : typeValue,
+                        type: resolvedType,
                         rawText: rawText.isEmpty ? null : rawText,
+                        accountBookName: accountBookName.isEmpty
+                            ? null
+                            : accountBookName,
+                        accountName: accountName.isEmpty ? null : accountName,
+                        toAccountName: resolvedType == 'transfer'
+                            ? (toAccountName.isEmpty ? null : toAccountName)
+                            : null,
+                        parentCategoryName: parentCategoryName.isEmpty
+                            ? (resolvedType == 'transfer' ? '转账' : null)
+                            : parentCategoryName,
+                        childCategoryName: childCategoryName.isEmpty
+                            ? (resolvedType == 'transfer' ? '转账' : null)
+                            : childCategoryName,
+                        serviceCharge: resolvedType == 'transfer'
+                            ? serviceCharge
+                            : null,
+                        tagNames: _splitTagNames(tagsController.text),
                       ),
                     );
-                    Navigator.pop(dialogContext, updated);
+                    Navigator.pop(
+                      dialogContext,
+                      _ImportRecordEditResult(
+                        record: updated,
+                        applyStructuredRepairToSimilar:
+                            applyStructuredRepairToSimilar,
+                      ),
+                    );
                   },
                   child: const Text('保存'),
                 ),
@@ -1051,7 +1288,18 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     );
 
     if (edited == null || !mounted) return;
-    await _replaceRecord(index, edited);
+    if (edited.applyStructuredRepairToSimilar) {
+      final result = _repairFanoutService.apply(
+        records: prepared.records,
+        targetIndex: index,
+        baselineRecord: record,
+        patchedRecord: edited.record,
+      );
+      await _replaceRecords(result.updatedRecords);
+      _showMessage(result.summary);
+      return;
+    }
+    await _replaceRecord(index, edited.record);
   }
 
   Future<void> _replaceRecord(int index, ImportParsedRecord updated) async {
@@ -1062,14 +1310,23 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     final nextRecords = List<ImportParsedRecord>.from(prepared.records);
     nextRecords[index] = updated;
 
+    await _replaceRecords(nextRecords);
+  }
+
+  Future<void> _replaceRecords(List<ImportParsedRecord> nextRecords) async {
+    final prepared = _prepared;
+    if (prepared == null) return;
+
     final nextSelected = List<bool>.from(_selected);
     if (nextSelected.length < nextRecords.length) {
       nextSelected.addAll(
         List<bool>.filled(nextRecords.length - nextSelected.length, false),
       );
     }
-    if (!updated.isValid) {
-      nextSelected[index] = false;
+    for (var index = 0; index < nextRecords.length; index++) {
+      if (!nextRecords[index].isValid) {
+        nextSelected[index] = false;
+      }
     }
 
     setState(() {
@@ -1099,10 +1356,26 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     if (record.type == null) {
       warnings.add('交易类型未知');
     }
+    if (record.type == 'transfer') {
+      if ((record.toAccountName ?? '').trim().isEmpty) {
+        warnings.add('转账缺少转入账户');
+      }
+      if ((record.accountName ?? '').trim().isNotEmpty &&
+          (record.toAccountName ?? '').trim().isNotEmpty &&
+          record.accountName!.trim() == record.toAccountName!.trim()) {
+        warnings.add('转出账户与转入账户重复');
+      }
+    }
     final confidence = record.amount <= 0
         ? 0.0
         : (1 - (warnings.length * 0.18)).clamp(0.2, 1.0).toDouble();
     return record.copyWith(confidence: confidence, warnings: warnings);
+  }
+
+  double? _parseOptionalAmount(String input) {
+    final normalized = input.trim().replaceAll(',', '');
+    if (normalized.isEmpty) return null;
+    return double.tryParse(normalized)?.abs();
   }
 
   DateTime? _parseEditorDateTime(String input) {
@@ -1124,6 +1397,37 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
       int.parse(match.group(4)!),
       int.parse(match.group(5)!),
     );
+  }
+
+  List<String> _splitTagNames(String raw) {
+    return raw
+        .split(RegExp(r'[,，;；、\s]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  String? _inferTypeFromStructuredHints({
+    required String? parentCategoryName,
+    required String? childCategoryName,
+    String? toAccountName,
+    double? serviceCharge,
+  }) {
+    final parent = (parentCategoryName ?? '').trim();
+    final child = (childCategoryName ?? '').trim();
+    if (parent == '收入' || child == '收入') {
+      return 'income';
+    }
+    if (parent == '转账' || child == '转账') {
+      return 'transfer';
+    }
+    if ((toAccountName ?? '').trim().isNotEmpty || serviceCharge != null) {
+      return 'transfer';
+    }
+    if (parent.isNotEmpty || child.isNotEmpty) {
+      return 'expense';
+    }
+    return null;
   }
 
   DateTime _adjustToWorkday(DateTime value, _WorkdayAdjustMode mode) {
@@ -1237,6 +1541,384 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
         duplicateReview: review,
       );
     });
+  }
+
+  _ImportCsvMappingSession? _inspectCsvMapping(String payloadText) {
+    if (payloadText.trim().isEmpty) return null;
+    final draft = _csvMappingService.inspect(payloadText);
+    if (!draft.hasHeader || draft.headers.isEmpty) {
+      return null;
+    }
+    return _evaluateCsvMappingSession(
+      draft: draft,
+      mapping: draft.mapping,
+      sourceScope: 'import_center_csv_preview',
+    );
+  }
+
+  _ImportCsvMappingSession _evaluateCsvMappingSession({
+    required ImportCsvMappingDraft draft,
+    required ImportCsvColumnMapping mapping,
+    required String sourceScope,
+  }) {
+    final result = _columnMappingFailfastService.evaluate(
+      ImportColumnMappingFailfastInput(
+        sourceScope: sourceScope,
+        headers: draft.headers,
+        requireCategoryMapping: false,
+        requireAccountBookMappingForReady: false,
+        accountBookColumnIndex: mapping.accountBookColumnIndex,
+        assetColumnIndex: mapping.assetColumnIndex,
+        parentCategoryColumnIndex: mapping.parentCategoryColumnIndex,
+        childCategoryColumnIndex: mapping.childCategoryColumnIndex,
+        dateColumnIndex: mapping.dateColumnIndex,
+        amountColumnIndex: mapping.amountColumnIndex,
+        remarkColumnIndex: mapping.remarkColumnIndex,
+        typeColumnIndex: mapping.typeColumnIndex,
+      ),
+    );
+    return _ImportCsvMappingSession(
+      draft: draft,
+      mapping: mapping,
+      result: result,
+    );
+  }
+
+  Future<void> _openCsvMappingEditor() async {
+    final prepared = _prepared;
+    final session = prepared?.csvMapping;
+    if (prepared == null || session == null) return;
+
+    var draft = session.draft;
+    var mapping = session.mapping;
+    var evaluation = session;
+
+    final nextSession = await showDialog<_ImportCsvMappingSession>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            void updateMapping(ImportCsvColumnMapping nextMapping) {
+              mapping = nextMapping;
+              evaluation = _evaluateCsvMappingSession(
+                draft: draft,
+                mapping: mapping,
+                sourceScope: 'import_center_csv_preview',
+              );
+              setDialogState(() {});
+            }
+
+            return AlertDialog(
+              title: const Text('列映射检查与修复'),
+              content: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _csvMappingStatusIcon(evaluation.result.status),
+                            color: _csvMappingStatusColor(
+                              evaluation.result.status,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _csvMappingStatusLabel(evaluation.result.status),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: _csvMappingStatusColor(
+                                  evaluation.result.status,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(evaluation.result.reason),
+                      const SizedBox(height: 4),
+                      Text(
+                        '动作：${evaluation.result.action}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      Text(
+                        '建议：${evaluation.result.recommendation}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '当前列头',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (var i = 0; i < draft.headers.length; i++)
+                            Chip(
+                              label: Text(
+                                'col ${i + 1}: ${draft.headers[i].trim().isEmpty ? "（空列头）" : draft.headers[i]}',
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      _buildCsvMappingSelector(
+                        label: '账本列',
+                        headers: draft.headers,
+                        value: mapping.accountBookColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            accountBookColumnIndex: value,
+                            clearAccountBookColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '一级分类列',
+                        headers: draft.headers,
+                        value: mapping.parentCategoryColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            parentCategoryColumnIndex: value,
+                            clearParentCategoryColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '二级分类列',
+                        headers: draft.headers,
+                        value: mapping.childCategoryColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            childCategoryColumnIndex: value,
+                            clearChildCategoryColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '金额列',
+                        headers: draft.headers,
+                        value: mapping.amountColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            amountColumnIndex: value,
+                            clearAmountColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '日期列',
+                        headers: draft.headers,
+                        value: mapping.dateColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            dateColumnIndex: value,
+                            clearDateColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '账户/来源列',
+                        headers: draft.headers,
+                        value: mapping.assetColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            assetColumnIndex: value,
+                            clearAssetColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '转入账户列',
+                        headers: draft.headers,
+                        value: mapping.toAssetColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            toAssetColumnIndex: value,
+                            clearToAssetColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '收支类型列',
+                        headers: draft.headers,
+                        value: mapping.typeColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            typeColumnIndex: value,
+                            clearTypeColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '手续费列',
+                        headers: draft.headers,
+                        value: mapping.serviceChargeColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            serviceChargeColumnIndex: value,
+                            clearServiceChargeColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '备注列',
+                        headers: draft.headers,
+                        value: mapping.remarkColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            remarkColumnIndex: value,
+                            clearRemarkColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildCsvMappingSelector(
+                        label: '标签列',
+                        headers: draft.headers,
+                        value: mapping.tagColumnIndex,
+                        onChanged: (value) => updateMapping(
+                          mapping.copyWith(
+                            tagColumnIndex: value,
+                            clearTagColumnIndex: value == null,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    final restored = _evaluateCsvMappingSession(
+                      draft: draft,
+                      mapping: draft.mapping,
+                      sourceScope: 'import_center_csv_preview',
+                    );
+                    mapping = restored.mapping;
+                    evaluation = restored;
+                    setDialogState(() {});
+                  },
+                  child: const Text('恢复系统推断'),
+                ),
+                FilledButton(
+                  onPressed:
+                      evaluation.result.status ==
+                          ImportColumnMappingFailfastStatus.block
+                      ? null
+                      : () => Navigator.pop(dialogContext, evaluation),
+                  child: const Text('应用到预览'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (nextSession == null || !mounted) return;
+
+    final reparsed = _csvMappingService.parseWithMapping(
+      prepared.payloadText,
+      mapping: nextSession.mapping,
+      sourceType: prepared.sourceType == ImportSourceType.auto
+          ? ImportSourceType.csv
+          : prepared.sourceType,
+    );
+    final template =
+        _ruleTemplates[prepared.sourceType] ??
+        const _ImportRuleTemplate.empty();
+    final templatedRecords = _applyRuleTemplate(reparsed, template);
+    final selected = templatedRecords
+        .map((record) => record.isValid)
+        .toList(growable: false);
+    setState(() {
+      _prepared = prepared.copyWith(
+        records: templatedRecords,
+        csvMapping: nextSession,
+      );
+      _selected = selected;
+      _previewFilter = _PreviewFilter.all;
+    });
+    await _refreshDuplicateInsights();
+    _showMessage('已将列映射修复应用到当前预览');
+  }
+
+  IconData _csvMappingStatusIcon(ImportColumnMappingFailfastStatus status) {
+    switch (status) {
+      case ImportColumnMappingFailfastStatus.ready:
+        return Icons.task_alt_outlined;
+      case ImportColumnMappingFailfastStatus.review:
+        return Icons.rule_folder_outlined;
+      case ImportColumnMappingFailfastStatus.block:
+        return Icons.block_outlined;
+    }
+  }
+
+  Color _csvMappingStatusColor(ImportColumnMappingFailfastStatus status) {
+    switch (status) {
+      case ImportColumnMappingFailfastStatus.ready:
+        return Colors.green;
+      case ImportColumnMappingFailfastStatus.review:
+        return Colors.orangeAccent;
+      case ImportColumnMappingFailfastStatus.block:
+        return Colors.redAccent;
+    }
+  }
+
+  String _csvMappingStatusLabel(ImportColumnMappingFailfastStatus status) {
+    switch (status) {
+      case ImportColumnMappingFailfastStatus.ready:
+        return '列映射已就绪';
+      case ImportColumnMappingFailfastStatus.review:
+        return '列映射需要人工复核';
+      case ImportColumnMappingFailfastStatus.block:
+        return '列映射阻断导入';
+    }
+  }
+
+  Widget _buildCsvMappingSelector({
+    required String label,
+    required List<String> headers,
+    required int? value,
+    required ValueChanged<int?> onChanged,
+  }) {
+    return DropdownButtonFormField<int?>(
+      initialValue: value,
+      items: [
+        const DropdownMenuItem<int?>(value: null, child: Text('不选择')),
+        for (var index = 0; index < headers.length; index++)
+          DropdownMenuItem<int?>(
+            value: index,
+            child: Text(
+              'col ${index + 1}: ${headers[index].trim().isEmpty ? "（空列头）" : headers[index]}',
+            ),
+          ),
+      ],
+      onChanged: onChanged,
+      decoration: InputDecoration(labelText: label),
+    );
   }
 
   List<ImportParsedRecord> _applyRuleTemplate(
@@ -1616,7 +2298,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     final riskByIndex = prepared.duplicateReview.byRecordIndex;
     final buffer = StringBuffer();
     buffer.writeln(
-      'lineNumber,selected,isValid,amount,timestamp,type,source,confidence,duplicateRisk,warnings,rawText',
+      'lineNumber,selected,isValid,amount,timestamp,type,source,accountBookName,accountName,toAccountName,parentCategoryName,childCategoryName,serviceCharge,tagNames,confidence,duplicateRisk,warnings,rawText',
     );
     for (final index in visibleIndices) {
       final record = prepared.records[index];
@@ -1631,6 +2313,13 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
           _csvSafe(_formatDateTime(record.timestamp)),
           _csvSafe(_typeLabel(record.type)),
           _csvSafe(record.source),
+          _csvSafe(record.accountBookName ?? ''),
+          _csvSafe(record.accountName ?? ''),
+          _csvSafe(record.toAccountName ?? ''),
+          _csvSafe(record.parentCategoryName ?? ''),
+          _csvSafe(record.childCategoryName ?? ''),
+          record.serviceCharge?.toStringAsFixed(2) ?? '',
+          _csvSafe(record.tagNames.join(' | ')),
           (record.confidence * 100).toStringAsFixed(1),
           _csvSafe(riskLabel),
           _csvSafe(record.warnings.join(' | ')),
@@ -1862,6 +2551,7 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
     final duplicateEstimate = prepared.duplicateEstimate;
     final duplicateReview = prepared.duplicateReview;
     final duplicateRiskByIndex = duplicateReview.byRecordIndex;
+    final csvMapping = prepared.csvMapping;
     final selectedCount = _selectedCount();
     final visibleIndices = _visibleRecordIndices(prepared);
     const maxPreviewItems = 30;
@@ -1904,6 +2594,63 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
               Text(
                 '预估重复率 ${(duplicateEstimate.duplicateRate * 100).toStringAsFixed(1)}%',
                 style: const TextStyle(color: Colors.orangeAccent),
+              ),
+            ],
+            if (csvMapping != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _csvMappingStatusColor(
+                    csvMapping.result.status,
+                  ).withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _csvMappingStatusColor(
+                      csvMapping.result.status,
+                    ).withValues(alpha: 0.28),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _csvMappingStatusIcon(csvMapping.result.status),
+                          color: _csvMappingStatusColor(
+                            csvMapping.result.status,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _csvMappingStatusLabel(csvMapping.result.status),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              color: _csvMappingStatusColor(
+                                csvMapping.result.status,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(csvMapping.result.reason),
+                    const SizedBox(height: 4),
+                    Text(
+                      '列头 ${csvMapping.draft.headers.length} 项，当前映射会在重新应用后刷新预览记录。',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _openCsvMappingEditor,
+                      icon: const Icon(Icons.table_chart_outlined),
+                      label: const Text('检查/修复列映射'),
+                    ),
+                  ],
+                ),
               ),
             ],
             if (duplicateReview.highRiskCount > 0) ...[
@@ -2075,6 +2822,19 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
         '第${record.lineNumber}行  ¥${record.amount.toStringAsFixed(2)}  ${_typeLabel(record.type)}';
     final subtitle =
         '${_formatDateTime(record.timestamp)} · ${record.source}\n${record.rawText ?? ''}';
+    final structuredChips = <String>[
+      if ((record.accountBookName ?? '').isNotEmpty)
+        '账本 ${record.accountBookName}',
+      if ((record.accountName ?? '').isNotEmpty) '账户 ${record.accountName}',
+      if ((record.toAccountName ?? '').isNotEmpty) '转入 ${record.toAccountName}',
+      if ((record.parentCategoryName ?? '').isNotEmpty)
+        '一级 ${record.parentCategoryName}',
+      if ((record.childCategoryName ?? '').isNotEmpty)
+        '二级 ${record.childCategoryName}',
+      if (record.serviceCharge != null)
+        '手续费 ¥${record.serviceCharge!.toStringAsFixed(2)}',
+      for (final tag in record.tagNames) '标签 $tag',
+    ];
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4),
@@ -2135,6 +2895,31 @@ class _ImportCenterScreenState extends State<ImportCenterScreen> {
                   ],
                 ),
                 Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+                if (structuredChips.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final chip in structuredChips)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blueGrey.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              chip,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 if (record.warnings.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
