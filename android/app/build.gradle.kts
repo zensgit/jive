@@ -1,6 +1,7 @@
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.Properties
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
@@ -12,6 +13,29 @@ plugins {
 }
 
 val enableSplitPerAbi = providers.gradleProperty("split-per-abi").orNull == "true"
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use(keystoreProperties::load)
+}
+
+fun propOrEnv(key: String, envKey: String): String? {
+    return (keystoreProperties.getProperty(key) ?: System.getenv(envKey))
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+}
+
+val releaseStoreFilePath = propOrEnv("storeFile", "JIVE_ANDROID_STORE_FILE")
+val releaseStorePassword = propOrEnv("storePassword", "JIVE_ANDROID_STORE_PASSWORD")
+val releaseKeyAlias = propOrEnv("keyAlias", "JIVE_ANDROID_KEY_ALIAS")
+val releaseKeyPassword = propOrEnv("keyPassword", "JIVE_ANDROID_KEY_PASSWORD")
+val hasReleaseSigning =
+    releaseStoreFilePath != null &&
+        releaseStorePassword != null &&
+        releaseKeyAlias != null &&
+        releaseKeyPassword != null &&
+        file(releaseStoreFilePath).exists()
 
 android {
     namespace = "com.jive.app"
@@ -42,6 +66,12 @@ android {
 
     flavorDimensions += "env"
     productFlavors {
+        create("prod") {
+            dimension = "env"
+            applicationId = "com.jivemoney.app"
+            manifestPlaceholders["appLabel"] = "Jive"
+            manifestPlaceholders["appLabelAccessibility"] = "Jive"
+        }
         create("auto") {
             dimension = "env"
             applicationId = "com.jivemoney.app.auto"
@@ -56,14 +86,27 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            if (hasReleaseSigning) {
+                storeFile = file(releaseStoreFilePath!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // versionName already includes build time for easier installs.
         }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (hasReleaseSigning) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -135,4 +178,12 @@ if (enableSplitPerAbi) {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // google_mlkit_text_recognition requires app-level language packages in release builds.
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    implementation("com.google.mlkit:text-recognition-devanagari:16.0.1")
+    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
 }

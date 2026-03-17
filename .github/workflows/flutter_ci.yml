@@ -7,6 +7,21 @@ on:
       - main
   workflow_dispatch:
     inputs:
+      build_release_candidate:
+        description: "Build Android release candidate app bundle"
+        required: false
+        type: boolean
+        default: false
+      require_release_signing:
+        description: "Require production Android signing for release candidate"
+        required: false
+        type: boolean
+        default: false
+      build_ios_release_candidate:
+        description: "Build iOS release candidate without codesign"
+        required: false
+        type: boolean
+        default: false
       run_android_e2e:
         description: "Run Android integration_test on emulator"
         required: false
@@ -49,6 +64,84 @@ jobs:
 
       - name: Test
         run: flutter test
+
+  android_release_candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.build_release_candidate == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.5
+          channel: stable
+          cache: true
+
+      - name: Build Android Release Candidate
+        env:
+          JIVE_RELEASE_CANDIDATE_STRICT_SIGNING: ${{ github.event.inputs.require_release_signing == 'true' && 'true' || '' }}
+        run: bash scripts/build_release_candidate.sh
+
+      - name: Publish Release Candidate Summary
+        if: always()
+        run: bash scripts/render_release_report_summary.sh android-candidate
+
+      - name: Upload Release Candidate Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-candidate-${{ github.run_id }}
+          path: |
+            build/release-candidate/**
+            build/reports/release-candidate/**
+          if-no-files-found: error
+
+  ios_release_candidate:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.event.inputs.build_ios_release_candidate == 'true'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.5
+          channel: stable
+          cache: true
+
+      - name: Build iOS Release Candidate
+        run: bash scripts/build_ios_release_candidate.sh
+
+      - name: Publish iOS Release Candidate Summary
+        if: always()
+        run: bash scripts/render_release_report_summary.sh ios-candidate
+
+      - name: Upload iOS Release Candidate Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-release-candidate-${{ github.run_id }}
+          path: |
+            build/ios-release-candidate/**
+            build/reports/ios-release-candidate/**
+          if-no-files-found: error
 
   release_smoke_host:
     runs-on: ubuntu-latest

@@ -42,7 +42,11 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
   }
 
   Future<void> _loadDrafts() async {
-    final list = await _isar.collection<JiveAutoDraft>().where().sortByTimestampDesc().findAll();
+    final list = await _isar
+        .collection<JiveAutoDraft>()
+        .where()
+        .sortByTimestampDesc()
+        .findAll();
     final accounts = await AccountService(_isar).getActiveAccounts();
     if (!mounted) return;
     setState(() {
@@ -70,7 +74,13 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     await _isar.writeTxn(() async {
       await _isar.collection<JiveAutoDraft>().put(draft);
     });
-    await AutoDraftService(_isar).confirmDraft(draft);
+    try {
+      await AutoDraftService(_isar).confirmDraft(draft);
+    } on AutoDraftConfirmException catch (error) {
+      if (!mounted) return;
+      _showDraftConfirmMessage(error.message);
+      return;
+    }
     _hasChanges = true;
     await _loadDrafts();
   }
@@ -83,18 +93,79 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
 
   Future<void> _confirmAll() async {
     final service = AutoDraftService(_isar);
+    var confirmedCount = 0;
+    final skipped = <String>[];
+    var abortedByUser = false;
     for (final draft in List<JiveAutoDraft>.from(_drafts)) {
       if (_isTransferDraft(draft)) {
         final ready = await _ensureTransferAccounts(draft);
-        if (!ready) break;
+        if (!ready) {
+          abortedByUser = true;
+          break;
+        }
       }
-      await service.confirmDraft(draft);
+      try {
+        await service.confirmDraft(draft);
+        confirmedCount += 1;
+      } on AutoDraftConfirmException catch (error) {
+        skipped.add('${_buildDraftSummaryLabel(draft)}：${error.message}');
+      }
     }
-    _hasChanges = true;
+    _hasChanges = confirmedCount > 0;
     await _loadDrafts();
+    if (!mounted) return;
+    final message = _buildBatchConfirmMessage(
+      confirmedCount: confirmedCount,
+      skipped: skipped,
+      abortedByUser: abortedByUser,
+    );
+    if (message != null) {
+      _showDraftConfirmMessage(message);
+    }
   }
 
-  Future<_DraftConfirmResult?> _reviewDraftBeforeConfirm(JiveAutoDraft draft) async {
+  void _showDraftConfirmMessage(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _buildDraftSummaryLabel(JiveAutoDraft draft) {
+    final prefix = _isTransferDraft(draft) ? '转账' : (draft.category ?? '草稿');
+    return '$prefix ${_timeFormat.format(draft.timestamp)}';
+  }
+
+  String? _buildBatchConfirmMessage({
+    required int confirmedCount,
+    required List<String> skipped,
+    required bool abortedByUser,
+  }) {
+    if (confirmedCount == 0 && skipped.isEmpty && !abortedByUser) {
+      return null;
+    }
+    final parts = <String>[];
+    if (confirmedCount > 0) {
+      parts.add('已确认 $confirmedCount 条草稿');
+    }
+    if (skipped.isNotEmpty) {
+      final preview = skipped.take(2).join('；');
+      final suffix = skipped.length > 2 ? '；其余 ${skipped.length - 2} 条已跳过' : '';
+      parts.add('跳过 ${skipped.length} 条：$preview$suffix');
+    }
+    if (abortedByUser) {
+      parts.add('已停止剩余批量确认');
+    }
+    if (parts.isEmpty) {
+      return '未确认任何草稿。';
+    }
+    return parts.join('，');
+  }
+
+  Future<_DraftConfirmResult?> _reviewDraftBeforeConfirm(
+    JiveAutoDraft draft,
+  ) async {
     if (_accounts.isEmpty) {
       await _loadDrafts();
     }
@@ -131,13 +202,21 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     }
 
     var parentOptions = _parentsForType(type, options);
-    var selectedParent = _pickCategory(parentOptions, draft.categoryKey, draft.category);
+    var selectedParent = _pickCategory(
+      parentOptions,
+      draft.categoryKey,
+      draft.category,
+    );
     selectedParent ??= parentOptions.isNotEmpty ? parentOptions.first : null;
     final initialParentKey = selectedParent?.key;
     var subOptions = initialParentKey == null
         ? <JiveCategory>[]
         : (options.subByParentKey[initialParentKey] ?? <JiveCategory>[]);
-    var selectedSub = _pickCategory(subOptions, draft.subCategoryKey, draft.subCategory);
+    var selectedSub = _pickCategory(
+      subOptions,
+      draft.subCategoryKey,
+      draft.subCategory,
+    );
     selectedSub ??= subOptions.isNotEmpty ? subOptions.first : null;
 
     final result = await showModalBottomSheet<_DraftConfirmResult>(
@@ -147,7 +226,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
-            final selectedTags = tags.where((tag) => selectedTagKeys.contains(tag.key)).toList();
+            final selectedTags = tags
+                .where((tag) => selectedTagKeys.contains(tag.key))
+                .toList();
             Future<void> pickTags() async {
               final picked = await showModalBottomSheet<List<String>>(
                 context: context,
@@ -161,7 +242,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                     tags: tags,
                     selectedKeys: selectedTagKeys,
                     onCreateTag: (name) async {
-                      final created = await TagService(_isar).createTag(name: name);
+                      final created = await TagService(
+                        _isar,
+                      ).createTag(name: name);
                       await _loadDrafts();
                       return created;
                     },
@@ -173,15 +256,26 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                 selectedTagKeys = picked;
               });
             }
+
             void refreshCategories() {
               parentOptions = _parentsForType(type, options);
-              selectedParent = _pickCategory(parentOptions, draft.categoryKey, draft.category);
-              selectedParent ??= parentOptions.isNotEmpty ? parentOptions.first : null;
+              selectedParent = _pickCategory(
+                parentOptions,
+                draft.categoryKey,
+                draft.category,
+              );
+              selectedParent ??= parentOptions.isNotEmpty
+                  ? parentOptions.first
+                  : null;
               final parentKey = selectedParent?.key;
               subOptions = parentKey == null
                   ? <JiveCategory>[]
                   : (options.subByParentKey[parentKey] ?? <JiveCategory>[]);
-              selectedSub = _pickCategory(subOptions, draft.subCategoryKey, draft.subCategory);
+              selectedSub = _pickCategory(
+                subOptions,
+                draft.subCategoryKey,
+                draft.subCategory,
+              );
               selectedSub ??= subOptions.isNotEmpty ? subOptions.first : null;
             }
 
@@ -208,7 +302,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                       const SizedBox(height: 12),
                       const Text(
                         '确认自动记账',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const Divider(height: 24),
                       Expanded(
@@ -218,31 +315,44 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                             children: [
                               Row(
                                 children: [
-                                  Expanded(
-                                    child: Text('来源：${draft.source}'),
-                                  ),
+                                  Expanded(child: Text('来源：${draft.source}')),
                                   Text(_timeFormat.format(draft.timestamp)),
                                 ],
                               ),
                               const SizedBox(height: 12),
                               TextField(
                                 controller: amountController,
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
                                 decoration: InputDecoration(
                                   labelText: '金额',
                                   prefixText: '¥ ',
                                   errorText: amountError,
                                 ),
-                                onChanged: (_) => setSheetState(() => amountError = null),
+                                onChanged: (_) =>
+                                    setSheetState(() => amountError = null),
                               ),
                               const SizedBox(height: 12),
                               DropdownButtonFormField<String>(
                                 initialValue: type,
-                                decoration: const InputDecoration(labelText: '类型'),
+                                decoration: const InputDecoration(
+                                  labelText: '类型',
+                                ),
                                 items: const [
-                                  DropdownMenuItem(value: 'expense', child: Text('支出')),
-                                  DropdownMenuItem(value: 'income', child: Text('收入')),
-                                  DropdownMenuItem(value: 'transfer', child: Text('转账')),
+                                  DropdownMenuItem(
+                                    value: 'expense',
+                                    child: Text('支出'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'income',
+                                    child: Text('收入'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'transfer',
+                                    child: Text('转账'),
+                                  ),
                                 ],
                                 onChanged: (value) {
                                   if (value == null) return;
@@ -265,21 +375,28 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   ),
                                   items: [
                                     for (final account in _accounts)
-                                      DropdownMenuItem(value: account.id, child: Text(account.name)),
+                                      DropdownMenuItem(
+                                        value: account.id,
+                                        child: Text(account.name),
+                                      ),
                                   ],
-                                  onChanged: (value) =>
-                                      setSheetState(() {
-                                        accountId = value;
-                                        accountError = null;
-                                      }),
+                                  onChanged: (value) => setSheetState(() {
+                                    accountId = value;
+                                    accountError = null;
+                                  }),
                                 ),
                                 const SizedBox(height: 12),
                                 DropdownButtonFormField<String>(
                                   initialValue: selectedParent?.key,
-                                  decoration: const InputDecoration(labelText: '分类'),
+                                  decoration: const InputDecoration(
+                                    labelText: '分类',
+                                  ),
                                   items: [
                                     for (final category in parentOptions)
-                                      DropdownMenuItem(value: category.key, child: Text(category.name)),
+                                      DropdownMenuItem(
+                                        value: category.key,
+                                        child: Text(category.name),
+                                      ),
                                   ],
                                   onChanged: (value) {
                                     setSheetState(() {
@@ -287,18 +404,28 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                         (cat) => cat.key == value,
                                         orElse: () => parentOptions.first,
                                       );
-                                      subOptions = options.subByParentKey[selectedParent!.key] ?? <JiveCategory>[];
-                                      selectedSub = subOptions.isNotEmpty ? subOptions.first : null;
+                                      subOptions =
+                                          options.subByParentKey[selectedParent!
+                                              .key] ??
+                                          <JiveCategory>[];
+                                      selectedSub = subOptions.isNotEmpty
+                                          ? subOptions.first
+                                          : null;
                                     });
                                   },
                                 ),
                                 const SizedBox(height: 12),
                                 DropdownButtonFormField<String>(
                                   initialValue: selectedSub?.key,
-                                  decoration: const InputDecoration(labelText: '子分类'),
+                                  decoration: const InputDecoration(
+                                    labelText: '子分类',
+                                  ),
                                   items: [
                                     for (final sub in subOptions)
-                                      DropdownMenuItem(value: sub.key, child: Text(sub.name)),
+                                      DropdownMenuItem(
+                                        value: sub.key,
+                                        child: Text(sub.name),
+                                      ),
                                   ],
                                   onChanged: (value) {
                                     setSheetState(() {
@@ -320,7 +447,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   ),
                                   items: [
                                     for (final account in _accounts)
-                                      DropdownMenuItem(value: account.id, child: Text(account.name)),
+                                      DropdownMenuItem(
+                                        value: account.id,
+                                        child: Text(account.name),
+                                      ),
                                   ],
                                   onChanged: (value) => setSheetState(() {
                                     accountId = value;
@@ -336,7 +466,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   ),
                                   items: [
                                     for (final account in _accounts)
-                                      DropdownMenuItem(value: account.id, child: Text(account.name)),
+                                      DropdownMenuItem(
+                                        value: account.id,
+                                        child: Text(account.name),
+                                      ),
                                   ],
                                   onChanged: (value) => setSheetState(() {
                                     toAccountId = value;
@@ -359,8 +492,14 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                         }),
                                       ),
                                     ActionChip(
-                                      label: Text(selectedTags.isEmpty ? '添加标签' : '编辑标签'),
-                                      avatar: const Icon(Icons.label_outline, size: 16, color: Colors.black54),
+                                      label: Text(
+                                        selectedTags.isEmpty ? '添加标签' : '编辑标签',
+                                      ),
+                                      avatar: const Icon(
+                                        Icons.label_outline,
+                                        size: 16,
+                                        color: Colors.black54,
+                                      ),
                                       onPressed: pickTags,
                                     ),
                                   ],
@@ -376,7 +515,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                       alignment: Alignment.centerLeft,
                                       child: Text(
                                         draft.rawText ?? '',
-                                        style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                        style: TextStyle(
+                                          color: Colors.grey.shade600,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -401,7 +543,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                               child: ElevatedButton(
                                 onPressed: () {
                                   final parsed = double.tryParse(
-                                    amountController.text.replaceAll(',', '').trim(),
+                                    amountController.text
+                                        .replaceAll(',', '')
+                                        .trim(),
                                   );
                                   if (parsed == null || parsed <= 0) {
                                     setSheetState(() => amountError = '金额无效');
@@ -409,15 +553,21 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   }
                                   if (type == 'transfer') {
                                     if (accountId == null) {
-                                      setSheetState(() => fromAccountError = '请选择转出账户');
+                                      setSheetState(
+                                        () => fromAccountError = '请选择转出账户',
+                                      );
                                       return;
                                     }
                                     if (toAccountId == null) {
-                                      setSheetState(() => toAccountError = '请选择转入账户');
+                                      setSheetState(
+                                        () => toAccountError = '请选择转入账户',
+                                      );
                                       return;
                                     }
                                     if (accountId == toAccountId) {
-                                      setSheetState(() => toAccountError = '转入账户不能与转出相同');
+                                      setSheetState(
+                                        () => toAccountError = '转入账户不能与转出相同',
+                                      );
                                       return;
                                     }
                                   } else if (accountId == null) {
@@ -431,16 +581,28 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                       amount: parsed,
                                       type: type,
                                       accountId: accountId,
-                                      toAccountId: type == 'transfer' ? toAccountId : null,
-                                      categoryKey: type == 'transfer' ? null : selectedParent?.key,
-                                      subCategoryKey: type == 'transfer' ? null : selectedSub?.key,
+                                      toAccountId: type == 'transfer'
+                                          ? toAccountId
+                                          : null,
+                                      categoryKey: type == 'transfer'
+                                          ? null
+                                          : selectedParent?.key,
+                                      subCategoryKey: type == 'transfer'
+                                          ? null
+                                          : selectedSub?.key,
                                       categoryName: type == 'transfer'
                                           ? '转账'
-                                          : (selectedParent?.name ?? draft.category ?? '未分类'),
+                                          : (selectedParent?.name ??
+                                                draft.category ??
+                                                '未分类'),
                                       subCategoryName: type == 'transfer'
                                           ? '转账'
-                                          : (selectedSub?.name ?? draft.subCategory ?? '未分类'),
-                                      tagKeys: List<String>.from(selectedTagKeys),
+                                          : (selectedSub?.name ??
+                                                draft.subCategory ??
+                                                '未分类'),
+                                      tagKeys: List<String>.from(
+                                        selectedTagKeys,
+                                      ),
                                     ),
                                   );
                                 },
@@ -465,16 +627,21 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
   }
 
   Future<_CategoryOptions> _loadCategoryOptions() async {
-    final categories =
-        await _isar.collection<JiveCategory>().filter().isHiddenEqualTo(false).findAll();
-    final parentsIncome = categories
-        .where((cat) => cat.parentKey == null && cat.isIncome)
-        .toList()
-      ..sort((a, b) => a.order.compareTo(b.order));
-    final parentsExpense = categories
-        .where((cat) => cat.parentKey == null && !cat.isIncome)
-        .toList()
-      ..sort((a, b) => a.order.compareTo(b.order));
+    final categories = await _isar
+        .collection<JiveCategory>()
+        .filter()
+        .isHiddenEqualTo(false)
+        .findAll();
+    final parentsIncome =
+        categories
+            .where((cat) => cat.parentKey == null && cat.isIncome)
+            .toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
+    final parentsExpense =
+        categories
+            .where((cat) => cat.parentKey == null && !cat.isIncome)
+            .toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
     final subByParentKey = <String, List<JiveCategory>>{};
     for (final cat in categories.where((cat) => cat.parentKey != null)) {
       final key = cat.parentKey!;
@@ -523,7 +690,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
-          title: Text("待确认自动记账", style: GoogleFonts.lato(fontWeight: FontWeight.bold)),
+          title: Text(
+            "待确认自动记账",
+            style: GoogleFonts.lato(fontWeight: FontWeight.bold),
+          ),
           backgroundColor: Colors.white,
           elevation: 0,
           leading: BackButton(
@@ -531,10 +701,7 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
           ),
           actions: [
             if (_drafts.isNotEmpty)
-              TextButton(
-                onPressed: _confirmAll,
-                child: const Text("全部确认"),
-              ),
+              TextButton(onPressed: _confirmAll, child: const Text("全部确认")),
           ],
         ),
         body: _isLoading
@@ -581,12 +748,13 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     );
   }
 
-
   Widget _buildDraftCard(JiveAutoDraft draft) {
     final type = draft.type ?? 'expense';
     final isTransfer = _isTransferDraft(draft);
     final amountPrefix = isTransfer ? '' : (type == 'income' ? '+ ' : '- ');
-    final amountColor = isTransfer ? Colors.blueGrey : (type == 'income' ? Colors.green : Colors.redAccent);
+    final amountColor = isTransfer
+        ? Colors.blueGrey
+        : (type == 'income' ? Colors.green : Colors.redAccent);
     final category = draft.category ?? '自动记账';
     final sub = draft.subCategory ?? '未分类';
     final timeText = _timeFormat.format(draft.timestamp);
@@ -615,18 +783,31 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(isTransfer ? '转账' : category, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(
+                      isTransfer ? '转账' : category,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       isTransfer ? transferLine : "$sub • $timeText",
-                      style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
               ),
               Text(
                 "$amountPrefix¥${draft.amount.toStringAsFixed(2)}",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: amountColor),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: amountColor,
+                ),
               ),
             ],
           ),
@@ -724,7 +905,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     return true;
   }
 
-  Future<_TransferSelection?> _promptTransferAccounts(JiveAutoDraft draft) async {
+  Future<_TransferSelection?> _promptTransferAccounts(
+    JiveAutoDraft draft,
+  ) async {
     final hints = _extractTransferHints(draft.rawText);
     final fromHint = hints?.from;
     final toHint = hints?.to;
@@ -760,10 +943,15 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       }
     }
     bool rememberMapping = false;
-    final mappingPreview = AutoAccountMappingStore.sanitizePattern(toHint?.name ?? '');
+    final mappingPreview = AutoAccountMappingStore.sanitizePattern(
+      toHint?.name ?? '',
+    );
     final fromHintLabel = _buildAccountNameFromHint(fromHint);
     final toHintLabel = _buildAccountNameFromHint(toHint);
-    final canQuickCreateBoth = fromHintLabel != null && toHintLabel != null && (fromId == null || toId == null);
+    final canQuickCreateBoth =
+        fromHintLabel != null &&
+        toHintLabel != null &&
+        (fromId == null || toId == null);
 
     return await showModalBottomSheet<_TransferSelection>(
       context: context,
@@ -795,7 +983,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                       const SizedBox(height: 12),
                       const Text(
                         '补全转账账户',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const Divider(height: 24),
                       Expanded(
@@ -815,13 +1006,21 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                 ),
                               DropdownButtonFormField<int>(
                                 initialValue: fromId,
-                                decoration: const InputDecoration(labelText: '转出账户'),
-                                hint: fromHintLabel == null ? const Text('请选择') : Text(fromHintLabel),
+                                decoration: const InputDecoration(
+                                  labelText: '转出账户',
+                                ),
+                                hint: fromHintLabel == null
+                                    ? const Text('请选择')
+                                    : Text(fromHintLabel),
                                 items: [
                                   for (final account in _accounts)
-                                    DropdownMenuItem(value: account.id, child: Text(account.name)),
+                                    DropdownMenuItem(
+                                      value: account.id,
+                                      child: Text(account.name),
+                                    ),
                                 ],
-                                onChanged: (value) => setSheetState(() => fromId = value),
+                                onChanged: (value) =>
+                                    setSheetState(() => fromId = value),
                               ),
                               if (fromId == null && fromHintLabel != null)
                                 const Align(
@@ -840,13 +1039,21 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                 ),
                               DropdownButtonFormField<int>(
                                 initialValue: toId,
-                                decoration: const InputDecoration(labelText: '转入账户'),
-                                hint: toHintLabel == null ? const Text('请选择') : Text(toHintLabel),
+                                decoration: const InputDecoration(
+                                  labelText: '转入账户',
+                                ),
+                                hint: toHintLabel == null
+                                    ? const Text('请选择')
+                                    : Text(toHintLabel),
                                 items: [
                                   for (final account in _accounts)
-                                    DropdownMenuItem(value: account.id, child: Text(account.name)),
+                                    DropdownMenuItem(
+                                      value: account.id,
+                                      child: Text(account.name),
+                                    ),
                                 ],
-                                onChanged: (value) => setSheetState(() => toId = value),
+                                onChanged: (value) =>
+                                    setSheetState(() => toId = value),
                               ),
                               if (toId == null && toHintLabel != null)
                                 const Align(
@@ -858,7 +1065,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                 alignment: Alignment.centerLeft,
                                 child: TextButton(
                                   onPressed: () async {
-                                    final created = await _quickCreateAccount(fromHintLabel);
+                                    final created = await _quickCreateAccount(
+                                      fromHintLabel,
+                                    );
                                     if (created == null) return;
                                     setSheetState(() {
                                       _accounts = [..._accounts, created];
@@ -873,7 +1082,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                 alignment: Alignment.centerLeft,
                                 child: TextButton(
                                   onPressed: () async {
-                                    final created = await _quickCreateAccount(toHintLabel);
+                                    final created = await _quickCreateAccount(
+                                      toHintLabel,
+                                    );
                                     if (created == null) return;
                                     setSheetState(() {
                                       _accounts = [..._accounts, created];
@@ -890,12 +1101,19 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   child: TextButton(
                                     onPressed: () async {
                                       final createdFrom = fromId == null
-                                          ? await _createAccountWithName(fromHintLabel)
+                                          ? await _createAccountWithName(
+                                              fromHintLabel,
+                                            )
                                           : null;
                                       final createdTo = toId == null
-                                          ? await _createAccountWithName(toHintLabel)
+                                          ? await _createAccountWithName(
+                                              toHintLabel,
+                                            )
                                           : null;
-                                      if (createdFrom == null && createdTo == null) return;
+                                      if (createdFrom == null &&
+                                          createdTo == null) {
+                                        return;
+                                      }
                                       setSheetState(() {
                                         if (createdFrom != null) {
                                           _addAccountToCache(createdFrom);
@@ -914,11 +1132,13 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                 CheckboxListTile(
                                   contentPadding: EdgeInsets.zero,
                                   value: rememberMapping,
-                                  onChanged: (value) =>
-                                      setSheetState(() => rememberMapping = value ?? false),
+                                  onChanged: (value) => setSheetState(
+                                    () => rememberMapping = value ?? false,
+                                  ),
                                   title: const Text('记住该账户映射'),
                                   subtitle: Text('下次自动匹配：$mappingPreview'),
-                                  controlAffinity: ListTileControlAffinity.leading,
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
                                 ),
                             ],
                           ),
@@ -940,7 +1160,8 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                               child: ElevatedButton(
                                 onPressed: () async {
                                   if (fromId == null || toId == null) return;
-                                  if (rememberMapping && mappingPreview.isNotEmpty) {
+                                  if (rememberMapping &&
+                                      mappingPreview.isNotEmpty) {
                                     await AutoAccountMappingStore.upsert(
                                       AutoAccountMapping(
                                         pattern: mappingPreview,
@@ -952,7 +1173,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   if (!context.mounted) return;
                                   Navigator.pop(
                                     context,
-                                    _TransferSelection(fromId: fromId!, toId: toId!),
+                                    _TransferSelection(
+                                      fromId: fromId!,
+                                      toId: toId!,
+                                    ),
                                   );
                                 },
                                 child: const Text('确认'),
@@ -984,7 +1208,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
             decoration: const InputDecoration(labelText: '账户名称'),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
             TextButton(
               onPressed: () {
                 final value = controller.text.trim();
@@ -1032,20 +1259,38 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
 
   _AccountTypeHint _inferAccountType(String name) {
     if (name.contains('信用')) {
-      return const _AccountTypeHint(type: AccountService.typeLiability, subType: 'credit');
+      return const _AccountTypeHint(
+        type: AccountService.typeLiability,
+        subType: 'credit',
+      );
     }
     if (name.contains('借') || name.contains('贷款')) {
-      return const _AccountTypeHint(type: AccountService.typeLiability, subType: 'loan');
+      return const _AccountTypeHint(
+        type: AccountService.typeLiability,
+        subType: 'loan',
+      );
     }
-    if (name.contains('微信') || name.contains('支付宝') || name.contains('钱包') || name.contains('余额宝')) {
-      return const _AccountTypeHint(type: AccountService.typeAsset, subType: 'wallet');
+    if (name.contains('微信') ||
+        name.contains('支付宝') ||
+        name.contains('钱包') ||
+        name.contains('余额宝')) {
+      return const _AccountTypeHint(
+        type: AccountService.typeAsset,
+        subType: 'wallet',
+      );
     }
-    return const _AccountTypeHint(type: AccountService.typeAsset, subType: 'bank');
+    return const _AccountTypeHint(
+      type: AccountService.typeAsset,
+      subType: 'bank',
+    );
   }
 
   _TransferAccountHints? _extractTransferHints(String? rawText) {
     if (rawText == null) return null;
-    final text = rawText.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final text = rawText
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (text.isEmpty) return null;
     final fromHint = _extractFromAccountHint(text);
     final toHint = _extractToAccountHint(text);
@@ -1055,19 +1300,25 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
 
   _AccountHint? _extractToAccountHint(String text) {
     final patterns = [
-      RegExp(r'(?:到账银行卡|到账卡|收款银行卡|收款卡|收款账号|收款账户|转入卡|转出卡|银行卡)[:：]?\s*([^\s，,。;；]{2,30})'),
+      RegExp(
+        r'(?:到账银行卡|到账卡|收款银行卡|收款卡|收款账号|收款账户|转入卡|转出卡|银行卡)[:：]?\s*([^\s，,。;；]{2,30})',
+      ),
       RegExp(r'(?:转账到|转到|转至|转入至|到账至)[:：]?\s*([^\s，,。;；]{2,30})'),
     ];
     final name = _matchFirstGroup(text, patterns);
-    return _buildAccountHint(name, text) ?? _inferAccountHintFromContext(text, preferWallet: false);
+    return _buildAccountHint(name, text) ??
+        _inferAccountHintFromContext(text, preferWallet: false);
   }
 
   _AccountHint? _extractFromAccountHint(String text) {
     final patterns = [
-      RegExp(r'(?:付款方式|付款信息|交易方式|退款方式|付款卡|付款方|扣款卡|支付方式|支付账户|付款账户)[:：]?\s*([^\s，,。;；]{2,30})'),
+      RegExp(
+        r'(?:付款方式|付款信息|交易方式|退款方式|付款卡|付款方|扣款卡|支付方式|支付账户|付款账户)[:：]?\s*([^\s，,。;；]{2,30})',
+      ),
     ];
     final name = _matchFirstGroup(text, patterns);
-    return _buildAccountHint(name, text) ?? _inferAccountHintFromContext(text, preferWallet: true);
+    return _buildAccountHint(name, text) ??
+        _inferAccountHintFromContext(text, preferWallet: true);
   }
 
   String? _matchFirstGroup(String text, List<RegExp> patterns) {
@@ -1080,7 +1331,8 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
   }
 
   _AccountHint? _buildAccountHint(String? name, String text) {
-    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
+    final tail =
+        RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
         RegExp(r'[（(](\d{3,4})[）)]').firstMatch(text)?.group(1);
     if (name == null || name.trim().isEmpty) {
       if (tail == null) return null;
@@ -1097,7 +1349,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       tailFromName ??= cleaned;
       cleaned = '';
     } else {
-      final tailMatch = RegExp(r'^(.*?)(?:尾号|末四位|末尾)\s*(\d{3,4})$').firstMatch(cleaned);
+      final tailMatch = RegExp(
+        r'^(.*?)(?:尾号|末四位|末尾)\s*(\d{3,4})$',
+      ).firstMatch(cleaned);
       if (tailMatch != null) {
         cleaned = tailMatch.group(1)!.trim();
         tailFromName ??= tailMatch.group(2);
@@ -1108,12 +1362,16 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       if (tailFromName == null) return null;
       return _AccountHint(name: tailFromName, tail: tailFromName);
     }
-    final resolvedTail = tailFromName ??
+    final resolvedTail =
+        tailFromName ??
         (RegExp(r'^\d{3,4}$').hasMatch(normalized) ? normalized : null);
     return _AccountHint(name: normalized, tail: resolvedTail);
   }
 
-  _AccountHint? _inferAccountHintFromContext(String text, {required bool preferWallet}) {
+  _AccountHint? _inferAccountHintFromContext(
+    String text, {
+    required bool preferWallet,
+  }) {
     final bank = _extractBankName(text);
     String? wallet;
     for (final keyword in _walletHintKeywords) {
@@ -1159,8 +1417,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       if (trimmed.contains(keyword)) return keyword;
     }
     if (RegExp(r'^\d{3,4}$').hasMatch(trimmed)) return trimmed;
-    if (RegExp(r'(?:元|今日|今天|昨天|交易|支付|消费|退款|收款|转入|转出|支出|收入|成功|失败|单次|定时|投资|理财)')
-        .hasMatch(trimmed)) {
+    if (RegExp(
+      r'(?:元|今日|今天|昨天|交易|支付|消费|退款|收款|转入|转出|支出|收入|成功|失败|单次|定时|投资|理财)',
+    ).hasMatch(trimmed)) {
       return null;
     }
     if (trimmed.length > 12) return null;
@@ -1186,7 +1445,8 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     if (accounts.isEmpty) return null;
     final normalizedHint = _cleanAccountName(hint.name);
     final bank = _extractBankName(hint.name);
-    final hintHasTail = hint.tail != null || RegExp(r'\d{3,4}').hasMatch(hint.name);
+    final hintHasTail =
+        hint.tail != null || RegExp(r'\d{3,4}').hasMatch(hint.name);
 
     if (hint.tail != null) {
       for (final account in accounts) {
@@ -1201,7 +1461,9 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
       if (!hintHasTail && RegExp(r'\d{3,4}').hasMatch(account.name)) {
         continue;
       }
-      if (bank != null && account.name.contains('信用卡') && !account.name.contains(bank)) {
+      if (bank != null &&
+          account.name.contains('信用卡') &&
+          !account.name.contains(bank)) {
         continue;
       }
       final normalizedAccount = _cleanAccountName(account.name);

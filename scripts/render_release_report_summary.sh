@@ -19,6 +19,8 @@ report_dir = sys.argv[1]
 context = sys.argv[2]
 
 sections = [
+    ("release-candidate", "Android Release Candidate"),
+    ("ios-release-candidate", "iOS Release Candidate"),
     ("sync-runtime", "Sync Runtime Reports"),
     ("account-book-import-sync", "Account Book / Import / Sync Reports"),
     ("import-column-mapping", "Import Column Mapping Reports"),
@@ -45,10 +47,25 @@ for folder, title in sections:
         name = os.path.basename(path)
         status = data.get("status", "unknown")
         level = data.get("telemetryLevel") or data.get("mode") or "n/a"
+        artifact_name = str(data.get("artifactName", "")).strip()
+        flavor = str(data.get("flavor", "")).strip()
+        signing_mode = str(data.get("signingMode", "")).strip()
+        codesign = str(data.get("codesign", "")).strip()
+        message = str(data.get("message", "")).strip()
         reason = str(data.get("reason", "")).strip()
         action = str(data.get("action", "")).strip()
         recommendation = str(data.get("recommendation", "")).strip()
         print(f"- `{name}`: `{status}` / `{level}`")
+        if artifact_name:
+            print(f"  - artifact: {artifact_name}")
+        if flavor:
+            print(f"  - flavor: {flavor}")
+        if signing_mode:
+            print(f"  - signingMode: {signing_mode}")
+        if codesign:
+            print(f"  - codesign: {codesign}")
+        if message:
+            print(f"  - message: {message}")
         if reason:
             print(f"  - reason: {reason}")
         if action:

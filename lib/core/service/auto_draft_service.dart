@@ -162,6 +162,16 @@ class AutoCaptureResult {
   );
 }
 
+class AutoDraftConfirmException implements Exception {
+  const AutoDraftConfirmException(this.code, this.message);
+
+  final String code;
+  final String message;
+
+  @override
+  String toString() => 'AutoDraftConfirmException($code): $message';
+}
+
 class AutoDraftService {
   AutoDraftService(this.isar);
 
@@ -354,6 +364,11 @@ class AutoDraftService {
     final categoryName = isTransfer ? '转账' : draft.category;
     final subCategoryName = isTransfer ? '转账' : draft.subCategory;
     final transferMetadata = _readTransferMetadata(draft.metadataJson);
+    final resolvedAccounts = await _resolveDraftAccountIds(
+      draft,
+      isTransfer: isTransfer,
+      transferMetadata: transferMetadata,
+    );
     await _commitTransaction(
       capture: AutoCapture(
         amount: draft.amount,
@@ -369,8 +384,8 @@ class AutoDraftService {
       subCategoryKey: subCategoryKey,
       categoryName: categoryName,
       subCategoryName: subCategoryName,
-      accountId: draft.accountId,
-      toAccountId: draft.toAccountId,
+      accountId: resolvedAccounts.accountId,
+      toAccountId: resolvedAccounts.toAccountId,
       exchangeFee: transferMetadata.serviceCharge,
       tagKeys: draft.tagKeys,
       draftId: draft.id,
@@ -399,6 +414,20 @@ class AutoDraftService {
     final account =
         accountId ?? (await AccountService(isar).getDefaultAccount())?.id;
     final normalizedType = type == 'transfer' ? 'transfer' : type;
+    if (normalizedType == 'transfer' && toAccountId == null) {
+      throw const AutoDraftConfirmException(
+        'missing_transfer_target_account',
+        '转账草稿缺少可解析的转入账户，无法确认。',
+      );
+    }
+    if (normalizedType == 'transfer' &&
+        account != null &&
+        account == toAccountId) {
+      throw const AutoDraftConfirmException(
+        'same_transfer_account',
+        '转账草稿的转出账户和转入账户不能相同。',
+      );
+    }
     final normalizedCategory = normalizedType == 'transfer'
         ? '转账'
         : categoryName;
@@ -446,6 +475,37 @@ class AutoDraftService {
       await TagService(isar).markTagsUsed(tx.tagKeys, capture.timestamp);
     }
     DataReloadBus.notify();
+  }
+
+  Future<_ResolvedDraftAccountIds> _resolveDraftAccountIds(
+    JiveAutoDraft draft, {
+    required bool isTransfer,
+    required _TransferDraftMetadata transferMetadata,
+  }) async {
+    if (!isTransfer) {
+      return _ResolvedDraftAccountIds(
+        accountId: draft.accountId,
+        toAccountId: draft.toAccountId,
+      );
+    }
+    final accounts = await AccountService(isar).getActiveAccounts();
+    final mappings = await AutoAccountMappingStore.load();
+    final resolvedAccountId =
+        draft.accountId ??
+        _resolveAccountIdFromAccounts(
+          accounts,
+          draft.source,
+          draft.rawText,
+          mappings,
+        );
+    final resolvedToAccountId =
+        draft.toAccountId ??
+        _resolveExplicitAccountId(accounts, transferMetadata.toAccountName) ??
+        _resolveToAccountIdFromAccounts(accounts, draft.rawText, mappings);
+    return _ResolvedDraftAccountIds(
+      accountId: resolvedAccountId,
+      toAccountId: resolvedToAccountId,
+    );
   }
 
   String? _inferMealSubCategory({
@@ -1142,6 +1202,16 @@ class _TransferDraftMetadata {
   const _TransferDraftMetadata.empty()
     : toAccountName = null,
       serviceCharge = null;
+}
+
+class _ResolvedDraftAccountIds {
+  final int? accountId;
+  final int? toAccountId;
+
+  const _ResolvedDraftAccountIds({
+    required this.accountId,
+    required this.toAccountId,
+  });
 }
 
 class _AccountHint {
