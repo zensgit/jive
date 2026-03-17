@@ -3,8 +3,8 @@
 ## Synced Baseline
 - Repository: `https://github.com/zensgit/jive.git`
 - Branch: `codex/post-merge-verify`
-- Latest pushed commit: `6244babf126be85486e1e3cbcdffde03cd3a438d`
-- Commit message: `chore(release): add candidate gating and verification`
+- Latest pushed commit: `b0c48b84ed26c1e2adf4164663dc83fb6546367f`
+- Commit message: `docs: add cross-machine handoff`
 
 ## What is already on GitHub
 - import pipeline repair / preview / transfer guard
@@ -23,9 +23,10 @@
 - Key example file exists at `/Users/huazhou/Downloads/Github/Jive/app/android/key.properties.example`.
 
 ### iOS
-- iOS platform download was started on this machine.
-- Before the download, the blocker was `Any iOS Device` unavailable and `iOS 26.0 is not installed`.
-- The local disk became tight again during/after platform work, so this machine is not a clean baseline for continued iOS release work.
+- iOS device platform is now installed on this machine.
+- `xcodebuild -showdestinations` now shows `Any iOS Device` and iOS 26.0.1 simulators.
+- iOS release candidate build has not yet been rerun after the platform installation.
+- The local disk is still tight, so another machine is still the cleaner baseline for continued release work.
 
 ## Important local-only state not fully synced
 These are still local and were intentionally not mixed into the pushed release slice:
