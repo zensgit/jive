@@ -98,7 +98,7 @@ class _TrendChartScreenState extends State<TrendChartScreen> {
       final v = t.totalExpense > t.totalIncome ? t.totalExpense : t.totalIncome;
       return v > m ? v : m;
     });
-    final ceiling = maxY > 0 ? maxY * 1.2 : 1000;
+    final ceiling = maxY > 0 ? maxY * 1.2 : 1000.0;
 
     return LineChart(
       LineChartData(

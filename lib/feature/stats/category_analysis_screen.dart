@@ -148,7 +148,10 @@ class _CategoryAnalysisScreenState extends State<CategoryAnalysisScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CategoryTransactionsScreen(categoryKey: stat.key),
+                      builder: (_) => CategoryTransactionsScreen(
+                        title: stat.name,
+                        filterCategoryKey: stat.key,
+                      ),
                     ),
                   );
                 },

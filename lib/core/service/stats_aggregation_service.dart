@@ -1,7 +1,6 @@
 import 'package:isar/isar.dart';
 import '../database/transaction_model.dart';
 import '../database/category_model.dart';
-import '../database/account_model.dart';
 import 'account_service.dart';
 import 'currency_service.dart';
 import 'database_service.dart';
@@ -223,7 +222,7 @@ class StatsAggregationService {
       return CategoryStat(
         key: e.key,
         name: cat?.name ?? e.key,
-        icon: cat?.icon,
+        icon: cat?.iconName,
         amount: e.value,
         percentage: total > 0 ? e.value / total * 100 : 0,
         count: counts[e.key] ?? 0,
