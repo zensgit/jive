@@ -47,7 +47,7 @@ import 'feature/auto/auto_settings_screen.dart';
 import 'feature/import/import_center_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/transactions/transaction_detail_screen.dart';
-import 'feature/stats/stats_screen.dart';
+import 'feature/stats/stats_home_screen.dart';
 import 'feature/category/category_manager_screen.dart';
 import 'feature/category/category_transactions_screen.dart';
 import 'feature/tag/tag_management_screen.dart';
@@ -1202,7 +1202,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         index: _currentIndex,
         children: [
           _buildHomeContent(),
-          StatsScreen(reloadSignal: _dataReloadSignal),
+          StatsHomeScreen(reloadSignal: _dataReloadSignal),
           AccountsScreen(
             reloadSignal: _dataReloadSignal,
             onDataChanged: _notifyDataChanged,
