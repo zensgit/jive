@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_icon_style.dart';
 import '../budget/budget_settings_screen.dart';
+import '../instalment/instalment_list_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -152,6 +153,35 @@ class SettingsScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const BudgetSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _sectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("账务管理", style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.view_timeline_outlined),
+                  title: const Text("分期管理"),
+                  subtitle: const Text("跟踪信用卡分期与贷款还款进度"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const InstalmentListScreen(),
                       ),
                     );
                   },
