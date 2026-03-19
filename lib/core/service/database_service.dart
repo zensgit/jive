@@ -10,6 +10,7 @@ import '../database/category_model.dart';
 import '../database/currency_model.dart';
 import '../database/import_job_model.dart';
 import '../database/import_job_record_model.dart';
+import '../database/instalment_model.dart';
 import '../database/project_model.dart';
 import '../database/recurring_rule_model.dart';
 import '../database/tag_conversion_log.dart';
@@ -45,6 +46,7 @@ class DatabaseService {
     JiveExchangeRateHistorySchema,
     JiveCurrencyPreferenceSchema,
     JiveRecurringRuleSchema,
+    JiveInstalmentSchema,
   ];
 
   /// 获取或创建 Isar 实例
