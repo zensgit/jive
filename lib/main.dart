@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -60,6 +61,7 @@ import 'feature/currency/currency_settings_screen.dart';
 import 'feature/currency/currency_converter_screen.dart';
 import 'feature/budget/budget_manager_screen.dart';
 import 'feature/settings/settings_screen.dart';
+import 'feature/theme/theme_provider.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -67,8 +69,15 @@ void main() async {
   GoogleFonts.config.allowRuntimeFetching = false;
   await JiveLogger.init();
   final iconStyle = await CategoryIconStyleStore.load();
+  final themeProvider = ThemeProvider();
+  await themeProvider.init();
   CategoryIconStyleConfig.current = iconStyle;
-  runApp(const JiveApp());
+  runApp(
+    ChangeNotifierProvider<ThemeProvider>.value(
+      value: themeProvider,
+      child: const JiveApp(),
+    ),
+  );
 }
 
 class JiveApp extends StatelessWidget {
@@ -76,31 +85,35 @@ class JiveApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<CategoryIconStyle>(
-      valueListenable: CategoryIconStyleConfig.notifier,
-      builder: (context, _, __) {
-        return MaterialApp(
-          title: 'Jive 积叶',
-          debugShowCheckedModeBanner: false,
-          theme: JiveTheme.lightTheme,
-          darkTheme: JiveTheme.darkTheme,
-          themeMode: ThemeMode.system, // 跟随系统主题
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-          localeResolutionCallback: (locale, supportedLocales) {
-            if (locale == null) return supportedLocales.first;
-            for (final supported in supportedLocales) {
-              if (supported.languageCode == locale.languageCode) {
-                return supported;
-              }
-            }
-            return supportedLocales.first;
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
+        return ValueListenableBuilder<CategoryIconStyle>(
+          valueListenable: CategoryIconStyleConfig.notifier,
+          builder: (context, _, __) {
+            return MaterialApp(
+              title: 'Jive 积叶',
+              debugShowCheckedModeBanner: false,
+              theme: themeProvider.lightTheme,
+              darkTheme: themeProvider.darkTheme,
+              themeMode: themeProvider.themeMode,
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+              localeResolutionCallback: (locale, supportedLocales) {
+                if (locale == null) return supportedLocales.first;
+                for (final supported in supportedLocales) {
+                  if (supported.languageCode == locale.languageCode) {
+                    return supported;
+                  }
+                }
+                return supportedLocales.first;
+              },
+              home: const MainScreen(),
+            );
           },
-          home: const MainScreen(),
         );
       },
     );
