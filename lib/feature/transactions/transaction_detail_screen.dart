@@ -15,6 +15,7 @@ import '../../core/design_system/theme.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/tag_rule_service.dart';
+import '../refund/add_refund_screen.dart';
 import '../tag/tag_rule_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import 'add_transaction_screen.dart';
@@ -178,6 +179,25 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     }
   }
 
+  Future<void> _createRefund() async {
+    final tx = _transaction;
+    if (tx == null || (tx.type ?? 'expense') == 'transfer') {
+      return;
+    }
+    final created = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AddRefundScreen(originalTransactionId: tx.id),
+      ),
+    );
+    if (created == true) {
+      _hasDataChanges = true;
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
   Future<void> _deleteTransaction() async {
     final tx = _transaction;
     if (tx == null) return;
@@ -304,6 +324,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     }
     final type = tx.type ?? 'expense';
     final isTransfer = type == 'transfer';
+    final canRefund = !isTransfer;
     final amountColor = isTransfer
         ? Colors.blueGrey
         : (type == 'income' ? Colors.green : Colors.redAccent);
@@ -400,9 +421,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         _buildProjectRow(tx.projectId),
       ]),
       const SizedBox(height: 12),
-        _buildDetailCard([
-          _buildTagRow(tags, smartTagKeys, smartTags, optOutTags, isOptOutAll),
-        ]),
+      _buildDetailCard([
+        _buildTagRow(tags, smartTagKeys, smartTags, optOutTags, isOptOutAll),
+      ]),
       const SizedBox(height: 12),
       _buildDetailCard([
         _buildDetailRow(
@@ -434,6 +455,13 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             tooltip: '复制',
             onPressed: _copyTransaction,
           ),
+          if (canRefund)
+            _buildActionIcon(
+              icon: Icons.undo_rounded,
+              color: Colors.orangeAccent,
+              tooltip: '退款',
+              onPressed: _createRefund,
+            ),
           _buildActionIcon(
             icon: Icons.edit_rounded,
             color: JiveTheme.primaryGreen,
