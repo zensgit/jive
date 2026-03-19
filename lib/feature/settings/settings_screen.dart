@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_icon_style.dart';
 import '../budget/budget_settings_screen.dart';
+import '../export/csv_export_screen.dart';
 import '../theme/theme_provider.dart';
 import '../theme/theme_selection_screen.dart';
 
@@ -183,6 +184,35 @@ class SettingsScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const BudgetSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _sectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("数据", style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.file_download_outlined),
+                  title: const Text("导出数据"),
+                  subtitle: const Text("按日期、分类和类型导出 CSV"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CsvExportScreen(),
                       ),
                     );
                   },

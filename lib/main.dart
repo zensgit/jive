@@ -47,6 +47,7 @@ import 'feature/auto/auto_supported_apps_screen.dart';
 import 'feature/auto/auto_settings_screen.dart';
 import 'feature/import/import_center_screen.dart';
 import 'feature/search/global_search_screen.dart';
+import 'feature/calendar/calendar_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/transactions/transaction_detail_screen.dart';
 import 'feature/stats/stats_home_screen.dart';
@@ -1162,6 +1163,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _openCalendarView() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const CalendarScreen()),
+    );
+    if (changed == true) {
+      await _loadTransactions();
+      _notifyDataChanged();
+    }
+  }
+
   Future<void> _openAutoDrafts() async {
     final changed = await Navigator.push(
       context,
@@ -1388,6 +1400,20 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 backgroundColor: Colors.grey.shade200,
                 child: Icon(
                   Icons.search,
+                  color: Colors.black54,
+                  size: iconSize,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: '日历视图',
+              onPressed: _openCalendarView,
+              icon: CircleAvatar(
+                radius: avatarRadius,
+                backgroundColor: Colors.grey.shade200,
+                child: Icon(
+                  Icons.calendar_month_outlined,
                   color: Colors.black54,
                   size: iconSize,
                 ),
