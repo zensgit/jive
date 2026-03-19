@@ -27,8 +27,30 @@ import 'budget_settings_screen.dart';
 /// - Monthly total budget dashboard card
 /// - Monthly spending/remaining trend chart
 /// - Category budgets list with drag reorder
+class BudgetManagerDebugData {
+  final BudgetSummary totalSummary;
+  final String? currency;
+  final DateTime? month;
+  final BudgetPacingInsight? totalPacingInsight;
+  final List<BudgetCategoryContribution> totalTopCategories;
+  final List<BudgetSpendingAnomalyDay> totalAnomalyDays;
+  final Map<String, JiveCategory> categoryByKey;
+
+  const BudgetManagerDebugData({
+    required this.totalSummary,
+    this.currency,
+    this.month,
+    this.totalPacingInsight,
+    this.totalTopCategories = const [],
+    this.totalAnomalyDays = const [],
+    this.categoryByKey = const {},
+  });
+}
+
 class BudgetManagerScreen extends StatefulWidget {
-  const BudgetManagerScreen({super.key});
+  final BudgetManagerDebugData? debugData;
+
+  const BudgetManagerScreen({super.key, this.debugData});
 
   @override
   State<BudgetManagerScreen> createState() => _BudgetManagerScreenState();
@@ -64,6 +86,25 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.debugData != null) {
+      final debug = widget.debugData!;
+      _totalSummary = debug.totalSummary;
+      _totalBudget = debug.totalSummary.budget;
+      _currency = debug.currency ?? debug.totalSummary.budget.currency;
+      _month =
+          debug.month ??
+          DateTime(
+            debug.totalSummary.budget.startDate.year,
+            debug.totalSummary.budget.startDate.month,
+            1,
+          );
+      _totalPacingInsight = debug.totalPacingInsight;
+      _totalTopCategories = debug.totalTopCategories;
+      _totalAnomalyDays = debug.totalAnomalyDays;
+      _categoryByKey = debug.categoryByKey;
+      _isLoading = false;
+      return;
+    }
     _loadPrefs().then((_) => _loadData());
   }
 
@@ -527,7 +568,8 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
           : Builder(
               builder: (context) {
                 final summary = _totalSummary;
-                if (summary == null || _budgetService == null) {
+                if (summary == null ||
+                    (_budgetService == null && widget.debugData == null)) {
                   return _buildLoadErrorState(
                     title: '预算服务尚未准备好',
                     message: '请稍后重试',
@@ -888,16 +930,15 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
           ),
           const SizedBox(height: 8),
           ..._totalTopCategories.map((item) {
-            final canDrillDown = item.categoryKey != '__uncategorized__';
+            final isDrillDownEnabled = item.categoryKey != '__uncategorized__';
             return Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
+                  key: Key('budget_top_category_${item.categoryKey}'),
                   borderRadius: BorderRadius.circular(8),
-                  onTap: canDrillDown
-                      ? () => _openContributionTransactions(item)
-                      : null,
+                  onTap: () => _openContributionTransactions(item),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 4,
@@ -925,7 +966,7 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                             color: Colors.grey.shade700,
                           ),
                         ),
-                        if (canDrillDown) ...[
+                        if (isDrillDownEnabled) ...[
                           const SizedBox(width: 4),
                           Icon(
                             Icons.chevron_right,
@@ -963,12 +1004,14 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
             style: GoogleFonts.lato(fontSize: 12, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
-          ..._totalAnomalyDays.map(
-            (item) => Padding(
+          ..._totalAnomalyDays.map((item) {
+            final dayKey = DateFormat('yyyyMMdd').format(item.day);
+            return Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
+                  key: Key('budget_anomaly_day_$dayKey'),
                   borderRadius: BorderRadius.circular(8),
                   onTap: () => _openAnomalyDayTransactions(item),
                   child: Padding(
@@ -998,8 +1041,8 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          }),
         ],
       ),
     );
