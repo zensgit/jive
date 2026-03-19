@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/import_job_model.dart';
 import '../../core/database/import_job_record_model.dart';
+import '../../core/repository/import_job_history_repository.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/import_service.dart';
 
@@ -131,7 +132,8 @@ class _ImportJobDetailScreenState extends State<ImportJobDetailScreen> {
     try {
       final isar = await DatabaseService.getInstance();
       final service = ImportService(isar);
-      final job = await isar.collection<JiveImportJob>().get(widget.jobId);
+      final jobRepository = ImportJobHistoryRepository(isar);
+      final job = await jobRepository.getJob(widget.jobId);
       if (job == null) {
         throw StateError('任务不存在 #${widget.jobId}');
       }

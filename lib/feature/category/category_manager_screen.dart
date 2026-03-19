@@ -9,6 +9,7 @@ import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/transaction_service.dart';
 import '../../core/utils/logger_util.dart';
 import '../stats/stats_screen.dart';
 import 'category_create_dialog.dart';
@@ -116,18 +117,22 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       final all = await _isar.collection<JiveCategory>().where().findAll();
       final onlyUser = widget.onlyUserCategories;
       final parents = all
-          .where((c) =>
-              c.parentKey == null &&
-              c.isIncome == _showIncome &&
-              (_showHidden || !c.isHidden) &&
-              (!onlyUser || !c.isSystem))
+          .where(
+            (c) =>
+                c.parentKey == null &&
+                c.isIncome == _showIncome &&
+                (_showHidden || !c.isHidden) &&
+                (!onlyUser || !c.isSystem),
+          )
           .toList();
       final children = all
-          .where((c) =>
-              c.parentKey != null &&
-              c.isIncome == _showIncome &&
-              (_showHidden || !c.isHidden) &&
-              (!onlyUser || !c.isSystem))
+          .where(
+            (c) =>
+                c.parentKey != null &&
+                c.isIncome == _showIncome &&
+                (_showHidden || !c.isHidden) &&
+                (!onlyUser || !c.isSystem),
+          )
           .toList();
 
       parents.sort((a, b) => a.order.compareTo(b.order));
@@ -166,7 +171,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         }
       }
 
-      final recommendations = _buildRecommendations(parents, byParent, parentTotals);
+      final recommendations = _buildRecommendations(
+        parents,
+        byParent,
+        parentTotals,
+      );
 
       JiveLogger.d(
         "Category manager load ok: parents=${parents.length}, children=${children.length}, income=$_showIncome, showHidden=$_showHidden, onlyUser=$onlyUser",
@@ -219,10 +228,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       for (final child in children) {
         final name = child['name'] as String;
         if (existingNames.contains(name)) continue;
-        items.add(_RecommendationItem(
-          name: name,
-          iconName: child['icon'] as String,
-        ));
+        items.add(
+          _RecommendationItem(name: name, iconName: child['icon'] as String),
+        );
       }
       if (items.isNotEmpty) {
         groups.add(_RecommendationGroup(parent: parent, items: items));
@@ -252,7 +260,14 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         children: [
           Row(
             children: [
-              Text("智能推荐", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: JiveTheme.primaryGreen)),
+              Text(
+                "智能推荐",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: JiveTheme.primaryGreen,
+                ),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -293,7 +308,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                     },
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey.shade300),
                         borderRadius: BorderRadius.circular(8),
@@ -366,7 +384,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
   Future<void> _onReorderParents(int oldIndex, int newIndex) async {
     if (newIndex > oldIndex) newIndex -= 1;
-    if (oldIndex < 0 || newIndex < 0 || oldIndex >= _parents.length || newIndex >= _parents.length) {
+    if (oldIndex < 0 ||
+        newIndex < 0 ||
+        oldIndex >= _parents.length ||
+        newIndex >= _parents.length) {
       return;
     }
     final updated = List<JiveCategory>.from(_parents);
@@ -377,8 +398,14 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     _hasChanges = true;
   }
 
-  Future<void> _reorderSubCategory(JiveCategory parent, JiveCategory from, JiveCategory to) async {
-    final list = List<JiveCategory>.from(_childrenByParentKey[parent.key] ?? []);
+  Future<void> _reorderSubCategory(
+    JiveCategory parent,
+    JiveCategory from,
+    JiveCategory to,
+  ) async {
+    final list = List<JiveCategory>.from(
+      _childrenByParentKey[parent.key] ?? [],
+    );
     final oldIndex = list.indexWhere((c) => c.key == from.key);
     final newIndex = list.indexWhere((c) => c.key == to.key);
     if (oldIndex == -1 || newIndex == -1 || oldIndex == newIndex) return;
@@ -398,8 +425,12 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final sourceParentKey = sub.parentKey;
     if (sourceParentKey == null || sourceParentKey == targetParent.key) return;
 
-    final sourceList = List<JiveCategory>.from(_childrenByParentKey[sourceParentKey] ?? []);
-    final targetList = List<JiveCategory>.from(_childrenByParentKey[targetParent.key] ?? []);
+    final sourceList = List<JiveCategory>.from(
+      _childrenByParentKey[sourceParentKey] ?? [],
+    );
+    final targetList = List<JiveCategory>.from(
+      _childrenByParentKey[targetParent.key] ?? [],
+    );
 
     sourceList.removeWhere((c) => c.key == sub.key);
 
@@ -418,13 +449,22 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       _childrenByParentKey[targetParent.key] = targetList;
     });
 
-    await _service.updateCategory(sub.id, sub.name, sub.iconName, targetParent.key, sub.colorHex);
+    await _service.updateCategory(
+      sub.id,
+      sub.name,
+      sub.iconName,
+      targetParent.key,
+      sub.colorHex,
+    );
     await _service.reorderChildren(sourceParentKey, sourceList);
     await _service.reorderChildren(targetParent.key, targetList);
     _hasChanges = true;
   }
 
-  Color _resolveCategoryColor(JiveCategory category, {required Color fallback}) {
+  Color _resolveCategoryColor(
+    JiveCategory category, {
+    required Color fallback,
+  }) {
     return CategoryService.parseColorHex(category.colorHex) ?? fallback;
   }
 
@@ -478,16 +518,31 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     return "$name $icon $pinyin $short";
   }
 
-  Widget _buildHighlightedText(String text, TextStyle style, String? query, {int? maxLines}) {
+  Widget _buildHighlightedText(
+    String text,
+    TextStyle style,
+    String? query, {
+    int? maxLines,
+  }) {
     final trimmed = query?.trim() ?? "";
     if (trimmed.isEmpty) {
-      return Text(text, style: style, maxLines: maxLines, overflow: TextOverflow.ellipsis);
+      return Text(
+        text,
+        style: style,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+      );
     }
     final lower = text.toLowerCase();
     final q = trimmed.toLowerCase();
     final index = lower.indexOf(q);
     if (index == -1) {
-      return Text(text, style: style, maxLines: maxLines, overflow: TextOverflow.ellipsis);
+      return Text(
+        text,
+        style: style,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+      );
     }
 
     final before = text.substring(0, index);
@@ -500,7 +555,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           TextSpan(text: before),
           TextSpan(
             text: match,
-            style: style.copyWith(color: JiveTheme.primaryGreen, fontWeight: FontWeight.bold),
+            style: style.copyWith(
+              color: JiveTheme.primaryGreen,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           TextSpan(text: after),
         ],
@@ -516,14 +574,21 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       container: true,
       child: ExcludeSemantics(
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 8, vertical: 2),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 8,
+            vertical: 2,
+          ),
           decoration: BoxDecoration(
             color: Colors.grey.shade300,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Text(
             "已隐藏",
-            style: TextStyle(fontSize: compact ? 9 : 10, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: compact ? 9 : 10,
+              color: Colors.grey.shade700,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
@@ -536,11 +601,18 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       container: true,
       child: ExcludeSemantics(
         child: Container(
-          padding: EdgeInsets.symmetric(horizontal: compact ? 5 : 7, vertical: compact ? 1.5 : 2),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 5 : 7,
+            vertical: compact ? 1.5 : 2,
+          ),
           decoration: BoxDecoration(
-            color: JiveTheme.primaryGreen.withValues(alpha: compact ? 0.16 : 0.14),
+            color: JiveTheme.primaryGreen.withValues(
+              alpha: compact ? 0.16 : 0.14,
+            ),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.28)),
+            border: Border.all(
+              color: JiveTheme.primaryGreen.withValues(alpha: 0.28),
+            ),
           ),
           child: Text(
             "单色",
@@ -560,7 +632,8 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final updated = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => CategoryEditDialog(category: category, isar: _isar),
+        builder: (context) =>
+            CategoryEditDialog(category: category, isar: _isar),
         fullscreenDialog: true,
       ),
     );
@@ -575,13 +648,18 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     bool initialBatch = false,
   }) async {
     final addAsSystem = !widget.onlyUserCategories;
-    final existingNames = (await _isar.collection<JiveCategory>()
-        .filter()
-        .parentKeyEqualTo(parent.key)
-        .findAll())
-        .map((child) => child.name)
-        .toSet();
-    final systemLibrary = _service.getSystemLibrary(isIncome: parent.isIncome, includeIncome: true);
+    final existingNames =
+        (await _isar
+                .collection<JiveCategory>()
+                .filter()
+                .parentKeyEqualTo(parent.key)
+                .findAll())
+            .map((child) => child.name)
+            .toSet();
+    final systemLibrary = _service.getSystemLibrary(
+      isIncome: parent.isIncome,
+      includeIncome: true,
+    );
     if (!mounted) return;
     final result = await Navigator.push<CategoryCreateResult>(
       context,
@@ -659,9 +737,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
     if (!mounted) return;
     if (lastCreated == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("已存在同名子类")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("已存在同名子类")));
       return;
     }
     await _reloadAndMarkChanged();
@@ -669,9 +747,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     if (skipped.isNotEmpty) {
       final preview = skipped.take(3).join("、");
       final suffix = skipped.length > 3 ? "等" : "";
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("已忽略重复: $preview$suffix")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("已忽略重复: $preview$suffix")));
     }
   }
 
@@ -680,12 +758,17 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final Map<String, Set<String>> userChildrenByParentName = {};
     for (final parent in _parents) {
       final children = _childrenByParentKey[parent.key] ?? const [];
-      userChildrenByParentName[parent.name] = children.map((c) => c.name).toSet();
+      userChildrenByParentName[parent.name] = children
+          .map((c) => c.name)
+          .toSet();
     }
     final filtered = <_UserCategorySeed>[];
     for (final seed in seeds) {
-      final existing = userChildrenByParentName[seed.parent] ?? const <String>{};
-      final missing = seed.children.where((name) => !existing.contains(name)).toList();
+      final existing =
+          userChildrenByParentName[seed.parent] ?? const <String>{};
+      final missing = seed.children
+          .where((name) => !existing.contains(name))
+          .toList();
       if (missing.isEmpty) continue;
       filtered.add(_UserCategorySeed(seed.parent, missing));
     }
@@ -702,7 +785,8 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       for (final entry in source.entries) {
         final parentName = entry.key;
         final icon = entry.value['icon'] as String?;
-        final rawChildren = entry.value['children'] as List<dynamic>? ?? const [];
+        final rawChildren =
+            entry.value['children'] as List<dynamic>? ?? const [];
         final children = <Map<String, dynamic>>[];
         for (final child in rawChildren) {
           if (child is Map) {
@@ -720,7 +804,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         }
 
         final existingIcon = existing['icon'] as String?;
-        if ((existingIcon == null || existingIcon.isEmpty || existingIcon == "category") &&
+        if ((existingIcon == null ||
+                existingIcon.isEmpty ||
+                existingIcon == "category") &&
             icon != null &&
             icon.isNotEmpty) {
           existing['icon'] = icon;
@@ -750,7 +836,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   }
 
   List<_UserCategorySeed> _commonSeedsForCurrentType() {
-    final fallbackSeeds = _showIncome ? _fallbackIncomeSeeds : _fallbackExpenseSeeds;
+    final fallbackSeeds = _showIncome
+        ? _fallbackIncomeSeeds
+        : _fallbackExpenseSeeds;
     if (widget.onlyUserCategories) {
       return _filterCommonSeeds(fallbackSeeds);
     }
@@ -764,7 +852,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final Map<String, Set<String>> userChildrenByParentName = {};
     for (final parent in userParents) {
       final children = _childrenByParentKey[parent.key] ?? const [];
-      userChildrenByParentName[parent.name] = children.map((c) => c.name).toSet();
+      userChildrenByParentName[parent.name] = children
+          .map((c) => c.name)
+          .toSet();
     }
 
     final totalsByName = <String, double>{};
@@ -774,7 +864,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
     List<MapEntry<String, dynamic>> entries = lib.entries.toList();
     if (userParentNames.isNotEmpty) {
-      final filtered = entries.where((entry) => userParentNames.containsKey(entry.key)).toList();
+      final filtered = entries
+          .where((entry) => userParentNames.containsKey(entry.key))
+          .toList();
       if (filtered.isNotEmpty) {
         entries = filtered;
       }
@@ -790,10 +882,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           .where((name) => name.isNotEmpty)
           .toList();
       if (children.isEmpty) continue;
-      final existingChildren = userChildrenByParentName[parentName] ?? const <String>{};
-      final missing = children.where((name) => !existingChildren.contains(name)).toList();
+      final existingChildren =
+          userChildrenByParentName[parentName] ?? const <String>{};
+      final missing = children
+          .where((name) => !existingChildren.contains(name))
+          .toList();
       if (missing.isEmpty) continue;
-      seeds.add(_UserCategorySeed(parentName, missing.take(maxChildren).toList()));
+      seeds.add(
+        _UserCategorySeed(parentName, missing.take(maxChildren).toList()),
+      );
       if (seeds.length >= maxParents) break;
     }
 
@@ -831,7 +928,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         }
       }
     }
-    return _service.suggestIconName(childName, fallback: _resolveSystemParentIcon(parentName));
+    return _service.suggestIconName(
+      childName,
+      fallback: _resolveSystemParentIcon(parentName),
+    );
   }
 
   Future<JiveCategory?> _ensureUserParent(
@@ -840,7 +940,8 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     String? iconName,
     bool iconForceTinted = false,
   }) async {
-    final existing = await _isar.collection<JiveCategory>()
+    final existing = await _isar
+        .collection<JiveCategory>()
         .filter()
         .parentKeyIsNull()
         .isIncomeEqualTo(_showIncome)
@@ -859,7 +960,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     );
   }
 
-  Future<bool> _addCommonSeedItem(_UserCategorySeed seed, String childName) async {
+  Future<bool> _addCommonSeedItem(
+    _UserCategorySeed seed,
+    String childName,
+  ) async {
     final parent = await _ensureUserParent(seed.parent);
     if (parent == null) return false;
     final iconName = _resolveSystemChildIcon(seed.parent, childName);
@@ -890,25 +994,34 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final Map<String, Set<String>> userChildrenByParentName = {};
     for (final parent in userParents) {
       final children = _childrenByParentKey[parent.key] ?? const [];
-      userChildrenByParentName[parent.name] = children.map((c) => c.name).toSet();
+      userChildrenByParentName[parent.name] = children
+          .map((c) => c.name)
+          .toSet();
     }
 
     var addedAny = false;
     try {
       for (final seed in seeds) {
-        final existingChildren = userChildrenByParentName[seed.parent] ?? const <String>{};
+        final existingChildren =
+            userChildrenByParentName[seed.parent] ?? const <String>{};
         final targetChildren = () {
           if (lib.isEmpty) {
-            return seed.children.where((name) => !existingChildren.contains(name)).toList();
+            return seed.children
+                .where((name) => !existingChildren.contains(name))
+                .toList();
           }
           final entry = lib[seed.parent];
           final children = entry?['children'] as List<dynamic>? ?? const [];
           final normalized = children
               .map((child) => (child['name'] as String? ?? "").trim())
-              .where((name) => name.isNotEmpty && !existingChildren.contains(name))
+              .where(
+                (name) => name.isNotEmpty && !existingChildren.contains(name),
+              )
               .toList();
           if (normalized.isNotEmpty) return normalized;
-          return seed.children.where((name) => !existingChildren.contains(name)).toList();
+          return seed.children
+              .where((name) => !existingChildren.contains(name))
+              .toList();
         }();
         final parent = await _ensureUserParent(seed.parent);
         if (parent == null) continue;
@@ -916,7 +1029,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           addedAny = true;
         }
         if (targetChildren.isEmpty) continue;
-        final trackedChildren = userChildrenByParentName.putIfAbsent(seed.parent, () => <String>{});
+        final trackedChildren = userChildrenByParentName.putIfAbsent(
+          seed.parent,
+          () => <String>{},
+        );
         for (final child in targetChildren) {
           if (trackedChildren.contains(child)) continue;
           final iconName = _resolveSystemChildIcon(seed.parent, child);
@@ -943,23 +1059,25 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     }
     await _loadCategories();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(addedAny ? "已添加常用分类" : "常用分类已存在")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(addedAny ? "已添加常用分类" : "常用分类已存在")));
   }
 
   Future<void> _promptAddParentCategory({
     String? initialText,
     bool initialBatch = false,
   }) async {
-    final existingNames = (await _isar.collection<JiveCategory>()
-        .filter()
-        .parentKeyIsNull()
-        .isIncomeEqualTo(_showIncome)
-        .isSystemEqualTo(false)
-        .findAll())
-        .map((parent) => parent.name)
-        .toSet();
+    final existingNames =
+        (await _isar
+                .collection<JiveCategory>()
+                .filter()
+                .parentKeyIsNull()
+                .isIncomeEqualTo(_showIncome)
+                .isSystemEqualTo(false)
+                .findAll())
+            .map((parent) => parent.name)
+            .toSet();
     final systemLibrary = _mergeSystemLibraries();
     if (!mounted) return;
     final result = await Navigator.push<CategoryCreateResult>(
@@ -1032,9 +1150,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
     if (!mounted) return;
     if (!createdAny) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("已存在同名分类")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("已存在同名分类")));
       return;
     }
     await _reloadAndMarkChanged();
@@ -1042,9 +1160,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     if (skipped.isNotEmpty) {
       final preview = skipped.take(3).join("、");
       final suffix = skipped.length > 3 ? "等" : "";
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("已忽略重复: $preview$suffix")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("已忽略重复: $preview$suffix")));
     }
   }
 
@@ -1095,7 +1213,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 8),
-            const Text("移动到其他一级分类", style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text(
+              "移动到其他一级分类",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             ...parents.map((parent) {
               return ListTile(
@@ -1104,7 +1225,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                   child: CategoryService.buildIcon(
                     parent.iconName,
                     size: 18,
-                    color: _resolveCategoryColor(parent, fallback: JiveTheme.categoryIconInactive),
+                    color: _resolveCategoryColor(
+                      parent,
+                      fallback: JiveTheme.categoryIconInactive,
+                    ),
                     isSystemCategory: parent.isSystem,
                     forceTinted: parent.iconForceTinted,
                   ),
@@ -1119,7 +1243,13 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     );
     if (target == null) return;
 
-    await _service.updateCategory(sub.id, sub.name, sub.iconName, target.key, sub.colorHex);
+    await _service.updateCategory(
+      sub.id,
+      sub.name,
+      sub.iconName,
+      target.key,
+      sub.colorHex,
+    );
     await _reloadAndMarkChanged();
   }
 
@@ -1130,9 +1260,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final parents = _parents.where((p) => p.key != exclude.key).toList();
     if (parents.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("没有可选的一级分类")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("没有可选的一级分类")));
       }
       return null;
     }
@@ -1156,7 +1286,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                   child: CategoryService.buildIcon(
                     parent.iconName,
                     size: 18,
-                    color: _resolveCategoryColor(parent, fallback: JiveTheme.categoryIconInactive),
+                    color: _resolveCategoryColor(
+                      parent,
+                      fallback: JiveTheme.categoryIconInactive,
+                    ),
                     isSystemCategory: parent.isSystem,
                     forceTinted: parent.iconForceTinted,
                   ),
@@ -1174,9 +1307,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   Future<void> _convertParentToSubCategory(JiveCategory parent) async {
     if (parent.isSystem) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("系统分类不可修改层级")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("系统分类不可修改层级")));
       return;
     }
     final targetParent = await _pickParentTarget(
@@ -1186,7 +1319,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     if (targetParent == null) return;
 
     if (!mounted) return;
-    final children = List<JiveCategory>.from(_childrenByParentKey[parent.key] ?? const []);
+    final children = List<JiveCategory>.from(
+      _childrenByParentKey[parent.key] ?? const [],
+    );
     if (children.isNotEmpty) {
       final proceed = await showDialog<bool>(
         context: context,
@@ -1222,22 +1357,31 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       }
     }
 
-    await _service.updateCategory(parent.id, parent.name, parent.iconName, targetParent.key, parent.colorHex);
+    await _service.updateCategory(
+      parent.id,
+      parent.name,
+      parent.iconName,
+      targetParent.key,
+      parent.colorHex,
+    );
     await _reloadAndMarkChanged();
   }
 
   Future<void> _deleteCategory(JiveCategory category) async {
     if (category.isSystem) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("系统分类不可删除")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("系统分类不可删除")));
       return;
     }
     final children = category.parentKey == null
         ? await _loadChildCategories(category)
         : <JiveCategory>[];
-    final totalTxCount = await _countTransactionsForCategories([category, ...children]);
+    final totalTxCount = await _countTransactionsForCategories([
+      category,
+      ...children,
+    ]);
 
     if (!mounted) return;
     if (children.isNotEmpty) {
@@ -1267,10 +1411,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       if (handling == _DeleteHandling.transfer) {
         final target = await _pickTransferTarget(category);
         if (target == null) return;
-        final moved = await _confirmAndTransferTransactionsForCategories(
-          [category, ...children],
-          target,
-        );
+        final moved = await _confirmAndTransferTransactionsForCategories([
+          category,
+          ...children,
+        ], target);
         if (!mounted) return;
         if (moved != null) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1278,10 +1422,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           );
         }
       } else if (handling == _DeleteHandling.uncategorize) {
-        final updated = await _uncategorizeTransactionsForCategories([category, ...children]);
+        final updated = await _uncategorizeTransactionsForCategories([
+          category,
+          ...children,
+        ]);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(updated == 0 ? "没有可处理的账单" : "已设为未分类 $updated 笔账单")),
+          SnackBar(
+            content: Text(updated == 0 ? "没有可处理的账单" : "已设为未分类 $updated 笔账单"),
+          ),
         );
       }
     }
@@ -1291,7 +1440,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(children.isEmpty ? "删除分类？" : "删除分类及子类？"),
-        content: Text(children.isEmpty ? "删除后分类将无法恢复，相关账单会保留原名称。" : "删除后分类与子类将无法恢复，相关账单会保留原名称。"),
+        content: Text(
+          children.isEmpty
+              ? "删除后分类将无法恢复，相关账单会保留原名称。"
+              : "删除后分类与子类将无法恢复，相关账单会保留原名称。",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -1312,16 +1465,17 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final deleted = await _service.deleteCategory(category);
     if (!mounted) return;
     if (!deleted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("请先处理子类后再删除")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("请先处理子类后再删除")));
       return;
     }
     await _reloadAndMarkChanged();
   }
 
   Future<List<JiveCategory>> _loadChildCategories(JiveCategory parent) async {
-    final children = await _isar.collection<JiveCategory>()
+    final children = await _isar
+        .collection<JiveCategory>()
         .filter()
         .parentKeyEqualTo(parent.key)
         .isSystemEqualTo(false)
@@ -1339,7 +1493,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     return filtered.count();
   }
 
-  Future<int> _countTransactionsForCategories(List<JiveCategory> categories) async {
+  Future<int> _countTransactionsForCategories(
+    List<JiveCategory> categories,
+  ) async {
     var total = 0;
     for (final category in categories) {
       total += await _countTransactionsForCategory(category);
@@ -1361,13 +1517,16 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       tx.category = "未分类";
       tx.subCategory = "";
     }
+    TransactionService.touchSyncMetadataForAll(txs);
     await _isar.writeTxn(() async {
       await _isar.jiveTransactions.putAll(txs);
     });
     return txs.length;
   }
 
-  Future<int> _uncategorizeTransactionsForCategories(List<JiveCategory> categories) async {
+  Future<int> _uncategorizeTransactionsForCategories(
+    List<JiveCategory> categories,
+  ) async {
     var total = 0;
     for (final category in categories) {
       total += await _uncategorizeTransactions(category);
@@ -1431,6 +1590,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       }
     }
 
+    TransactionService.touchSyncMetadataForAll(txs);
     await _isar.writeTxn(() async {
       await _isar.jiveTransactions.putAll(txs);
     });
@@ -1449,7 +1609,8 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             child: const Text("取消"),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, _DeleteHandling.uncategorize),
+            onPressed: () =>
+                Navigator.pop(context, _DeleteHandling.uncategorize),
             child: const Text("设为未分类"),
           ),
           TextButton(
@@ -1463,10 +1624,13 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
 
   Future<_TransferTarget?> _pickTransferTarget(JiveCategory category) async {
     final all = await _isar.collection<JiveCategory>().where().findAll();
-    final parents = all
-        .where((c) => c.parentKey == null && c.isIncome == category.isIncome)
-        .toList()
-      ..sort((a, b) => a.order.compareTo(b.order));
+    final parents =
+        all
+            .where(
+              (c) => c.parentKey == null && c.isIncome == category.isIncome,
+            )
+            .toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
 
     final Map<String, List<JiveCategory>> childrenByParent = {};
     for (final cat in all) {
@@ -1490,26 +1654,26 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-              child: Text("选择目标分类", style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(
+                "选择目标分类",
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
             ...parents.expand((parent) {
               final tiles = <Widget>[];
-              final isCurrentParent = category.parentKey == null && parent.key == category.key;
+              final isCurrentParent =
+                  category.parentKey == null && parent.key == category.key;
               if (!isCurrentParent) {
-                tiles.add(_buildTargetTile(
-                  parent: parent,
-                  child: null,
-                  indent: 0,
-                ));
+                tiles.add(
+                  _buildTargetTile(parent: parent, child: null, indent: 0),
+                );
               }
               final children = childrenByParent[parent.key] ?? [];
               for (final child in children) {
                 if (child.key == category.key) continue;
-                tiles.add(_buildTargetTile(
-                  parent: parent,
-                  child: child,
-                  indent: 24,
-                ));
+                tiles.add(
+                  _buildTargetTile(parent: parent, child: child, indent: 24),
+                );
               }
               tiles.add(const Divider(height: 16));
               return tiles;
@@ -1538,8 +1702,14 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         forceTinted: child?.iconForceTinted ?? parent.iconForceTinted,
       ),
       title: Text(title, style: const TextStyle(fontSize: 14)),
-      subtitle: child == null ? null : Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-      onTap: () => Navigator.pop(context, _TransferTarget(parent: parent, child: child)),
+      subtitle: child == null
+          ? null
+          : Text(
+              subtitle,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+      onTap: () =>
+          Navigator.pop(context, _TransferTarget(parent: parent, child: child)),
     );
   }
 
@@ -1580,7 +1750,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                 },
               ),
             ListTile(
-              leading: Icon(parent.isHidden ? Icons.visibility : Icons.visibility_off),
+              leading: Icon(
+                parent.isHidden ? Icons.visibility : Icons.visibility_off,
+              ),
               title: Text(parent.isHidden ? "显示" : "隐藏"),
               onTap: () async {
                 Navigator.pop(context);
@@ -1647,7 +1819,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                 },
               ),
             ListTile(
-              leading: Icon(sub.isHidden ? Icons.visibility : Icons.visibility_off),
+              leading: Icon(
+                sub.isHidden ? Icons.visibility : Icons.visibility_off,
+              ),
               title: Text(sub.isHidden ? "显示" : "隐藏"),
               onTap: () async {
                 Navigator.pop(context);
@@ -1659,7 +1833,13 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
               title: const Text("改为一级分类"),
               onTap: () async {
                 Navigator.pop(context);
-                await _service.updateCategory(sub.id, sub.name, sub.iconName, null, sub.colorHex);
+                await _service.updateCategory(
+                  sub.id,
+                  sub.name,
+                  sub.iconName,
+                  null,
+                  sub.colorHex,
+                );
                 await _reloadAndMarkChanged();
               },
             ),
@@ -1750,7 +1930,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 16, fontWeight: selected ? FontWeight.bold : FontWeight.w500, color: color),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+              color: color,
+            ),
           ),
           const SizedBox(height: 6),
           AnimatedContainer(
@@ -1770,7 +1954,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   Widget _buildHeaderHint() {
     final hint = _isSearching
         ? "搜索结果（排序已暂停）"
-        : (_showHidden ? "长按图标拖拽可排序/跨分类移动，点击可编辑 · 已显示隐藏" : "长按图标拖拽可排序/跨分类移动，点击可编辑");
+        : (_showHidden
+              ? "长按图标拖拽可排序/跨分类移动，点击可编辑 · 已显示隐藏"
+              : "长按图标拖拽可排序/跨分类移动，点击可编辑");
     return Text(
       hint,
       style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
@@ -1796,7 +1982,13 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           children: [
             Row(
               children: [
-                Text("常用分类", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade800)),
+                Text(
+                  "常用分类",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade800,
+                  ),
+                ),
                 const Spacer(),
                 TextButton(
                   onPressed: _isAddingCommonSeeds ? null : _addAllCommonSeeds,
@@ -1806,7 +1998,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             ),
             const SizedBox(height: 6),
             for (final seed in seeds) ...[
-              Text(seed.parent, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+              Text(
+                seed.parent,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 8,
@@ -1829,15 +2024,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                       }
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: Colors.grey.shade300),
                       ),
-                      child: Text(
-                        child,
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                      child: Text(child, style: const TextStyle(fontSize: 12)),
                     ),
                   );
                 }).toList(),
@@ -1869,7 +2064,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     );
   }
 
-  Widget _buildParentList(List<JiveCategory> parents, {String? highlightQuery}) {
+  Widget _buildParentList(
+    List<JiveCategory> parents, {
+    String? highlightQuery,
+  }) {
     return ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -1900,7 +2098,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     if (_loadError != null) {
       return _buildErrorState();
     }
-    final searchGroups = _isSearching ? _buildSearchGroups() : const <_SearchGroup>[];
+    final searchGroups = _isSearching
+        ? _buildSearchGroups()
+        : const <_SearchGroup>[];
     final items = <Widget>[
       const SizedBox(height: 8),
       _buildTypeTabs(),
@@ -1922,9 +2122,16 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                 await _loadCategories();
               },
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                backgroundColor: _showHidden ? Colors.grey.shade200 : Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                backgroundColor: _showHidden
+                    ? Colors.grey.shade200
+                    : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
                 side: BorderSide(color: Colors.grey.shade300),
               ),
               child: Text(
@@ -1952,23 +2159,27 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     if (_isSearching && searchGroups.isEmpty) {
       items.add(SizedBox(height: 320, child: _buildEmptySearchState()));
     } else if (!_isSearching && _parents.isEmpty) {
-      items.add(SizedBox(height: 320, child: _buildEmptyState(text: emptyText)));
+      items.add(
+        SizedBox(height: 320, child: _buildEmptyState(text: emptyText)),
+      );
     } else if (_isSearching) {
-      items.addAll(searchGroups.map((group) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _buildParentCard(
-            group.parent,
-            0,
-            allowReorder: false,
-            childrenOverride: group.children,
-            allowCollapse: false,
-            allowChildDrag: false,
-            showAddChip: false,
-            highlightQuery: _rawQuery,
-          ),
-        );
-      }));
+      items.addAll(
+        searchGroups.map((group) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _buildParentCard(
+              group.parent,
+              0,
+              allowReorder: false,
+              childrenOverride: group.children,
+              allowCollapse: false,
+              allowChildDrag: false,
+              showAddChip: false,
+              highlightQuery: _rawQuery,
+            ),
+          );
+        }),
+      );
     } else {
       items.add(
         Padding(
@@ -1979,10 +2190,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     }
     items.add(const SizedBox(height: 120));
 
-    return ListView(
-      padding: EdgeInsets.zero,
-      children: items,
-    );
+    return ListView(padding: EdgeInsets.zero, children: items);
   }
 
   @override
@@ -1996,7 +2204,13 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       child: Scaffold(
         backgroundColor: Colors.grey.shade100,
         appBar: AppBar(
-          title: Text("分类管理", style: GoogleFonts.lato(color: Colors.black87, fontWeight: FontWeight.bold)),
+          title: Text(
+            "分类管理",
+            style: GoogleFonts.lato(
+              color: Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           backgroundColor: Colors.grey.shade100,
           elevation: 0,
           leading: BackButton(
@@ -2015,9 +2229,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             ),
           ],
         ),
-        floatingActionButton: (_isLoading || _loadError != null)
-            ? null
-            : null,
+        floatingActionButton: (_isLoading || _loadError != null) ? null : null,
         body: _buildBody(),
       ),
     );
@@ -2038,11 +2250,16 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final isHidden = parent.isHidden;
     final parentIconColor = isHidden
         ? Colors.grey.shade400
-        : _resolveCategoryColor(parent, fallback: JiveTheme.categoryIconInactive);
+        : _resolveCategoryColor(
+            parent,
+            fallback: JiveTheme.categoryIconInactive,
+          );
 
     return DragTarget<JiveCategory>(
-      onWillAcceptWithDetails: (details) => details.data.parentKey != parent.key,
-      onAcceptWithDetails: (details) => _moveSubCategoryToParent(details.data, parent),
+      onWillAcceptWithDetails: (details) =>
+          details.data.parentKey != parent.key,
+      onAcceptWithDetails: (details) =>
+          _moveSubCategoryToParent(details.data, parent),
       builder: (context, candidateData, _) {
         final isTarget = candidateData.isNotEmpty;
         return Container(
@@ -2051,7 +2268,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           decoration: BoxDecoration(
             color: Colors.grey.shade50,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: isTarget ? JiveTheme.primaryGreen.withValues(alpha: 0.4) : Colors.grey.shade200),
+            border: Border.all(
+              color: isTarget
+                  ? JiveTheme.primaryGreen.withValues(alpha: 0.4)
+                  : Colors.grey.shade200,
+            ),
           ),
           child: Opacity(
             opacity: isHidden ? 0.6 : 1,
@@ -2062,11 +2283,16 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                   children: [
                     if (allowCollapse)
                       IconButton(
-                        icon: Icon(isCollapsed ? Icons.chevron_right : Icons.expand_more),
+                        icon: Icon(
+                          isCollapsed ? Icons.chevron_right : Icons.expand_more,
+                        ),
                         color: Colors.grey.shade600,
                         iconSize: 20,
                         padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                        constraints: const BoxConstraints.tightFor(
+                          width: 32,
+                          height: 32,
+                        ),
                         onPressed: () {
                           setState(() {
                             if (isCollapsed) {
@@ -2099,7 +2325,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                           Flexible(
                             child: _buildHighlightedText(
                               parent.name,
-                              const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                              const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                               highlightQuery,
                               maxLines: 1,
                             ),
@@ -2120,7 +2349,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                       color: Colors.grey.shade600,
                       iconSize: 20,
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                      constraints: const BoxConstraints.tightFor(
+                        width: 32,
+                        height: 32,
+                      ),
                       onPressed: () => _showParentActions(parent),
                     ),
                     if (allowReorder)
@@ -2128,7 +2360,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                         index: index,
                         child: Listener(
                           onPointerDown: (_) => HapticFeedback.selectionClick(),
-                          child: Icon(Icons.drag_indicator, size: 18, color: Colors.grey.shade400),
+                          child: Icon(
+                            Icons.drag_indicator,
+                            size: 18,
+                            color: Colors.grey.shade400,
+                          ),
                         ),
                       )
                     else
@@ -2165,15 +2401,21 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         const columns = 5;
         final items = _buildSubGridItems(children, showAddChip: showAddChip);
         return DragTarget<JiveCategory>(
-          onWillAcceptWithDetails: (details) => details.data.parentKey != parent.key,
-          onAcceptWithDetails: (details) => _moveSubCategoryToParent(details.data, parent),
+          onWillAcceptWithDetails: (details) =>
+              details.data.parentKey != parent.key,
+          onAcceptWithDetails: (details) =>
+              _moveSubCategoryToParent(details.data, parent),
           builder: (context, candidateData, _) {
             final isTarget = candidateData.isNotEmpty;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 120),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(10),
-                border: isTarget ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35)) : null,
+                border: isTarget
+                    ? Border.all(
+                        color: JiveTheme.primaryGreen.withValues(alpha: 0.35),
+                      )
+                    : null,
               ),
               padding: const EdgeInsets.all(2),
               child: GridView.builder(
@@ -2209,9 +2451,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     List<JiveCategory> children, {
     required bool showAddChip,
   }) {
-    final items = <_SubGridItem>[
-      ...children.map(_SubGridItem.category),
-    ];
+    final items = <_SubGridItem>[...children.map(_SubGridItem.category)];
     if (showAddChip) {
       items.add(const _SubGridItem.add());
     }
@@ -2224,10 +2464,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     bool allowDrag = true,
     String? highlightQuery,
   }) {
-    final tile = _buildSubChipBody(
-      sub,
-      highlightQuery: highlightQuery,
-    );
+    final tile = _buildSubChipBody(sub, highlightQuery: highlightQuery);
     if (!allowDrag) {
       return GestureDetector(
         onTap: () => _editCategory(sub),
@@ -2260,15 +2497,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           onDragStarted: () => HapticFeedback.mediumImpact(),
           feedback: Material(
             color: Colors.transparent,
-            child: Transform.scale(
-              scale: 1.05,
-              child: decorated,
-            ),
+            child: Transform.scale(scale: 1.05, child: decorated),
           ),
-          childWhenDragging: Opacity(
-            opacity: 0.4,
-            child: decorated,
-          ),
+          childWhenDragging: Opacity(opacity: 0.4, child: decorated),
           child: GestureDetector(
             onTap: () => _editCategory(sub),
             child: decorated,
@@ -2295,7 +2526,9 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           border: isTarget
-              ? Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.35))
+              ? Border.all(
+                  color: JiveTheme.primaryGreen.withValues(alpha: 0.35),
+                )
               : Border.all(color: Colors.transparent),
         ),
         child: Stack(
@@ -2314,7 +2547,12 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                   const SizedBox(height: 4),
                   _buildHighlightedText(
                     sub.name,
-                    TextStyle(fontSize: 10, height: 1.0, color: labelColor, fontWeight: FontWeight.w500),
+                    TextStyle(
+                      fontSize: 10,
+                      height: 1.0,
+                      color: labelColor,
+                      fontWeight: FontWeight.w500,
+                    ),
                     highlightQuery,
                     maxLines: 1,
                   ),
@@ -2344,7 +2582,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           const SizedBox(height: 4),
           Text(
             "添加子类",
-            style: TextStyle(fontSize: 10, height: 1.0, color: Colors.grey.shade600),
+            style: TextStyle(
+              fontSize: 10,
+              height: 1.0,
+              color: Colors.grey.shade600,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -2354,7 +2596,8 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   }
 
   Widget _buildEmptyState({String text = "暂无分类"}) {
-    final canQuickAdd = widget.onlyUserCategories && _commonSeedsForCurrentType().isNotEmpty;
+    final canQuickAdd =
+        widget.onlyUserCategories && _commonSeedsForCurrentType().isNotEmpty;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -2398,7 +2641,10 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           ),
           const SizedBox(height: 8),
           OutlinedButton(
-            onPressed: () => _promptAddParentCategory(initialText: query, initialBatch: true),
+            onPressed: () => _promptAddParentCategory(
+              initialText: query,
+              initialBatch: true,
+            ),
             child: const Text("批量创建一级分类"),
           ),
         ],
@@ -2445,10 +2691,7 @@ class _RecommendationPick {
   const _RecommendationPick({required this.parent, required this.item});
 }
 
-enum _DeleteHandling {
-  transfer,
-  uncategorize,
-}
+enum _DeleteHandling { transfer, uncategorize }
 
 class _TransferTarget {
   final JiveCategory parent;

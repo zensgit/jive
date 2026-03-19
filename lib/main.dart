@@ -45,9 +45,10 @@ import 'feature/auto/auto_rule_tester_screen.dart';
 import 'feature/auto/auto_supported_apps_screen.dart';
 import 'feature/auto/auto_settings_screen.dart';
 import 'feature/import/import_center_screen.dart';
+import 'feature/search/global_search_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/transactions/transaction_detail_screen.dart';
-import 'feature/stats/stats_screen.dart';
+import 'feature/stats/stats_home_screen.dart';
 import 'feature/category/category_manager_screen.dart';
 import 'feature/category/category_transactions_screen.dart';
 import 'feature/tag/tag_management_screen.dart';
@@ -1137,6 +1138,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await _loadAutoDraftCount();
   }
 
+  Future<void> _openGlobalSearch() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const GlobalSearchScreen()),
+    );
+    if (changed == true) {
+      await _loadTransactions();
+      _notifyDataChanged();
+    }
+  }
+
   Future<void> _openAutoDrafts() async {
     final changed = await Navigator.push(
       context,
@@ -1202,7 +1214,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         index: _currentIndex,
         children: [
           _buildHomeContent(),
-          StatsScreen(reloadSignal: _dataReloadSignal),
+          StatsHomeScreen(reloadSignal: _dataReloadSignal),
           AccountsScreen(
             reloadSignal: _dataReloadSignal,
             onDataChanged: _notifyDataChanged,
@@ -1352,425 +1364,465 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ),
           ],
         ),
-        GestureDetector(
-          onTap: () {
-            showModalBottomSheet(
-              context: context,
-              backgroundColor: Colors.white,
-              isScrollControlled: true,
-              builder: (context) => SafeArea(
-                child: DraggableScrollableSheet(
-                  expand: false,
-                  initialChildSize: 0.75,
-                  minChildSize: 0.5,
-                  maxChildSize: 0.95,
-                  builder: (context, scrollController) {
-                    return StatefulBuilder(
-                      builder: (context, setSheetState) {
-                        return ListView(
-                          controller: scrollController,
-                          padding: const EdgeInsets.only(bottom: 12),
-                          children: [
-                            SwitchListTile(
-                              secondary: const Icon(Icons.science_outlined),
-                              title: const Text("测试数据开关"),
-                              subtitle: const Text("仅用于调试展示"),
-                              value: _demoSeedEnabled,
-                              onChanged: (value) async {
-                                setSheetState(() {
-                                  _demoSeedEnabled = value;
-                                });
-                                await _setDemoSeedEnabled(value);
-                                _showMessage(value ? "已开启测试数据" : "已关闭测试数据");
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.auto_awesome),
-                              title: const Text("注入测试数据"),
-                              subtitle: Text(
-                                _demoSeedEnabled ? "写入一批示例数据" : "请先开启测试数据开关",
-                              ),
-                              onTap: () async {
-                                if (!_demoSeedEnabled) {
-                                  _showMessage("请先开启测试数据开关");
-                                  return;
-                                }
-                                Navigator.pop(context);
-                                final inserted = await _seedDemoDataIfNeeded();
-                                await _loadTransactions();
-                                if (inserted) {
-                                  _notifyDataChanged();
-                                }
-                                _showMessage(
-                                  inserted ? "已注入测试数据" : "已有数据，未注入测试数据",
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.auto_awesome_motion),
-                              title: const Text("生成随机测试数据"),
-                              subtitle: Text(
-                                _demoSeedEnabled
-                                    ? "随机生成账户/标签/交易"
-                                    : "请先开启测试数据开关",
-                              ),
-                              onTap: () async {
-                                if (!_demoSeedEnabled) {
-                                  _showMessage("请先开启测试数据开关");
-                                  return;
-                                }
-                                Navigator.pop(context);
-                                await _handleRandomSeed();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(
-                                Icons.folder_special_outlined,
-                              ),
-                              title: const Text("生成项目测试数据（大量）"),
-                              subtitle: Text(
-                                _demoSeedEnabled
-                                    ? "生成一年以上交易并关联到项目"
-                                    : "请先开启测试数据开关",
-                              ),
-                              onTap: () async {
-                                if (!_demoSeedEnabled) {
-                                  _showMessage("请先开启测试数据开关");
-                                  return;
-                                }
-                                Navigator.pop(context);
-                                await _handleProjectSeedLarge();
-                              },
-                            ),
-                            if (kDebugMode)
-                              ListTile(
-                                leading: const Icon(Icons.bolt_outlined),
-                                title: const Text("模拟自动记账"),
-                                subtitle: const Text("写入一条自动记账事件"),
-                                onTap: () async {
-                                  Navigator.pop(context);
-                                  final now = DateTime.now();
-                                  await _handleAutoEvent({
-                                    "source": "WeChat",
-                                    "amount": "12.34",
-                                    "raw_text": "微信 支付成功 测试 12.34",
-                                    "type": "expense",
-                                    "timestamp": now.millisecondsSinceEpoch,
-                                    "package_name": "com.tencent.mm",
-                                  });
-                                },
-                              ),
-                            ListTile(
-                              leading: const Icon(Icons.category_outlined),
-                              title: const Text("分类管理"),
-                              subtitle: const Text("管理自定义分类"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await _openCategoryManager();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.settings_outlined),
-                              title: const Text("设置"),
-                              subtitle: const Text("外观与偏好"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const SettingsScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.folder_outlined),
-                              title: const Text("项目追踪"),
-                              subtitle: const Text("追踪旅行、装修等专项支出"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const ProjectListScreen(),
-                                  ),
-                                );
-                                await _loadTransactions();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.currency_exchange),
-                              title: const Text("货币与汇率"),
-                              subtitle: const Text("管理多币种和汇率"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const CurrencySettingsScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(
-                                Icons.account_balance_wallet_outlined,
-                              ),
-                              title: const Text("预算管理"),
-                              subtitle: const Text("设置和追踪预算"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const BudgetManagerScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.repeat),
-                              title: const Text("周期记账"),
-                              subtitle: const Text("自动生成草稿或入账"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        const RecurringRuleListScreen(),
-                                  ),
-                                );
-                                await _loadTransactions();
-                                await _loadAutoDraftCount();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.label_outline),
-                              title: const Text("标签管理"),
-                              subtitle: const Text("管理交易标签"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        TagManagementScreen(isar: _isar),
-                                  ),
-                                );
-                                await _loadTransactions();
-                              },
-                            ),
-                            if (kDebugMode)
-                              ListTile(
-                                leading: const Icon(
-                                  Icons.restart_alt,
-                                  color: Colors.orangeAccent,
-                                ),
-                                title: const Text(
-                                  "重置系统分类",
-                                  style: TextStyle(color: Colors.orangeAccent),
-                                ),
-                                subtitle: const Text("清空分类并重新载入系统分类"),
-                                onTap: () async {
-                                  Navigator.pop(context);
-                                  final confirmed = await showDialog<bool>(
-                                    context: context,
-                                    builder: (dialogContext) => AlertDialog(
-                                      title: const Text("重置系统分类"),
-                                      content: const Text(
-                                        "将清空所有分类并重新载入系统分类，是否继续？",
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(
-                                            dialogContext,
-                                            false,
-                                          ),
-                                          child: const Text("取消"),
-                                        ),
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(
-                                            dialogContext,
-                                            true,
-                                          ),
-                                          child: const Text("重置"),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                  if (confirmed != true) return;
-                                  await CategoryService(
-                                    _isar,
-                                  ).resetCategories();
-                                  await TransactionService(
-                                    _isar,
-                                  ).migrateTransactionCategoryKeys();
-                                  await _loadTransactions();
-                                  _showMessage("已重置系统分类");
-                                },
-                              ),
-                            ListTile(
-                              leading: const Icon(
-                                Icons.delete_forever,
-                                color: Colors.redAccent,
-                              ),
-                              title: const Text(
-                                "清空数据",
-                                style: TextStyle(color: Colors.redAccent),
-                              ),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                final confirmed = await showDialog<bool>(
-                                  context: context,
-                                  builder: (dialogContext) => AlertDialog(
-                                    title: const Text("清空数据"),
-                                    content: const Text(
-                                      "将删除全部交易、账户和分类数据，是否继续？",
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(dialogContext, false),
-                                        child: const Text("取消"),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.pop(dialogContext, true),
-                                        child: const Text("清空"),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                                if (confirmed != true) return;
-                                await _clearAllData();
-                                _showMessage("已清空数据");
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.file_download_outlined),
-                              title: const Text("导出数据"),
-                              subtitle: const Text("导出为备份文件"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await _exportBackup();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.file_upload_outlined),
-                              title: const Text("导入数据"),
-                              subtitle: const Text("导入将覆盖当前数据"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await _importBackup();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(
-                                Icons.playlist_add_check_circle_outlined,
-                              ),
-                              title: const Text("导入中心"),
-                              subtitle: const Text("文本/CSV/OCR 导入到待确认草稿"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await _openImportCenter();
-                              },
-                            ),
-                            const Divider(height: 1),
-                            SwitchListTile(
-                              secondary: const Icon(Icons.auto_awesome),
-                              title: const Text("自动记账"),
-                              subtitle: Text(
-                                _autoSettings.enabled ? "已开启" : "已关闭",
-                              ),
-                              value: _autoSettings.enabled,
-                              onChanged: (value) async {
-                                final updated = _autoSettings.copyWith(
-                                  enabled: value,
-                                );
-                                setSheetState(() {
-                                  _autoSettings = updated;
-                                });
-                                await _setAutoSettings(updated);
-                              },
-                            ),
-                            SwitchListTile(
-                              secondary: const Icon(Icons.playlist_add_check),
-                              title: const Text("自动入账"),
-                              subtitle: const Text("关闭则进入待确认"),
-                              value: _autoSettings.directCommit,
-                              onChanged: (value) async {
-                                final updated = _autoSettings.copyWith(
-                                  directCommit: value,
-                                );
-                                setSheetState(() {
-                                  _autoSettings = updated;
-                                });
-                                await _setAutoSettings(updated);
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.apps),
-                              title: const Text("自动记账支持的应用"),
-                              subtitle: Text(
-                                "已启用 $_autoAppEnabledCount / ${AutoAppRegistry.apps.length}",
-                              ),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await _openAutoSupportedApps();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.inbox_outlined),
-                              title: const Text("待确认自动记账"),
-                              subtitle: Text("当前 $_pendingDraftCount 条"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await _openAutoDrafts();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.rule),
-                              title: const Text("自动规则测试"),
-                              onTap: () async {
-                                Navigator.pop(context);
-                                await _openAutoRuleTester();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.settings),
-                              title: const Text("自动记账设置"),
-                              onTap: () {
-                                Navigator.pop(context);
-                                _openAutoSettings();
-                              },
-                            ),
-                            ListTile(
-                              leading: const Icon(Icons.bug_report),
-                              title: const Text("导出调试日志"),
-                              onTap: () {
-                                Navigator.pop(context);
-                                JiveLogger.exportLogs();
-                              },
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: '搜索交易',
+              onPressed: _openGlobalSearch,
+              icon: CircleAvatar(
+                radius: avatarRadius,
+                backgroundColor: Colors.grey.shade200,
+                child: Icon(
+                  Icons.search,
+                  color: Colors.black54,
+                  size: iconSize,
                 ),
               ),
-            );
-          },
-          child: CircleAvatar(
-            radius: avatarRadius,
-            backgroundColor: Colors.grey.shade200,
-            child: Icon(Icons.settings, color: Colors.black54, size: iconSize),
-          ),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.white,
+                  isScrollControlled: true,
+                  builder: (context) => SafeArea(
+                    child: DraggableScrollableSheet(
+                      expand: false,
+                      initialChildSize: 0.75,
+                      minChildSize: 0.5,
+                      maxChildSize: 0.95,
+                      builder: (context, scrollController) {
+                        return StatefulBuilder(
+                          builder: (context, setSheetState) {
+                            return ListView(
+                              controller: scrollController,
+                              padding: const EdgeInsets.only(bottom: 12),
+                              children: [
+                                SwitchListTile(
+                                  secondary: const Icon(Icons.science_outlined),
+                                  title: const Text("测试数据开关"),
+                                  subtitle: const Text("仅用于调试展示"),
+                                  value: _demoSeedEnabled,
+                                  onChanged: (value) async {
+                                    setSheetState(() {
+                                      _demoSeedEnabled = value;
+                                    });
+                                    await _setDemoSeedEnabled(value);
+                                    _showMessage(value ? "已开启测试数据" : "已关闭测试数据");
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.auto_awesome),
+                                  title: const Text("注入测试数据"),
+                                  subtitle: Text(
+                                    _demoSeedEnabled
+                                        ? "写入一批示例数据"
+                                        : "请先开启测试数据开关",
+                                  ),
+                                  onTap: () async {
+                                    if (!_demoSeedEnabled) {
+                                      _showMessage("请先开启测试数据开关");
+                                      return;
+                                    }
+                                    Navigator.pop(context);
+                                    final inserted =
+                                        await _seedDemoDataIfNeeded();
+                                    await _loadTransactions();
+                                    if (inserted) {
+                                      _notifyDataChanged();
+                                    }
+                                    _showMessage(
+                                      inserted ? "已注入测试数据" : "已有数据，未注入测试数据",
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.auto_awesome_motion,
+                                  ),
+                                  title: const Text("生成随机测试数据"),
+                                  subtitle: Text(
+                                    _demoSeedEnabled
+                                        ? "随机生成账户/标签/交易"
+                                        : "请先开启测试数据开关",
+                                  ),
+                                  onTap: () async {
+                                    if (!_demoSeedEnabled) {
+                                      _showMessage("请先开启测试数据开关");
+                                      return;
+                                    }
+                                    Navigator.pop(context);
+                                    await _handleRandomSeed();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.folder_special_outlined,
+                                  ),
+                                  title: const Text("生成项目测试数据（大量）"),
+                                  subtitle: Text(
+                                    _demoSeedEnabled
+                                        ? "生成一年以上交易并关联到项目"
+                                        : "请先开启测试数据开关",
+                                  ),
+                                  onTap: () async {
+                                    if (!_demoSeedEnabled) {
+                                      _showMessage("请先开启测试数据开关");
+                                      return;
+                                    }
+                                    Navigator.pop(context);
+                                    await _handleProjectSeedLarge();
+                                  },
+                                ),
+                                if (kDebugMode)
+                                  ListTile(
+                                    leading: const Icon(Icons.bolt_outlined),
+                                    title: const Text("模拟自动记账"),
+                                    subtitle: const Text("写入一条自动记账事件"),
+                                    onTap: () async {
+                                      Navigator.pop(context);
+                                      final now = DateTime.now();
+                                      await _handleAutoEvent({
+                                        "source": "WeChat",
+                                        "amount": "12.34",
+                                        "raw_text": "微信 支付成功 测试 12.34",
+                                        "type": "expense",
+                                        "timestamp": now.millisecondsSinceEpoch,
+                                        "package_name": "com.tencent.mm",
+                                      });
+                                    },
+                                  ),
+                                ListTile(
+                                  leading: const Icon(Icons.category_outlined),
+                                  title: const Text("分类管理"),
+                                  subtitle: const Text("管理自定义分类"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await _openCategoryManager();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.settings_outlined),
+                                  title: const Text("设置"),
+                                  subtitle: const Text("外观与偏好"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const SettingsScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.folder_outlined),
+                                  title: const Text("项目追踪"),
+                                  subtitle: const Text("追踪旅行、装修等专项支出"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const ProjectListScreen(),
+                                      ),
+                                    );
+                                    await _loadTransactions();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.currency_exchange),
+                                  title: const Text("货币与汇率"),
+                                  subtitle: const Text("管理多币种和汇率"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const CurrencySettingsScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.account_balance_wallet_outlined,
+                                  ),
+                                  title: const Text("预算管理"),
+                                  subtitle: const Text("设置和追踪预算"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const BudgetManagerScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.repeat),
+                                  title: const Text("周期记账"),
+                                  subtitle: const Text("自动生成草稿或入账"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const RecurringRuleListScreen(),
+                                      ),
+                                    );
+                                    await _loadTransactions();
+                                    await _loadAutoDraftCount();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.label_outline),
+                                  title: const Text("标签管理"),
+                                  subtitle: const Text("管理交易标签"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            TagManagementScreen(isar: _isar),
+                                      ),
+                                    );
+                                    await _loadTransactions();
+                                  },
+                                ),
+                                if (kDebugMode)
+                                  ListTile(
+                                    leading: const Icon(
+                                      Icons.restart_alt,
+                                      color: Colors.orangeAccent,
+                                    ),
+                                    title: const Text(
+                                      "重置系统分类",
+                                      style: TextStyle(
+                                        color: Colors.orangeAccent,
+                                      ),
+                                    ),
+                                    subtitle: const Text("清空分类并重新载入系统分类"),
+                                    onTap: () async {
+                                      Navigator.pop(context);
+                                      final confirmed = await showDialog<bool>(
+                                        context: context,
+                                        builder: (dialogContext) => AlertDialog(
+                                          title: const Text("重置系统分类"),
+                                          content: const Text(
+                                            "将清空所有分类并重新载入系统分类，是否继续？",
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(
+                                                dialogContext,
+                                                false,
+                                              ),
+                                              child: const Text("取消"),
+                                            ),
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(
+                                                dialogContext,
+                                                true,
+                                              ),
+                                              child: const Text("重置"),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirmed != true) return;
+                                      await CategoryService(
+                                        _isar,
+                                      ).resetCategories();
+                                      await TransactionService(
+                                        _isar,
+                                      ).migrateTransactionCategoryKeys();
+                                      await _loadTransactions();
+                                      _showMessage("已重置系统分类");
+                                    },
+                                  ),
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.delete_forever,
+                                    color: Colors.redAccent,
+                                  ),
+                                  title: const Text(
+                                    "清空数据",
+                                    style: TextStyle(color: Colors.redAccent),
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (dialogContext) => AlertDialog(
+                                        title: const Text("清空数据"),
+                                        content: const Text(
+                                          "将删除全部交易、账户和分类数据，是否继续？",
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(
+                                              dialogContext,
+                                              false,
+                                            ),
+                                            child: const Text("取消"),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(
+                                              dialogContext,
+                                              true,
+                                            ),
+                                            child: const Text("清空"),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (confirmed != true) return;
+                                    await _clearAllData();
+                                    _showMessage("已清空数据");
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.file_download_outlined,
+                                  ),
+                                  title: const Text("导出数据"),
+                                  subtitle: const Text("导出为备份文件"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await _exportBackup();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.file_upload_outlined,
+                                  ),
+                                  title: const Text("导入数据"),
+                                  subtitle: const Text("导入将覆盖当前数据"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await _importBackup();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(
+                                    Icons.playlist_add_check_circle_outlined,
+                                  ),
+                                  title: const Text("导入中心"),
+                                  subtitle: const Text("文本/CSV/OCR 导入到待确认草稿"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await _openImportCenter();
+                                  },
+                                ),
+                                const Divider(height: 1),
+                                SwitchListTile(
+                                  secondary: const Icon(Icons.auto_awesome),
+                                  title: const Text("自动记账"),
+                                  subtitle: Text(
+                                    _autoSettings.enabled ? "已开启" : "已关闭",
+                                  ),
+                                  value: _autoSettings.enabled,
+                                  onChanged: (value) async {
+                                    final updated = _autoSettings.copyWith(
+                                      enabled: value,
+                                    );
+                                    setSheetState(() {
+                                      _autoSettings = updated;
+                                    });
+                                    await _setAutoSettings(updated);
+                                  },
+                                ),
+                                SwitchListTile(
+                                  secondary: const Icon(
+                                    Icons.playlist_add_check,
+                                  ),
+                                  title: const Text("自动入账"),
+                                  subtitle: const Text("关闭则进入待确认"),
+                                  value: _autoSettings.directCommit,
+                                  onChanged: (value) async {
+                                    final updated = _autoSettings.copyWith(
+                                      directCommit: value,
+                                    );
+                                    setSheetState(() {
+                                      _autoSettings = updated;
+                                    });
+                                    await _setAutoSettings(updated);
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.apps),
+                                  title: const Text("自动记账支持的应用"),
+                                  subtitle: Text(
+                                    "已启用 $_autoAppEnabledCount / ${AutoAppRegistry.apps.length}",
+                                  ),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await _openAutoSupportedApps();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.inbox_outlined),
+                                  title: const Text("待确认自动记账"),
+                                  subtitle: Text("当前 $_pendingDraftCount 条"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await _openAutoDrafts();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.rule),
+                                  title: const Text("自动规则测试"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await _openAutoRuleTester();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.settings),
+                                  title: const Text("自动记账设置"),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    _openAutoSettings();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.bug_report),
+                                  title: const Text("导出调试日志"),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    JiveLogger.exportLogs();
+                                  },
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                );
+              },
+              child: CircleAvatar(
+                radius: avatarRadius,
+                backgroundColor: Colors.grey.shade200,
+                child: Icon(
+                  Icons.settings,
+                  color: Colors.black54,
+                  size: iconSize,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -1929,6 +1981,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             ),
           ),
           GestureDetector(
+            key: const Key('home_view_all_transactions_button'),
             onTap: () {
               Navigator.push(
                 context,

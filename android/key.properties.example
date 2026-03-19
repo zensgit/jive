@@ -1,0 +1,5 @@
+# Copy this file to key.properties and fill in real credentials or set the corresponding env vars.
+storeFile=android/app/jive.keystore
+storePassword=your-password-here
+keyAlias=jive
+keyPassword=your-alias-password

@@ -4,6 +4,7 @@ import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/category_icon_style.dart';
 import '../../core/service/category_service.dart';
+import '../../core/service/transaction_service.dart';
 import '../../core/design_system/theme.dart';
 import '../stats/stats_screen.dart';
 import 'category_icon_source_picker.dart';
@@ -13,7 +14,11 @@ class CategoryEditDialog extends StatefulWidget {
   final JiveCategory category;
   final Isar isar;
 
-  const CategoryEditDialog({super.key, required this.category, required this.isar});
+  const CategoryEditDialog({
+    super.key,
+    required this.category,
+    required this.isar,
+  });
 
   @override
   State<CategoryEditDialog> createState() => _CategoryEditDialogState();
@@ -46,7 +51,10 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
 
   Future<void> _loadParents() async {
     final parents = await CategoryService(widget.isar).getAllParents();
-    parents.removeWhere((p) => p.id == widget.category.id || p.isIncome != widget.category.isIncome);
+    parents.removeWhere(
+      (p) =>
+          p.id == widget.category.id || p.isIncome != widget.category.isIncome,
+    );
     parents.sort((a, b) => a.order.compareTo(b.order));
     if (mounted) setState(() => _parents = parents);
   }
@@ -58,7 +66,10 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: const Text("编辑分类", style: TextStyle(fontWeight: FontWeight.w600)),
+        title: const Text(
+          "编辑分类",
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         backgroundColor: Colors.grey.shade100,
         elevation: 0,
         actions: [
@@ -113,7 +124,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                   value: _iconForceTinted,
                   title: const Text("图标强制单色"),
                   subtitle: const Text("即使在彩色模式下也显示为单色（跟随分类颜色）"),
-                  onChanged: (value) => setState(() => _iconForceTinted = value),
+                  onChanged: (value) =>
+                      setState(() => _iconForceTinted = value),
                 ),
                 if (!widget.category.isIncome) ...[
                   SwitchListTile(
@@ -125,7 +137,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                           ? "该二级分类相关支出将不计入总预算"
                           : "该一级分类及其子类相关支出将不计入总预算",
                     ),
-                    onChanged: (value) => setState(() => _excludeFromBudget = value),
+                    onChanged: (value) =>
+                        setState(() => _excludeFromBudget = value),
                   ),
                 ],
                 _buildForceTintedPreview(),
@@ -162,7 +175,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     final label = hasParent ? selectedParent.name : "无 (作为一级分类)";
     final iconName = hasParent ? selectedParent.iconName : "category";
     final iconColor = hasParent
-        ? (CategoryService.parseColorHex(selectedParent.colorHex) ?? Colors.grey.shade600)
+        ? (CategoryService.parseColorHex(selectedParent.colorHex) ??
+              Colors.grey.shade600)
         : Colors.grey.shade500;
     final iconIsSystem = hasParent ? selectedParent.isSystem : null;
     final iconForceTinted = hasParent ? selectedParent.iconForceTinted : false;
@@ -202,24 +216,30 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         return StatefulBuilder(
           builder: (context, setStateDialog) {
             return Dialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text("分类选择", style: TextStyle(fontWeight: FontWeight.w600)),
+                    const Text(
+                      "分类选择",
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                     const SizedBox(height: 12),
                     SizedBox(
                       height: 260,
                       child: GridView.builder(
                         itemCount: _parents.length + 1,
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 1.1,
-                        ),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 4,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 1.1,
+                            ),
                         itemBuilder: (context, index) {
                           if (index == 0) {
                             final isSelected = tempKey == _noParentKey;
@@ -227,7 +247,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                               iconName: "category",
                               label: "无",
                               isSelected: isSelected,
-                              onTap: () => setStateDialog(() => tempKey = _noParentKey),
+                              onTap: () =>
+                                  setStateDialog(() => tempKey = _noParentKey),
                             );
                           }
                           final parent = _parents[index - 1];
@@ -235,9 +256,14 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                           return _buildParentPickerTile(
                             iconName: parent.iconName,
                             label: parent.name,
-                            iconColor: CategoryService.parseColorHex(parent.colorHex) ?? Colors.grey.shade600,
+                            iconColor:
+                                CategoryService.parseColorHex(
+                                  parent.colorHex,
+                                ) ??
+                                Colors.grey.shade600,
                             isSelected: isSelected,
-                            onTap: () => setStateDialog(() => tempKey = parent.key),
+                            onTap: () =>
+                                setStateDialog(() => tempKey = parent.key),
                             isSystemCategory: parent.isSystem,
                             forceTinted: parent.iconForceTinted,
                           );
@@ -288,7 +314,9 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? JiveTheme.primaryGreen.withValues(alpha: 0.12) : Colors.grey.shade100,
+          color: isSelected
+              ? JiveTheme.primaryGreen.withValues(alpha: 0.12)
+              : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? JiveTheme.primaryGreen : Colors.transparent,
@@ -307,7 +335,12 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
             const SizedBox(height: 6),
             Text(
               label,
-              style: TextStyle(fontSize: 11, color: isSelected ? JiveTheme.primaryGreen : Colors.grey.shade700),
+              style: TextStyle(
+                fontSize: 11,
+                color: isSelected
+                    ? JiveTheme.primaryGreen
+                    : Colors.grey.shade700,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -376,7 +409,10 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       leading: Icon(icon, color: iconColor ?? Colors.grey.shade700, size: 20),
       title: Text(
         label,
-        style: TextStyle(fontSize: 14, color: textColor ?? Colors.grey.shade800),
+        style: TextStyle(
+          fontSize: 14,
+          color: textColor ?? Colors.grey.shade800,
+        ),
       ),
       onTap: onTap,
     );
@@ -498,6 +534,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       }
     }
 
+    TransactionService.touchSyncMetadataForAll(txs);
     await widget.isar.writeTxn(() async {
       await widget.isar.jiveTransactions.putAll(txs);
     });
@@ -507,7 +544,9 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   Future<_TransferTarget?> _pickTransferTarget() async {
     final all = await widget.isar.collection<JiveCategory>().where().findAll();
     final parents = all
-        .where((c) => c.parentKey == null && c.isIncome == widget.category.isIncome)
+        .where(
+          (c) => c.parentKey == null && c.isIncome == widget.category.isIncome,
+        )
         .toList();
     parents.sort((a, b) => a.order.compareTo(b.order));
 
@@ -535,26 +574,27 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
           children: [
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-              child: Text("选择目标分类", style: TextStyle(fontWeight: FontWeight.w600)),
+              child: Text(
+                "选择目标分类",
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
             ),
             ...parents.expand((parent) {
               final tiles = <Widget>[];
-              final isCurrentParent = widget.category.parentKey == null && parent.key == widget.category.key;
+              final isCurrentParent =
+                  widget.category.parentKey == null &&
+                  parent.key == widget.category.key;
               if (!isCurrentParent) {
-                tiles.add(_buildTargetTile(
-                  parent: parent,
-                  child: null,
-                  indent: 0,
-                ));
+                tiles.add(
+                  _buildTargetTile(parent: parent, child: null, indent: 0),
+                );
               }
               final children = childrenByParent[parent.key] ?? [];
               for (final child in children) {
                 if (child.key == widget.category.key) continue;
-                tiles.add(_buildTargetTile(
-                  parent: parent,
-                  child: child,
-                  indent: 24,
-                ));
+                tiles.add(
+                  _buildTargetTile(parent: parent, child: child, indent: 24),
+                );
               }
               tiles.add(const Divider(height: 16));
               return tiles;
@@ -583,8 +623,14 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         forceTinted: child?.iconForceTinted ?? parent.iconForceTinted,
       ),
       title: Text(title, style: const TextStyle(fontSize: 14)),
-      subtitle: child == null ? null : Text(subtitle, style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
-      onTap: () => Navigator.pop(context, _TransferTarget(parent: parent, child: child)),
+      subtitle: child == null
+          ? null
+          : Text(
+              subtitle,
+              style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+            ),
+      onTap: () =>
+          Navigator.pop(context, _TransferTarget(parent: parent, child: child)),
     );
   }
 
@@ -604,7 +650,9 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   }
 
   Future<void> _toggleHidden() async {
-    await CategoryService(widget.isar).setCategoryHidden(widget.category.id, !_isHidden);
+    await CategoryService(
+      widget.isar,
+    ).setCategoryHidden(widget.category.id, !_isHidden);
     if (!mounted) return;
     setState(() => _isHidden = !_isHidden);
   }
@@ -632,6 +680,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       tx.category = "未分类";
       tx.subCategory = "";
     }
+    TransactionService.touchSyncMetadataForAll(txs);
     await widget.isar.writeTxn(() async {
       await widget.isar.jiveTransactions.putAll(txs);
     });
@@ -650,7 +699,8 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
             child: const Text("取消"),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, _DeleteHandling.uncategorize),
+            onPressed: () =>
+                Navigator.pop(context, _DeleteHandling.uncategorize),
             child: const Text("设为未分类"),
           ),
           TextButton(
@@ -696,12 +746,14 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       ),
     );
     if (confirmed != true) return;
-    final deleted = await CategoryService(widget.isar).deleteCategory(widget.category);
+    final deleted = await CategoryService(
+      widget.isar,
+    ).deleteCategory(widget.category);
     if (!mounted) return;
     if (!deleted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("请先处理子类后再删除")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("请先处理子类后再删除")));
       return;
     }
     Navigator.pop(context, true);
@@ -791,8 +843,12 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     required bool forceTinted,
     required Color color,
   }) {
-    final borderColor = active ? JiveTheme.primaryGreen.withValues(alpha: 0.45) : Colors.grey.shade300;
-    final backgroundColor = active ? JiveTheme.primaryGreen.withValues(alpha: 0.08) : Colors.white;
+    final borderColor = active
+        ? JiveTheme.primaryGreen.withValues(alpha: 0.45)
+        : Colors.grey.shade300;
+    final backgroundColor = active
+        ? JiveTheme.primaryGreen.withValues(alpha: 0.08)
+        : Colors.white;
     return Semantics(
       container: true,
       label: title,
@@ -835,7 +891,9 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: active ? JiveTheme.primaryGreen : Colors.grey.shade700,
+                      color: active
+                          ? JiveTheme.primaryGreen
+                          : Colors.grey.shade700,
                     ),
                   ),
                   Text(
@@ -856,7 +914,9 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   Widget _buildColorDot(Color? color) {
     final hex = color == null ? null : _colorHexFromColor(color);
     final isSelected = _selectedColorHex == hex;
-    final borderColor = isSelected ? (color ?? Colors.grey.shade600) : Colors.grey.shade300;
+    final borderColor = isSelected
+        ? (color ?? Colors.grey.shade600)
+        : Colors.grey.shade300;
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () => setState(() => _selectedColorHex = hex),
@@ -870,7 +930,9 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
         ),
         child: color == null
             ? Icon(Icons.close, size: 12, color: Colors.grey.shade500)
-            : (isSelected ? const Icon(Icons.check, size: 12, color: Colors.white) : null),
+            : (isSelected
+                  ? const Icon(Icons.check, size: 12, color: Colors.white)
+                  : null),
       ),
     );
   }
@@ -892,10 +954,7 @@ class _TransferTarget {
   const _TransferTarget({required this.parent, this.child});
 }
 
-enum _DeleteHandling {
-  transfer,
-  uncategorize,
-}
+enum _DeleteHandling { transfer, uncategorize }
 
 const List<Color> _categoryColorOptions = [
   Color(0xFFF44336),

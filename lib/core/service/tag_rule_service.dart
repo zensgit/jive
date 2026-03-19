@@ -4,6 +4,7 @@ import '../database/tag_model.dart';
 import '../database/tag_rule_model.dart';
 import '../database/transaction_model.dart';
 import 'tag_service.dart';
+import 'transaction_service.dart';
 
 class TagRuleBackfillResult {
   final int scannedCount;
@@ -81,10 +82,7 @@ class SmartTagMatchExplanation {
   final String tagKey;
   final List<RuleMatchDetail> matches;
 
-  const SmartTagMatchExplanation({
-    required this.tagKey,
-    required this.matches,
-  });
+  const SmartTagMatchExplanation({required this.tagKey, required this.matches});
 }
 
 class TagRuleService {
@@ -247,16 +245,19 @@ class TagRuleService {
       grouped.putIfAbsent(tagKey, () => []).add(detail);
     }
 
-    final result = grouped.entries
-        .map(
-          (entry) => SmartTagMatchExplanation(
-            tagKey: entry.key,
-            matches: entry.value
-              ..sort((a, b) => b.rule.updatedAt.compareTo(a.rule.updatedAt)),
-          ),
-        )
-        .toList()
-      ..sort((a, b) => a.tagKey.compareTo(b.tagKey));
+    final result =
+        grouped.entries
+            .map(
+              (entry) => SmartTagMatchExplanation(
+                tagKey: entry.key,
+                matches: entry.value
+                  ..sort(
+                    (a, b) => b.rule.updatedAt.compareTo(a.rule.updatedAt),
+                  ),
+              ),
+            )
+            .toList()
+          ..sort((a, b) => a.tagKey.compareTo(b.tagKey));
     return result;
   }
 
@@ -278,7 +279,11 @@ class TagRuleService {
     List<JiveTransaction> txs,
   ) async {
     if (txs.isEmpty) return const {};
-    final tag = await isar.collection<JiveTag>().filter().keyEqualTo(tagKey).findFirst();
+    final tag = await isar
+        .collection<JiveTag>()
+        .filter()
+        .keyEqualTo(tagKey)
+        .findFirst();
     if (tag == null || tag.isArchived) return const {};
 
     final rules = await isar
@@ -301,7 +306,10 @@ class TagRuleService {
       }
       if (matches.isEmpty) continue;
       matches.sort((a, b) => b.rule.updatedAt.compareTo(a.rule.updatedAt));
-      result[tx.id] = SmartTagMatchExplanation(tagKey: tagKey, matches: matches);
+      result[tx.id] = SmartTagMatchExplanation(
+        tagKey: tagKey,
+        matches: matches,
+      );
     }
     return result;
   }
@@ -336,6 +344,7 @@ class TagRuleService {
 
     if (!changed) return;
 
+    TransactionService.touchSyncMetadata(tx);
     await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
     });
@@ -362,6 +371,7 @@ class TagRuleService {
 
     if (!changed) return false;
 
+    TransactionService.touchSyncMetadata(tx);
     await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
     });
@@ -379,6 +389,7 @@ class TagRuleService {
     tx.smartTagKeys = matched;
     tx.tagKeys = <String>{...tx.tagKeys, ...matched}.toList();
 
+    TransactionService.touchSyncMetadata(tx);
     await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
     });
@@ -396,8 +407,9 @@ class TagRuleService {
     if (tx == null) return false;
     if (!tx.smartTagOptOutKeys.contains(tagKey)) return false;
 
-    tx.smartTagOptOutKeys =
-        tx.smartTagOptOutKeys.where((key) => key != tagKey).toList();
+    tx.smartTagOptOutKeys = tx.smartTagOptOutKeys
+        .where((key) => key != tagKey)
+        .toList();
 
     final rules = await isar
         .collection<JiveTagRule>()
@@ -413,6 +425,7 @@ class TagRuleService {
       tx.tagKeys = <String>{...tx.tagKeys, tagKey}.toList();
     }
 
+    TransactionService.touchSyncMetadata(tx);
     await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
     });
@@ -436,6 +449,7 @@ class TagRuleService {
     if (next.length == original.length) return 0;
 
     tx.smartTagOptOutKeys = next;
+    TransactionService.touchSyncMetadata(tx);
     await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
     });
@@ -452,11 +466,13 @@ class TagRuleService {
 
     tx.smartTagOptOutKeys = [];
     tx.smartTagOptOutAll = false;
+    TransactionService.touchSyncMetadata(tx);
     await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
     });
     return removedCount + (hadAll ? 1 : 0);
   }
+
   Future<TagRuleBackfillResult> backfillForTag(
     String tagKey, {
     DateTime? rangeStart,
@@ -522,6 +538,7 @@ class TagRuleService {
     }
 
     if (updates.isNotEmpty) {
+      TransactionService.touchSyncMetadataForAll(updates);
       await isar.writeTxn(() async {
         await isar.collection<JiveTransaction>().putAll(updates);
       });
@@ -674,6 +691,7 @@ class TagRuleService {
       }
     }
     if (updates.isNotEmpty) {
+      TransactionService.touchSyncMetadataForAll(updates);
       await isar.writeTxn(() async {
         await isar.collection<JiveTransaction>().putAll(updates);
       });
@@ -694,12 +712,14 @@ class TagRuleService {
   ) async {
     final txQuery = isar.jiveTransactions.where();
     if (rangeStart != null && rangeEnd != null) {
-      return txQuery.timestampBetween(
-        rangeStart,
-        rangeEnd,
-        includeLower: true,
-        includeUpper: true,
-      ).findAll();
+      return txQuery
+          .timestampBetween(
+            rangeStart,
+            rangeEnd,
+            includeLower: true,
+            includeUpper: true,
+          )
+          .findAll();
     }
     if (rangeStart != null) {
       return txQuery.timestampGreaterThan(rangeStart, include: true).findAll();
@@ -745,8 +765,9 @@ class TagRuleService {
 
     var matchedKeywords = const <String>[];
     if (rule.keywords.isNotEmpty) {
-      final haystack =
-          '${tx.note ?? ''} ${tx.rawText ?? ''}'.toLowerCase().trim();
+      final haystack = '${tx.note ?? ''} ${tx.rawText ?? ''}'
+          .toLowerCase()
+          .trim();
       if (haystack.isEmpty) return null;
       final hits = rule.keywords
           .map((keyword) => keyword.trim().toLowerCase())

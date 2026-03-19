@@ -1,6 +1,7 @@
 import 'package:isar/isar.dart';
 import '../database/project_model.dart';
 import '../database/transaction_model.dart';
+import 'transaction_service.dart';
 
 class ProjectService {
   final Isar _isar;
@@ -54,8 +55,8 @@ class ProjectService {
       final status = project.status == 'active'
           ? '进行中'
           : project.status == 'completed'
-              ? '已完成'
-              : '已归档';
+          ? '已完成'
+          : '已归档';
       grouped.putIfAbsent(status, () => []).add(project);
     }
 
@@ -176,6 +177,7 @@ class ProjectService {
       await _isar.writeTxn(() async {
         for (final tx in recentExpenses) {
           tx.projectId = project.id;
+          TransactionService.touchSyncMetadata(tx);
           await _isar.jiveTransactions.put(tx);
         }
       });
@@ -183,9 +185,16 @@ class ProjectService {
   }
 
   /// 获取项目每日支出数据（用于趋势图）
-  Future<List<DailySpending>> getProjectDailySpending(int projectId, {int days = 30}) async {
+  Future<List<DailySpending>> getProjectDailySpending(
+    int projectId, {
+    int days = 30,
+  }) async {
     final now = DateTime.now();
-    final startDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: days - 1));
+    final startDate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: days - 1));
 
     final transactions = await _isar.jiveTransactions
         .filter()
@@ -197,7 +206,8 @@ class ProjectService {
     // 按日期分组
     final dailyMap = <String, double>{};
     for (final tx in transactions) {
-      final dateKey = '${tx.timestamp.year}-${tx.timestamp.month.toString().padLeft(2, '0')}-${tx.timestamp.day.toString().padLeft(2, '0')}';
+      final dateKey =
+          '${tx.timestamp.year}-${tx.timestamp.month.toString().padLeft(2, '0')}-${tx.timestamp.day.toString().padLeft(2, '0')}';
       dailyMap[dateKey] = (dailyMap[dateKey] ?? 0) + tx.amount;
     }
 
@@ -205,7 +215,8 @@ class ProjectService {
     final result = <DailySpending>[];
     for (int i = 0; i < days; i++) {
       final date = startDate.add(Duration(days: i));
-      final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final dateKey =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
       result.add(DailySpending(date: date, amount: dailyMap[dateKey] ?? 0));
     }
 
@@ -213,7 +224,10 @@ class ProjectService {
   }
 
   /// 获取项目累计支出数据（用于累计趋势图）
-  Future<List<DailySpending>> getProjectCumulativeSpending(int projectId, {int days = 30}) async {
+  Future<List<DailySpending>> getProjectCumulativeSpending(
+    int projectId, {
+    int days = 30,
+  }) async {
     final dailyData = await getProjectDailySpending(projectId, days: days);
 
     double cumulative = 0;

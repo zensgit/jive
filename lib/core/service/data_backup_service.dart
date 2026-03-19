@@ -11,17 +11,24 @@ import '../database/category_model.dart';
 import '../database/currency_model.dart';
 import '../database/import_job_model.dart';
 import '../database/import_job_record_model.dart';
+import '../database/project_model.dart';
 import '../database/recurring_rule_model.dart';
 import '../database/tag_conversion_log.dart';
 import '../database/tag_model.dart';
 import '../database/tag_rule_model.dart';
 import '../database/transaction_model.dart';
+import '../repository/import_job_history_repository.dart';
+import '../repository/sync_checkpoint_snapshot.dart';
+import '../repository/sync_cursor_store.dart';
+import '../repository/sync_lease_store.dart';
 import 'currency_service.dart';
+import 'transaction_service.dart';
 
 class BackupImportSummary {
   final int accounts;
   final int categories;
   final int categoryOverrides;
+  final int projects;
   final int tags;
   final int tagGroups;
   final int transactions;
@@ -33,11 +40,17 @@ class BackupImportSummary {
   final int recurringRules;
   final int importJobs;
   final int importJobRecords;
+  final int sourceSchemaVersion;
+  final int repairedTransactionCategoryKeys;
+  final int repairedTransactionAccountIds;
+  final int importedSyncCursorCount;
+  final bool clearedSyncLease;
 
   const BackupImportSummary({
     required this.accounts,
     required this.categories,
     required this.categoryOverrides,
+    this.projects = 0,
     required this.tags,
     required this.tagGroups,
     required this.transactions,
@@ -49,19 +62,29 @@ class BackupImportSummary {
     this.recurringRules = 0,
     this.importJobs = 0,
     this.importJobRecords = 0,
+    this.sourceSchemaVersion = JiveDataBackupService.legacySchemaVersion,
+    this.repairedTransactionCategoryKeys = 0,
+    this.repairedTransactionAccountIds = 0,
+    this.importedSyncCursorCount = 0,
+    this.clearedSyncLease = false,
   });
 }
 
 class JiveDataBackupService {
-  static const int schemaVersion = 4;
+  static const int legacySchemaVersion = 1;
+  static const int schemaVersion = 5;
 
-  static Future<File> exportToFile(Isar isar) async {
+  static Future<File> exportToFile(
+    Isar isar, {
+    bool includeSyncMetadata = true,
+  }) async {
     final accounts = await isar.collection<JiveAccount>().where().findAll();
     final categories = await isar.collection<JiveCategory>().where().findAll();
     final overrides = await isar
         .collection<JiveCategoryOverride>()
         .where()
         .findAll();
+    final projects = await isar.collection<JiveProject>().where().findAll();
     final tags = await isar.collection<JiveTag>().where().findAll();
     final tagGroups = await isar.collection<JiveTagGroup>().where().findAll();
     final tagRules = await isar.collection<JiveTagRule>().where().findAll();
@@ -86,11 +109,12 @@ class JiveDataBackupService {
         .collection<JiveRecurringRule>()
         .where()
         .findAll();
-    final importJobs = await isar.collection<JiveImportJob>().where().findAll();
-    final importJobRecords = await isar
-        .collection<JiveImportJobRecord>()
-        .where()
-        .findAll();
+    final importHistorySnapshot = await ImportJobHistoryRepository(
+      isar,
+    ).exportSnapshot();
+    final syncSnapshot = includeSyncMetadata
+        ? await SyncCheckpointSnapshot.collect(isar)
+        : SyncCheckpointSnapshot();
 
     final payload = <String, dynamic>{
       'schemaVersion': schemaVersion,
@@ -98,6 +122,7 @@ class JiveDataBackupService {
       'accounts': accounts.map(_accountToMap).toList(),
       'categories': categories.map(_categoryToMap).toList(),
       'categoryOverrides': overrides.map(_categoryOverrideToMap).toList(),
+      'projects': projects.map(_projectToMap).toList(),
       'tags': tags.map(_tagToMap).toList(),
       'tagGroups': tagGroups.map(_tagGroupToMap).toList(),
       'tagRules': tagRules.map(_tagRuleToMap).toList(),
@@ -109,8 +134,11 @@ class JiveDataBackupService {
           .map(_currencyPreferenceToMap)
           .toList(),
       'recurringRules': recurringRules.map(_recurringRuleToMap).toList(),
-      'importJobs': importJobs.map(_importJobToMap).toList(),
-      'importJobRecords': importJobRecords.map(_importJobRecordToMap).toList(),
+      'importJobs': importHistorySnapshot.jobs.map(_importJobToMap).toList(),
+      'importJobRecords': importHistorySnapshot.records
+          .map(_importJobRecordToMap)
+          .toList(),
+      'syncCursors': syncSnapshot.toJson(),
     };
 
     final dir = await getApplicationDocumentsDirectory();
@@ -124,9 +152,17 @@ class JiveDataBackupService {
     Isar isar,
     File file, {
     bool clearBefore = true,
+    bool restoreSyncState = true,
   }) async {
     final raw = await file.readAsString();
     final data = jsonDecode(raw) as Map<String, dynamic>;
+    final importedSchemaVersion =
+        _parseInt(data['schemaVersion']) ?? legacySchemaVersion;
+    if (importedSchemaVersion > schemaVersion) {
+      throw StateError(
+        '备份 schemaVersion=$importedSchemaVersion 高于当前支持版本 $schemaVersion，已阻断导入',
+      );
+    }
 
     final accounts = _decodeList(data['accounts'], _accountFromMap);
     final categories = _decodeList(data['categories'], _categoryFromMap);
@@ -134,6 +170,7 @@ class JiveDataBackupService {
       data['categoryOverrides'],
       _categoryOverrideFromMap,
     );
+    final projects = _decodeList(data['projects'], _projectFromMap);
     final tags = _decodeList(data['tags'], _tagFromMap);
     final tagGroups = _decodeList(data['tagGroups'], _tagGroupFromMap);
     final tagRules = _decodeList(data['tagRules'], _tagRuleFromMap);
@@ -160,6 +197,10 @@ class JiveDataBackupService {
       data['importJobRecords'],
       _importJobRecordFromMap,
     );
+    final syncSnapshot = SyncCheckpointSnapshot.fromJson(data['syncCursors']);
+    var repairedTransactionCategoryKeys = 0;
+    var repairedTransactionAccountIds = 0;
+    var clearedSyncLease = false;
 
     await isar.writeTxn(() async {
       if (clearBefore) {
@@ -167,6 +208,7 @@ class JiveDataBackupService {
         await isar.collection<JiveAccount>().clear();
         await isar.collection<JiveCategory>().clear();
         await isar.collection<JiveCategoryOverride>().clear();
+        await isar.collection<JiveProject>().clear();
         await isar.collection<JiveAutoDraft>().clear();
         await isar.collection<JiveTag>().clear();
         await isar.collection<JiveTagGroup>().clear();
@@ -186,6 +228,9 @@ class JiveDataBackupService {
       }
       if (overrides.isNotEmpty) {
         await isar.collection<JiveCategoryOverride>().putAll(overrides);
+      }
+      if (projects.isNotEmpty) {
+        await isar.collection<JiveProject>().putAll(projects);
       }
       if (tags.isNotEmpty) {
         await isar.collection<JiveTag>().putAll(tags);
@@ -222,10 +267,29 @@ class JiveDataBackupService {
       }
     });
 
+    if (transactions.isNotEmpty) {
+      final transactionService = TransactionService(isar);
+      repairedTransactionCategoryKeys = await transactionService
+          .migrateTransactionCategoryKeys();
+      repairedTransactionAccountIds = await transactionService
+          .migrateTransactionAccountIds();
+    }
+
+    if (restoreSyncState) {
+      if (syncSnapshot.count > 0) {
+        await SyncCursorStore.saveSnapshot(syncSnapshot);
+      } else {
+        await SyncCursorStore.clearAll();
+      }
+      await SyncLeaseStore.clear();
+      clearedSyncLease = true;
+    }
+
     return BackupImportSummary(
       accounts: accounts.length,
       categories: categories.length,
       categoryOverrides: overrides.length,
+      projects: projects.length,
       tags: tags.length,
       tagGroups: tagGroups.length,
       tagRules: tagRules.length,
@@ -237,6 +301,11 @@ class JiveDataBackupService {
       recurringRules: recurringRules.length,
       importJobs: importJobs.length,
       importJobRecords: importJobRecords.length,
+      sourceSchemaVersion: importedSchemaVersion,
+      repairedTransactionCategoryKeys: repairedTransactionCategoryKeys,
+      repairedTransactionAccountIds: repairedTransactionAccountIds,
+      importedSyncCursorCount: syncSnapshot.count,
+      clearedSyncLease: clearedSyncLease,
     );
   }
 
@@ -363,6 +432,40 @@ class JiveDataBackupService {
     return override;
   }
 
+  static Map<String, dynamic> _projectToMap(JiveProject project) => {
+    'id': project.id,
+    'name': project.name,
+    'description': project.description,
+    'iconName': project.iconName,
+    'colorHex': project.colorHex,
+    'budget': project.budget,
+    'startDate': project.startDate?.toIso8601String(),
+    'endDate': project.endDate?.toIso8601String(),
+    'completedDate': project.completedDate?.toIso8601String(),
+    'status': project.status,
+    'createdAt': project.createdAt.toIso8601String(),
+    'updatedAt': project.updatedAt.toIso8601String(),
+    'sortOrder': project.sortOrder,
+  };
+
+  static JiveProject _projectFromMap(Map<String, dynamic> map) {
+    final project = JiveProject()
+      ..id = _parseInt(map['id']) ?? Isar.autoIncrement
+      ..name = map['name']?.toString() ?? ''
+      ..description = map['description']?.toString()
+      ..iconName = map['iconName']?.toString()
+      ..colorHex = map['colorHex']?.toString()
+      ..budget = _parseDouble(map['budget']) ?? 0
+      ..startDate = _parseDate(map['startDate'])
+      ..endDate = _parseDate(map['endDate'])
+      ..completedDate = _parseDate(map['completedDate'])
+      ..status = map['status']?.toString() ?? 'active'
+      ..createdAt = _parseDate(map['createdAt']) ?? DateTime.now()
+      ..updatedAt = _parseDate(map['updatedAt']) ?? DateTime.now()
+      ..sortOrder = _parseInt(map['sortOrder']) ?? 0;
+    return project;
+  }
+
   static Map<String, dynamic> _tagToMap(JiveTag tag) => {
     'id': tag.id,
     'key': tag.key,
@@ -480,6 +583,7 @@ class JiveDataBackupService {
     'smartTagKeys': tx.smartTagKeys,
     'recurringRuleId': tx.recurringRuleId,
     'recurringKey': tx.recurringKey,
+    'updatedAt': tx.updatedAt.toIso8601String(),
   };
 
   static JiveTransaction _transactionFromMap(Map<String, dynamic> map) {
@@ -503,7 +607,11 @@ class JiveDataBackupService {
       ..tagKeys = List<String>.from(map['tagKeys'] ?? [])
       ..smartTagKeys = List<String>.from(map['smartTagKeys'] ?? [])
       ..recurringRuleId = _parseInt(map['recurringRuleId'])
-      ..recurringKey = map['recurringKey']?.toString();
+      ..recurringKey = map['recurringKey']?.toString()
+      ..updatedAt =
+          _parseDate(map['updatedAt']) ??
+          _parseDate(map['timestamp']) ??
+          DateTime.now();
     return tx;
   }
 

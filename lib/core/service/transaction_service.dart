@@ -8,6 +8,20 @@ class TransactionService {
 
   TransactionService(this.isar);
 
+  static void touchSyncMetadata(JiveTransaction tx, {DateTime? now}) {
+    tx.updatedAt = now ?? DateTime.now();
+  }
+
+  static void touchSyncMetadataForAll(
+    Iterable<JiveTransaction> txs, {
+    DateTime? now,
+  }) {
+    final stamp = now ?? DateTime.now();
+    for (final tx in txs) {
+      tx.updatedAt = stamp;
+    }
+  }
+
   Future<int> migrateTransactionCategoryKeys() async {
     final txs = await isar.jiveTransactions.where().findAll();
     if (txs.isEmpty) return 0;
@@ -69,6 +83,7 @@ class TransactionService {
 
     if (toUpdate.isEmpty) return 0;
 
+    touchSyncMetadataForAll(toUpdate);
     await isar.writeTxn(() async {
       await isar.jiveTransactions.putAll(toUpdate);
     });
@@ -82,7 +97,10 @@ class TransactionService {
 
     JiveAccount? defaultAccount;
     for (final account in accounts) {
-      if (account.type == 'asset' && account.includeInBalance && !account.isHidden && !account.isArchived) {
+      if (account.type == 'asset' &&
+          account.includeInBalance &&
+          !account.isHidden &&
+          !account.isArchived) {
         defaultAccount = account;
         break;
       }
@@ -102,6 +120,7 @@ class TransactionService {
 
     if (toUpdate.isEmpty) return 0;
 
+    touchSyncMetadataForAll(toUpdate);
     await isar.writeTxn(() async {
       await isar.jiveTransactions.putAll(toUpdate);
     });

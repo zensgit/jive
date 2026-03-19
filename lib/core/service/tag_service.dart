@@ -7,12 +7,9 @@ import '../database/transaction_model.dart';
 import '../database/category_model.dart';
 import 'category_service.dart';
 import 'tag_rule_service.dart';
+import 'transaction_service.dart';
 
-enum TagMigratePolicy {
-  onlyNull,
-  overwrite,
-  none,
-}
+enum TagMigratePolicy { onlyNull, overwrite, none }
 
 class TagService {
   TagService(this.isar);
@@ -69,10 +66,11 @@ class TagService {
   Future<List<JiveTagGroup>> getGroups({bool includeArchived = true}) async {
     final list = includeArchived
         ? await isar.collection<JiveTagGroup>().where().findAll()
-        : await isar.collection<JiveTagGroup>()
-            .filter()
-            .isArchivedEqualTo(false)
-            .findAll();
+        : await isar
+              .collection<JiveTagGroup>()
+              .filter()
+              .isArchivedEqualTo(false)
+              .findAll();
     list.sort((a, b) => a.order.compareTo(b.order));
     return list;
   }
@@ -80,10 +78,11 @@ class TagService {
   Future<List<JiveTag>> getTags({bool includeArchived = true}) async {
     final list = includeArchived
         ? await isar.collection<JiveTag>().where().findAll()
-        : await isar.collection<JiveTag>()
-            .filter()
-            .isArchivedEqualTo(false)
-            .findAll();
+        : await isar
+              .collection<JiveTag>()
+              .filter()
+              .isArchivedEqualTo(false)
+              .findAll();
     list.sort((a, b) {
       final order = a.order.compareTo(b.order);
       if (order != 0) return order;
@@ -111,14 +110,16 @@ class TagService {
       throw ArgumentError('最多12字');
     }
     final normalized = _normalizeName(trimmed);
-    final exists = await isar.collection<JiveTagGroup>()
+    final exists = await isar
+        .collection<JiveTagGroup>()
         .filter()
         .nameEqualTo(normalized, caseSensitive: false)
         .findFirst();
     if (exists != null) {
       throw ArgumentError('group name exists');
     }
-    final last = await isar.collection<JiveTagGroup>()
+    final last = await isar
+        .collection<JiveTagGroup>()
         .where()
         .sortByOrderDesc()
         .findFirst();
@@ -147,7 +148,8 @@ class TagService {
     if (trimmed.length > maxGroupNameLength) {
       throw ArgumentError('最多12字');
     }
-    final existing = await isar.collection<JiveTagGroup>()
+    final existing = await isar
+        .collection<JiveTagGroup>()
         .filter()
         .nameEqualTo(trimmed, caseSensitive: false)
         .findAll();
@@ -164,12 +166,14 @@ class TagService {
   }
 
   Future<void> deleteGroup(String groupKey) async {
-    final group = await isar.collection<JiveTagGroup>()
+    final group = await isar
+        .collection<JiveTagGroup>()
         .filter()
         .keyEqualTo(groupKey)
         .findFirst();
     if (group == null) return;
-    final tags = await isar.collection<JiveTag>()
+    final tags = await isar
+        .collection<JiveTag>()
         .filter()
         .groupKeyEqualTo(groupKey)
         .findAll();
@@ -186,7 +190,8 @@ class TagService {
   }
 
   Future<void> setGroupArchived(String groupKey, bool archived) async {
-    final group = await isar.collection<JiveTagGroup>()
+    final group = await isar
+        .collection<JiveTagGroup>()
         .filter()
         .keyEqualTo(groupKey)
         .findFirst();
@@ -212,14 +217,16 @@ class TagService {
     if (trimmed.length > maxTagNameLength) {
       throw ArgumentError('最多9字');
     }
-    final exists = await isar.collection<JiveTag>()
+    final exists = await isar
+        .collection<JiveTag>()
         .filter()
         .nameEqualTo(trimmed, caseSensitive: false)
         .findFirst();
     if (exists != null) {
       throw ArgumentError('tag name exists');
     }
-    final last = await isar.collection<JiveTag>()
+    final last = await isar
+        .collection<JiveTag>()
         .where()
         .sortByOrderDesc()
         .findFirst();
@@ -252,7 +259,8 @@ class TagService {
     if (trimmed.length > maxTagNameLength) {
       throw ArgumentError('最多9字');
     }
-    final existing = await isar.collection<JiveTag>()
+    final existing = await isar
+        .collection<JiveTag>()
         .filter()
         .nameEqualTo(trimmed, caseSensitive: false)
         .findAll();
@@ -269,7 +277,8 @@ class TagService {
   }
 
   Future<void> setTagArchived(String tagKey, bool archived) async {
-    final tag = await isar.collection<JiveTag>()
+    final tag = await isar
+        .collection<JiveTag>()
         .filter()
         .keyEqualTo(tagKey)
         .findFirst();
@@ -282,7 +291,8 @@ class TagService {
   }
 
   Future<void> deleteTag(String tagKey) async {
-    final tag = await isar.collection<JiveTag>()
+    final tag = await isar
+        .collection<JiveTag>()
         .filter()
         .keyEqualTo(tagKey)
         .findFirst();
@@ -296,6 +306,7 @@ class TagService {
         for (final tx in txs) {
           tx.tagKeys = _removeTagKey(tx.tagKeys, tagKey);
         }
+        TransactionService.touchSyncMetadataForAll(txs);
         await isar.jiveTransactions.putAll(txs);
       }
       await isar.collection<JiveTag>().delete(tag.id);
@@ -309,7 +320,8 @@ class TagService {
   }) async {
     final uniqueSources = sourceKeys.toSet()..remove(targetKey);
     if (uniqueSources.isEmpty) return 0;
-    final target = await isar.collection<JiveTag>()
+    final target = await isar
+        .collection<JiveTag>()
         .filter()
         .keyEqualTo(targetKey)
         .findFirst();
@@ -324,15 +336,19 @@ class TagService {
       if (txs.isNotEmpty) {
         for (final tx in txs) {
           var updated = tx.tagKeys;
-          updated = updated.where((key) => !uniqueSources.contains(key)).toList();
+          updated = updated
+              .where((key) => !uniqueSources.contains(key))
+              .toList();
           if (!updated.contains(targetKey)) {
             updated.add(targetKey);
           }
           tx.tagKeys = updated;
         }
+        TransactionService.touchSyncMetadataForAll(txs);
         await isar.jiveTransactions.putAll(txs);
       }
-      final toDelete = await isar.collection<JiveTag>()
+      final toDelete = await isar
+          .collection<JiveTag>()
           .where()
           .anyOf(uniqueSources.toList(), (query, key) => query.keyEqualTo(key))
           .findAll();
@@ -343,10 +359,9 @@ class TagService {
       target.updatedAt = now;
       await isar.collection<JiveTag>().put(target);
     });
-    await TagRuleService(isar).reassignRules(
-      sourceKeys: uniqueSources.toList(),
-      targetKey: targetKey,
-    );
+    await TagRuleService(
+      isar,
+    ).reassignRules(sourceKeys: uniqueSources.toList(), targetKey: targetKey);
     await refreshUsageCounts(tagKeys: [targetKey]);
     return uniqueSources.length;
   }
@@ -360,7 +375,8 @@ class TagService {
     for (final raw in names) {
       final trimmed = raw.trim();
       if (trimmed.isEmpty) continue;
-      final existing = await isar.collection<JiveTag>()
+      final existing = await isar
+          .collection<JiveTag>()
           .filter()
           .nameEqualTo(trimmed, caseSensitive: false)
           .findFirst();
@@ -369,17 +385,15 @@ class TagService {
         continue;
       }
       if (!createIfMissing) continue;
-      final created = await createTag(
-        name: trimmed,
-        groupKey: groupKey,
-      );
+      final created = await createTag(name: trimmed, groupKey: groupKey);
       result.add(created.key);
     }
     return result;
   }
 
   Future<void> refreshUsageCounts({List<String>? tagKeys}) async {
-    final keys = tagKeys ??
+    final keys =
+        tagKeys ??
         (await isar.collection<JiveTag>().where().findAll())
             .map((tag) => tag.key)
             .toList();
@@ -387,7 +401,8 @@ class TagService {
     final now = DateTime.now();
     final updates = <JiveTag>[];
     for (final key in keys) {
-      final tag = await isar.collection<JiveTag>()
+      final tag = await isar
+          .collection<JiveTag>()
           .filter()
           .keyEqualTo(key)
           .findFirst();
@@ -411,7 +426,8 @@ class TagService {
   Future<void> markTagsUsed(List<String> tagKeys, DateTime timestamp) async {
     if (tagKeys.isEmpty) return;
     final uniqueKeys = tagKeys.toSet().toList();
-    final tags = await isar.collection<JiveTag>()
+    final tags = await isar
+        .collection<JiveTag>()
         .where()
         .anyOf(uniqueKeys, (query, key) => query.keyEqualTo(key))
         .findAll();
@@ -436,13 +452,15 @@ class TagService {
     String? renameTo,
     String? existingCategoryKey,
   }) async {
-    final tag = await isar.collection<JiveTag>()
+    final tag = await isar
+        .collection<JiveTag>()
         .filter()
         .keyEqualTo(tagKey)
         .findFirst();
     if (tag == null) return null;
     if (tag.redirectCategoryKey != null) {
-      final existing = await isar.collection<JiveCategory>()
+      final existing = await isar
+          .collection<JiveCategory>()
           .filter()
           .keyEqualTo(tag.redirectCategoryKey!)
           .findFirst();
@@ -455,13 +473,15 @@ class TagService {
     final categoryService = CategoryService(isar);
     JiveCategory? category;
     if (existingCategoryKey != null && existingCategoryKey.isNotEmpty) {
-      category = await isar.collection<JiveCategory>()
+      category = await isar
+          .collection<JiveCategory>()
           .filter()
           .keyEqualTo(existingCategoryKey)
           .findFirst();
     }
     if (category == null && parentKey != null) {
-      final parent = await isar.collection<JiveCategory>()
+      final parent = await isar
+          .collection<JiveCategory>()
           .filter()
           .keyEqualTo(parentKey)
           .findFirst();
@@ -481,13 +501,16 @@ class TagService {
       );
     }
     if (category == null) {
-      final query = isar.collection<JiveCategory>()
-          .filter()
-          .nameEqualTo(targetName);
+      final query = isar.collection<JiveCategory>().filter().nameEqualTo(
+        targetName,
+      );
       if (parentKey != null) {
         category = await query.parentKeyEqualTo(parentKey).findFirst();
       } else {
-        category = await query.parentKeyIsNull().isIncomeEqualTo(isIncome).findFirst();
+        category = await query
+            .parentKeyIsNull()
+            .isIncomeEqualTo(isIncome)
+            .findFirst();
       }
     }
     if (category == null) return null;
@@ -512,14 +535,18 @@ class TagService {
     var skippedByPolicy = 0;
     final categoryTypeByKey = <String, bool>{};
     if (migratePolicy == TagMigratePolicy.overwrite) {
-      final allCategories = await isar.collection<JiveCategory>().where().findAll();
+      final allCategories = await isar
+          .collection<JiveCategory>()
+          .where()
+          .findAll();
       for (final item in allCategories) {
         categoryTypeByKey[item.key] = item.isIncome;
       }
     }
     String? parentName;
     if (category.parentKey != null) {
-      final parent = await isar.collection<JiveCategory>()
+      final parent = await isar
+          .collection<JiveCategory>()
           .filter()
           .keyEqualTo(category.parentKey!)
           .findFirst();
@@ -587,6 +614,7 @@ class TagService {
       await isar.collection<JiveTag>().put(tag);
       await isar.collection<JiveTagConversionLog>().put(log);
       if (updatedTxs.isNotEmpty) {
+        TransactionService.touchSyncMetadataForAll(updatedTxs);
         await isar.jiveTransactions.putAll(updatedTxs);
       }
     });

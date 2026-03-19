@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:isar/isar.dart';
 import '../database/auto_draft_model.dart';
 import '../database/account_model.dart';
@@ -10,6 +12,7 @@ import '../service/auto_settings.dart';
 import '../service/tag_service.dart';
 import '../service/tag_rule_service.dart';
 import '../service/data_reload_bus.dart';
+import 'transaction_service.dart';
 
 class AutoCapture {
   final double amount;
@@ -17,14 +20,15 @@ class AutoCapture {
   final String? rawText;
   final DateTime timestamp;
   final String? type;
+  final String? accountBookName;
+  final String? accountName;
+  final String? toAccountName;
+  final String? parentCategoryName;
+  final String? childCategoryName;
+  final double? serviceCharge;
+  final List<String> tagNames;
 
-  static const _incomeKeywords = [
-    '已收款',
-    '已收到',
-    '到账',
-    '退款',
-    '赔付',
-  ];
+  static const _incomeKeywords = ['已收款', '已收到', '到账', '退款', '赔付'];
 
   static const _transferKeywords = [
     '转账',
@@ -44,6 +48,13 @@ class AutoCapture {
     required this.rawText,
     required this.timestamp,
     required this.type,
+    this.accountBookName,
+    this.accountName,
+    this.toAccountName,
+    this.parentCategoryName,
+    this.childCategoryName,
+    this.serviceCharge,
+    this.tagNames = const [],
   });
 
   factory AutoCapture.fromEvent(Map<String, dynamic> data) {
@@ -61,6 +72,7 @@ class AutoCapture {
       rawText: rawText?.trim(),
       timestamp: timestamp,
       type: type,
+      tagNames: const [],
     );
   }
 
@@ -90,7 +102,9 @@ class AutoCapture {
   static String? _normalizeType(String? rawType) {
     if (rawType == null) return null;
     final normalized = rawType.trim().toLowerCase();
-    if (normalized == 'expense' || normalized == 'income' || normalized == 'transfer') {
+    if (normalized == 'expense' ||
+        normalized == 'income' ||
+        normalized == 'transfer') {
       return normalized;
     }
     return null;
@@ -148,10 +162,22 @@ class AutoCaptureResult {
   );
 }
 
+class AutoDraftConfirmException implements Exception {
+  const AutoDraftConfirmException(this.code, this.message);
+
+  final String code;
+  final String message;
+
+  @override
+  String toString() => 'AutoDraftConfirmException($code): $message';
+}
+
 class AutoDraftService {
   AutoDraftService(this.isar);
 
   final Isar isar;
+  static const _transferToAccountMetadataKey = 'transferToAccountName';
+  static const _transferServiceChargeMetadataKey = 'transferServiceCharge';
 
   static const _transferKeywords = [
     '转账',
@@ -178,22 +204,57 @@ class AutoDraftService {
 
     final engine = await AutoRuleEngine.instance();
     final categories = await _buildCategoryIndex();
-    final match = engine.match(text: capture.rawText ?? '', source: capture.source);
-    final tagKeys = match.tags.isEmpty
+    final match = engine.match(
+      text: capture.rawText ?? '',
+      source: capture.source,
+    );
+    final explicitTagKeys = capture.tagNames.isEmpty
+        ? <String>[]
+        : await TagService(isar).resolveTagKeysByNames(capture.tagNames);
+    final matchedTagKeys = match.tags.isEmpty
         ? <String>[]
         : await TagService(isar).resolveTagKeysByNames(match.tags);
+    final tagKeys = <String>{...explicitTagKeys, ...matchedTagKeys}.toList();
 
     final accounts = await AccountService(isar).getActiveAccounts();
     final mappings = await AutoAccountMappingStore.load();
-    final accountId = _resolveAccountIdFromAccounts(accounts, capture.source, capture.rawText, mappings);
-    final toAccountId = capture.type == 'transfer'
+    final accountId =
+        _resolveExplicitAccountId(accounts, capture.accountName) ??
+        _resolveAccountIdFromAccounts(
+          accounts,
+          capture.source,
+          capture.rawText,
+          mappings,
+        );
+    final explicitToAccountId = capture.type == 'transfer'
+        ? _resolveExplicitAccountId(accounts, capture.toAccountName)
+        : null;
+    final inferredToAccountId = capture.type == 'transfer'
         ? _resolveToAccountIdFromAccounts(accounts, capture.rawText, mappings)
         : null;
-    final resolved = categories.resolve(match.parent, match.sub);
+    final toAccountId = capture.type == 'transfer'
+        ? (explicitToAccountId ?? inferredToAccountId)
+        : null;
+    final explicitResolved = categories.resolve(
+      capture.parentCategoryName,
+      capture.childCategoryName,
+    );
+    final resolved =
+        explicitResolved.parent != null || explicitResolved.child != null
+        ? explicitResolved
+        : categories.resolve(match.parent, match.sub);
 
-    var parentName = resolved.parent?.name ?? match.parent ?? '自动记账';
-    var subName = resolved.child?.name ?? match.sub ?? '未分类';
-    final type = capture.type ?? match.type;
+    var parentName = capture.parentCategoryName?.trim().isNotEmpty == true
+        ? capture.parentCategoryName!.trim()
+        : (resolved.parent?.name ?? match.parent ?? '自动记账');
+    var subName = capture.childCategoryName?.trim().isNotEmpty == true
+        ? capture.childCategoryName!.trim()
+        : (resolved.child?.name ?? match.sub ?? '未分类');
+    final hintType = _inferTypeFromCategoryHints(
+      capture.parentCategoryName,
+      capture.childCategoryName,
+    );
+    final type = capture.type ?? hintType ?? match.type;
 
     if (type == 'transfer') {
       parentName = '转账';
@@ -244,9 +305,15 @@ class AutoDraftService {
         subCategoryName: subName,
         accountId: accountId,
         toAccountId: toAccountId,
+        exchangeFee: capture.serviceCharge,
         tagKeys: tagKeys,
       );
-      return const AutoCaptureResult(inserted: true, committed: true, duplicate: false, merged: false);
+      return const AutoCaptureResult(
+        inserted: true,
+        committed: true,
+        duplicate: false,
+        merged: false,
+      );
     }
 
     final subKey = type == 'transfer'
@@ -269,6 +336,7 @@ class AutoDraftService {
       ..subCategoryKey = subKey
       ..accountId = accountId
       ..toAccountId = toAccountId
+      ..metadataJson = _buildCaptureMetadataJson(capture)
       ..tagKeys = tagKeys
       ..dedupKey = dedupKey
       ..createdAt = DateTime.now();
@@ -277,17 +345,30 @@ class AutoDraftService {
       await isar.collection<JiveAutoDraft>().put(draft);
     });
 
-    return const AutoCaptureResult(inserted: true, committed: false, duplicate: false, merged: false);
+    return const AutoCaptureResult(
+      inserted: true,
+      committed: false,
+      duplicate: false,
+      merged: false,
+    );
   }
 
   Future<void> confirmDraft(JiveAutoDraft draft) async {
     final explicitType = draft.type;
-    final isTransfer = explicitType == 'transfer' || (explicitType == null && _looksLikeTransfer(draft));
+    final isTransfer =
+        explicitType == 'transfer' ||
+        (explicitType == null && _looksLikeTransfer(draft));
     final type = explicitType ?? (isTransfer ? 'transfer' : 'expense');
     final categoryKey = isTransfer ? null : draft.categoryKey;
     final subCategoryKey = isTransfer ? null : draft.subCategoryKey;
     final categoryName = isTransfer ? '转账' : draft.category;
     final subCategoryName = isTransfer ? '转账' : draft.subCategory;
+    final transferMetadata = _readTransferMetadata(draft.metadataJson);
+    final resolvedAccounts = await _resolveDraftAccountIds(
+      draft,
+      isTransfer: isTransfer,
+      transferMetadata: transferMetadata,
+    );
     await _commitTransaction(
       capture: AutoCapture(
         amount: draft.amount,
@@ -295,14 +376,17 @@ class AutoDraftService {
         rawText: draft.rawText,
         timestamp: draft.timestamp,
         type: type,
+        toAccountName: transferMetadata.toAccountName,
+        serviceCharge: transferMetadata.serviceCharge,
       ),
       type: type,
       categoryKey: categoryKey,
       subCategoryKey: subCategoryKey,
       categoryName: categoryName,
       subCategoryName: subCategoryName,
-      accountId: draft.accountId,
-      toAccountId: draft.toAccountId,
+      accountId: resolvedAccounts.accountId,
+      toAccountId: resolvedAccounts.toAccountId,
+      exchangeFee: transferMetadata.serviceCharge,
       tagKeys: draft.tagKeys,
       draftId: draft.id,
     );
@@ -323,15 +407,37 @@ class AutoDraftService {
     required String? subCategoryName,
     required int? accountId,
     int? toAccountId,
+    double? exchangeFee,
     List<String>? tagKeys,
     int? draftId,
   }) async {
-    final account = accountId ?? (await AccountService(isar).getDefaultAccount())?.id;
+    final account =
+        accountId ?? (await AccountService(isar).getDefaultAccount())?.id;
     final normalizedType = type == 'transfer' ? 'transfer' : type;
-    final normalizedCategory = normalizedType == 'transfer' ? '转账' : categoryName;
+    if (normalizedType == 'transfer' && toAccountId == null) {
+      throw const AutoDraftConfirmException(
+        'missing_transfer_target_account',
+        '转账草稿缺少可解析的转入账户，无法确认。',
+      );
+    }
+    if (normalizedType == 'transfer' &&
+        account != null &&
+        account == toAccountId) {
+      throw const AutoDraftConfirmException(
+        'same_transfer_account',
+        '转账草稿的转出账户和转入账户不能相同。',
+      );
+    }
+    final normalizedCategory = normalizedType == 'transfer'
+        ? '转账'
+        : categoryName;
     final normalizedSub = normalizedType == 'transfer' ? '转账' : subCategoryName;
-    final normalizedCategoryKey = normalizedType == 'transfer' ? null : categoryKey;
-    final normalizedSubKey = normalizedType == 'transfer' ? null : subCategoryKey;
+    final normalizedCategoryKey = normalizedType == 'transfer'
+        ? null
+        : categoryKey;
+    final normalizedSubKey = normalizedType == 'transfer'
+        ? null
+        : subCategoryKey;
     final tx = JiveTransaction()
       ..amount = capture.amount
       ..source = capture.source
@@ -344,6 +450,10 @@ class AutoDraftService {
       ..subCategory = normalizedSub
       ..accountId = account
       ..toAccountId = toAccountId
+      ..exchangeFee = normalizedType == 'transfer' ? exchangeFee : null
+      ..exchangeFeeType = normalizedType == 'transfer' && exchangeFee != null
+          ? 'fixed'
+          : null
       ..tagKeys = tagKeys == null ? [] : List<String>.from(tagKeys);
 
     final smartTags = await TagRuleService(isar).resolveMatchingTags(tx);
@@ -354,6 +464,7 @@ class AutoDraftService {
       tx.smartTagKeys = [];
     }
 
+    TransactionService.touchSyncMetadata(tx);
     await isar.writeTxn(() async {
       await isar.collection<JiveTransaction>().put(tx);
       if (draftId != null) {
@@ -364,6 +475,37 @@ class AutoDraftService {
       await TagService(isar).markTagsUsed(tx.tagKeys, capture.timestamp);
     }
     DataReloadBus.notify();
+  }
+
+  Future<_ResolvedDraftAccountIds> _resolveDraftAccountIds(
+    JiveAutoDraft draft, {
+    required bool isTransfer,
+    required _TransferDraftMetadata transferMetadata,
+  }) async {
+    if (!isTransfer) {
+      return _ResolvedDraftAccountIds(
+        accountId: draft.accountId,
+        toAccountId: draft.toAccountId,
+      );
+    }
+    final accounts = await AccountService(isar).getActiveAccounts();
+    final mappings = await AutoAccountMappingStore.load();
+    final resolvedAccountId =
+        draft.accountId ??
+        _resolveAccountIdFromAccounts(
+          accounts,
+          draft.source,
+          draft.rawText,
+          mappings,
+        );
+    final resolvedToAccountId =
+        draft.toAccountId ??
+        _resolveExplicitAccountId(accounts, transferMetadata.toAccountName) ??
+        _resolveToAccountIdFromAccounts(accounts, draft.rawText, mappings);
+    return _ResolvedDraftAccountIds(
+      accountId: resolvedAccountId,
+      toAccountId: resolvedToAccountId,
+    );
   }
 
   String? _inferMealSubCategory({
@@ -411,19 +553,22 @@ class AutoDraftService {
     final window = Duration(seconds: windowSeconds.clamp(10, 300));
     final start = capture.timestamp.subtract(window);
     final end = capture.timestamp.add(window);
-    final candidates = await isar.collection<JiveAutoDraft>()
+    final candidates = await isar
+        .collection<JiveAutoDraft>()
         .filter()
         .timestampBetween(start, end, includeUpper: true)
         .findAll();
     if (candidates.isEmpty) return false;
 
-    final captureIsTransfer = matchType == 'transfer' || _looksLikeTransferText(capture.rawText);
+    final captureIsTransfer =
+        matchType == 'transfer' || _looksLikeTransferText(capture.rawText);
     for (final draft in candidates) {
       if (draft.dedupKey == dedupKey) continue;
       if ((draft.amount - capture.amount).abs() > 0.01) continue;
 
       final draftType = draft.type ?? 'expense';
-      final draftIsTransfer = draftType == 'transfer' || _looksLikeTransfer(draft);
+      final draftIsTransfer =
+          draftType == 'transfer' || _looksLikeTransfer(draft);
       final hasIncome = draftType == 'income' || matchType == 'income';
       final hasExpense = draftType == 'expense' || matchType == 'expense';
 
@@ -484,10 +629,7 @@ class AutoDraftService {
     draft.toAccountId = toId ?? draft.toAccountId ?? toAccountId;
     draft.rawText = _mergeRawText(draft.rawText, capture.rawText);
     if (tagKeys.isNotEmpty) {
-      final mergedTags = <String>{
-        ...draft.tagKeys,
-        ...tagKeys,
-      };
+      final mergedTags = <String>{...draft.tagKeys, ...tagKeys};
       draft.tagKeys = mergedTags.toList();
     }
     return true;
@@ -500,7 +642,9 @@ class AutoDraftService {
     required int? captureAccountId,
   }) {
     if (draftType == 'expense' && draftAccountId != null) return draftAccountId;
-    if (captureType == 'expense' && captureAccountId != null) return captureAccountId;
+    if (captureType == 'expense' && captureAccountId != null) {
+      return captureAccountId;
+    }
     return draftAccountId ?? captureAccountId;
   }
 
@@ -513,7 +657,9 @@ class AutoDraftService {
     required int? captureToAccountId,
   }) {
     if (draftType == 'income' && draftAccountId != null) return draftAccountId;
-    if (captureType == 'income' && captureAccountId != null) return captureAccountId;
+    if (captureType == 'income' && captureAccountId != null) {
+      return captureAccountId;
+    }
     return draftToAccountId ?? captureToAccountId;
   }
 
@@ -530,14 +676,16 @@ class AutoDraftService {
   Future<bool> _isDuplicate(AutoCapture capture, String dedupKey) async {
     final start = capture.timestamp.subtract(const Duration(minutes: 5));
     final end = capture.timestamp.add(const Duration(minutes: 5));
-    final draft = await isar.collection<JiveAutoDraft>()
+    final draft = await isar
+        .collection<JiveAutoDraft>()
         .filter()
         .dedupKeyEqualTo(dedupKey)
         .timestampBetween(start, end, includeUpper: true)
         .findFirst();
     if (draft != null) return true;
 
-    final txs = await isar.collection<JiveTransaction>()
+    final txs = await isar
+        .collection<JiveTransaction>()
         .filter()
         .timestampBetween(start, end, includeUpper: true)
         .findAll();
@@ -550,16 +698,20 @@ class AutoDraftService {
     }
 
     if (_looksLikeBulkText(capture.rawText)) {
-      final narrowStart = capture.timestamp.subtract(const Duration(seconds: 90));
+      final narrowStart = capture.timestamp.subtract(
+        const Duration(seconds: 90),
+      );
       final narrowEnd = capture.timestamp.add(const Duration(seconds: 90));
-      final nearDraft = await isar.collection<JiveAutoDraft>()
+      final nearDraft = await isar
+          .collection<JiveAutoDraft>()
           .filter()
           .amountEqualTo(capture.amount)
           .sourceEqualTo(capture.source)
           .timestampBetween(narrowStart, narrowEnd, includeUpper: true)
           .findFirst();
       if (nearDraft != null) return true;
-      final nearTx = await isar.collection<JiveTransaction>()
+      final nearTx = await isar
+          .collection<JiveTransaction>()
           .filter()
           .amountEqualTo(capture.amount)
           .sourceEqualTo(capture.source)
@@ -584,7 +736,11 @@ class AutoDraftService {
     if (accounts.isEmpty) return null;
     final fromHint = _extractFromAccountHint(rawText);
     if (fromHint != null) {
-      final mapped = _resolveMappingAccountId(accounts, mappings, fromHint.name);
+      final mapped = _resolveMappingAccountId(
+        accounts,
+        mappings,
+        fromHint.name,
+      );
       if (mapped != null) return mapped;
     }
     if (fromHint != null) {
@@ -592,7 +748,8 @@ class AutoDraftService {
       if (matched != null) return matched;
     }
     if (source.contains('WeChat') || source.contains('微信')) {
-      return _matchAccountByName(accounts, ['微信', '零钱', '微信钱包']) ?? accounts.first.id;
+      return _matchAccountByName(accounts, ['微信', '零钱', '微信钱包']) ??
+          accounts.first.id;
     }
     if (source.contains('Alipay') || source.contains('支付宝')) {
       return _matchAccountByName(accounts, ['支付宝', '余额宝']) ?? accounts.first.id;
@@ -601,6 +758,61 @@ class AutoDraftService {
       return _matchAccountByName(accounts, ['云闪付']) ?? accounts.first.id;
     }
     return accounts.first.id;
+  }
+
+  int? _resolveExplicitAccountId(
+    List<JiveAccount> accounts,
+    String? accountName,
+  ) {
+    final normalized = (accountName ?? '').trim();
+    if (normalized.isEmpty) return null;
+    for (final account in accounts) {
+      if (account.name.trim() == normalized) return account.id;
+    }
+    for (final account in accounts) {
+      if (account.name.contains(normalized) ||
+          normalized.contains(account.name)) {
+        return account.id;
+      }
+    }
+    return null;
+  }
+
+  String? _buildCaptureMetadataJson(AutoCapture capture) {
+    final payload = <String, dynamic>{};
+    final toAccountName = capture.toAccountName?.trim();
+    if (toAccountName != null && toAccountName.isNotEmpty) {
+      payload[_transferToAccountMetadataKey] = toAccountName;
+    }
+    final serviceCharge = capture.serviceCharge;
+    if (serviceCharge != null && serviceCharge > 0) {
+      payload[_transferServiceChargeMetadataKey] = serviceCharge;
+    }
+    if (payload.isEmpty) return null;
+    return jsonEncode(payload);
+  }
+
+  _TransferDraftMetadata _readTransferMetadata(String? metadataJson) {
+    if (metadataJson == null || metadataJson.trim().isEmpty) {
+      return const _TransferDraftMetadata.empty();
+    }
+    try {
+      final decoded = jsonDecode(metadataJson);
+      if (decoded is! Map<String, dynamic>) {
+        return const _TransferDraftMetadata.empty();
+      }
+      final rawName = '${decoded[_transferToAccountMetadataKey] ?? ''}'.trim();
+      final rawFee = decoded[_transferServiceChargeMetadataKey];
+      final serviceCharge = rawFee is num
+          ? rawFee.toDouble()
+          : double.tryParse('${rawFee ?? ''}');
+      return _TransferDraftMetadata(
+        toAccountName: rawName.isEmpty ? null : rawName,
+        serviceCharge: serviceCharge,
+      );
+    } catch (_) {
+      return const _TransferDraftMetadata.empty();
+    }
   }
 
   int? _resolveToAccountIdFromAccounts(
@@ -646,6 +858,24 @@ class AutoDraftService {
     return false;
   }
 
+  String? _inferTypeFromCategoryHints(
+    String? parentCategoryName,
+    String? childCategoryName,
+  ) {
+    final parent = (parentCategoryName ?? '').trim();
+    final child = (childCategoryName ?? '').trim();
+    if (parent == '收入' || child == '收入') {
+      return 'income';
+    }
+    if (parent == '转账' || child == '转账') {
+      return 'transfer';
+    }
+    if (parent.isNotEmpty || child.isNotEmpty) {
+      return 'expense';
+    }
+    return null;
+  }
+
   bool _looksLikeTransferText(String? rawText) {
     if (rawText == null || rawText.trim().isEmpty) return false;
     for (final keyword in _transferKeywords) {
@@ -656,10 +886,15 @@ class AutoDraftService {
 
   _AccountHint? _extractToAccountHint(String? rawText) {
     if (rawText == null) return null;
-    final text = rawText.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final text = rawText
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (text.isEmpty) return null;
     final patterns = [
-      RegExp(r'(?:到账银行卡|到账卡|收款银行卡|收款卡|收款账号|收款账户|转入卡|转出卡|银行卡)[:：]?\s*([^\s，,。;；]{2,30})'),
+      RegExp(
+        r'(?:到账银行卡|到账卡|收款银行卡|收款卡|收款账号|收款账户|转入卡|转出卡|银行卡)[:：]?\s*([^\s，,。;；]{2,30})',
+      ),
       RegExp(r'(?:转账到|转到|转至|转入至|到账至)[:：]?\s*([^\s，,。;；]{2,30})'),
     ];
 
@@ -672,11 +907,14 @@ class AutoDraftService {
       }
     }
 
-    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
+    final tail =
+        RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
         RegExp(r'[（(](\d{3,4})[）)]').firstMatch(text)?.group(1);
 
     if (name == null || name.trim().isEmpty) {
-      if (tail == null) return _inferAccountHintFromContext(text, preferWallet: false);
+      if (tail == null) {
+        return _inferAccountHintFromContext(text, preferWallet: false);
+      }
       return _AccountHint(name: tail, tail: tail);
     }
 
@@ -691,7 +929,9 @@ class AutoDraftService {
       tailFromName ??= cleaned;
       cleaned = '';
     } else {
-      final tailMatch = RegExp(r'^(.*?)(?:尾号|末四位|末尾)\s*(\d{3,4})$').firstMatch(cleaned);
+      final tailMatch = RegExp(
+        r'^(.*?)(?:尾号|末四位|末尾)\s*(\d{3,4})$',
+      ).firstMatch(cleaned);
       if (tailMatch != null) {
         cleaned = tailMatch.group(1)!.trim();
         tailFromName ??= tailMatch.group(2);
@@ -701,18 +941,24 @@ class AutoDraftService {
     if (normalized == null || normalized.isEmpty) {
       return _inferAccountHintFromContext(text, preferWallet: false);
     }
-    final resolvedTail = tailFromName ??
+    final resolvedTail =
+        tailFromName ??
         (RegExp(r'^\d{3,4}$').hasMatch(normalized) ? normalized : null);
     return _AccountHint(name: normalized, tail: resolvedTail);
   }
 
   _AccountHint? _extractFromAccountHint(String? rawText) {
     if (rawText == null) return null;
-    final text = rawText.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final text = rawText
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (text.isEmpty) return null;
 
     final patterns = [
-      RegExp(r'(?:付款方式|付款信息|交易方式|退款方式|付款卡|付款方|扣款卡|支付方式|支付账户|付款账户)[:：]?\s*([^\s，,。;；]{2,30})'),
+      RegExp(
+        r'(?:付款方式|付款信息|交易方式|退款方式|付款卡|付款方|扣款卡|支付方式|支付账户|付款账户)[:：]?\s*([^\s，,。;；]{2,30})',
+      ),
     ];
 
     String? name;
@@ -724,11 +970,14 @@ class AutoDraftService {
       }
     }
 
-    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
+    final tail =
+        RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
         RegExp(r'[（(](\d{3,4})[）)]').firstMatch(text)?.group(1);
 
     if (name == null || name.trim().isEmpty) {
-      if (tail == null) return _inferAccountHintFromContext(text, preferWallet: true);
+      if (tail == null) {
+        return _inferAccountHintFromContext(text, preferWallet: true);
+      }
       return _AccountHint(name: tail, tail: tail);
     }
 
@@ -743,7 +992,9 @@ class AutoDraftService {
       tailFromName ??= cleaned;
       cleaned = '';
     } else {
-      final tailMatch = RegExp(r'^(.*?)(?:尾号|末四位|末尾)\s*(\d{3,4})$').firstMatch(cleaned);
+      final tailMatch = RegExp(
+        r'^(.*?)(?:尾号|末四位|末尾)\s*(\d{3,4})$',
+      ).firstMatch(cleaned);
       if (tailMatch != null) {
         cleaned = tailMatch.group(1)!.trim();
         tailFromName ??= tailMatch.group(2);
@@ -753,12 +1004,16 @@ class AutoDraftService {
     if (normalized == null || normalized.isEmpty) {
       return _inferAccountHintFromContext(text, preferWallet: true);
     }
-    final resolvedTail = tailFromName ??
+    final resolvedTail =
+        tailFromName ??
         (RegExp(r'^\d{3,4}$').hasMatch(normalized) ? normalized : null);
     return _AccountHint(name: normalized, tail: resolvedTail);
   }
 
-  _AccountHint? _inferAccountHintFromContext(String text, {required bool preferWallet}) {
+  _AccountHint? _inferAccountHintFromContext(
+    String text, {
+    required bool preferWallet,
+  }) {
     final bank = _extractBankName(text);
     String? wallet;
     for (final keyword in _walletHintKeywords) {
@@ -769,7 +1024,8 @@ class AutoDraftService {
     }
     final primary = preferWallet ? (wallet ?? bank) : (bank ?? wallet);
     if (primary == null) return null;
-    final tail = RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
+    final tail =
+        RegExp(r'(?:尾号|末四位|末尾)\s*(\d{3,4})').firstMatch(text)?.group(1) ??
         RegExp(r'[（(](\d{3,4})[）)]').firstMatch(text)?.group(1);
     return _AccountHint(name: primary, tail: tail);
   }
@@ -787,8 +1043,9 @@ class AutoDraftService {
       if (trimmed.contains(keyword)) return keyword;
     }
     if (RegExp(r'^\d{3,4}$').hasMatch(trimmed)) return trimmed;
-    if (RegExp(r'(?:元|今日|今天|昨天|交易|支付|消费|退款|收款|转入|转出|支出|收入|成功|失败|单次|定时|投资|理财)')
-        .hasMatch(trimmed)) {
+    if (RegExp(
+      r'(?:元|今日|今天|昨天|交易|支付|消费|退款|收款|转入|转出|支出|收入|成功|失败|单次|定时|投资|理财)',
+    ).hasMatch(trimmed)) {
       return null;
     }
     if (trimmed.length > 12) return null;
@@ -814,7 +1071,8 @@ class AutoDraftService {
     if (accounts.isEmpty) return null;
     final normalizedHint = _cleanAccountName(hint.name);
     final bank = _extractBankName(hint.name);
-    final hintHasTail = hint.tail != null || RegExp(r'\d{3,4}').hasMatch(hint.name);
+    final hintHasTail =
+        hint.tail != null || RegExp(r'\d{3,4}').hasMatch(hint.name);
 
     if (hint.tail != null) {
       for (final account in accounts) {
@@ -829,7 +1087,9 @@ class AutoDraftService {
       if (!hintHasTail && RegExp(r'\d{3,4}').hasMatch(account.name)) {
         continue;
       }
-      if (bank != null && account.name.contains('信用卡') && !account.name.contains(bank)) {
+      if (bank != null &&
+          account.name.contains('信用卡') &&
+          !account.name.contains(bank)) {
         continue;
       }
       final normalizedAccount = _cleanAccountName(account.name);
@@ -895,14 +1155,18 @@ class AutoDraftService {
   }
 
   String _normalizeText(String text) {
-    return text
-        .toLowerCase()
-        .replaceAll(RegExp(r"[\s`~!@#$%^&*()+=|{}\[\]:;,.<>/?，。！？、【】（）《》“”‘’￥…—-]"), '');
+    return text.toLowerCase().replaceAll(
+      RegExp(r"[\s`~!@#$%^&*()+=|{}\[\]:;,.<>/?，。！？、【】（）《》“”‘’￥…—-]"),
+      '',
+    );
   }
 
   bool _looksLikeBulkText(String? rawText) {
     if (rawText == null || rawText.trim().isEmpty) return false;
-    final text = rawText.replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final text = rawText
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (text.length >= 220) return true;
     const keywords = [
       '交易记录',
@@ -924,6 +1188,30 @@ class AutoDraftService {
     final currencyHits = RegExp(r'[¥￥]').allMatches(text).length;
     return currencyHits >= 3;
   }
+}
+
+class _TransferDraftMetadata {
+  final String? toAccountName;
+  final double? serviceCharge;
+
+  const _TransferDraftMetadata({
+    required this.toAccountName,
+    required this.serviceCharge,
+  });
+
+  const _TransferDraftMetadata.empty()
+    : toAccountName = null,
+      serviceCharge = null;
+}
+
+class _ResolvedDraftAccountIds {
+  final int? accountId;
+  final int? toAccountId;
+
+  const _ResolvedDraftAccountIds({
+    required this.accountId,
+    required this.toAccountId,
+  });
 }
 
 class _AccountHint {
@@ -966,7 +1254,9 @@ class CategoryIndex {
   }
 
   CategoryMatch resolve(String? parentName, String? subName) {
-    JiveCategory? parent = parentName == null ? null : _parentByName[parentName];
+    JiveCategory? parent = parentName == null
+        ? null
+        : _parentByName[parentName];
     JiveCategory? child;
 
     if (parent != null && subName != null) {
@@ -984,8 +1274,5 @@ class CategoryMatch {
   final JiveCategory? parent;
   final JiveCategory? child;
 
-  const CategoryMatch({
-    required this.parent,
-    required this.child,
-  });
+  const CategoryMatch({required this.parent, required this.child});
 }
