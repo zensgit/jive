@@ -10,10 +10,20 @@ set -euo pipefail
 # Usage:
 #   bash scripts/verify_dev_flow.sh [package]
 # Example:
-#   bash scripts/verify_dev_flow.sh com.jivemoney.app.dev
+#   bash scripts/verify_dev_flow.sh com.jivemoney.app.auto.dev
 
-APP_ID="${1:-com.jivemoney.app.dev}"
+APP_ID="${1:-com.jivemoney.app.auto.dev}"
+APP_ID_FROM_ARG=0
+if [[ $# -gt 0 ]]; then
+  APP_ID_FROM_ARG=1
+fi
+
 ACTIVITY="${APP_ID}/com.jive.app.MainActivity"
+FALLBACK_APP_IDS=(
+  "com.jivemoney.app.auto.dev"
+  "com.jivemoney.app.dev"
+  "com.jivemoney.app.auto"
+)
 STAMP="$(date +%Y%m%d-%H%M%S)"
 OUT_DIR="/tmp/jive-verify-${STAMP}"
 mkdir -p "${OUT_DIR}"
@@ -455,6 +465,70 @@ tap_first_parent_more_button() {
   return 0
 }
 
+tap_first_budget_top_category_row() {
+  # Tap first clickable "Top category contribution" row in BudgetManagerScreen.
+  local xml="$1"
+  local candidate bounds x1 y1 x2 y2 h
+
+  candidate="$(
+    grep 'clickable="true"' "${xml}" 2>/dev/null \
+      | grep '%' \
+      | while IFS= read -r line; do
+          bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\\[([0-9]+),([0-9]+)\\]\\[([0-9]+),([0-9]+)\\]".*/\\1 \\2 \\3 \\4/p')"
+          if [[ -z "${bounds}" ]]; then
+            continue
+          fi
+          read -r x1 y1 x2 y2 <<<"${bounds}"
+          h="$((y2 - y1))"
+          if (( y1 >= 500 )) && (( h >= 70 )); then
+            echo "${y1} ${x1} ${x2} ${y2}"
+          fi
+        done \
+      | sort -n -k1,1 -k2,2 \
+      | head -n 1
+  )"
+
+  if [[ -z "${candidate}" ]]; then
+    return 1
+  fi
+
+  read -r y1 x1 x2 y2 <<<"${candidate}"
+  tap_xy "$(((x1 + x2) / 2))" "$(((y1 + y2) / 2))"
+  return 0
+}
+
+tap_first_budget_anomaly_row() {
+  # Tap first clickable anomaly row (contains threshold label) in BudgetManagerScreen.
+  local xml="$1"
+  local candidate bounds x1 y1 x2 y2 h
+
+  candidate="$(
+    grep 'clickable="true"' "${xml}" 2>/dev/null \
+      | grep '阈值' \
+      | while IFS= read -r line; do
+          bounds="$(echo "${line}" | sed -E -n 's/.*bounds="\\[([0-9]+),([0-9]+)\\]\\[([0-9]+),([0-9]+)\\]".*/\\1 \\2 \\3 \\4/p')"
+          if [[ -z "${bounds}" ]]; then
+            continue
+          fi
+          read -r x1 y1 x2 y2 <<<"${bounds}"
+          h="$((y2 - y1))"
+          if (( y1 >= 500 )) && (( h >= 70 )); then
+            echo "${y1} ${x1} ${x2} ${y2}"
+          fi
+        done \
+      | sort -n -k1,1 -k2,2 \
+      | head -n 1
+  )"
+
+  if [[ -z "${candidate}" ]]; then
+    return 1
+  fi
+
+  read -r y1 x1 x2 y2 <<<"${candidate}"
+  tap_xy "$(((x1 + x2) / 2))" "$(((y1 + y2) / 2))"
+  return 0
+}
+
 assert_text_exists() {
   local text="$1"
   local name="$2"
@@ -492,9 +566,43 @@ restore_rotation() {
   fi
 }
 
+pick_available_app_if_needed() {
+  if adb shell pm list packages | grep -q "^package:${APP_ID}\$"; then
+    return 0
+  fi
+  if (( APP_ID_FROM_ARG == 1 )); then
+    fail "package '${APP_ID}' not installed on device"
+  fi
+
+  local candidate
+  for candidate in "${FALLBACK_APP_IDS[@]}"; do
+    if adb shell pm list packages | grep -q "^package:${candidate}\$"; then
+      APP_ID="${candidate}"
+      ACTIVITY="${APP_ID}/com.jive.app.MainActivity"
+      return 0
+    fi
+  done
+
+  fail "no supported app package found (${FALLBACK_APP_IDS[*]})"
+}
+
+resolve_activity_if_possible() {
+  local resolved
+  resolved="$(
+    adb shell cmd package resolve-activity --brief "${APP_ID}" 2>/dev/null \
+      | tr -d '\r' \
+      | tail -n 1
+  )"
+  if [[ "${resolved}" == */* ]]; then
+    ACTIVITY="${resolved}"
+  fi
+}
+
 log "artifacts dir: ${OUT_DIR}"
 adb get-state >/dev/null 2>&1 || fail "no adb device"
 trap restore_rotation EXIT
+pick_available_app_if_needed
+resolve_activity_if_possible
 
 log "force portrait for stable coordinates"
 ORIG_ACCELEROMETER_ROTATION="$(adb shell settings get system accelerometer_rotation 2>/dev/null | tr -d '\r' | tail -n 1)"
@@ -579,11 +687,27 @@ if ! grep -Eq "[0-9]{4}-[0-9]{2}-[0-9]{2} - [0-9]{4}-[0-9]{2}-[0-9]{2}" "${OUT_D
   fail "date range was not applied in transaction filter sheet"
 fi
 
-tap_text_once "全部清除" "${OUT_DIR}/01_all_tx_filter_after_range.nodes.xml" || fail "cannot tap 全部清除"
-sleep 1
-cap "01_all_tx_filter_after_clear"
-dump_ui "01_all_tx_filter_after_clear"
-assert_text_exists "不限" "01_all_tx_filter_after_clear"
+if tap_text_once "全部清除" "${OUT_DIR}/01_all_tx_filter_after_range.nodes.xml"; then
+  sleep 1
+  cap "01_all_tx_filter_after_clear"
+  dump_ui "01_all_tx_filter_after_clear"
+  assert_text_exists "不限" "01_all_tx_filter_after_clear"
+else
+  # Some builds keep the calendar range picker open after selecting end date.
+  if grep -q "选择日历范围" "${OUT_DIR}/01_all_tx_filter_after_range.nodes.xml"; then
+    if ! tap_text_once "清除" "${OUT_DIR}/01_all_tx_filter_after_range.nodes.xml"; then
+      fail "cannot clear date range in calendar picker"
+    fi
+    sleep 1
+    adb shell input keyevent 4
+    sleep 1
+    cap "01_all_tx_filter_after_clear"
+    dump_ui "01_all_tx_filter_after_clear"
+    assert_text_exists "不限" "01_all_tx_filter_after_clear"
+  else
+    fail "cannot tap 全部清除"
+  fi
+fi
 
 if ! tap_text_once "关闭" "${OUT_DIR}/01_all_tx_filter_after_clear.nodes.xml"; then
   adb shell input keyevent 4
@@ -967,6 +1091,44 @@ cap "10_budget_after_wait"
 dump_ui "10_budget_after_wait"
 if grep -q "progressbar" "${OUT_DIR}/10_budget_after_wait.nodes.xml"; then
   fail "budget screen still shows loading indicator after wait"
+fi
+
+log "budget drilldown: tap first top category row"
+if ! tap_first_budget_top_category_row "${OUT_DIR}/10_budget_after_wait.nodes.xml"; then
+  if grep -q "创建你的第一个预算方案" "${OUT_DIR}/10_budget_after_wait.nodes.xml" \
+    || grep -q "新建预算方案" "${OUT_DIR}/10_budget_after_wait.nodes.xml" \
+    || grep -q "暂无预算" "${OUT_DIR}/10_budget_after_wait.nodes.xml"; then
+    log "budget drilldown skipped: budget insight has no data in current profile"
+  else
+    fail "budget drilldown: cannot tap first top category row"
+  fi
+else
+  sleep 2
+  cap "11_budget_top_drilldown"
+  dump_ui "11_budget_top_drilldown"
+  assert_text_exists "账单 ·" "11_budget_top_drilldown"
+
+  log "budget drilldown: return to budget page"
+  adb shell input keyevent 4
+  sleep 1
+  cap "12_budget_back_from_top"
+  dump_ui "12_budget_back_from_top"
+  assert_text_exists "预算管理" "12_budget_back_from_top"
+
+  log "budget drilldown: tap first anomaly row"
+  if ! tap_first_budget_anomaly_row "${OUT_DIR}/12_budget_back_from_top.nodes.xml"; then
+    adb shell input swipe 540 2300 540 1700 260
+    sleep 1
+    cap "12_budget_back_from_top_scrolled"
+    dump_ui "12_budget_back_from_top_scrolled"
+    if ! tap_first_budget_anomaly_row "${OUT_DIR}/12_budget_back_from_top_scrolled.nodes.xml"; then
+      fail "budget drilldown: cannot tap first anomaly row"
+    fi
+  fi
+  sleep 2
+  cap "13_budget_anomaly_drilldown"
+  dump_ui "13_budget_anomaly_drilldown"
+  assert_text_exists "账单 ·" "13_budget_anomaly_drilldown"
 fi
 
 log "PASS"
