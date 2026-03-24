@@ -10,8 +10,9 @@ import 'stats_screen.dart';
 /// Replaces the old single-page StatsScreen as the entry point.
 class StatsHomeScreen extends StatefulWidget {
   final ValueListenable<int>? reloadSignal;
+  final int? bookId;
 
-  const StatsHomeScreen({super.key, this.reloadSignal});
+  const StatsHomeScreen({super.key, this.reloadSignal, this.bookId});
 
   @override
   State<StatsHomeScreen> createState() => _StatsHomeScreenState();
@@ -59,9 +60,9 @@ class _StatsHomeScreenState extends State<StatsHomeScreen> with SingleTickerProv
       body: TabBarView(
         controller: _tabController,
         children: [
-          const MonthlyOverviewScreen(),
-          const CategoryAnalysisScreen(),
-          const TrendChartScreen(),
+          MonthlyOverviewScreen(bookId: widget.bookId),
+          CategoryAnalysisScreen(bookId: widget.bookId),
+          TrendChartScreen(bookId: widget.bookId),
           StatsScreen(reloadSignal: widget.reloadSignal),
         ],
       ),

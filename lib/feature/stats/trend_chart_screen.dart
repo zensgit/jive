@@ -7,7 +7,8 @@ import '../../core/service/stats_aggregation_service.dart';
 
 class TrendChartScreen extends StatefulWidget {
   final String? currencyCode;
-  const TrendChartScreen({super.key, this.currencyCode});
+  final int? bookId;
+  const TrendChartScreen({super.key, this.currencyCode, this.bookId});
 
   @override
   State<TrendChartScreen> createState() => _TrendChartScreenState();
@@ -27,7 +28,7 @@ class _TrendChartScreenState extends State<TrendChartScreen> {
   Future<void> _load() async {
     setState(() => _isLoading = true);
     final service = await StatsAggregationService.create();
-    final trends = await service.getMonthlyTrend(_monthCount, currencyCode: widget.currencyCode);
+    final trends = await service.getMonthlyTrend(_monthCount, currencyCode: widget.currencyCode, bookId: widget.bookId);
     if (mounted) {
       setState(() {
         _trends = trends;

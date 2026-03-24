@@ -16,6 +16,7 @@ class CsvExportService {
     DateTime start,
     DateTime end, {
     String? categoryKey,
+    int? bookId,
   }) async {
     final accountsFuture = _isar.collection<JiveAccount>().where().findAll();
     final categoriesFuture = _isar.collection<JiveCategory>().where().findAll();
@@ -24,6 +25,7 @@ class CsvExportService {
       start,
       end,
       categoryKey: categoryKey,
+      bookId: bookId,
     );
     final accounts = await accountsFuture;
     final categories = await categoriesFuture;
@@ -60,11 +62,13 @@ class CsvExportService {
     DateTime start,
     DateTime end, {
     String? categoryKey,
+    int? bookId,
   }) async {
     final transactions = await _loadFilteredTransactions(
       start,
       end,
       categoryKey: categoryKey,
+      bookId: bookId,
     );
     return transactions.length;
   }
@@ -73,6 +77,7 @@ class CsvExportService {
     DateTime start,
     DateTime end, {
     String? categoryKey,
+    int? bookId,
   }) async {
     if (end.isBefore(start)) {
       throw ArgumentError('结束时间不能早于开始时间');
@@ -82,20 +87,21 @@ class CsvExportService {
     final startAt = _startOfDay(start);
     final endExclusive = _startOfDay(end).add(const Duration(days: 1));
 
+    var baseQuery = _isar
+        .collection<JiveTransaction>()
+        .filter()
+        .timestampBetween(startAt, endExclusive, includeUpper: false);
+    if (bookId != null) {
+      baseQuery = baseQuery.bookIdEqualTo(bookId);
+    }
+
     late final List<JiveTransaction> transactions;
     if (normalizedCategoryKey != null) {
-      transactions = await _isar
-          .collection<JiveTransaction>()
-          .filter()
-          .timestampBetween(startAt, endExclusive, includeUpper: false)
+      transactions = await baseQuery
           .categoryKeyEqualTo(normalizedCategoryKey)
           .findAll();
     } else {
-      transactions = await _isar
-          .collection<JiveTransaction>()
-          .filter()
-          .timestampBetween(startAt, endExclusive, includeUpper: false)
-          .findAll();
+      transactions = await baseQuery.findAll();
     }
 
     transactions.sort((left, right) {

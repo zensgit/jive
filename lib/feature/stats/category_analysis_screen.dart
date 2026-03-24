@@ -8,7 +8,8 @@ import '../category/category_transactions_screen.dart';
 
 class CategoryAnalysisScreen extends StatefulWidget {
   final String? currencyCode;
-  const CategoryAnalysisScreen({super.key, this.currencyCode});
+  final int? bookId;
+  const CategoryAnalysisScreen({super.key, this.currencyCode, this.bookId});
 
   @override
   State<CategoryAnalysisScreen> createState() => _CategoryAnalysisScreenState();
@@ -40,6 +41,7 @@ class _CategoryAnalysisScreenState extends State<CategoryAnalysisScreen> {
       _currentMonth,
       isExpense: _showExpense,
       currencyCode: widget.currencyCode,
+      bookId: widget.bookId,
     );
     if (mounted) {
       setState(() {

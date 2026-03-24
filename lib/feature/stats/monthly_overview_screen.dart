@@ -6,7 +6,8 @@ import '../../core/service/stats_aggregation_service.dart';
 
 class MonthlyOverviewScreen extends StatefulWidget {
   final String? currencyCode;
-  const MonthlyOverviewScreen({super.key, this.currencyCode});
+  final int? bookId;
+  const MonthlyOverviewScreen({super.key, this.currencyCode, this.bookId});
 
   @override
   State<MonthlyOverviewScreen> createState() => _MonthlyOverviewScreenState();
@@ -29,6 +30,7 @@ class _MonthlyOverviewScreenState extends State<MonthlyOverviewScreen> {
     final comparison = await service.getMonthComparison(
       _currentMonth,
       currencyCode: widget.currencyCode,
+      bookId: widget.bookId,
     );
     if (mounted) {
       setState(() {

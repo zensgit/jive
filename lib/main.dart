@@ -1293,10 +1293,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         index: _currentIndex,
         children: [
           _buildHomeContent(),
-          StatsHomeScreen(reloadSignal: _dataReloadSignal),
+          StatsHomeScreen(reloadSignal: _dataReloadSignal, bookId: _currentBookId),
           AccountsScreen(
             reloadSignal: _dataReloadSignal,
             onDataChanged: _notifyDataChanged,
+            bookId: _currentBookId,
           ),
         ],
       ),
