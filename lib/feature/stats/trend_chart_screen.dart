@@ -156,7 +156,7 @@ class _TrendChartScreenState extends State<TrendChartScreen> {
               getDotPainter: (spot, pct, bar, idx) =>
                   FlDotCirclePainter(radius: 3, color: Colors.redAccent, strokeWidth: 0),
             ),
-            belowBarData: BarAreaData(show: true, color: Colors.redAccent.withOpacity(0.08)),
+            belowBarData: BarAreaData(show: true, color: Colors.redAccent.withValues(alpha: 0.08)),
           ),
           // Income
           LineChartBarData(
@@ -170,7 +170,7 @@ class _TrendChartScreenState extends State<TrendChartScreen> {
               getDotPainter: (spot, pct, bar, idx) =>
                   FlDotCirclePainter(radius: 3, color: Colors.green, strokeWidth: 0),
             ),
-            belowBarData: BarAreaData(show: true, color: Colors.green.withOpacity(0.08)),
+            belowBarData: BarAreaData(show: true, color: Colors.green.withValues(alpha: 0.08)),
           ),
         ],
         lineTouchData: LineTouchData(

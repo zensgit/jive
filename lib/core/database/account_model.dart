@@ -30,4 +30,6 @@ class JiveAccount {
   double openingBalance = 0;
 
   late DateTime updatedAt;
+  @Index()
+  int? bookId; // 多账本支持 - null 表示默认账本
 }

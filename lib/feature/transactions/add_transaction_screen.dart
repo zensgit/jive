@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -27,6 +28,12 @@ import '../../core/service/tag_rule_service.dart';
 import '../../core/service/transaction_service.dart';
 import '../../core/widgets/jive_calendar/jive_calendar.dart';
 import '../../core/database/category_model.dart';
+import '../../core/service/auto_rule_engine.dart';
+import '../../core/service/merchant_memory_service.dart';
+import '../../core/service/speech_intent_parser.dart';
+import '../../core/service/speech_settings.dart';
+import '../../core/service/speech_service.dart';
+import '../../core/service/voice_quota_service.dart';
 import '../../core/utils/logger_util.dart';
 import '../category/category_create_dialog.dart';
 import '../category/category_create_screen.dart';
@@ -44,12 +51,18 @@ class AddTransactionScreen extends StatefulWidget {
   final JiveTransaction? editingTransaction;
   final JiveTransaction? prefillTransaction;
   final TransactionType? initialType;
+  final bool startWithSpeech;
+  final String? initialSpeechText;
+  final int? bookId;
 
   const AddTransactionScreen({
     super.key,
     this.editingTransaction,
     this.prefillTransaction,
     this.initialType,
+    this.startWithSpeech = false,
+    this.initialSpeechText,
+    this.bookId,
   });
 
   @override
@@ -79,6 +92,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   static const List<String> _transferNoteSuggestions = ['还款', '储蓄', '调拨', '借还'];
   static const String _noteTagUsageKeyPrefix = 'note_tag_usage_v1_';
 
+  // ── Voice recognition state ──
+  final SpeechIntentParser _speechParser = SpeechIntentParser();
+  bool _speechHoldActive = false;
+  bool _speechHoldPending = false;
+  bool _speechHoldStopQueued = false;
+  bool _speechHoldCancelQueued = false;
+  bool _speechHoldUsedFallback = false;
+  bool _speechUiActive = false;
+  SpeechEngine? _speechHoldEngine;
+  SpeechService? _speechHoldService;
+
   String _amountStr = "0";
   String _toAmountStr = ""; // 跨币种转账的转入金额
   double? _crossCurrencyRate; // 跨币种转账时使用的汇率
@@ -96,6 +120,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   DateTime _selectedTime = DateTime.now();
   final TextEditingController _noteController = TextEditingController();
   final Map<TransactionType, Map<String, int>> _noteTagUsage = {};
+  // ── Merchant memory ──
+  MerchantSuggestion? _merchantSuggestion;
+  Timer? _merchantDebounce;
   int? _editingAccountId;
   int? _editingToAccountId;
   String? _editingParentKey;
@@ -150,10 +177,31 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _initializeEditingState();
     _loadNoteTagUsage();
     _initData();
+    _noteController.addListener(() => _onNoteChanged(_noteController.text));
+    // Speech initialization
+    if (widget.startWithSpeech) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          final initialText = widget.initialSpeechText;
+          if (initialText != null && initialText.trim().isNotEmpty) {
+            _handleInitialSpeechText(initialText);
+          } else {
+            _showHoldToTalkHint();
+          }
+        }
+      });
+    } else if (widget.initialSpeechText != null && widget.initialSpeechText!.trim().isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _handleInitialSpeechText(widget.initialSpeechText!);
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
+    _merchantDebounce?.cancel();
     _inlineSearchController.dispose();
     _inlineSearchFocus.dispose();
     _noteController.dispose();
@@ -1123,7 +1171,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ..excludeFromBudget =
           _txType == TransactionType.expense && _excludeFromBudget
       ..smartTagKeys = List<String>.from(tx.smartTagKeys)
-      ..timestamp = _selectedTime;
+      ..timestamp = _selectedTime
+      ..bookId = widget.bookId ?? tx.bookId;
 
     if (!_isEditing) {
       final matched = await TagRuleService(_isar).resolveMatchingTags(tx);
@@ -1419,6 +1468,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             onPressed: () => Navigator.pop(context, _hasDataChanges),
           ),
           actions: [
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _showHoldToTalkHint,
+              onLongPressStart: (_) => _startSpeechHold(),
+              onLongPressEnd: (_) => _stopSpeechHold(),
+              onLongPressCancel: _cancelSpeechHold,
+              child: const SizedBox(
+                width: kMinInteractiveDimension,
+                height: kMinInteractiveDimension,
+                child: Center(
+                  child: Icon(Icons.mic, color: Colors.black87),
+                ),
+              ),
+            ),
             if (_showCategories)
               IconButton(
                 icon: Icon(
@@ -1431,7 +1494,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           centerTitle: true,
           title: _buildTypeSelector(),
         ),
-        body: Column(
+        body: Stack(
+          children: [
+            Column(
           children: [
             // 1. 金额显示区 (Flex 1)
             amountSection,
@@ -1578,9 +1643,750 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             ),
           ],
         ),
+            // Voice listening overlay
+            if (_speechHoldActive)
+              Positioned(
+                left: 20,
+                right: 20,
+                top: 12,
+                child: IgnorePointer(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.75),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.mic, color: Colors.white, size: 16),
+                        SizedBox(width: 8),
+                        Text("正在聆听，松开结束", style: TextStyle(color: Colors.white, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
+
+  // ══════════════════════════════════════════════════
+  // ── Merchant Memory Methods ──
+  // ══════════════════════════════════════════════════
+
+  void _onNoteChanged(String text) {
+    _merchantDebounce?.cancel();
+    if (text.trim().length < 2) {
+      if (_merchantSuggestion != null) {
+        setState(() => _merchantSuggestion = null);
+      }
+      return;
+    }
+    _merchantDebounce = Timer(const Duration(milliseconds: 300), () async {
+      final suggestion = await MerchantMemoryService(_isar).getSuggestion(text.trim());
+      if (!mounted) return;
+      setState(() => _merchantSuggestion = suggestion);
+    });
+  }
+
+  void _applyMerchantSuggestion() {
+    final suggestion = _merchantSuggestion;
+    if (suggestion == null) return;
+    if (suggestion.categoryKey != null) {
+      final parent = _parentCategories.firstWhere(
+        (cat) => cat.key == suggestion.categoryKey,
+        orElse: () => _parentCategories.first,
+      );
+      if (parent.key == suggestion.categoryKey) {
+        setState(() => _selectedParent = parent);
+        _loadSubCategories(parent.key);
+      }
+    }
+    setState(() => _merchantSuggestion = null);
+  }
+
+  Widget _buildMerchantSuggestionBanner() {
+    final suggestion = _merchantSuggestion;
+    if (suggestion == null) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.store, size: 16, color: Colors.green.shade700),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              "建议分类: ${_parentCategories.where((c) => c.key == suggestion.categoryKey).map((c) => c.name).firstOrNull ?? '未知'}",
+              style: TextStyle(fontSize: 12, color: Colors.green.shade800),
+            ),
+          ),
+          GestureDetector(
+            onTap: _applyMerchantSuggestion,
+            child: Text("应用", style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () => setState(() => _merchantSuggestion = null),
+            child: Icon(Icons.close, size: 14, color: Colors.green.shade400),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════
+  // ── Voice Recognition Methods ──
+  // ══════════════════════════════════════════════════
+
+  void _showHoldToTalkHint() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("按住麦克风说话，松开结束")),
+    );
+  }
+
+  Future<void> _handleInitialSpeechText(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty || !mounted) return;
+    final intent = await _showSpeechPreview(trimmed);
+    if (!mounted || intent == null) return;
+    await _applySpeechIntent(intent);
+  }
+
+  Future<void> _startSpeechHold() async {
+    if (_speechHoldActive || _speechHoldPending) return;
+    _speechHoldPending = true;
+    _speechHoldStopQueued = false;
+    _speechHoldCancelQueued = false;
+    final settings = await SpeechSettingsStore.load();
+    if (!settings.enabled) {
+      JiveLogger.i("Speech hold skipped: disabled");
+      _speechHoldPending = false;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("语音记账已关闭")),
+      );
+      return;
+    }
+    final quota = await VoiceQuotaStore.load();
+    final preferOnline = settings.onlineEnhance && !quota.isOnlineExceeded;
+    if (settings.onlineEnhance && quota.isOnlineExceeded && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("今日线上语音配额已用完，已切换为本地识别")),
+      );
+    }
+
+    final speechService = SpeechServiceFactory.create();
+    final engineCandidates = preferOnline
+        ? <SpeechEngine>[SpeechEngine.system, SpeechEngine.iflytek]
+        : <SpeechEngine>[SpeechEngine.system];
+
+    SpeechEngine? selectedEngine;
+    SpeechRecognitionResult? startResult;
+    for (var i = 0; i < engineCandidates.length; i++) {
+      final engine = engineCandidates[i];
+      final preferOffline = engine == SpeechEngine.system;
+      JiveLogger.i(
+        "Speech hold start (engine=${engine.value}, locale=${settings.locale}, onlineEnhance=${settings.onlineEnhance})",
+      );
+      startResult = await speechService.startListening(
+        locale: settings.locale,
+        preferOffline: preferOffline,
+        engine: engine,
+      );
+      if (startResult.errorCode == null) {
+        selectedEngine = engine;
+        break;
+      }
+      JiveLogger.w(
+        "Speech hold start failed (engine=${engine.value}, error=${startResult.errorCode})",
+      );
+      if (!_shouldFallbackFromSpeechError(startResult.errorCode)) {
+        break;
+      }
+    }
+
+    if (selectedEngine == null) {
+      _speechHoldPending = false;
+      _showSpeechError(startResult?.errorCode);
+      return;
+    }
+
+    final usedFallback = selectedEngine != engineCandidates.first;
+
+    if (!mounted) return;
+    _speechHoldPending = false;
+    setState(() {
+      _speechHoldActive = true;
+      _speechHoldUsedFallback = usedFallback;
+      _speechHoldService = speechService;
+      _speechHoldEngine = selectedEngine;
+    });
+
+    if (_speechHoldCancelQueued) {
+      _speechHoldCancelQueued = false;
+      await _cancelSpeechHold();
+      return;
+    }
+    if (_speechHoldStopQueued) {
+      _speechHoldStopQueued = false;
+      await _stopSpeechHold();
+    }
+  }
+
+  Future<void> _stopSpeechHold() async {
+    if (_speechHoldPending && !_speechHoldActive) {
+      _speechHoldStopQueued = true;
+      return;
+    }
+    if (!_speechHoldActive) return;
+    final speechService = _speechHoldService;
+    final usedFallback = _speechHoldUsedFallback;
+    final engine = _speechHoldEngine;
+    setState(() {
+      _speechHoldActive = false;
+      _speechHoldUsedFallback = false;
+      _speechHoldService = null;
+      _speechHoldEngine = null;
+    });
+
+    if (speechService == null) return;
+
+    SpeechRecognitionResult finalResult;
+    try {
+      finalResult = await speechService.stopListening().timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      await speechService.cancel();
+      finalResult = const SpeechRecognitionResult(errorCode: 'TIMEOUT');
+    } catch (_) {
+      finalResult = const SpeechRecognitionResult(errorCode: 'UNKNOWN');
+    }
+
+    await _handleSpeechResult(finalResult, usedFallback: usedFallback, engine: engine);
+  }
+
+  Future<void> _cancelSpeechHold() async {
+    if (_speechHoldPending && !_speechHoldActive) {
+      _speechHoldCancelQueued = true;
+      return;
+    }
+    if (!_speechHoldActive) return;
+    final speechService = _speechHoldService;
+    setState(() {
+      _speechHoldActive = false;
+      _speechHoldUsedFallback = false;
+      _speechHoldService = null;
+      _speechHoldEngine = null;
+    });
+    if (speechService != null) {
+      await speechService.cancel();
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("已取消语音识别")),
+      );
+    }
+  }
+
+  Future<void> _handleSpeechResult(
+    SpeechRecognitionResult finalResult, {
+    bool usedFallback = false,
+    SpeechEngine? engine,
+  }) async {
+    if (!mounted) return;
+    final recognized = finalResult.text;
+    final errorCode = finalResult.errorCode;
+
+    if (recognized != null) {
+      JiveLogger.i(
+        "Speech hold result success (length=${recognized.length}, fallback=$usedFallback)",
+      );
+      final onlineUsed = engine != null && engine != SpeechEngine.system;
+      final quota = await VoiceQuotaStore.increment(online: onlineUsed);
+      if (onlineUsed) {
+        _showQuotaWarning(quota);
+      }
+    } else {
+      JiveLogger.w(
+        "Speech hold result failure (error=${errorCode ?? 'NONE'}, fallback=$usedFallback)",
+      );
+    }
+
+    if (errorCode == 'CANCELLED') return;
+
+    if (errorCode != null && recognized == null) {
+      final message = _speechErrorMessage(errorCode);
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+    } else if (recognized == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("未识别到语音，可手动输入")),
+      );
+    }
+
+    if (_speechUiActive) {
+      JiveLogger.w("Speech UI busy, skipping result");
+      return;
+    }
+    _speechUiActive = true;
+    try {
+      final text = recognized ?? await _promptSpeechText();
+      if (!mounted) return;
+      final trimmed = text?.trim();
+      if (trimmed == null || trimmed.isEmpty) return;
+      final intent = await _showSpeechPreview(trimmed);
+      if (intent == null) return;
+      await _applySpeechIntent(intent);
+    } finally {
+      _speechUiActive = false;
+    }
+  }
+
+  void _showQuotaWarning(VoiceQuota quota) {
+    if (!mounted) return;
+    if (quota.warningLevel == VoiceQuotaWarningLevel.high) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("线上语音配额即将用完，建议使用本地识别")),
+      );
+    } else if (quota.warningLevel == VoiceQuotaWarningLevel.exceeded) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("今日线上语音配额已用完，已建议改用本地识别")),
+      );
+    }
+  }
+
+  Future<String?> _promptSpeechText({String? initialText}) async {
+    if (!mounted) return null;
+    FocusScope.of(context).unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    if (!mounted) return null;
+    var currentText = initialText ?? '';
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        var closing = false;
+        Future<void> closeDialog([String? value]) async {
+          if (closing) return;
+          closing = true;
+          FocusScope.of(dialogContext).unfocus();
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          if (!Navigator.of(dialogContext).canPop()) return;
+          Navigator.pop(dialogContext, value);
+        }
+
+        return AlertDialog(
+          scrollable: true,
+          title: const Text("语音输入"),
+          content: TextFormField(
+            initialValue: currentText,
+            autofocus: true,
+            onChanged: (value) => currentText = value,
+            decoration: const InputDecoration(hintText: "例如：今天午餐花了 23 元 微信"),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => closeDialog(),
+              child: const Text("取消"),
+            ),
+            TextButton(
+              onPressed: () => closeDialog(currentText),
+              child: const Text("继续"),
+            ),
+          ],
+        );
+      },
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    return result;
+  }
+
+  Future<SpeechIntent?> _showSpeechPreview(String text) async {
+    if (!mounted) return null;
+    FocusScope.of(context).unfocus();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    if (!mounted) return null;
+    var currentText = text;
+    final accountNames = _accounts.map((account) => account.name).toList();
+    SpeechIntent? intent = _speechParser.parse(
+      currentText,
+      now: DateTime.now(),
+      accountNames: accountNames,
+    );
+    final formatter = DateFormat('yyyy-MM-dd HH:mm');
+    final result = await showModalBottomSheet<SpeechIntent>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            var closing = false;
+            Future<void> closeSheet([SpeechIntent? value]) async {
+              if (closing) return;
+              closing = true;
+              FocusScope.of(context).unfocus();
+              await Future<void>.delayed(const Duration(milliseconds: 50));
+              Navigator.pop(context, value);
+            }
+
+            void updateIntent(String value) {
+              if (closing) return;
+              currentText = value;
+              setSheetState(() {
+                intent = _speechParser.parse(
+                  value,
+                  now: DateTime.now(),
+                  accountNames: accountNames,
+                );
+              });
+            }
+
+            final preview = intent;
+            final isValid = preview?.isValid ?? false;
+            final typeLabel = _speechTypeLabel(preview?.type);
+            final amountLabel = preview?.amount == null
+                ? "未识别"
+                : _speechFormatAmount(preview!.amount!);
+            final timeLabel = preview == null
+                ? formatter.format(DateTime.now())
+                : formatter.format(preview.timestamp);
+            final accountLabel = preview?.accountHint ?? "默认账户";
+            final toAccountLabel = preview?.toAccountHint ?? "自动选择";
+            return AnimatedPadding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOut,
+              child: SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      "语音预览",
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      initialValue: currentText,
+                      minLines: 1,
+                      maxLines: 3,
+                      onChanged: updateIntent,
+                      decoration: const InputDecoration(
+                        labelText: "识别文本",
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    if (!isValid) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        "未识别到金额，请修改文本",
+                        style: TextStyle(color: Colors.red.shade400),
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    _buildSpeechPreviewRow("金额", amountLabel),
+                    _buildSpeechPreviewRow("类型", typeLabel),
+                    if (preview?.type == 'transfer')
+                      _buildSpeechPreviewRow("账户", "$accountLabel → $toAccountLabel")
+                    else
+                      _buildSpeechPreviewRow("账户", accountLabel),
+                    _buildSpeechPreviewRow("时间", timeLabel),
+                    const SizedBox(height: 16),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => closeSheet(),
+                          child: const Text("取消"),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: isValid ? () => closeSheet(preview) : null,
+                          child: const Text("填充表单"),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    return result;
+  }
+
+  Widget _buildSpeechPreviewRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 56,
+            child: Text(
+              label,
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.black87, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _applySpeechIntent(SpeechIntent intent) async {
+    final nextType = _speechTypeFromIntent(intent.type);
+    if (nextType != null && nextType != _txType) {
+      await _switchType(nextType);
+    }
+
+    if (_isSearchMode) {
+      _exitSearchMode();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      if (intent.amount != null) {
+        _amountStr = _speechFormatAmount(intent.amount!);
+      }
+    });
+
+    _speechApplyAccountHints(intent);
+    await _speechApplyCategorySuggestion(intent);
+  }
+
+  void _speechApplyAccountHints(SpeechIntent intent) {
+    if (_accounts.isEmpty) return;
+    final from = _speechResolveAccountByHint(intent.accountHint);
+    final to = _txType == TransactionType.transfer
+        ? _speechResolveAccountByHint(intent.toAccountHint, excludeId: from?.id)
+        : null;
+
+    setState(() {
+      if (from != null) {
+        _selectedAccount = from;
+      }
+      if (_txType == TransactionType.transfer) {
+        if (to != null && to.id != _selectedAccount?.id) {
+          _selectedToAccount = to;
+        }
+        if (_selectedAccount != null && _selectedToAccount?.id == _selectedAccount?.id) {
+          _selectedToAccount = _speechPickAlternateAccount(_selectedAccount);
+        }
+      }
+    });
+  }
+
+  Future<void> _speechApplyCategorySuggestion(SpeechIntent intent) async {
+    if (_txType == TransactionType.transfer) return;
+    final text = intent.cleanedText ?? intent.rawText;
+    final match = (await AutoRuleEngine.instance()).match(text: text, source: 'Voice');
+    if (match.parent == null) return;
+    final parent = _parentCategories.firstWhere(
+      (cat) => cat.name == match.parent,
+      orElse: () => _parentCategories.first,
+    );
+    if (parent.name != match.parent) return;
+    if (!mounted) return;
+    setState(() {
+      _selectedParent = parent;
+    });
+    await _loadSubCategories(parent.key);
+    if (match.sub == null || !mounted) return;
+    final sub = _subCategories.firstWhere(
+      (cat) => cat.name == match.sub,
+      orElse: () => _subCategories.first,
+    );
+    if (sub.name != match.sub) return;
+    setState(() {
+      _selectedSub = sub;
+    });
+  }
+
+  TransactionType? _speechTypeFromIntent(String? type) {
+    switch (type) {
+      case 'income':
+        return TransactionType.income;
+      case 'transfer':
+        return TransactionType.transfer;
+      case 'expense':
+        return TransactionType.expense;
+    }
+    return null;
+  }
+
+  String _speechTypeLabel(String? type) {
+    switch (type) {
+      case 'income':
+        return '收入';
+      case 'transfer':
+        return '转账';
+      case 'expense':
+        return '支出';
+      default:
+        return '自动识别';
+    }
+  }
+
+  String _speechFormatAmount(double amount) {
+    final fixed = amount.toStringAsFixed(2);
+    return fixed.replaceAll(RegExp(r'\.?0+$'), '');
+  }
+
+  JiveAccount? _speechResolveAccountByHint(String? hint, {int? excludeId}) {
+    if (hint == null || hint.trim().isEmpty) return null;
+    final normalizedHint = hint.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+    JiveAccount? best;
+    var bestLen = 0;
+    for (final account in _accounts) {
+      if (excludeId != null && account.id == excludeId) continue;
+      for (final alias in _speechAccountAliases(account)) {
+        final normalizedAlias = alias.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+        if (normalizedAlias.isEmpty) continue;
+        if (normalizedHint.contains(normalizedAlias) || normalizedAlias.contains(normalizedHint)) {
+          if (normalizedAlias.length > bestLen) {
+            best = account;
+            bestLen = normalizedAlias.length;
+          }
+        }
+      }
+    }
+    return best;
+  }
+
+  List<String> _speechAccountAliases(JiveAccount account) {
+    final aliases = <String>{account.name};
+    final trimmed = account.name.replaceAll(RegExp(r'(钱包|账户|帐户)$'), '');
+    if (trimmed.length >= 2 && trimmed != account.name) {
+      aliases.add(trimmed);
+    }
+    if (account.name.contains('微信')) aliases.add('微信');
+    if (account.name.contains('支付宝')) aliases.add('支付宝');
+    if (account.name.contains('现金')) aliases.add('现金');
+    if (account.name.contains('银行卡') || account.name.contains('银行')) {
+      aliases.add('银行卡');
+    }
+    if (account.name.contains('信用卡')) aliases.add('信用卡');
+    return aliases.toList();
+  }
+
+  JiveAccount? _speechPickAlternateAccount(JiveAccount? selected) {
+    if (selected == null) return null;
+    return _accounts.firstWhere(
+      (account) => account.id != selected.id,
+      orElse: () => selected,
+    );
+  }
+
+  bool _shouldFallbackFromSpeechError(String? code) {
+    switch (code) {
+      case 'NO_PERMISSION':
+      case 'BUSY':
+      case 'CANCELLED':
+      case 'NO_SESSION':
+        return false;
+    }
+    return true;
+  }
+
+  void _showSpeechError(String? code) {
+    if (!mounted) return;
+    final message = _speechErrorMessage(code);
+    if (message == null) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  String? _speechErrorMessage(String? code) {
+    if (code != null && code.startsWith('IFLYTEK_ERROR')) {
+      return "讯飞识别失败，可手动输入";
+    }
+    if (code != null && code.startsWith('BAIDU_ERROR')) {
+      return "百度语音识别失败，可手动输入";
+    }
+    switch (code) {
+      case 'BUSY':
+        return "语音识别正忙，请稍后重试";
+      case 'NO_PERMISSION':
+        return "未获得麦克风或语音识别权限";
+      case 'NO_NETWORK':
+        return "网络不可用，已切换为手动输入";
+      case 'NO_ENGINE':
+        return "设备不支持语音识别";
+      case 'NO_CREDENTIALS':
+        return "未配置语音识别密钥";
+      case 'NO_BAIDU_SDK':
+        return "百度语音 SDK 未配置";
+      case 'NO_SESSION':
+        return "语音识别未开始";
+      case 'CANCELLED':
+        return "语音识别已取消";
+      case 'TIMEOUT':
+        return "语音识别超时，已切换为手动输入";
+      case 'NO_MATCH':
+        return "未识别到语音，可手动输入";
+      case 'AUDIO':
+        return "麦克风异常，可手动输入";
+      case 'CLIENT':
+        return "语音识别失败，可手动输入";
+      case 'SERVER':
+        return "语音识别服务异常，可手动输入";
+      case 'UNAVAILABLE':
+        return "语音识别不可用";
+      case 'UNKNOWN':
+        return "语音识别失败，可手动输入";
+    }
+    return null;
+  }
+
+  // ══════════════════════════════════════════════════
+  // ── End Voice Recognition Methods ──
+  // ══════════════════════════════════════════════════
 
   Widget _buildTypeSelector() {
     return Container(
@@ -2919,11 +3725,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Widget _buildNoteField({required bool isLandscape}) {
     final currentType = _txType;
-    return NoteFieldWithChips(
-      controller: _noteController,
-      isLandscape: isLandscape,
-      suggestions: _noteSuggestionsForType(currentType),
-      onTagSelected: (tag) => _trackNoteTagUsage(currentType, tag),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildMerchantSuggestionBanner(),
+        NoteFieldWithChips(
+          controller: _noteController,
+          isLandscape: isLandscape,
+          suggestions: _noteSuggestionsForType(currentType),
+          onTagSelected: (tag) => _trackNoteTagUsage(currentType, tag),
+        ),
+      ],
     );
   }
 

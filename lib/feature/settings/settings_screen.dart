@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_icon_style.dart';
 import '../budget/budget_settings_screen.dart';
+import 'theme_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -124,6 +125,25 @@ class SettingsScreen extends StatelessWidget {
                       ),
                       onTap: () =>
                           _pickCategoryIconStyle(context, current: style),
+                    );
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.color_lens_outlined),
+                  title: const Text("主题设置"),
+                  subtitle: const Text("颜色、字体与显示模式"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ThemeSettingsScreen(),
+                      ),
                     );
                   },
                 ),

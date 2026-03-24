@@ -17,6 +17,12 @@ import '../database/tag_model.dart';
 import '../database/tag_rule_model.dart';
 import '../database/template_model.dart';
 import '../database/transaction_model.dart';
+import '../database/merchant_memory_model.dart';
+import '../database/installment_model.dart';
+import '../database/bill_split_model.dart';
+import '../database/savings_goal_model.dart';
+import '../database/bill_relation_model.dart';
+import '../database/book_model.dart';
 
 /// 统一的数据库服务，确保所有地方使用相同的 schema 列表
 class DatabaseService {
@@ -45,6 +51,13 @@ class DatabaseService {
     JiveExchangeRateHistorySchema,
     JiveCurrencyPreferenceSchema,
     JiveRecurringRuleSchema,
+    JiveMerchantMemorySchema,
+    JiveInstallmentSchema,
+    JiveBillSplitSchema,
+    JiveSplitMemberSchema,
+    JiveSavingsGoalSchema,
+    JiveBillRelationSchema,
+    JiveBookSchema,
   ];
 
   /// 获取或创建 Isar 实例

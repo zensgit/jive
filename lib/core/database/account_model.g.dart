@@ -22,83 +22,88 @@ const JiveAccountSchema = CollectionSchema(
       name: r'billingDay',
       type: IsarType.long,
     ),
-    r'colorHex': PropertySchema(
+    r'bookId': PropertySchema(
       id: 1,
+      name: r'bookId',
+      type: IsarType.long,
+    ),
+    r'colorHex': PropertySchema(
+      id: 2,
       name: r'colorHex',
       type: IsarType.string,
     ),
     r'creditLimit': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'creditLimit',
       type: IsarType.double,
     ),
     r'currency': PropertySchema(
-      id: 3,
+      id: 4,
       name: r'currency',
       type: IsarType.string,
     ),
     r'groupName': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'groupName',
       type: IsarType.string,
     ),
     r'iconName': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'iconName',
       type: IsarType.string,
     ),
     r'includeInBalance': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'includeInBalance',
       type: IsarType.bool,
     ),
     r'isArchived': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'isArchived',
       type: IsarType.bool,
     ),
     r'isHidden': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'isHidden',
       type: IsarType.bool,
     ),
     r'key': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'key',
       type: IsarType.string,
     ),
     r'name': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'name',
       type: IsarType.string,
     ),
     r'openingBalance': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'openingBalance',
       type: IsarType.double,
     ),
     r'order': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'order',
       type: IsarType.long,
     ),
     r'repaymentDay': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'repaymentDay',
       type: IsarType.long,
     ),
     r'subType': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'subType',
       type: IsarType.string,
     ),
     r'type': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'type',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 16,
+      id: 17,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -119,6 +124,19 @@ const JiveAccountSchema = CollectionSchema(
           name: r'key',
           type: IndexType.hash,
           caseSensitive: true,
+        )
+      ],
+    ),
+    r'bookId': IndexSchema(
+      id: 3567540928881766442,
+      name: r'bookId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'bookId',
+          type: IndexType.value,
+          caseSensitive: false,
         )
       ],
     )
@@ -170,22 +188,23 @@ void _jiveAccountSerialize(
   Map<Type, List<int>> allOffsets,
 ) {
   writer.writeLong(offsets[0], object.billingDay);
-  writer.writeString(offsets[1], object.colorHex);
-  writer.writeDouble(offsets[2], object.creditLimit);
-  writer.writeString(offsets[3], object.currency);
-  writer.writeString(offsets[4], object.groupName);
-  writer.writeString(offsets[5], object.iconName);
-  writer.writeBool(offsets[6], object.includeInBalance);
-  writer.writeBool(offsets[7], object.isArchived);
-  writer.writeBool(offsets[8], object.isHidden);
-  writer.writeString(offsets[9], object.key);
-  writer.writeString(offsets[10], object.name);
-  writer.writeDouble(offsets[11], object.openingBalance);
-  writer.writeLong(offsets[12], object.order);
-  writer.writeLong(offsets[13], object.repaymentDay);
-  writer.writeString(offsets[14], object.subType);
-  writer.writeString(offsets[15], object.type);
-  writer.writeDateTime(offsets[16], object.updatedAt);
+  writer.writeLong(offsets[1], object.bookId);
+  writer.writeString(offsets[2], object.colorHex);
+  writer.writeDouble(offsets[3], object.creditLimit);
+  writer.writeString(offsets[4], object.currency);
+  writer.writeString(offsets[5], object.groupName);
+  writer.writeString(offsets[6], object.iconName);
+  writer.writeBool(offsets[7], object.includeInBalance);
+  writer.writeBool(offsets[8], object.isArchived);
+  writer.writeBool(offsets[9], object.isHidden);
+  writer.writeString(offsets[10], object.key);
+  writer.writeString(offsets[11], object.name);
+  writer.writeDouble(offsets[12], object.openingBalance);
+  writer.writeLong(offsets[13], object.order);
+  writer.writeLong(offsets[14], object.repaymentDay);
+  writer.writeString(offsets[15], object.subType);
+  writer.writeString(offsets[16], object.type);
+  writer.writeDateTime(offsets[17], object.updatedAt);
 }
 
 JiveAccount _jiveAccountDeserialize(
@@ -196,23 +215,24 @@ JiveAccount _jiveAccountDeserialize(
 ) {
   final object = JiveAccount();
   object.billingDay = reader.readLongOrNull(offsets[0]);
-  object.colorHex = reader.readStringOrNull(offsets[1]);
-  object.creditLimit = reader.readDoubleOrNull(offsets[2]);
-  object.currency = reader.readString(offsets[3]);
-  object.groupName = reader.readStringOrNull(offsets[4]);
-  object.iconName = reader.readString(offsets[5]);
+  object.bookId = reader.readLongOrNull(offsets[1]);
+  object.colorHex = reader.readStringOrNull(offsets[2]);
+  object.creditLimit = reader.readDoubleOrNull(offsets[3]);
+  object.currency = reader.readString(offsets[4]);
+  object.groupName = reader.readStringOrNull(offsets[5]);
+  object.iconName = reader.readString(offsets[6]);
   object.id = id;
-  object.includeInBalance = reader.readBool(offsets[6]);
-  object.isArchived = reader.readBool(offsets[7]);
-  object.isHidden = reader.readBool(offsets[8]);
-  object.key = reader.readString(offsets[9]);
-  object.name = reader.readString(offsets[10]);
-  object.openingBalance = reader.readDouble(offsets[11]);
-  object.order = reader.readLong(offsets[12]);
-  object.repaymentDay = reader.readLongOrNull(offsets[13]);
-  object.subType = reader.readStringOrNull(offsets[14]);
-  object.type = reader.readString(offsets[15]);
-  object.updatedAt = reader.readDateTime(offsets[16]);
+  object.includeInBalance = reader.readBool(offsets[7]);
+  object.isArchived = reader.readBool(offsets[8]);
+  object.isHidden = reader.readBool(offsets[9]);
+  object.key = reader.readString(offsets[10]);
+  object.name = reader.readString(offsets[11]);
+  object.openingBalance = reader.readDouble(offsets[12]);
+  object.order = reader.readLong(offsets[13]);
+  object.repaymentDay = reader.readLongOrNull(offsets[14]);
+  object.subType = reader.readStringOrNull(offsets[15]);
+  object.type = reader.readString(offsets[16]);
+  object.updatedAt = reader.readDateTime(offsets[17]);
   return object;
 }
 
@@ -226,36 +246,38 @@ P _jiveAccountDeserializeProp<P>(
     case 0:
       return (reader.readLongOrNull(offset)) as P;
     case 1:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 2:
-      return (reader.readDoubleOrNull(offset)) as P;
-    case 3:
-      return (reader.readString(offset)) as P;
-    case 4:
       return (reader.readStringOrNull(offset)) as P;
-    case 5:
+    case 3:
+      return (reader.readDoubleOrNull(offset)) as P;
+    case 4:
       return (reader.readString(offset)) as P;
+    case 5:
+      return (reader.readStringOrNull(offset)) as P;
     case 6:
-      return (reader.readBool(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 7:
       return (reader.readBool(offset)) as P;
     case 8:
       return (reader.readBool(offset)) as P;
     case 9:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 10:
       return (reader.readString(offset)) as P;
     case 11:
-      return (reader.readDouble(offset)) as P;
-    case 12:
-      return (reader.readLong(offset)) as P;
-    case 13:
-      return (reader.readLongOrNull(offset)) as P;
-    case 14:
-      return (reader.readStringOrNull(offset)) as P;
-    case 15:
       return (reader.readString(offset)) as P;
+    case 12:
+      return (reader.readDouble(offset)) as P;
+    case 13:
+      return (reader.readLong(offset)) as P;
+    case 14:
+      return (reader.readLongOrNull(offset)) as P;
+    case 15:
+      return (reader.readStringOrNull(offset)) as P;
     case 16:
+      return (reader.readString(offset)) as P;
+    case 17:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -334,6 +356,14 @@ extension JiveAccountQueryWhereSort
   QueryBuilder<JiveAccount, JiveAccount, QAfterWhere> anyId() {
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(const IdWhereClause.any());
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhere> anyBookId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'bookId'),
+      );
     });
   }
 }
@@ -450,6 +480,116 @@ extension JiveAccountQueryWhere
       }
     });
   }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhereClause> bookIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'bookId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhereClause> bookIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'bookId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhereClause> bookIdEqualTo(
+      int? bookId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'bookId',
+        value: [bookId],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhereClause> bookIdNotEqualTo(
+      int? bookId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'bookId',
+              lower: [],
+              upper: [bookId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'bookId',
+              lower: [bookId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'bookId',
+              lower: [bookId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'bookId',
+              lower: [],
+              upper: [bookId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhereClause> bookIdGreaterThan(
+    int? bookId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'bookId',
+        lower: [bookId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhereClause> bookIdLessThan(
+    int? bookId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'bookId',
+        lower: [],
+        upper: [bookId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhereClause> bookIdBetween(
+    int? lowerBookId,
+    int? upperBookId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'bookId',
+        lower: [lowerBookId],
+        includeLower: includeLower,
+        upper: [upperBookId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension JiveAccountQueryFilter
@@ -520,6 +660,77 @@ extension JiveAccountQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'billingDay',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> bookIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'bookId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      bookIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'bookId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> bookIdEqualTo(
+      int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'bookId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      bookIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'bookId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> bookIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'bookId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> bookIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'bookId',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -2088,6 +2299,18 @@ extension JiveAccountQuerySortBy
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByBookId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'bookId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByBookIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'bookId', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByColorHex() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'colorHex', Sort.asc);
@@ -2296,6 +2519,18 @@ extension JiveAccountQuerySortThenBy
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByBillingDayDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'billingDay', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByBookId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'bookId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByBookIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'bookId', Sort.desc);
     });
   }
 
@@ -2516,6 +2751,12 @@ extension JiveAccountQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctByBookId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'bookId');
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctByColorHex(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2633,6 +2874,12 @@ extension JiveAccountQueryProperty
   QueryBuilder<JiveAccount, int?, QQueryOperations> billingDayProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'billingDay');
+    });
+  }
+
+  QueryBuilder<JiveAccount, int?, QQueryOperations> bookIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'bookId');
     });
   }
 

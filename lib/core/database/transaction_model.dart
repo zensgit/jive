@@ -42,4 +42,7 @@ class JiveTransaction {
   String? recurringKey; // 周期入账去重 Key
   @Index()
   DateTime updatedAt = DateTime.now(); // 同步游标与增量同步使用
+  @Index()
+  int? bookId; // 多账本支持 - null 表示默认账本
+  List<String> attachmentPaths = []; // 附件文件路径
 }
