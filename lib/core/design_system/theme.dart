@@ -17,70 +17,71 @@ class JiveTheme {
   static const Color darkDivider = Color(0xFF2D2D2D);
 
   static ThemeData get lightTheme {
-    return ThemeData(
-      useMaterial3: true,
+    return buildTheme(
       brightness: Brightness.light,
-      scaffoldBackgroundColor: surfaceWhite,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primaryGreen,
-        brightness: Brightness.light,
-        primary: primaryGreen,
-        secondary: accentLime,
-        surface: surfaceWhite,
-      ),
-      textTheme: GoogleFonts.latoTextTheme(),
-      // cardTheme removed to avoid version conflict
-      appBarTheme: const AppBarTheme(
-        backgroundColor: surfaceWhite,
-        elevation: 0,
-        centerTitle: true,
-        scrolledUnderElevation: 0,
-      ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: primaryGreen,
-        foregroundColor: Colors.white,
-        elevation: 4,
-        shape: CircleBorder(), // 圆形按钮
-      ),
+      primaryColor: primaryGreen,
+      accentColor: accentLime,
+      seedColor: primaryGreen,
     );
   }
 
   static ThemeData get darkTheme {
+    return buildTheme(
+      brightness: Brightness.dark,
+      primaryColor: primaryGreen,
+      accentColor: accentLime,
+      seedColor: primaryGreen,
+    );
+  }
+
+  static ThemeData buildTheme({
+    required Brightness brightness,
+    required Color primaryColor,
+    required Color accentColor,
+    required Color seedColor,
+  }) {
+    final isDark = brightness == Brightness.dark;
+    final backgroundColor = isDark ? darkSurface : surfaceWhite;
+    final baseColorScheme = ColorScheme.fromSeed(
+      seedColor: seedColor,
+      brightness: brightness,
+    );
+
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: darkSurface,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: primaryGreen,
-        brightness: Brightness.dark,
-        primary: primaryGreen,
-        secondary: accentLime,
-        surface: darkSurface,
+      brightness: brightness,
+      scaffoldBackgroundColor: backgroundColor,
+      colorScheme: baseColorScheme.copyWith(
+        primary: primaryColor,
+        secondary: accentColor,
+        surface: backgroundColor,
       ),
-      textTheme: GoogleFonts.latoTextTheme(ThemeData.dark().textTheme),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: darkSurface,
+      textTheme: isDark
+          ? GoogleFonts.latoTextTheme(ThemeData.dark().textTheme)
+          : GoogleFonts.latoTextTheme(),
+      appBarTheme: AppBarTheme(
+        backgroundColor: backgroundColor,
         elevation: 0,
         centerTitle: true,
         scrolledUnderElevation: 0,
       ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: primaryGreen,
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: primaryColor,
         foregroundColor: Colors.white,
         elevation: 4,
         shape: CircleBorder(),
       ),
-      cardTheme: const CardThemeData(
-        color: darkCard,
+      cardTheme: CardThemeData(
+        color: isDark ? darkCard : cardWhite,
       ),
-      dividerTheme: const DividerThemeData(
-        color: darkDivider,
+      dividerTheme: DividerThemeData(
+        color: isDark ? darkDivider : Colors.grey.shade200,
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
-        backgroundColor: darkCard,
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: isDark ? darkCard : cardWhite,
       ),
-      dialogTheme: const DialogThemeData(
-        backgroundColor: darkCard,
+      dialogTheme: DialogThemeData(
+        backgroundColor: isDark ? darkCard : cardWhite,
       ),
     );
   }

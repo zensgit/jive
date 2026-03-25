@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_icon_style.dart';
 import '../budget/budget_settings_screen.dart';
 import 'theme_settings_screen.dart';
 import 'webdav_settings_screen.dart';
+import '../export/csv_export_screen.dart';
+import '../instalment/instalment_list_screen.dart';
+import '../theme/theme_provider.dart';
+import '../theme/theme_selection_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -111,6 +116,34 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 const Text("外观", style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
+                Consumer<ThemeProvider>(
+                  builder: (context, themeProvider, _) {
+                    final modeLabel =
+                        themeProvider.isDarkMode ? '深色模式' : '浅色模式';
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.color_lens_outlined),
+                      title: const Text("主题设置"),
+                      subtitle: Text(
+                        '${themeProvider.selectedPresetName} · $modeLabel',
+                      ),
+                      trailing: Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: Colors.grey.shade500,
+                      ),
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ThemeSelectionScreen(),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+                const Divider(height: 1),
                 ValueListenableBuilder<CategoryIconStyle>(
                   valueListenable: CategoryIconStyleConfig.notifier,
                   builder: (context, style, _) {
@@ -202,6 +235,47 @@ class SettingsScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const WebDavSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.file_download_outlined),
+                  title: const Text("导出数据"),
+                  subtitle: const Text("按日期、分类和类型导出 CSV"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const CsvExportScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 16),
+                const Text("账务管理", style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.view_timeline_outlined),
+                  title: const Text("分期管理"),
+                  subtitle: const Text("跟踪信用卡分期与贷款还款进度"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const InstalmentListScreen(),
                       ),
                     );
                   },

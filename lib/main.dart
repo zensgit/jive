@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -46,6 +47,7 @@ import 'feature/auto/auto_supported_apps_screen.dart';
 import 'feature/auto/auto_settings_screen.dart';
 import 'feature/import/import_center_screen.dart';
 import 'feature/search/global_search_screen.dart';
+import 'feature/calendar/calendar_screen.dart';
 import 'feature/transactions/add_transaction_screen.dart';
 import 'feature/transactions/transaction_detail_screen.dart';
 import 'feature/stats/stats_home_screen.dart';
@@ -72,6 +74,7 @@ import 'feature/savings/savings_goal_screen.dart';
 import 'feature/bill_relation/bill_relation_screen.dart';
 import 'feature/merchant/merchant_memory_screen.dart';
 import 'feature/security/pin_setup_screen.dart';
+import 'feature/theme/theme_provider.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -79,8 +82,15 @@ void main() async {
   GoogleFonts.config.allowRuntimeFetching = false;
   await JiveLogger.init();
   final iconStyle = await CategoryIconStyleStore.load();
+  final themeProvider = ThemeProvider();
+  await themeProvider.init();
   CategoryIconStyleConfig.current = iconStyle;
-  runApp(const JiveApp());
+  runApp(
+    ChangeNotifierProvider<ThemeProvider>.value(
+      value: themeProvider,
+      child: const JiveApp(),
+    ),
+  );
 }
 
 class JiveApp extends StatelessWidget {
@@ -88,31 +98,35 @@ class JiveApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<CategoryIconStyle>(
-      valueListenable: CategoryIconStyleConfig.notifier,
-      builder: (context, _, __) {
-        return MaterialApp(
-          title: 'Jive 积叶',
-          debugShowCheckedModeBanner: false,
-          theme: JiveTheme.lightTheme,
-          darkTheme: JiveTheme.darkTheme,
-          themeMode: ThemeMode.system, // 跟随系统主题
-          localizationsDelegates: const [
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-          localeResolutionCallback: (locale, supportedLocales) {
-            if (locale == null) return supportedLocales.first;
-            for (final supported in supportedLocales) {
-              if (supported.languageCode == locale.languageCode) {
-                return supported;
-              }
-            }
-            return supportedLocales.first;
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, _) {
+        return ValueListenableBuilder<CategoryIconStyle>(
+          valueListenable: CategoryIconStyleConfig.notifier,
+          builder: (context, _, __) {
+            return MaterialApp(
+              title: 'Jive 积叶',
+              debugShowCheckedModeBanner: false,
+              theme: themeProvider.lightTheme,
+              darkTheme: themeProvider.darkTheme,
+              themeMode: themeProvider.themeMode,
+              localizationsDelegates: const [
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
+              localeResolutionCallback: (locale, supportedLocales) {
+                if (locale == null) return supportedLocales.first;
+                for (final supported in supportedLocales) {
+                  if (supported.languageCode == locale.languageCode) {
+                    return supported;
+                  }
+                }
+                return supportedLocales.first;
+              },
+              home: const LockGate(child: _AppEntry()),
+            );
           },
-          home: const LockGate(child: _AppEntry()),
         );
       },
     );
@@ -1228,6 +1242,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _openCalendarView() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (context) => const CalendarScreen()),
+    );
+    if (changed == true) {
+      await _loadTransactions();
+      _notifyDataChanged();
+    }
+  }
+
   Future<void> _openAutoDrafts() async {
     final changed = await Navigator.push(
       context,
@@ -1548,6 +1573,20 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 backgroundColor: Colors.grey.shade200,
                 child: Icon(
                   Icons.search,
+                  color: Colors.black54,
+                  size: iconSize,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: '日历视图',
+              onPressed: _openCalendarView,
+              icon: CircleAvatar(
+                radius: avatarRadius,
+                backgroundColor: Colors.grey.shade200,
+                child: Icon(
+                  Icons.calendar_month_outlined,
                   color: Colors.black54,
                   size: iconSize,
                 ),
