@@ -164,6 +164,7 @@ class _AutoSettingsScreenState extends State<AutoSettingsScreen> with WidgetsBin
       ),
     );
     if (saved != true) return;
+    if (!mounted) return;
     final lines = controller.text
         .split('\n')
         .map((line) => line.trim())

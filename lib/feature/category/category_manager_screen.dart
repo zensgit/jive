@@ -1406,11 +1406,14 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     }
 
     if (totalTxCount > 0) {
+      if (!mounted) return;
       final handling = await _askDeleteHandling(totalTxCount);
       if (handling == null) return;
       if (handling == _DeleteHandling.transfer) {
+        if (!mounted) return;
         final target = await _pickTransferTarget(category);
         if (target == null) return;
+        if (!mounted) return;
         final moved = await _confirmAndTransferTransactionsForCategories([
           category,
           ...children,
@@ -1422,6 +1425,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           );
         }
       } else if (handling == _DeleteHandling.uncategorize) {
+        if (!mounted) return;
         final updated = await _uncategorizeTransactionsForCategories([
           category,
           ...children,

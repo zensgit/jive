@@ -701,6 +701,7 @@ class _BudgetEditorSheetState extends State<_BudgetEditorSheet> {
 
   Future<void> _loadCurrency() async {
     final base = await widget.currencyService.getBaseCurrency();
+    if (!mounted) return;
     setState(() => _currency = base);
   }
 

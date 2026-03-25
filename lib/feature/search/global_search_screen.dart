@@ -170,6 +170,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
             TransactionDetailScreen(transactionId: transaction.id),
       ),
     );
+    if (!mounted) return;
     if (updated == true) {
       _hasDataChanges = true;
       final keyword = _searchController.text.trim();
