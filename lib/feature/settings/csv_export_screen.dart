@@ -143,15 +143,12 @@ class _CsvExportScreenState extends State<CsvExportScreen> {
 
     setState(() => _isExporting = true);
     try {
-      final csv = await _csvExportService.exportTransactionsCsv(
+      final file = await _csvExportService.exportTransactionsCsv(
         _dateRange.start,
         _dateRange.end,
         categoryKey: _selectedCategoryKey,
       );
-      final dir = await getTemporaryDirectory();
-      final fileName = _buildFileName();
-      final file = File('${dir.path}/$fileName');
-      await file.writeAsString(csv, encoding: utf8, flush: true);
+      final fileName = file.uri.pathSegments.last;
 
       if (!mounted) return;
       await SharePlus.instance.share(
