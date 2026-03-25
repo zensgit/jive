@@ -1196,6 +1196,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       await TagService(_isar).markTagsUsed(tx.tagKeys, tx.timestamp);
     }
 
+    // 商户记忆自动学习
+    await MerchantMemoryService(_isar).learnFromTransaction(tx);
+
     JiveLogger.i("Manual Transaction Saved: $amount");
     _hasDataChanges = true;
 
