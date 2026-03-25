@@ -77,6 +77,7 @@ import 'feature/security/pin_setup_screen.dart';
 import 'feature/theme/theme_provider.dart';
 import 'core/service/reminder_service.dart';
 import 'feature/debt/debt_list_screen.dart';
+import 'feature/investment/investment_screen.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -1957,6 +1958,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                       MaterialPageRoute(
                                         builder: (context) =>
                                             const DebtListScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.trending_up),
+                                  title: const Text("投资组合"),
+                                  subtitle: const Text("股票、基金与加密货币追踪"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const InvestmentScreen(),
                                       ),
                                     );
                                   },
