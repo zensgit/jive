@@ -296,6 +296,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       },
     );
     if (result == null) return;
+    if (!mounted) return;
     setState(() => _selectedParentKey = result == _noParentKey ? null : result);
   }
 
@@ -425,7 +426,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       forSystemCategory: widget.category.isSystem,
       forceTinted: _iconForceTinted,
     );
-    if (selected != null) {
+    if (selected != null && mounted) {
       setState(() => _selectedIcon = selected);
     }
   }
@@ -714,6 +715,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
 
   Future<void> _confirmDelete() async {
     final txCount = await _countTransactionsForCategory();
+    if (!mounted) return;
     if (txCount > 0) {
       final handling = await _askDeleteHandling(txCount);
       if (handling == null) return;

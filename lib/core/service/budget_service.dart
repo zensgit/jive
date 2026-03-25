@@ -182,7 +182,7 @@ class BudgetService {
   }
 
   /// 计算预算使用情况
-  Future<BudgetSummary> calculateBudgetUsage(JiveBudget budget) async {
+  Future<BudgetSummary> calculateBudgetUsage(JiveBudget budget, {int? bookId}) async {
     final now = DateTime.now();
 
     final effectiveDirectAmount = _effectiveDirectAmount(budget);
@@ -199,6 +199,7 @@ class BudgetService {
       budgetedParentKeys: context?.budgetedParentKeys,
       budgetedChildKeys: context?.budgetedChildKeys,
       onlyBudgetedCategories: context?.onlyBudgetedCategories ?? false,
+      bookId: bookId,
     );
 
     // 计算总使用金额（转换为预算货币）
@@ -618,6 +619,7 @@ class BudgetService {
     required Set<String>? budgetedParentKeys,
     required Set<String>? budgetedChildKeys,
     required bool onlyBudgetedCategories,
+    int? bookId,
   }) async {
     // 获取周期内的交易
     var query = _isar.jiveTransactions
@@ -625,6 +627,9 @@ class BudgetService {
         .timestampBetween(start, end)
         .typeEqualTo('expense')
         .excludeFromBudgetEqualTo(false);
+    if (bookId != null) {
+      query = query.bookIdEqualTo(bookId);
+    }
 
     if (budget.categoryKey != null && budget.categoryKey!.isNotEmpty) {
       final key = budget.categoryKey!;
@@ -672,14 +677,14 @@ class BudgetService {
   }
 
   /// 获取所有预算摘要
-  Future<List<BudgetSummary>> getAllBudgetSummaries() async {
+  Future<List<BudgetSummary>> getAllBudgetSummaries({int? bookId}) async {
     final budgets = await getActiveBudgets();
     final summaries = <BudgetSummary>[];
     final failed = <String>[];
 
     for (final budget in budgets) {
       try {
-        final summary = await calculateBudgetUsage(budget).timeout(
+        final summary = await calculateBudgetUsage(budget, bookId: bookId).timeout(
           _summaryTimeout,
           onTimeout: () => throw TimeoutException('预算计算超时'),
         );
@@ -1176,8 +1181,8 @@ class BudgetService {
   }
 
   /// 检查需要预警的预算
-  Future<List<BudgetSummary>> checkBudgetAlerts() async {
-    final summaries = await getAllBudgetSummaries();
+  Future<List<BudgetSummary>> checkBudgetAlerts({int? bookId}) async {
+    final summaries = await getAllBudgetSummaries(bookId: bookId);
     return summaries
         .where(
           (s) =>

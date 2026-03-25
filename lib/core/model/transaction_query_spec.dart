@@ -15,6 +15,7 @@ class TransactionQuerySpec {
   final TransactionSortField sortField;
   final TransactionSortDirection sortDirection;
   final bool groupByDate;
+  final int? bookId; // 多账本过滤
 
   const TransactionQuerySpec({
     this.keyword,
@@ -25,6 +26,7 @@ class TransactionQuerySpec {
     this.sortField = TransactionSortField.date,
     this.sortDirection = TransactionSortDirection.desc,
     this.groupByDate = true,
+    this.bookId,
   });
 
   String? get normalizedKeyword {

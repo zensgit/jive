@@ -20,11 +20,13 @@ import 'account_reconcile_screen.dart';
 class AccountsScreen extends StatefulWidget {
   final ValueListenable<int>? reloadSignal;
   final VoidCallback? onDataChanged;
+  final int? bookId;
 
   const AccountsScreen({
     super.key,
     this.reloadSignal,
     this.onDataChanged,
+    this.bookId,
   });
 
   @override
@@ -103,7 +105,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
     final service = AccountService(_isar);
     await service.initDefaultAccounts();
-    final accounts = await service.getActiveAccounts();
+    final accounts = await service.getActiveAccounts(bookId: widget.bookId);
     final balances = await service.computeBalances(accounts: accounts);
 
     // 初始化货币服务并获取基础货币

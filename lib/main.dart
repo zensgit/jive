@@ -60,7 +60,20 @@ import 'feature/recurring/recurring_rule_list_screen.dart';
 import 'feature/currency/currency_settings_screen.dart';
 import 'feature/currency/currency_converter_screen.dart';
 import 'feature/budget/budget_manager_screen.dart';
+import 'feature/settings/csv_export_screen.dart';
 import 'feature/settings/settings_screen.dart';
+import 'feature/security/lock_gate.dart';
+import 'feature/onboarding/onboarding_screen.dart';
+import 'feature/assistant/assistant_screen.dart';
+import 'feature/books/book_manager_screen.dart';
+import 'core/database/book_model.dart';
+import 'core/service/book_service.dart';
+import 'feature/installment/installment_list_screen.dart';
+import 'feature/split/bill_split_screen.dart';
+import 'feature/savings/savings_goal_screen.dart';
+import 'feature/bill_relation/bill_relation_screen.dart';
+import 'feature/merchant/merchant_memory_screen.dart';
+import 'feature/security/pin_setup_screen.dart';
 import 'feature/theme/theme_provider.dart';
 import 'core/utils/logger_util.dart';
 
@@ -111,7 +124,7 @@ class JiveApp extends StatelessWidget {
                 }
                 return supportedLocales.first;
               },
-              home: const MainScreen(),
+              home: const LockGate(child: _AppEntry()),
             );
           },
         );
@@ -151,6 +164,44 @@ class _RandomAccountSeed {
 }
 
 enum _AutoPermissionDialogAction { later, settings }
+
+/// 应用入口门控 — 先检查引导页是否完成
+class _AppEntry extends StatefulWidget {
+  const _AppEntry();
+
+  @override
+  State<_AppEntry> createState() => _AppEntryState();
+}
+
+class _AppEntryState extends State<_AppEntry> {
+  bool? _onboardingComplete;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOnboarding();
+  }
+
+  Future<void> _checkOnboarding() async {
+    final complete = await OnboardingScreen.isComplete();
+    if (mounted) {
+      setState(() => _onboardingComplete = complete);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_onboardingComplete == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_onboardingComplete == false) {
+      return OnboardingScreen(onComplete: () {
+        if (mounted) setState(() => _onboardingComplete = true);
+      });
+    }
+    return const MainScreen();
+  }
+}
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -198,6 +249,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   String _baseCurrency = 'CNY';
   CurrencyService? _currencyService;
 
+  // 多账本支持
+  List<JiveBook> _books = [];
+  int? _currentBookId; // null = 全部账本
+
   @override
   void initState() {
     super.initState();
@@ -242,6 +297,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     // 检查是否需要自动更新汇率
     await _checkAutoUpdateRates(currencyService);
     await ProjectService(_isar).initTestProjectIfNeeded();
+    await BookService(_isar).initDefaultBook();
+    await _loadBooks();
     await TransactionService(_isar).migrateTransactionCategoryKeys();
     await TransactionService(_isar).migrateTransactionAccountIds();
     await _loadTransactions();
@@ -992,16 +1049,26 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _loadTransactions() async {
-    final list = await _isar.jiveTransactions
-        .where()
-        .sortByTimestampDesc()
-        .findAll();
+    List<JiveTransaction> list;
+    if (_currentBookId != null) {
+      list = await _isar.jiveTransactions
+          .where()
+          .filter()
+          .bookIdEqualTo(_currentBookId)
+          .sortByTimestampDesc()
+          .findAll();
+    } else {
+      list = await _isar.jiveTransactions
+          .where()
+          .sortByTimestampDesc()
+          .findAll();
+    }
     final categories = await _isar.collection<JiveCategory>().where().findAll();
     final categoryMap = {for (final c in categories) c.key: c};
     final tags = await _isar.collection<JiveTag>().where().findAll();
     final tagMap = {for (final t in tags) t.key: t};
     final accountService = AccountService(_isar);
-    final accounts = await accountService.getActiveAccounts();
+    final accounts = await accountService.getActiveAccounts(bookId: _currentBookId);
     final accountMap = {for (final a in accounts) a.id: a};
     final balances = await accountService.computeBalances(accounts: accounts);
     final totals = accountService.calculateTotals(accounts, balances);
@@ -1024,6 +1091,18 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         _totalCreditAvailable = creditSummary.available;
         _baseCurrency = baseCurrency;
         _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadBooks() async {
+    final books = await BookService(_isar).getActiveBooks();
+    final defaultBook = await BookService(_isar).getDefaultBook();
+    if (mounted) {
+      setState(() {
+        _books = books;
+        // 默认选中默认账本
+        _currentBookId ??= defaultBook?.id;
       });
     }
   }
@@ -1239,10 +1318,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         index: _currentIndex,
         children: [
           _buildHomeContent(),
-          StatsHomeScreen(reloadSignal: _dataReloadSignal),
+          StatsHomeScreen(reloadSignal: _dataReloadSignal, bookId: _currentBookId),
           AccountsScreen(
             reloadSignal: _dataReloadSignal,
             onDataChanged: _notifyDataChanged,
+            bookId: _currentBookId,
           ),
         ],
       ),
@@ -1251,7 +1331,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => const AddTransactionScreen(),
+              builder: (context) => AddTransactionScreen(bookId: _currentBookId),
             ),
           );
           if (result == true) {
@@ -1361,6 +1441,95 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildBookSwitcher({bool compact = false}) {
+    final currentBook = _books.where((b) => b.id == _currentBookId).firstOrNull;
+    final label = currentBook?.name ?? '全部账本';
+    final fontSize = compact ? 11.0 : 12.0;
+    return GestureDetector(
+      onTap: () {
+        showModalBottomSheet(
+          context: context,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text('切换账本',
+                      style: GoogleFonts.lato(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.all_inclusive, size: 20),
+                  title: const Text('全部账本'),
+                  trailing: _currentBookId == null
+                      ? const Icon(Icons.check, color: Color(0xFF2E7D32))
+                      : null,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() => _currentBookId = null);
+                    _loadTransactions();
+                  },
+                ),
+                ..._books.map((book) => ListTile(
+                      leading: Icon(
+                        book.isDefault ? Icons.book : Icons.book_outlined,
+                        size: 20,
+                        color: book.isDefault
+                            ? const Color(0xFF2E7D32)
+                            : null,
+                      ),
+                      title: Text(book.name),
+                      subtitle: book.isDefault
+                          ? const Text('默认',
+                              style: TextStyle(
+                                  fontSize: 11, color: Color(0xFF2E7D32)))
+                          : null,
+                      trailing: _currentBookId == book.id
+                          ? const Icon(Icons.check, color: Color(0xFF2E7D32))
+                          : null,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        setState(() => _currentBookId = book.id);
+                        _loadTransactions();
+                      },
+                    )),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2E7D32).withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.book_outlined,
+                size: fontSize + 2, color: const Color(0xFF2E7D32)),
+            const SizedBox(width: 4),
+            Text(label,
+                style: GoogleFonts.lato(
+                    fontSize: fontSize,
+                    color: const Color(0xFF2E7D32),
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(width: 2),
+            Icon(Icons.keyboard_arrow_down,
+                size: fontSize + 2, color: const Color(0xFF2E7D32)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTopBar({bool compact = false}) {
     final greetingSize = compact ? 12.0 : 14.0;
     final nameSize = compact ? 20.0 : 24.0;
@@ -1387,6 +1556,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 fontWeight: FontWeight.bold,
               ),
             ),
+            if (_books.length > 1) ...[
+              const SizedBox(height: 4),
+              _buildBookSwitcher(compact: compact),
+            ],
           ],
         ),
         Row(
@@ -1543,6 +1716,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   },
                                 ),
                                 ListTile(
+                                  leading: const Icon(
+                                    Icons.table_view_outlined,
+                                  ),
+                                  title: const Text("导出 CSV"),
+                                  subtitle: const Text("按时间范围和分类导出交易"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const CsvExportScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
                                   leading: const Icon(Icons.settings_outlined),
                                   title: const Text("设置"),
                                   subtitle: const Text("外观与偏好"),
@@ -1636,6 +1826,127 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                       ),
                                     );
                                     await _loadTransactions();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.auto_awesome),
+                                  title: const Text("AI 助手"),
+                                  subtitle: const Text("语音记账、智能分类"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            AssistantScreen(isar: _isar),
+                                      ),
+                                    );
+                                    await _loadTransactions();
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.store_outlined),
+                                  title: const Text("商户记忆"),
+                                  subtitle: const Text("管理商户名称与分类偏好"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const MerchantMemoryScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.book_outlined),
+                                  title: const Text("账本管理"),
+                                  subtitle: const Text("多账本切换与管理"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const BookManagerScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.credit_card_outlined),
+                                  title: const Text("分期管理"),
+                                  subtitle: const Text("贷款与分期付款追踪"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const InstallmentListScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.group_outlined),
+                                  title: const Text("AA 分账"),
+                                  subtitle: const Text("多人分账与结算"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const BillSplitScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.savings_outlined),
+                                  title: const Text("储蓄目标"),
+                                  subtitle: const Text("设置并追踪储蓄计划"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const SavingsGoalScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.receipt_long_outlined),
+                                  title: const Text("账单关联"),
+                                  subtitle: const Text("报销与退款追踪"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const BillRelationScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.lock_outline),
+                                  title: const Text("应用锁"),
+                                  subtitle: const Text("PIN 码与生物识别设置"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const PinSetupScreen(),
+                                      ),
+                                    );
                                   },
                                 ),
                                 if (kDebugMode)
@@ -2090,7 +2401,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddTransactionScreen(initialType: txType),
+        builder: (context) => AddTransactionScreen(initialType: txType, bookId: _currentBookId),
       ),
     );
     if (result == true) {

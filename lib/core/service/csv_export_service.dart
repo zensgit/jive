@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../database/account_model.dart';
+import '../database/category_model.dart';
+import '../database/tag_model.dart';
 import '../database/transaction_model.dart';
 
 enum CsvExportTransactionType {
@@ -29,11 +32,13 @@ class CsvExportService {
   static final DateFormat _fileDateFormat = DateFormat('yyyyMMdd');
   static final DateFormat _fileTimestampFormat = DateFormat('yyyyMMdd_HHmmss');
   static final DateFormat _timestampFormat = DateFormat('yyyy-MM-dd HH:mm:ss');
+  static final DateFormat _dateFormat = DateFormat('yyyy-MM-dd');
 
   final Isar _isar;
 
   const CsvExportService(this._isar);
 
+  /// Count transactions matching the given filters (from main).
   Future<int> countTransactions({
     required DateTime start,
     required DateTime end,
@@ -49,6 +54,70 @@ class CsvExportService {
     return transactions.length;
   }
 
+  /// Preview transaction count with bookId filtering (from HEAD).
+  Future<int> previewTransactionCount(
+    DateTime start,
+    DateTime end, {
+    String? categoryKey,
+    int? bookId,
+  }) async {
+    final transactions = await _loadFilteredTransactions(
+      start,
+      end,
+      categoryKey: categoryKey,
+      bookId: bookId,
+    );
+    return transactions.length;
+  }
+
+  /// Export transactions to a CSV string with bookId filtering (from HEAD).
+  Future<String> exportTransactionsCsvString(
+    DateTime start,
+    DateTime end, {
+    String? categoryKey,
+    int? bookId,
+  }) async {
+    final accountsFuture = _isar.collection<JiveAccount>().where().findAll();
+    final categoriesFuture = _isar.collection<JiveCategory>().where().findAll();
+    final tagsFuture = _isar.collection<JiveTag>().where().findAll();
+    final transactions = await _loadFilteredTransactions(
+      start,
+      end,
+      categoryKey: categoryKey,
+      bookId: bookId,
+    );
+    final accounts = await accountsFuture;
+    final categories = await categoriesFuture;
+    final tags = await tagsFuture;
+
+    final accountById = {for (final account in accounts) account.id: account};
+    final categoryByKey = {
+      for (final category in categories) category.key: category,
+    };
+    final tagByKey = {for (final tag in tags) tag.key: tag};
+
+    final rows = <List<String>>[
+      ['日期', '类型(收入/支出/转账)', '金额', '分类', '子分类', '备注', '账户', '标签'],
+    ];
+
+    for (final transaction in transactions) {
+      rows.add([
+        _dateFormat.format(transaction.timestamp),
+        _typeLabel(transaction.type),
+        transaction.amount.toStringAsFixed(2),
+        _categoryLabel(transaction, categoryByKey),
+        _subCategoryLabel(transaction, categoryByKey),
+        transaction.note?.trim() ?? '',
+        _accountLabel(transaction, accountById),
+        _tagLabel(transaction, tagByKey),
+      ]);
+    }
+
+    final csv = rows.map((row) => row.map(_escapeCsv).join(',')).join('\r\n');
+    return '\uFEFF$csv';
+  }
+
+  /// Export transactions to a CSV file with type filtering (from main).
   Future<File> exportTransactionsCsv(
     DateTime start,
     DateTime end, {
@@ -68,6 +137,10 @@ class CsvExportService {
     await file.writeAsString(_buildCsv(transactions), flush: true);
     return file;
   }
+
+  // ---------------------------------------------------------------------------
+  // Transaction loading (main branch version with type filtering)
+  // ---------------------------------------------------------------------------
 
   Future<List<JiveTransaction>> _loadTransactions({
     required DateTime start,
@@ -98,6 +171,55 @@ class CsvExportService {
     return filtered;
   }
 
+  // ---------------------------------------------------------------------------
+  // Transaction loading (HEAD branch version with bookId filtering)
+  // ---------------------------------------------------------------------------
+
+  Future<List<JiveTransaction>> _loadFilteredTransactions(
+    DateTime start,
+    DateTime end, {
+    String? categoryKey,
+    int? bookId,
+  }) async {
+    if (end.isBefore(start)) {
+      throw ArgumentError('结束时间不能早于开始时间');
+    }
+
+    final normalizedCategoryKey = _normalizeCategoryKey(categoryKey);
+    final startAt = _startOfDay(start);
+    final endExclusive = _startOfDay(end).add(const Duration(days: 1));
+
+    var baseQuery = _isar
+        .collection<JiveTransaction>()
+        .filter()
+        .timestampBetween(startAt, endExclusive, includeUpper: false);
+    if (bookId != null) {
+      baseQuery = baseQuery.bookIdEqualTo(bookId);
+    }
+
+    late final List<JiveTransaction> transactions;
+    if (normalizedCategoryKey != null) {
+      transactions = await baseQuery
+          .categoryKeyEqualTo(normalizedCategoryKey)
+          .findAll();
+    } else {
+      transactions = await baseQuery.findAll();
+    }
+
+    transactions.sort((left, right) {
+      final byTimestamp = left.timestamp.compareTo(right.timestamp);
+      if (byTimestamp != 0) {
+        return byTimestamp;
+      }
+      return left.id.compareTo(right.id);
+    });
+    return transactions;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Matching helpers (from main)
+  // ---------------------------------------------------------------------------
+
   bool _matchesCategory(JiveTransaction tx, String? categoryKey) {
     if (categoryKey == null) return true;
     return tx.categoryKey == categoryKey || tx.subCategoryKey == categoryKey;
@@ -120,6 +242,10 @@ class CsvExportService {
     }
     return normalized;
   }
+
+  // ---------------------------------------------------------------------------
+  // File export helpers (from main)
+  // ---------------------------------------------------------------------------
 
   Future<Directory> _resolveExportDirectory() async {
     final documentsDirectory = await getApplicationDocumentsDirectory();
@@ -222,6 +348,10 @@ class CsvExportService {
     return buffer.toString();
   }
 
+  // ---------------------------------------------------------------------------
+  // Type / label helpers
+  // ---------------------------------------------------------------------------
+
   String _typeLabel(String? rawType) {
     switch (_normalizeTransactionType(rawType)) {
       case 'income':
@@ -231,6 +361,85 @@ class CsvExportService {
       default:
         return '支出';
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Label helpers for string-based CSV export (from HEAD)
+  // ---------------------------------------------------------------------------
+
+  String _categoryLabel(
+    JiveTransaction transaction,
+    Map<String, JiveCategory> categoryByKey,
+  ) {
+    if (transaction.type == 'transfer') {
+      return '';
+    }
+    final category = transaction.categoryKey == null
+        ? null
+        : categoryByKey[transaction.categoryKey!];
+    return category?.name ?? transaction.category ?? '未分类';
+  }
+
+  String _subCategoryLabel(
+    JiveTransaction transaction,
+    Map<String, JiveCategory> categoryByKey,
+  ) {
+    if (transaction.type == 'transfer') {
+      return '';
+    }
+    final subCategory = transaction.subCategoryKey == null
+        ? null
+        : categoryByKey[transaction.subCategoryKey!];
+    return subCategory?.name ?? transaction.subCategory ?? '';
+  }
+
+  String _accountLabel(
+    JiveTransaction transaction,
+    Map<int, JiveAccount> accountById,
+  ) {
+    final sourceAccount = transaction.accountId == null
+        ? null
+        : accountById[transaction.accountId!];
+    final targetAccount = transaction.toAccountId == null
+        ? null
+        : accountById[transaction.toAccountId!];
+
+    if (transaction.type == 'transfer') {
+      final sourceName = sourceAccount?.name ?? '';
+      final targetName = targetAccount?.name ?? '';
+      if (sourceName.isNotEmpty && targetName.isNotEmpty) {
+        return '$sourceName -> $targetName';
+      }
+      if (sourceName.isNotEmpty) {
+        return sourceName;
+      }
+      return targetName;
+    }
+
+    return sourceAccount?.name ?? '';
+  }
+
+  String _tagLabel(JiveTransaction transaction, Map<String, JiveTag> tagByKey) {
+    if (transaction.tagKeys.isEmpty) {
+      return '';
+    }
+    return transaction.tagKeys
+        .map((key) => tagByKey[key]?.name ?? key)
+        .join('、');
+  }
+
+  // ---------------------------------------------------------------------------
+  // CSV cell helpers
+  // ---------------------------------------------------------------------------
+
+  String _escapeCsv(String value) {
+    if (value.contains(',') ||
+        value.contains('"') ||
+        value.contains('\n') ||
+        value.contains('\r')) {
+      return '"${value.replaceAll('"', '""')}"';
+    }
+    return value;
   }
 
   String _csvCell(Object? value) {
@@ -248,11 +457,27 @@ class CsvExportService {
     return normalized.isEmpty ? 'category' : normalized;
   }
 
+  // ---------------------------------------------------------------------------
+  // Normalization helpers
+  // ---------------------------------------------------------------------------
+
+  String? _normalizeCategoryKey(String? categoryKey) {
+    final normalized = categoryKey?.trim();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
   String? _normalizeOptional(String? value) {
     final normalized = value?.trim();
     if (normalized == null || normalized.isEmpty) {
       return null;
     }
     return normalized;
+  }
+
+  DateTime _startOfDay(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
   }
 }

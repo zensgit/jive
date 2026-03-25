@@ -149,6 +149,8 @@ class TransactionQueryService {
   }) {
     if (!_matchesBaseScope(tx, spec)) return false;
 
+    if (spec.bookId != null && tx.bookId != spec.bookId) return false;
+
     if (!_matchesDateRange(tx, spec.filterState.dateRange)) return false;
 
     final accountId = spec.filterState.accountId;

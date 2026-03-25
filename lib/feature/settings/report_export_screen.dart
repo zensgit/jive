@@ -50,6 +50,7 @@ class _ReportExportScreenState extends State<ReportExportScreen> {
     final monthStart = DateTime(now.year, now.month, 1);
     final monthEnd = DateTime(now.year, now.month + 1, 0);
 
+    if (!mounted) return;
     setState(() {
       _targetCurrency = baseCurrency;
       _enabledCurrencies = enabled;

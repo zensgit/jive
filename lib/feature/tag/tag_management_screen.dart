@@ -2425,7 +2425,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         );
       },
     );
-    if (action == null) return;
+    if (action == null || !mounted) return;
     if (action == _TagAction.edit) {
       await _editTag(tag);
     } else if (action == _TagAction.archive) {
@@ -2673,6 +2673,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         .filter()
         .tagKeysElementEqualTo(tag.key)
         .findAll();
+    if (!mounted) return;
     final request = await _showConvertTagSheet(
       tag: tag,
       parentsExpense: parentsExpense,
@@ -3045,6 +3046,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   }
 
   void _showMessage(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 

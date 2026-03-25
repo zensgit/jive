@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_icon_style.dart';
 import '../budget/budget_settings_screen.dart';
+import 'theme_settings_screen.dart';
+import 'webdav_settings_screen.dart';
 import '../export/csv_export_screen.dart';
 import '../instalment/instalment_list_screen.dart';
 import '../theme/theme_provider.dart';
@@ -160,6 +162,25 @@ class SettingsScreen extends StatelessWidget {
                     );
                   },
                 ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.color_lens_outlined),
+                  title: const Text("主题设置"),
+                  subtitle: const Text("颜色、字体与显示模式"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ThemeSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -199,6 +220,25 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 const Text("数据", style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.cloud_sync_outlined),
+                  title: const Text("WebDAV 同步"),
+                  subtitle: const Text("云端备份与恢复"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const WebDavSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.file_download_outlined),

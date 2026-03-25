@@ -229,14 +229,16 @@ class AccountService {
     });
   }
 
-  Future<List<JiveAccount>> getActiveAccounts() async {
-    return await isar
+  Future<List<JiveAccount>> getActiveAccounts({int? bookId}) async {
+    var query = isar
         .collection<JiveAccount>()
         .filter()
         .isHiddenEqualTo(false)
-        .isArchivedEqualTo(false)
-        .sortByOrder()
-        .findAll();
+        .isArchivedEqualTo(false);
+    if (bookId != null) {
+      query = query.bookIdEqualTo(bookId);
+    }
+    return await query.sortByOrder().findAll();
   }
 
   Future<JiveAccount?> getDefaultAccount() async {

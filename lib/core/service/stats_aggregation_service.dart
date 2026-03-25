@@ -89,19 +89,23 @@ class StatsAggregationService {
   Future<MonthSummary> getMonthSummary(
     DateTime month, {
     String? currencyCode,
+    int? bookId,
   }) async {
     final currency = currencyCode ?? await currencyService.getBaseCurrency();
     final start = DateTime(month.year, month.month, 1);
     final end = DateTime(month.year, month.month + 1, 1);
     final daysInMonth = end.difference(start).inDays;
 
-    final txs = await isar.jiveTransactions
+    var query = isar.jiveTransactions
         .filter()
-        .timestampBetween(start, end, includeUpper: false)
-        .findAll();
+        .timestampBetween(start, end, includeUpper: false);
+    if (bookId != null) {
+      query = query.bookIdEqualTo(bookId);
+    }
+    final txs = await query.findAll();
 
     final accountService = AccountService(isar);
-    final accounts = await accountService.getActiveAccounts();
+    final accounts = await accountService.getActiveAccounts(bookId: bookId);
     final accountById = {for (final a in accounts) a.id: a};
 
     double income = 0;
@@ -148,10 +152,11 @@ class StatsAggregationService {
   Future<MonthComparison> getMonthComparison(
     DateTime month, {
     String? currencyCode,
+    int? bookId,
   }) async {
-    final current = await getMonthSummary(month, currencyCode: currencyCode);
+    final current = await getMonthSummary(month, currencyCode: currencyCode, bookId: bookId);
     final prevMonth = DateTime(month.year, month.month - 1, 1);
-    final previous = await getMonthSummary(prevMonth, currencyCode: currencyCode);
+    final previous = await getMonthSummary(prevMonth, currencyCode: currencyCode, bookId: bookId);
 
     double incomeChange = 0;
     if (previous.totalIncome > 0) {
@@ -176,21 +181,25 @@ class StatsAggregationService {
     DateTime month, {
     bool isExpense = true,
     String? currencyCode,
+    int? bookId,
   }) async {
     final currency = currencyCode ?? await currencyService.getBaseCurrency();
     final start = DateTime(month.year, month.month, 1);
     final end = DateTime(month.year, month.month + 1, 1);
 
-    final txs = await isar.jiveTransactions
+    var query = isar.jiveTransactions
         .filter()
-        .timestampBetween(start, end, includeUpper: false)
-        .findAll();
+        .timestampBetween(start, end, includeUpper: false);
+    if (bookId != null) {
+      query = query.bookIdEqualTo(bookId);
+    }
+    final txs = await query.findAll();
 
     final categories = await isar.collection<JiveCategory>().where().findAll();
     final categoryMap = {for (final c in categories) c.key: c};
 
     final accountService = AccountService(isar);
-    final accounts = await accountService.getActiveAccounts();
+    final accounts = await accountService.getActiveAccounts(bookId: bookId);
     final accountById = {for (final a in accounts) a.id: a};
 
     final Map<String, double> amounts = {};
@@ -238,13 +247,14 @@ class StatsAggregationService {
   Future<List<MonthTrend>> getMonthlyTrend(
     int months, {
     String? currencyCode,
+    int? bookId,
   }) async {
     final now = DateTime.now();
     final trends = <MonthTrend>[];
 
     for (int i = months - 1; i >= 0; i--) {
       final m = DateTime(now.year, now.month - i, 1);
-      final summary = await getMonthSummary(m, currencyCode: currencyCode);
+      final summary = await getMonthSummary(m, currencyCode: currencyCode, bookId: bookId);
       trends.add(MonthTrend(
         month: m,
         totalIncome: summary.totalIncome,
