@@ -24,6 +24,7 @@ import '../database/bill_split_model.dart';
 import '../database/savings_goal_model.dart';
 import '../database/bill_relation_model.dart';
 import '../database/book_model.dart';
+import '../database/debt_model.dart';
 
 /// 统一的数据库服务，确保所有地方使用相同的 schema 列表
 class DatabaseService {
@@ -60,6 +61,8 @@ class DatabaseService {
     JiveBillRelationSchema,
     JiveBookSchema,
     JiveInstalmentSchema,
+    JiveDebtSchema,
+    JiveDebtPaymentSchema,
   ];
 
   /// 获取或创建 Isar 实例

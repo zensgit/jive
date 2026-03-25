@@ -75,6 +75,8 @@ import 'feature/bill_relation/bill_relation_screen.dart';
 import 'feature/merchant/merchant_memory_screen.dart';
 import 'feature/security/pin_setup_screen.dart';
 import 'feature/theme/theme_provider.dart';
+import 'core/service/reminder_service.dart';
+import 'feature/debt/debt_list_screen.dart';
 import 'core/utils/logger_util.dart';
 
 void main() async {
@@ -306,6 +308,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     _dbReady = true;
     await _flushPendingAutoEvents();
     await _processRecurringRules();
+    await _checkReminders();
     await _checkAutoPermissions();
   }
 
@@ -325,6 +328,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       debugPrint('Recurring processing failed: $e');
     } finally {
       _isProcessingRecurringRules = false;
+    }
+  }
+
+  Future<void> _checkReminders() async {
+    if (!_dbReady) return;
+    try {
+      await ReminderService(_isar).checkReminders();
+    } catch (e) {
+      debugPrint('Reminder check failed: $e');
     }
   }
 
@@ -1930,6 +1942,21 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                       MaterialPageRoute(
                                         builder: (context) =>
                                             const BillRelationScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                ListTile(
+                                  leading: const Icon(Icons.handshake_outlined),
+                                  title: const Text("借贷管理"),
+                                  subtitle: const Text("借入借出与还款追踪"),
+                                  onTap: () async {
+                                    Navigator.pop(context);
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) =>
+                                            const DebtListScreen(),
                                       ),
                                     );
                                   },
