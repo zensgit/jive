@@ -23,7 +23,6 @@ import '../database/merchant_memory_model.dart';
 import '../database/installment_model.dart';
 import '../database/bill_split_model.dart';
 import '../database/savings_goal_model.dart';
-import '../database/bill_relation_model.dart';
 import '../database/book_model.dart';
 import '../database/debt_model.dart';
 import '../database/investment_model.dart';

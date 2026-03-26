@@ -112,7 +112,7 @@ class _InstallmentManageScreenState extends State<InstallmentManageScreen> {
                           }
                         }
                         if (match != null) {
-                          setState(() => selectedAccount = match);
+                          setState(() => selectedAccount = match!);
                         }
                       },
                     ),

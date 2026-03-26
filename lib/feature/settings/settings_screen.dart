@@ -8,7 +8,6 @@ import '../budget/budget_settings_screen.dart';
 import 'theme_settings_screen.dart';
 import 'webdav_settings_screen.dart';
 import '../export/csv_export_screen.dart';
-import '../instalment/instalment_list_screen.dart';
 import '../theme/theme_provider.dart';
 import '../theme/theme_selection_screen.dart';
 import '../transactions/reimbursement_lab_screen.dart';
