@@ -499,6 +499,155 @@ class BudgetService {
     return toCreate.length;
   }
 
+  /// 从任意来源月份复制月预算到目标月份。
+  ///
+  /// - 仅处理 `period == monthly` 的预算。
+  /// - 当 `overwriteExisting=false` 时，目标月已存在同类预算（currency+categoryKey）会跳过。
+  /// - 当 `overwriteExisting=true` 时，目标月同类预算会被来源配置覆盖（非同类预算保留）。
+  /// - 复制的是“预算配置”，不会复制来源月的结转值，目标月 `carryoverAmount` 固定重置为 `0`。
+  Future<BudgetMonthlyCopyResult> copyMonthlyBudgetsFromMonth({
+    required DateTime fromMonth,
+    DateTime? toMonth,
+    bool overwriteExisting = false,
+    bool includeInactiveSource = false,
+  }) async {
+    final targetRef = toMonth ?? DateTime.now();
+    final (fromStart, fromEnd) = getPeriodDateRange(
+      BudgetPeriod.monthly,
+      referenceDate: fromMonth,
+    );
+    final (toStart, toEnd) = getPeriodDateRange(
+      BudgetPeriod.monthly,
+      referenceDate: targetRef,
+    );
+
+    final isSameMonth =
+        fromStart.year == toStart.year && fromStart.month == toStart.month;
+    if (isSameMonth) {
+      return const BudgetMonthlyCopyResult(
+        sourceCount: 0,
+        createdCount: 0,
+        updatedCount: 0,
+        skippedCount: 0,
+      );
+    }
+
+    final sourceRaw = await _getMonthlyBudgetsForRange(
+      fromStart,
+      fromEnd,
+      includeInactive: includeInactiveSource,
+    );
+    if (sourceRaw.isEmpty) {
+      return const BudgetMonthlyCopyResult(
+        sourceCount: 0,
+        createdCount: 0,
+        updatedCount: 0,
+        skippedCount: 0,
+      );
+    }
+
+    // 同签名预算仅保留“最近更新”的一条，防止历史重复数据导致重复复制。
+    final sortedSource = [...sourceRaw]
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final sourceBySignature = <String, JiveBudget>{};
+    for (final source in sortedSource) {
+      sourceBySignature.putIfAbsent(_budgetSignature(source), () => source);
+    }
+    final source = sourceBySignature.values.toList();
+
+    final target = await _getMonthlyBudgetsForRange(
+      toStart,
+      toEnd,
+      includeInactive: true,
+    );
+    final targetBySignature = <String, List<JiveBudget>>{};
+    for (final budget in target) {
+      targetBySignature
+          .putIfAbsent(_budgetSignature(budget), () => [])
+          .add(budget);
+    }
+    for (final list in targetBySignature.values) {
+      list.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    }
+
+    final now = DateTime.now();
+    final toCreate = <JiveBudget>[];
+    final toUpdate = <JiveBudget>[];
+    var createdCount = 0;
+    var updatedCount = 0;
+    var skippedCount = 0;
+
+    for (final sourceBudget in source) {
+      final signature = _budgetSignature(sourceBudget);
+      final targetMatches =
+          targetBySignature[signature] ?? const <JiveBudget>[];
+      if (targetMatches.isEmpty) {
+        toCreate.add(
+          JiveBudget()
+            ..name = sourceBudget.name
+            ..amount = sourceBudget.amount
+            ..currency = sourceBudget.currency
+            ..carryoverAmount = 0
+            ..categoryKey = sourceBudget.categoryKey
+            ..startDate = toStart
+            ..endDate = toEnd
+            ..period = BudgetPeriod.monthly.value
+            ..isActive = true
+            ..rollover = sourceBudget.rollover
+            ..positionWeight = sourceBudget.positionWeight
+            ..alertEnabled = sourceBudget.alertEnabled
+            ..alertThreshold = sourceBudget.alertThreshold
+            ..createdAt = now
+            ..updatedAt = now,
+        );
+        createdCount++;
+        continue;
+      }
+
+      if (!overwriteExisting) {
+        skippedCount++;
+        continue;
+      }
+
+      final targetBudget = targetMatches.first;
+      targetBudget
+        ..name = sourceBudget.name
+        ..amount = sourceBudget.amount
+        ..currency = sourceBudget.currency
+        ..carryoverAmount = 0
+        ..categoryKey = sourceBudget.categoryKey
+        ..startDate = toStart
+        ..endDate = toEnd
+        ..period = BudgetPeriod.monthly.value
+        ..isActive = true
+        ..rollover = sourceBudget.rollover
+        ..positionWeight = sourceBudget.positionWeight
+        ..alertEnabled = sourceBudget.alertEnabled
+        ..alertThreshold = sourceBudget.alertThreshold
+        ..updatedAt = now;
+      toUpdate.add(targetBudget);
+      updatedCount++;
+    }
+
+    if (toCreate.isNotEmpty || toUpdate.isNotEmpty) {
+      await _isar.writeTxn(() async {
+        if (toCreate.isNotEmpty) {
+          await _isar.jiveBudgets.putAll(toCreate);
+        }
+        if (toUpdate.isNotEmpty) {
+          await _isar.jiveBudgets.putAll(toUpdate);
+        }
+      });
+    }
+
+    return BudgetMonthlyCopyResult(
+      sourceCount: source.length,
+      createdCount: createdCount,
+      updatedCount: updatedCount,
+      skippedCount: skippedCount,
+    );
+  }
+
   Future<void> updateBudgetOrder(List<JiveBudget> orderedBudgets) async {
     if (orderedBudgets.isEmpty) return;
     final now = DateTime.now();
@@ -1301,5 +1450,19 @@ class BudgetTransactionImpact {
     required this.currentUsedPercent,
     required this.projectedUsedPercent,
     required this.deltaAmount,
+  });
+}
+
+class BudgetMonthlyCopyResult {
+  final int sourceCount;
+  final int createdCount;
+  final int updatedCount;
+  final int skippedCount;
+
+  const BudgetMonthlyCopyResult({
+    required this.sourceCount,
+    required this.createdCount,
+    required this.updatedCount,
+    required this.skippedCount,
   });
 }

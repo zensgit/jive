@@ -3,13 +3,14 @@ import 'package:provider/provider.dart';
 
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_icon_style.dart';
+import '../installment/installment_manage_screen.dart';
 import '../budget/budget_settings_screen.dart';
 import 'theme_settings_screen.dart';
 import 'webdav_settings_screen.dart';
 import '../export/csv_export_screen.dart';
-import '../instalment/instalment_list_screen.dart';
 import '../theme/theme_provider.dart';
 import '../theme/theme_selection_screen.dart';
+import '../transactions/reimbursement_lab_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -264,8 +265,8 @@ class SettingsScreen extends StatelessWidget {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.view_timeline_outlined),
-                  title: const Text("分期管理"),
-                  subtitle: const Text("跟踪信用卡分期与贷款还款进度"),
+                  title: const Text("分期管理（MVP）"),
+                  subtitle: const Text("分期创建、到期执行、提前结清"),
                   trailing: Icon(
                     Icons.chevron_right,
                     size: 18,
@@ -275,7 +276,26 @@ class SettingsScreen extends StatelessWidget {
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const InstalmentListScreen(),
+                        builder: (context) => const InstallmentManageScreen(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.receipt_long_outlined),
+                  title: const Text("报销退款工作台（MVP）"),
+                  subtitle: const Text("按账单创建报销或退款记录"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ReimbursementLabScreen(),
                       ),
                     );
                   },
