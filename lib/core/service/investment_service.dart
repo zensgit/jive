@@ -500,7 +500,17 @@ class InvestmentService {
     if (fromCurrency == toCurrency) {
       return value;
     }
-    return await currencyService.convert(value, fromCurrency, toCurrency) ??
-        value;
+    final convertedValue = await currencyService.convert(
+      value,
+      fromCurrency,
+      toCurrency,
+    );
+    if (convertedValue == null) {
+      throw InvestmentValidationException(
+        'missing_exchange_rate',
+        '无法从 $fromCurrency 转换为 $toCurrency：未找到汇率',
+      );
+    }
+    return convertedValue;
   }
 }

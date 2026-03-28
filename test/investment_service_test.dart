@@ -8,6 +8,15 @@ import 'package:jive/core/database/investment_model.dart';
 import 'package:jive/core/service/currency_service.dart';
 import 'package:jive/core/service/investment_service.dart';
 
+class _NullRateCurrencyService extends CurrencyService {
+  _NullRateCurrencyService(super.isar);
+
+  @override
+  Future<double?> convert(double amount, String from, String to) async {
+    return null;
+  }
+}
+
 void main() {
   late Isar isar;
   late Directory dir;
@@ -188,5 +197,35 @@ void main() {
     expect(holdings[1].accountId, 2);
     expect(holdings[1].quantity, 5);
     expect(holdings[1].costBasis, closeTo(20, 1e-9));
+  });
+
+  test('portfolio summary throws when exchange rate is missing', () async {
+    final security = await investmentService.addSecurity(
+      ticker: 'MSFT',
+      name: 'Microsoft',
+      type: SecurityType.stock,
+      currency: 'USD',
+      latestPrice: 100,
+    );
+
+    await investmentService.addHolding(
+      securityId: security.id,
+      quantity: 1,
+      costBasis: 90,
+    );
+
+    await expectLater(
+      investmentService.getPortfolioSummary(
+        currencyService: _NullRateCurrencyService(isar),
+        baseCurrency: 'CNY',
+      ),
+      throwsA(
+        isA<InvestmentValidationException>().having(
+          (error) => error.code,
+          'code',
+          'missing_exchange_rate',
+        ),
+      ),
+    );
   });
 }
