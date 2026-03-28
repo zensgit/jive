@@ -77,10 +77,13 @@ class JiveAccountBook {
   bool isDefault = false;     // 是否默认账本
   int sortOrder = 0;
 
-  DateTime createdAt = DateTime.now();
-  DateTime updatedAt = DateTime.now();
+  late DateTime createdAt;
+  late DateTime updatedAt;
 }
 ```
+
+**时间戳约束**:
+- `createdAt` / `updatedAt` 统一由 Service 层在写入数据库前赋值，不在模型定义中直接使用 `DateTime.now()` 作为默认值。
 
 **集成点**:
 1. **JiveTransaction** — 新增 `int? accountBookId` 字段 (索引)，关联到账本
@@ -137,8 +140,8 @@ class JiveSavingsGoal {
   String status = 'active';    // active | completed | paused | cancelled
   bool autoTrack = false;      // 是否自动追踪关联账户余额变化
 
-  DateTime createdAt = DateTime.now();
-  DateTime updatedAt = DateTime.now();
+  late DateTime createdAt;
+  late DateTime updatedAt;
 }
 
 @collection
@@ -151,7 +154,7 @@ class JiveSavingsRecord {
   String? note;
   int? transactionId;          // 关联交易 (可选)
 
-  DateTime createdAt = DateTime.now();
+  late DateTime createdAt;
 }
 ```
 
@@ -218,7 +221,7 @@ lib/main.dart                                    (MODIFY)
 pubspec.yaml                                     (MODIFY - add local_auth)
 ```
 
-**新增依赖**: `local_auth: ^0.6.0`, `crypto` (已有)
+**新增依赖**: `local_auth: ^2.2.0`, `crypto` (已有)
 
 ---
 
@@ -246,8 +249,8 @@ class JiveLoan {
 
   String status = 'active';     // active | completed | early_settled
 
-  DateTime createdAt = DateTime.now();
-  DateTime updatedAt = DateTime.now();
+  late DateTime createdAt;
+  late DateTime updatedAt;
 }
 
 @collection
@@ -299,8 +302,10 @@ lib/main.dart                                   (MODIFY)
 不新建 Isar 模型，而是利用现有 Tag 系统 + Transaction 扩展字段：
 
 ```dart
+enum ReimbursementStatus { pending, partial, completed }
+
 // 在 JiveTransaction 中增加:
-String? reimbursementStatus;  // null | pending | partial | completed
+ReimbursementStatus? reimbursementStatus;
 double? reimbursedAmount;     // 已报销金额
 DateTime? reimbursedDate;
 ```
@@ -388,8 +393,8 @@ class JiveNote {
   int? projectId;           // 关联项目 (可选)
   List<String> tagKeys = [];
 
-  DateTime createdAt = DateTime.now();
-  DateTime updatedAt = DateTime.now();
+  late DateTime createdAt;
+  late DateTime updatedAt;
 }
 ```
 
@@ -553,7 +558,7 @@ flutter test
 | 多账本改造影响面大 | 🔴 高 | 放在 Wave 3，其他功能验证通过后再动 |
 | Isar schema 升级不可逆 | 🟡 中 | 只添加字段、不删改；数据备份后再升级 |
 | Android Widget 需原生代码 | 🟡 中 | 放在最后，不影响核心功能 |
-| 贷款利息计算精度 | 🟡 中 | 使用 Decimal 或 double 定义允许误差 (±0.01) |
+| 贷款利息计算精度 | 🔴 高 | 必须使用 Decimal 类型处理货币与利息计算，避免使用 double 引入累计精度误差 |
 | `codex/post-merge-verify` 与 main 分叉 | 🟢 低 | 先 merge 到 main 再开始 Phase 3 |
 
 ---

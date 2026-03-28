@@ -18,14 +18,36 @@ Future<void> _pumpUntilSettled(
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('Category icon picker supports search clear and confirm flow', (
+  testWidgets('Category icon picker returns selected icon after confirm', (
     tester,
   ) async {
+    String? selectedIconValue;
+
     await tester.pumpWidget(
-      const MaterialApp(
-        home: CategoryIconPickerScreen(initialIcon: 'category'),
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: Center(
+              child: ElevatedButton(
+                onPressed: () async {
+                  selectedIconValue = await Navigator.of(context).push<String>(
+                    MaterialPageRoute(
+                      builder: (_) => const CategoryIconPickerScreen(
+                        initialIcon: 'category',
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Open Picker'),
+              ),
+            ),
+          ),
+        ),
       ),
     );
+    await _pumpUntilSettled(tester);
+
+    await tester.tap(find.text('Open Picker'));
     await _pumpUntilSettled(tester);
 
     expect(find.text('选择图标'), findsOneWidget);
@@ -55,5 +77,6 @@ void main() {
     await _pumpUntilSettled(tester);
 
     expect(find.byType(CategoryIconPickerScreen), findsNothing);
+    expect(selectedIconValue, 'movie');
   });
 }
