@@ -511,10 +511,6 @@ P _jiveTransactionDeserializeProp<P>(
     case 19:
       return (reader.readStringOrNull(offset)) as P;
     case 20:
-      return (reader.readLongOrNull(offset)) as P;
-    case 21:
-      return (reader.readDoubleOrNull(offset)) as P;
-    case 22:
       return (reader.readStringOrNull(offset)) as P;
     case 21:
       return (reader.readStringList(offset) ?? []) as P;
