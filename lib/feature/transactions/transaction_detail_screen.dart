@@ -157,7 +157,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       _hasDataChanges = true;
       await _loadData();
       if (mounted) {
-        setState(() {});
+        setState(() {
+          // trigger rebuild after transaction edited and data reloaded
+        });
       }
     }
   }
@@ -172,9 +174,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       ),
     );
     if (updated == true) {
-      _hasDataChanges = true;
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _hasDataChanges = true;
+        });
       }
     }
   }
@@ -191,9 +194,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       ),
     );
     if (created == true) {
-      _hasDataChanges = true;
       if (mounted) {
-        setState(() {});
+        setState(() {
+          _hasDataChanges = true;
+        });
       }
     }
   }

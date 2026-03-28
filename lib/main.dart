@@ -367,10 +367,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   Future<void> _loadDemoSeedPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    _demoSeedEnabled = prefs.getBool(_prefKeyDemoSeedEnabled) ?? true;
-    _showSmartTagBadge = await UiPrefService.getShowSmartTagBadge();
+    final demoSeed = prefs.getBool(_prefKeyDemoSeedEnabled) ?? true;
+    final showBadge = await UiPrefService.getShowSmartTagBadge();
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _demoSeedEnabled = demoSeed;
+        _showSmartTagBadge = showBadge;
+      });
     }
   }
 

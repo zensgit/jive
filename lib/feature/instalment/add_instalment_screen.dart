@@ -114,7 +114,9 @@ class _AddInstalmentScreenState extends State<AddInstalmentScreen> {
 
   void _onAmountChanged() {
     if (!mounted) return;
-    setState(() {});
+    setState(() {
+      // trigger rebuild to recalculate monthly amount preview
+    });
   }
 
   double? get _calculatedMonthlyAmount {

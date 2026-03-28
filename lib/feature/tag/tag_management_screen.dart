@@ -132,19 +132,21 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   }
 
   Future<void> _setShowSmartTagBadge(bool value) async {
-    _showSmartTagBadge = value;
     await UiPrefService.setShowSmartTagBadge(value);
     DataReloadBus.notify();
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _showSmartTagBadge = value;
+      });
     }
   }
 
   Future<void> _setCleanupRemoveTagTooDefault(bool value) async {
-    _cleanupRemoveTagTooDefault = value;
     await UiPrefService.setSmartCleanupRemoveTagToo(value);
     if (mounted) {
-      setState(() {});
+      setState(() {
+        _cleanupRemoveTagTooDefault = value;
+      });
     }
   }
 

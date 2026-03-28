@@ -485,7 +485,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                       keyboardType: _isBatch ? TextInputType.multiline : TextInputType.text,
                       textInputAction: _isBatch ? TextInputAction.newline : TextInputAction.done,
                       maxLines: _isBatch ? 4 : 1,
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (_) {
+                        setState(() {
+                          // trigger rebuild to update UI based on text input
+                        });
+                      },
                       onSubmitted: _isBatch ? null : (_) => _save(),
                     ),
                   ),
@@ -624,7 +628,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                       border: InputBorder.none,
                     ),
                     textInputAction: TextInputAction.done,
-                    onChanged: (_) => setState(() {}),
+                    onChanged: (_) {
+                      setState(() {
+                        // trigger rebuild to update UI based on text input
+                      });
+                    },
                     onSubmitted: (_) => _save(),
                   ),
                 ),
