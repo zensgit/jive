@@ -75,7 +75,7 @@ class SmartTextParser {
           int.parse(dateMatch.group(2)!),
           int.parse(dateMatch.group(3)!),
         );
-      } catch (_) {}
+      } catch (e) { debugPrint('Failed to parse date from input: $e'); }
     }
 
     if (description == null) {

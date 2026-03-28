@@ -75,7 +75,7 @@ class _InstallmentFormScreenState extends State<InstallmentFormScreen> {
         if (_isEditing) {
           try {
             _selectedAccount = accts.firstWhere((a) => a.id == widget.installment!.accountId);
-          } catch (_) {}
+          } catch (e) { debugPrint('Failed to find matching account for installment: $e'); }
         } else if (accts.isNotEmpty) {
           // default to first credit card account
           _selectedAccount = accts.firstWhere(
@@ -190,7 +190,11 @@ class _InstallmentFormScreenState extends State<InstallmentFormScreen> {
                     border: OutlineInputBorder(),
                     prefixText: '¥ ',
                   ),
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (_) {
+                    setState(() {
+                      // trigger rebuild to update monthly preview
+                    });
+                  },
                   validator: (v) {
                     final d = double.tryParse(v ?? '');
                     return d == null || d <= 0 ? '请输入有效金额' : null;
@@ -208,7 +212,11 @@ class _InstallmentFormScreenState extends State<InstallmentFormScreen> {
                     prefixText: '¥ ',
                     hintText: '0.00',
                   ),
-                  onChanged: (_) => setState(() {}),
+                  onChanged: (_) {
+                    setState(() {
+                      // trigger rebuild to update monthly preview
+                    });
+                  },
                 ),
               ),
             ]),
@@ -223,7 +231,11 @@ class _InstallmentFormScreenState extends State<InstallmentFormScreen> {
                 border: OutlineInputBorder(),
                 suffixText: '期',
               ),
-              onChanged: (_) => setState(() {}),
+              onChanged: (_) {
+                setState(() {
+                  // trigger rebuild to update monthly preview
+                });
+              },
               validator: (v) {
                 final n = int.tryParse(v ?? '');
                 return n == null || n <= 0 ? '请输入有效期数' : null;

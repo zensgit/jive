@@ -131,7 +131,7 @@ class _WebDavSettingsScreenState extends State<WebDavSettingsScreen> {
     try {
       final backups = await _service!.listBackups(config);
       if (mounted) setState(() => _remoteBackups = backups);
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to load remote WebDAV backups: $e'); }
   }
 
   Future<void> _restoreBackup(WebDavBackupEntry entry) async {

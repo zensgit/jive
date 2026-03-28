@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:isar/isar.dart';
 import '../database/currency_model.dart';
@@ -598,7 +599,7 @@ class CurrencyService {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to fetch rate from CoinGecko: $e'); }
     return null;
   }
 
@@ -627,7 +628,7 @@ class CurrencyService {
           );
         }
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to fetch rate from Frankfurter: $e'); }
     return null;
   }
 
@@ -656,7 +657,7 @@ class CurrencyService {
           );
         }
       }
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to fetch rate from ExchangeRate.host: $e'); }
     return null;
   }
 
