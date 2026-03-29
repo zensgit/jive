@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:isar/isar.dart';
 
 import '../../core/service/database_service.dart';
 import '../../core/service/webdav_sync_service.dart';

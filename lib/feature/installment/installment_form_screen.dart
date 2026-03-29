@@ -6,7 +6,6 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/database/installment_model.dart';
 import '../../core/database/account_model.dart';
-import '../../core/service/account_service.dart';
 
 class InstallmentFormScreen extends StatefulWidget {
   const InstallmentFormScreen({super.key, this.installment});

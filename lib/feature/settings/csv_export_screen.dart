@@ -1,11 +1,7 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/database/category_model.dart';
@@ -208,24 +204,6 @@ class _CsvExportScreenState extends State<CsvExportScreen> {
       return byOrder;
     }
     return left.name.compareTo(right.name);
-  }
-
-  String _buildFileName() {
-    final start = DateFormat('yyyyMMdd').format(_dateRange.start);
-    final end = DateFormat('yyyyMMdd').format(_dateRange.end);
-    final categorySegment = _selectedCategoryKey == null
-        ? 'all'
-        : _sanitizeFileSegment(_selectedCategoryKey!);
-    return 'jive_transactions_${start}_${end}_$categorySegment.csv';
-  }
-
-  String _sanitizeFileSegment(String raw) {
-    final sanitized = raw
-        .trim()
-        .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_')
-        .replaceAll(RegExp(r'_+'), '_')
-        .replaceAll(RegExp(r'^_|_$'), '');
-    return sanitized.isEmpty ? 'export' : sanitized;
   }
 
   String _formatRange(DateTimeRange range) {
