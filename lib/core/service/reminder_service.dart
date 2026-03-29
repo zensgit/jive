@@ -80,8 +80,7 @@ class ReminderService {
     final reminders = <ReminderItem>[];
 
     for (final rule in rules) {
-      if (rule.nextRunAt == null) continue;
-      final next = rule.nextRunAt!;
+      final next = rule.nextRunAt;
 
       // 今天或明天到期
       if (_isSameDay(next, now) || _isSameDay(next, tomorrow)) {

@@ -38,7 +38,7 @@ class DataBackupService {
     final dir = await getApplicationDocumentsDirectory();
     final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
     final zipFile = File('${dir.path}/jive_backup_$timestamp.zip');
-    await zipFile.writeAsBytes(zipBytes!);
+    await zipFile.writeAsBytes(zipBytes);
 
     // 清理临时 JSON 文件
     if (jsonFile.existsSync()) await jsonFile.delete();
