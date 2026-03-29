@@ -9,6 +9,17 @@ class IflytekSpeechService implements SpeechService {
   static const _apiKey = String.fromEnvironment('IFLYTEK_API_KEY');
   static const _apiSecret = String.fromEnvironment('IFLYTEK_API_SECRET');
 
+  static bool get hasCredentials =>
+      _appId.isNotEmpty && _apiKey.isNotEmpty && _apiSecret.isNotEmpty;
+
+  static List<String> get missingCredentialKeys {
+    final keys = <String>[];
+    if (_appId.isEmpty) keys.add('IFLYTEK_APP_ID');
+    if (_apiKey.isEmpty) keys.add('IFLYTEK_API_KEY');
+    if (_apiSecret.isEmpty) keys.add('IFLYTEK_API_SECRET');
+    return keys;
+  }
+
   final AudioRecorder _recorder = AudioRecorder();
   String? _recordPath;
   bool _recording = false;
@@ -38,7 +49,7 @@ class IflytekSpeechService implements SpeechService {
     if (engine != SpeechEngine.iflytek) {
       return const SpeechRecognitionResult(errorCode: 'UNSUPPORTED');
     }
-    if (_appId.isEmpty || _apiKey.isEmpty || _apiSecret.isEmpty) {
+    if (!hasCredentials) {
       return const SpeechRecognitionResult(errorCode: 'NO_CREDENTIALS');
     }
     if (_recording) {
