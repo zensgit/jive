@@ -66,7 +66,11 @@ class _DatePickerSheetState extends State<DatePickerSheet> {
         _isChineseLocale(context) || _hasChineseText(widget.bottomLabel);
     if (!isChinese) return;
     await JiveHolidayCalendarService.instance.ensureInitialized();
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        // trigger rebuild after holiday data initialized
+      });
+    }
   }
 
   Future<void> _loadPrefs() async {

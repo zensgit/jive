@@ -54,30 +54,30 @@ class AutoPermissionService {
   static Future<void> openNotificationSettings() async {
     try {
       await _channel.invokeMethod('openNotificationSettings');
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to open notification settings: $e'); }
   }
 
   static Future<void> openAccessibilitySettings() async {
     try {
       await _channel.invokeMethod('openAccessibilitySettings');
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to open accessibility settings: $e'); }
   }
 
   static Future<void> openOverlaySettings() async {
     try {
       await _channel.invokeMethod('openOverlaySettings');
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to open overlay settings: $e'); }
   }
 
   static Future<void> openAppDetails() async {
     try {
       await _channel.invokeMethod('openAppDetails');
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to open app details: $e'); }
   }
 
   static Future<void> requestIgnoreBatteryOptimizations() async {
     try {
       await _channel.invokeMethod('requestIgnoreBatteryOptimizations');
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to request ignore battery optimizations: $e'); }
   }
 }

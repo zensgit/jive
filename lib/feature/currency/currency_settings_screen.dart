@@ -545,7 +545,9 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
         _preference!.preferredRateSource = selected;
       }
       await _currencyService.updatePreference(_preference!);
-      setState(() {});
+      setState(() {
+        // trigger rebuild after rate source preference updated
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1027,7 +1029,9 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                 if (_preference == null) return;
                 _preference!.autoUpdateRates = value;
                 await _currencyService.updatePreference(_preference!);
-                setState(() {});
+                setState(() {
+                  // trigger rebuild after auto-update preference changed
+                });
               },
               secondary: Icon(
                 Icons.sync,
@@ -1055,7 +1059,9 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                     if (_preference == null) return;
                     _preference!.rateChangeAlert = value;
                     await _currencyService.updatePreference(_preference!);
-                    setState(() {});
+                    setState(() {
+                      // trigger rebuild after rate change alert toggled
+                    });
                   },
                   secondary: Icon(
                     Icons.notifications_active,
@@ -1083,7 +1089,9 @@ class _CurrencySettingsScreenState extends State<CurrencySettingsScreen> {
                                 if (!selected || _preference == null) return;
                                 _preference!.rateChangeThreshold = threshold;
                                 await _currencyService.updatePreference(_preference!);
-                                setState(() {});
+                                setState(() {
+                                  // trigger rebuild after threshold changed
+                                });
                               },
                               labelStyle: TextStyle(
                                 fontSize: 12,

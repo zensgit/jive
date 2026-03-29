@@ -312,7 +312,7 @@ class _MerchantCard extends StatelessWidget {
     try {
       final decoded = json.decode(memory.categoryFrequencyJson) as Map;
       catFreq = decoded.map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to parse category frequency JSON: $e'); }
 
     final sortedCats = catFreq.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));

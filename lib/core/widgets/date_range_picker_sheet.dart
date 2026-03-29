@@ -69,7 +69,11 @@ class _DateRangePickerSheetState extends State<DateRangePickerSheet> {
         _isChineseLocale(context) || _hasChineseText(widget.bottomLabel);
     if (!isChinese) return;
     await JiveHolidayCalendarService.instance.ensureInitialized();
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {
+        // trigger rebuild after holiday data initialized
+      });
+    }
   }
 
   void _handleDaySelected(DateTime selectedDay, DateTime focusedDay) {

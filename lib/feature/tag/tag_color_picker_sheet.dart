@@ -153,7 +153,9 @@ class _TagColorPickerSheetState extends State<TagColorPickerSheet>
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (mounted) {
-        setState(() {});
+        setState(() {
+          // trigger rebuild when tab changes
+        });
       }
     });
     _gridColors = _buildGridColors();

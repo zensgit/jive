@@ -3699,7 +3699,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     usage[tag] = (usage[tag] ?? 0) + 1;
     _persistNoteTagUsage(type);
     if (mounted) {
-      setState(() {});
+      setState(() {
+        // trigger rebuild after note tag usage updated
+      });
     }
   }
 

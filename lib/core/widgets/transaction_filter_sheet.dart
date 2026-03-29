@@ -421,7 +421,9 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                     : _buildClearIcon(_clearTag),
               ),
               onChanged: (_) {
-                setState(() {});
+                setState(() {
+                  // trigger rebuild to update clear icon visibility
+                });
                 _notifyChange();
               },
             ),

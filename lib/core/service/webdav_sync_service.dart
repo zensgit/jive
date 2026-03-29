@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:archive/archive.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
@@ -210,7 +212,7 @@ class WebDavSyncService {
     // 确保远程目录存在
     try {
       await client.mkdir(config.remotePath);
-    } catch (_) {}
+    } catch (e) { debugPrint('Failed to create WebDAV remote directory: $e'); }
 
     // 导出为 ZIP
     final zipFile = await _backupService.exportToZip();
