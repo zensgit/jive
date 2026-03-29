@@ -1,42 +1,17 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:share_plus/share_plus.dart';
-
 import '../../core/design_system/theme.dart';
-import '../../core/database/account_model.dart';
 import '../../core/database/transaction_model.dart';
-import '../../core/database/category_model.dart';
-import '../../core/database/auto_draft_model.dart';
 import '../../core/database/tag_model.dart';
-import '../../core/database/tag_rule_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/category_service.dart';
-import '../../core/service/currency_service.dart';
 import '../../core/service/transaction_service.dart';
-import '../../core/service/auto_draft_service.dart';
 import '../../core/service/auto_app_registry.dart';
-import '../../core/service/auto_app_settings.dart';
-import '../../core/service/auto_permission_service.dart';
-import '../../core/service/auto_permission_prompt_policy.dart';
-import '../../core/service/auto_settings.dart';
-import '../../core/service/tag_service.dart';
-import '../../core/service/data_reload_bus.dart';
-import '../../core/service/data_backup_service.dart';
-import '../../core/service/ui_pref_service.dart';
-import '../../core/service/database_service.dart';
-import '../../core/service/project_service.dart';
-import '../../core/service/recurring_service.dart';
 import '../accounts/accounts_screen.dart';
 import '../auto/auto_drafts_screen.dart';
 import '../auto/auto_rule_tester_screen.dart';
@@ -61,50 +36,16 @@ import '../settings/csv_export_screen.dart';
 import '../settings/settings_screen.dart';
 import '../assistant/assistant_screen.dart';
 import '../books/book_manager_screen.dart';
-import '../../core/database/book_model.dart';
-import '../../core/service/book_service.dart';
 import '../installment/installment_list_screen.dart';
 import '../split/bill_split_screen.dart';
 import '../savings/savings_goal_screen.dart';
 import '../bill_relation/bill_relation_screen.dart';
 import '../merchant/merchant_memory_screen.dart';
 import '../security/pin_setup_screen.dart';
-import '../../core/service/reminder_service.dart';
 import '../debt/debt_list_screen.dart';
 import '../investment/investment_screen.dart';
 import '../../core/utils/logger_util.dart';
-
-class _RandomSeedResult {
-  final int accounts;
-  final int tags;
-  final int transactions;
-
-  const _RandomSeedResult({
-    required this.accounts,
-    required this.tags,
-    required this.transactions,
-  });
-}
-
-class _ProjectSeedResult {
-  final String projectName;
-  final int transactions;
-
-  const _ProjectSeedResult({
-    required this.projectName,
-    required this.transactions,
-  });
-}
-
-class _RandomAccountSeed {
-  final String name;
-  final String type;
-  final String subType;
-
-  const _RandomAccountSeed(this.name, this.type, this.subType);
-}
-
-enum _AutoPermissionDialogAction { later, settings }
+import 'main_screen_controller.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -113,1038 +54,45 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
-  static const eventChannel = EventChannel('com.jive.app/stream');
-  static const _prefKeyDemoSeedEnabled = 'demo_seed_enabled';
-  static const _kE2eMode = bool.fromEnvironment(
-    'JIVE_E2E',
-    defaultValue: false,
-  );
-
-  late Isar _isar;
-  List<JiveTransaction> _transactions = [];
-  Map<String, JiveCategory> _categoryByKey = {};
-  Map<String, JiveTag> _tagByKey = {};
-  Map<int, JiveAccount> _accountById = {};
-  bool _isLoading = true;
-  double _totalAssets = 0;
-  double _totalLiabilities = 0;
-  double _totalCreditLimit = 0;
-  double _totalCreditUsed = 0;
-  double _totalCreditAvailable = 0;
+class _MainScreenState extends State<MainScreen>
+    with WidgetsBindingObserver, MainScreenController {
   int _currentIndex = 0;
-  bool _demoSeedEnabled = true;
-  bool _showSmartTagBadge = true;
-  bool _dbReady = false;
-  bool _isListening = false;
-  final List<Map<String, dynamic>> _pendingAutoEvents = [];
-  AutoSettings _autoSettings = AutoSettingsStore.defaults;
-  int _pendingDraftCount = 0;
-  Map<String, bool> _autoAppEnabled = {};
-  int _autoAppEnabledCount = AutoAppRegistry.apps.length;
-  bool _permissionDialogVisible = false;
-  AutoPermissionPromptPolicy? _autoPermissionPromptPolicy;
-  final ValueNotifier<int> _dataReloadSignal = ValueNotifier(0);
-  final Random _random = Random();
-  bool _isProcessingRecurringRules = false;
-
-  // 多币种支持
-  String _baseCurrency = 'CNY';
-  CurrencyService? _currencyService;
-
-  // 多账本支持
-  List<JiveBook> _books = [];
-  int? _currentBookId; // null = 全部账本
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initDatabase();
-    _startListening();
+    onOpenAutoSettings = _openAutoSettings;
+    initDatabase();
+    startListening();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _dataReloadSignal.dispose();
+    dataReloadSignal.dispose();
     super.dispose();
-  }
-
-  void _notifyDataChanged() {
-    _dataReloadSignal.value += 1;
-    DataReloadBus.notify();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _checkAutoPermissions();
-      unawaited(_processRecurringRules());
+      checkAutoPermissions();
+      unawaited(processRecurringRules());
     }
-  }
-
-  Future<void> _initDatabase() async {
-    _isar = await DatabaseService.getInstance();
-    _autoPermissionPromptPolicy = AutoPermissionPromptPolicy(
-      await SharedPreferences.getInstance(),
-    );
-    await _loadDemoSeedPrefs();
-    await _loadAutoSettings();
-    await _loadAutoAppSettings();
-    await CategoryService(_isar).initDefaultCategories();
-    await AccountService(_isar).initDefaultAccounts();
-    await TagService(_isar).initDefaultGroups();
-    final currencyService = CurrencyService(_isar);
-    await currencyService.initCurrencies();
-    // 检查是否需要自动更新汇率
-    await _checkAutoUpdateRates(currencyService);
-    await ProjectService(_isar).initTestProjectIfNeeded();
-    await BookService(_isar).initDefaultBook();
-    await _loadBooks();
-    await TransactionService(_isar).migrateTransactionCategoryKeys();
-    await TransactionService(_isar).migrateTransactionAccountIds();
-    await _loadTransactions();
-    await _loadAutoDraftCount();
-    _dbReady = true;
-    await _flushPendingAutoEvents();
-    await _processRecurringRules();
-    await _checkReminders();
-    await _checkAutoPermissions();
-  }
-
-  Future<void> _processRecurringRules() async {
-    if (!_dbReady || _isProcessingRecurringRules) return;
-    _isProcessingRecurringRules = true;
-    try {
-      final result = await RecurringService(_isar).processDueRules();
-      if (result.generatedDrafts > 0) {
-        await _loadAutoDraftCount();
-      }
-      if (result.committedTransactions > 0) {
-        await _loadTransactions();
-        _notifyDataChanged();
-      }
-    } catch (e) {
-      debugPrint('Recurring processing failed: $e');
-    } finally {
-      _isProcessingRecurringRules = false;
-    }
-  }
-
-  Future<void> _checkReminders() async {
-    if (!_dbReady) return;
-    try {
-      await ReminderService(_isar).checkReminders();
-    } catch (e) {
-      debugPrint('Reminder check failed: $e');
-    }
-  }
-
-  Future<void> _checkAutoUpdateRates(CurrencyService currencyService) async {
-    try {
-      final pref = await currencyService.getPreference();
-      if (pref == null || !pref.autoUpdateRates) return;
-
-      // 检查是否需要更新（每天最多更新一次）
-      final lastUpdate = pref.lastRateUpdate;
-      if (lastUpdate != null) {
-        final now = DateTime.now();
-        final diff = now.difference(lastUpdate);
-        if (diff.inHours < 24) return; // 24小时内不重复更新
-      }
-
-      // 后台静默更新汇率
-      await currencyService.fetchAndUpdateRates(
-        pref.baseCurrency,
-        pref.enabledCurrencies,
-      );
-    } catch (e) {
-      // 静默失败，不影响应用启动
-      debugPrint('Auto rate update failed: $e');
-    }
-  }
-
-  Future<void> _loadDemoSeedPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final demoSeed = prefs.getBool(_prefKeyDemoSeedEnabled) ?? true;
-    final showBadge = await UiPrefService.getShowSmartTagBadge();
-    if (mounted) {
-      setState(() {
-        _demoSeedEnabled = demoSeed;
-        _showSmartTagBadge = showBadge;
-      });
-    }
-  }
-
-  Future<void> _loadAutoSettings() async {
-    final settings = await AutoSettingsStore.load();
-    if (!mounted) return;
-    setState(() {
-      _autoSettings = settings;
-    });
-  }
-
-  Future<void> _loadAutoAppSettings() async {
-    final map = await AutoAppSettingsStore.loadEnabledMap();
-    if (!mounted) return;
-    setState(() {
-      _autoAppEnabled = map;
-      _autoAppEnabledCount = AutoAppSettingsStore.enabledCount(map);
-    });
-  }
-
-  Future<void> _setAutoSettings(AutoSettings settings) async {
-    if (!mounted) return;
-    final wasEnabled = _autoSettings.enabled;
-    setState(() {
-      _autoSettings = settings;
-    });
-    await AutoSettingsStore.save(settings);
-    if (!wasEnabled && settings.enabled) {
-      await _autoPermissionPromptPolicy?.clearSnooze();
-    }
-    await _checkAutoPermissions();
-  }
-
-  Future<void> _checkAutoPermissions() async {
-    if (_kE2eMode) return;
-    if (!_dbReady) return;
-    final promptPolicy = _autoPermissionPromptPolicy;
-    if (promptPolicy == null) return;
-    if (!_autoSettings.enabled) return;
-    final status = await AutoPermissionService.getStatus();
-    if (!mounted) return;
-    final shouldPrompt = await promptPolicy.shouldPrompt(
-      autoEnabled: _autoSettings.enabled,
-      allRequiredPermissionsGranted: status.allRequired,
-      dialogVisible: _permissionDialogVisible,
-    );
-    if (!shouldPrompt) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted || _permissionDialogVisible) return;
-      _permissionDialogVisible = true;
-      try {
-        final missing = status.missingRequiredLabels();
-        final action = await showDialog<_AutoPermissionDialogAction>(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('自动记账权限未开启'),
-            content: Text('未开启：${missing.join('、')}'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(
-                  dialogContext,
-                  _AutoPermissionDialogAction.later,
-                ),
-                child: const Text('稍后'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(
-                  dialogContext,
-                  _AutoPermissionDialogAction.settings,
-                ),
-                child: const Text('去设置'),
-              ),
-            ],
-          ),
-        );
-
-        // Any close path should enter cooldown to avoid repeated interruptions.
-        await promptPolicy.snoozePrompt();
-        if (action == _AutoPermissionDialogAction.settings && mounted) {
-          _openAutoSettings();
-        }
-      } finally {
-        _permissionDialogVisible = false;
-      }
-    });
-  }
-
-  Future<void> _setDemoSeedEnabled(bool enabled) async {
-    _demoSeedEnabled = enabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefKeyDemoSeedEnabled, enabled);
-  }
-
-  void _showMessage(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Future<bool> _seedDemoDataIfNeeded() async {
-    if (!kDebugMode) return false;
-    if (!_demoSeedEnabled) return false;
-    final existingCount = await _isar.jiveTransactions.count();
-    if (existingCount > 0) return false;
-
-    final accountService = AccountService(_isar);
-    final accounts = await accountService.getActiveAccounts();
-    if (accounts.isEmpty) return false;
-
-    final accountByKey = {for (final account in accounts) account.key: account};
-    final defaultAccount =
-        await accountService.getDefaultAccount() ?? accounts.first;
-    final shouldSeedBalances = accounts.every(
-      (account) => account.openingBalance == 0,
-    );
-
-    if (shouldSeedBalances) {
-      final openingBalances = <String, double>{
-        'acct_cash': 1200,
-        'acct_bank': 15000,
-        'acct_wechat': 800,
-        'acct_alipay': 600,
-        'acct_credit': -3200,
-        'acct_loan': -8000,
-      };
-      await _isar.writeTxn(() async {
-        for (final account in accounts) {
-          final opening = openingBalances[account.key];
-          if (opening == null) continue;
-          account.openingBalance = opening;
-          await _isar.collection<JiveAccount>().put(account);
-        }
-      });
-    }
-
-    final categories = await _isar.collection<JiveCategory>().where().findAll();
-    final expenseParents = categories
-        .where((cat) => cat.parentKey == null && !cat.isIncome && !cat.isHidden)
-        .toList();
-    final incomeParents = categories
-        .where((cat) => cat.parentKey == null && cat.isIncome && !cat.isHidden)
-        .toList();
-
-    JiveCategory? pickParent(List<JiveCategory> parents, List<String> names) {
-      for (final name in names) {
-        final match = parents.where((cat) => cat.name == name).toList();
-        if (match.isNotEmpty) return match.first;
-      }
-      return parents.isNotEmpty ? parents.first : null;
-    }
-
-    JiveCategory? pickChild(String parentKey, List<String> names) {
-      final children = categories
-          .where((cat) => cat.parentKey == parentKey && !cat.isHidden)
-          .toList();
-      for (final name in names) {
-        final match = children.where((cat) => cat.name == name).toList();
-        if (match.isNotEmpty) return match.first;
-      }
-      return children.isNotEmpty ? children.first : null;
-    }
-
-    JiveTransaction buildTx({
-      required String type,
-      required double amount,
-      required JiveAccount account,
-      required int daysAgo,
-      List<String>? parentNames,
-      List<String>? childNames,
-    }) {
-      final now = DateTime.now().subtract(Duration(days: daysAgo));
-      final parent = parentNames == null
-          ? null
-          : pickParent(
-              type == 'income' ? incomeParents : expenseParents,
-              parentNames,
-            );
-      final child = (parent == null || childNames == null)
-          ? null
-          : pickChild(parent.key, childNames);
-      return JiveTransaction()
-        ..amount = amount
-        ..source = 'Seed'
-        ..type = type
-        ..timestamp = now
-        ..accountId = account.id
-        ..categoryKey = parent?.key
-        ..subCategoryKey = child?.key
-        ..category = parent?.name ?? (parentNames?.first ?? '')
-        ..subCategory = child?.name ?? (childNames?.first ?? '');
-    }
-
-    final cash = accountByKey['acct_cash'] ?? defaultAccount;
-    final bank = accountByKey['acct_bank'] ?? defaultAccount;
-    final wechat = accountByKey['acct_wechat'] ?? defaultAccount;
-    final alipay = accountByKey['acct_alipay'] ?? defaultAccount;
-
-    final demoTxs = <JiveTransaction>[
-      buildTx(
-        type: 'expense',
-        amount: 28,
-        account: cash,
-        daysAgo: 0,
-        parentNames: ['餐饮', '吃喝'],
-        childNames: ['早餐', '咖啡'],
-      ),
-      buildTx(
-        type: 'expense',
-        amount: 56,
-        account: wechat,
-        daysAgo: 1,
-        parentNames: ['交通', '出行'],
-        childNames: ['地铁', '公交'],
-      ),
-      buildTx(
-        type: 'expense',
-        amount: 198,
-        account: alipay,
-        daysAgo: 2,
-        parentNames: ['购物', '日常'],
-        childNames: ['衣服', '日用品'],
-      ),
-      buildTx(
-        type: 'expense',
-        amount: 76,
-        account: cash,
-        daysAgo: 3,
-        parentNames: ['娱乐', '运动'],
-        childNames: ['电影', '游戏'],
-      ),
-      buildTx(
-        type: 'expense',
-        amount: 123,
-        account: bank,
-        daysAgo: 4,
-        parentNames: ['医疗', '健康'],
-        childNames: ['药品', '门诊'],
-      ),
-      buildTx(
-        type: 'expense',
-        amount: 42,
-        account: wechat,
-        daysAgo: 5,
-        parentNames: ['日常', '生活'],
-        childNames: ['话费', '网费'],
-      ),
-      buildTx(
-        type: 'income',
-        amount: 8000,
-        account: bank,
-        daysAgo: 2,
-        parentNames: ['收入', '工资', '薪水'],
-        childNames: ['工资', '薪水'],
-      ),
-      buildTx(
-        type: 'income',
-        amount: 1200,
-        account: bank,
-        daysAgo: 6,
-        parentNames: ['收入', '奖金', '理财'],
-        childNames: ['奖金', '理财收益'],
-      ),
-      buildTx(
-        type: 'income',
-        amount: 300,
-        account: alipay,
-        daysAgo: 8,
-        parentNames: ['收入', '投资', '利息'],
-        childNames: ['投资收益', '利息'],
-      ),
-    ];
-
-    final transfer = JiveTransaction()
-      ..amount = 500
-      ..source = 'Seed'
-      ..type = 'transfer'
-      ..timestamp = DateTime.now().subtract(const Duration(days: 1))
-      ..accountId = bank.id
-      ..toAccountId = wechat.id;
-
-    await _isar.writeTxn(() async {
-      await _isar.jiveTransactions.putAll([...demoTxs, transfer]);
-    });
-    return true;
-  }
-
-  Future<void> _handleRandomSeed() async {
-    const accountCount = 3;
-    const tagCount = 12;
-    const transactionCount = 80;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('生成随机测试数据'),
-        content: const Text('将追加随机测试数据：3 个账户、12 个标签、80 笔交易。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('继续'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    final result = await _seedRandomTestData(
-      accountCount: accountCount,
-      tagCount: tagCount,
-      transactionCount: transactionCount,
-    );
-    await _loadTransactions();
-    await _loadAutoDraftCount();
-    _notifyDataChanged();
-    _showMessage(
-      '已生成随机测试数据：账户${result.accounts}、标签${result.tags}、交易${result.transactions}',
-    );
-  }
-
-  Future<void> _handleProjectSeedLarge() async {
-    const transactionCount = 1200;
-    const daysSpan = 420;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('生成项目测试数据'),
-        content: const Text('将创建一个测试项目，并生成 1200 笔交易（覆盖近 14 个月），全部关联到该项目。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('继续'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    final result = await _seedProjectTestData(
-      transactionCount: transactionCount,
-      daysSpan: daysSpan,
-    );
-    await _loadTransactions();
-    await _loadAutoDraftCount();
-    _notifyDataChanged();
-    _showMessage('已生成项目测试数据：${result.projectName}，交易${result.transactions} 笔');
-  }
-
-  Future<_RandomSeedResult> _seedRandomTestData({
-    required int accountCount,
-    required int tagCount,
-    required int transactionCount,
-  }) async {
-    final accountService = AccountService(_isar);
-    final tagService = TagService(_isar);
-    await accountService.initDefaultAccounts();
-    await tagService.initDefaultGroups();
-    await CategoryService(_isar).initDefaultCategories();
-
-    final accountTemplates = <_RandomAccountSeed>[
-      _RandomAccountSeed('测试钱包', AccountService.typeAsset, 'wallet'),
-      _RandomAccountSeed('测试现金', AccountService.typeAsset, 'cash'),
-      _RandomAccountSeed('测试银行卡', AccountService.typeAsset, 'bank'),
-      _RandomAccountSeed('测试微信', AccountService.typeAsset, 'wechat'),
-      _RandomAccountSeed('测试支付宝', AccountService.typeAsset, 'alipay'),
-      _RandomAccountSeed('测试信用卡', AccountService.typeLiability, 'credit'),
-      _RandomAccountSeed('测试借入', AccountService.typeLiability, 'loan'),
-    ];
-
-    final createdAccounts = <JiveAccount>[];
-    for (var i = 0; i < accountCount; i++) {
-      final seed = accountTemplates[_random.nextInt(accountTemplates.length)];
-      final name = '${seed.name}${_randomSuffix()}';
-      final amount = 200 + _random.nextInt(9800);
-      final openingBalance = seed.type == AccountService.typeLiability
-          ? -amount.toDouble()
-          : amount.toDouble();
-      final account = await accountService.createAccount(
-        name: name,
-        type: seed.type,
-        subType: seed.subType,
-        openingBalance: openingBalance,
-      );
-      createdAccounts.add(account);
-    }
-
-    final groups = await tagService.getGroups(includeArchived: false);
-    if (groups.isEmpty) {
-      await tagService.createGroup(name: '随机分组');
-    }
-    final refreshedGroups = await tagService.getGroups(includeArchived: false);
-    final createdTags = <JiveTag>[];
-    for (var i = 0; i < tagCount; i++) {
-      final name = '随机标签${_randomSuffix()}';
-      final group = refreshedGroups.isEmpty
-          ? null
-          : refreshedGroups[_random.nextInt(refreshedGroups.length)];
-      final color = TagService
-          .defaultColors[_random.nextInt(TagService.defaultColors.length)];
-      try {
-        final tag = await tagService.createTag(
-          name: name,
-          groupKey: group?.key,
-          colorHex: color,
-        );
-        createdTags.add(tag);
-      } catch (_) {
-        // Ignore duplicates; use a new suffix next time.
-      }
-    }
-
-    final accounts = await accountService.getActiveAccounts();
-    final tags = await tagService.getTags(includeArchived: false);
-    final categories = await _isar.collection<JiveCategory>().where().findAll();
-    final expenseParents = categories
-        .where((cat) => cat.parentKey == null && !cat.isIncome && !cat.isHidden)
-        .toList();
-    final incomeParents = categories
-        .where((cat) => cat.parentKey == null && cat.isIncome && !cat.isHidden)
-        .toList();
-
-    JiveCategory? pickParent(List<JiveCategory> parents) {
-      if (parents.isEmpty) return null;
-      return parents[_random.nextInt(parents.length)];
-    }
-
-    JiveCategory? pickChild(String parentKey) {
-      final children = categories
-          .where((cat) => cat.parentKey == parentKey && !cat.isHidden)
-          .toList();
-      if (children.isEmpty) return null;
-      return children[_random.nextInt(children.length)];
-    }
-
-    List<String> pickTags() {
-      if (tags.isEmpty) return [];
-      final count = _random.nextInt(3);
-      if (count == 0) return [];
-      final pool = List<JiveTag>.from(tags)..shuffle(_random);
-      return pool.take(count).map((tag) => tag.key).toList();
-    }
-
-    final now = DateTime.now();
-    final transactions = <JiveTransaction>[];
-    for (var i = 0; i < transactionCount; i++) {
-      final roll = _random.nextInt(100);
-      final type = roll < 15 ? 'income' : (roll < 25 ? 'transfer' : 'expense');
-      final timestamp = now.subtract(
-        Duration(days: _random.nextInt(120), minutes: _random.nextInt(1440)),
-      );
-      final account = accounts[_random.nextInt(accounts.length)];
-      if (type == 'transfer') {
-        final others = accounts.where((a) => a.id != account.id).toList();
-        if (others.isEmpty) continue;
-        final toAccount = others[_random.nextInt(others.length)];
-        final amount = 50 + _random.nextInt(3000);
-        transactions.add(
-          JiveTransaction()
-            ..amount = amount.toDouble()
-            ..source = 'SeedRandom'
-            ..type = 'transfer'
-            ..timestamp = timestamp
-            ..accountId = account.id
-            ..toAccountId = toAccount.id
-            ..tagKeys = pickTags(),
-        );
-        continue;
-      }
-
-      final parent = type == 'income'
-          ? pickParent(incomeParents)
-          : pickParent(expenseParents);
-      final child = parent == null ? null : pickChild(parent.key);
-      final amount = type == 'income'
-          ? 200 + _random.nextInt(12000)
-          : 10 + _random.nextInt(1200);
-      transactions.add(
-        JiveTransaction()
-          ..amount = amount.toDouble()
-          ..source = 'SeedRandom'
-          ..type = type
-          ..timestamp = timestamp
-          ..accountId = account.id
-          ..categoryKey = parent?.key
-          ..subCategoryKey = child?.key
-          ..category = parent?.name ?? ''
-          ..subCategory = child?.name ?? ''
-          ..rawText = '随机测试数据'
-          ..note = '随机测试数据'
-          ..tagKeys = pickTags(),
-      );
-    }
-
-    await _isar.writeTxn(() async {
-      if (transactions.isNotEmpty) {
-        await _isar.jiveTransactions.putAll(transactions);
-      }
-    });
-    await tagService.refreshUsageCounts();
-
-    return _RandomSeedResult(
-      accounts: createdAccounts.length,
-      tags: createdTags.length,
-      transactions: transactions.length,
-    );
-  }
-
-  Future<_ProjectSeedResult> _seedProjectTestData({
-    required int transactionCount,
-    required int daysSpan,
-  }) async {
-    final accountService = AccountService(_isar);
-    final tagService = TagService(_isar);
-    await accountService.initDefaultAccounts();
-    await tagService.initDefaultGroups();
-    await CategoryService(_isar).initDefaultCategories();
-
-    final projectService = ProjectService(_isar);
-    final projectName = '项目测试${_randomSuffix()}';
-    final startDate = DateTime.now().subtract(Duration(days: daysSpan));
-    final project = await projectService.createProject(
-      name: projectName,
-      description: '自动生成的项目测试数据',
-      budget: 50000,
-      iconName: 'folder',
-      colorHex: '#2E7D32',
-      startDate: startDate,
-      endDate: DateTime.now().add(const Duration(days: 30)),
-    );
-
-    final accounts = await accountService.getActiveAccounts();
-    final tags = await tagService.getTags(includeArchived: false);
-    final categories = await _isar.collection<JiveCategory>().where().findAll();
-    final expenseParents = categories
-        .where((cat) => cat.parentKey == null && !cat.isIncome && !cat.isHidden)
-        .toList();
-
-    JiveCategory? pickParent() {
-      if (expenseParents.isEmpty) return null;
-      return expenseParents[_random.nextInt(expenseParents.length)];
-    }
-
-    JiveCategory? pickChild(String parentKey) {
-      final children = categories
-          .where((cat) => cat.parentKey == parentKey && !cat.isHidden)
-          .toList();
-      if (children.isEmpty) return null;
-      return children[_random.nextInt(children.length)];
-    }
-
-    List<String> pickTags() {
-      if (tags.isEmpty) return [];
-      final count = _random.nextInt(3);
-      if (count == 0) return [];
-      final pool = List<JiveTag>.from(tags)..shuffle(_random);
-      return pool.take(count).map((tag) => tag.key).toList();
-    }
-
-    final now = DateTime.now();
-    final transactions = <JiveTransaction>[];
-    for (var i = 0; i < transactionCount; i++) {
-      if (accounts.isEmpty) break;
-      final timestamp = now.subtract(
-        Duration(
-          days: _random.nextInt(daysSpan),
-          minutes: _random.nextInt(1440),
-        ),
-      );
-      final account = accounts[_random.nextInt(accounts.length)];
-      final parent = pickParent();
-      final child = parent == null ? null : pickChild(parent.key);
-      final amount = 10 + _random.nextInt(5000);
-      transactions.add(
-        JiveTransaction()
-          ..amount = amount.toDouble()
-          ..source = 'SeedProject'
-          ..type = 'expense'
-          ..timestamp = timestamp
-          ..accountId = account.id
-          ..projectId = project.id
-          ..categoryKey = parent?.key
-          ..subCategoryKey = child?.key
-          ..category = parent?.name ?? ''
-          ..subCategory = child?.name ?? ''
-          ..rawText = '项目测试数据'
-          ..note = '项目测试数据'
-          ..tagKeys = pickTags(),
-      );
-    }
-
-    await _isar.writeTxn(() async {
-      if (transactions.isNotEmpty) {
-        await _isar.jiveTransactions.putAll(transactions);
-      }
-    });
-    await tagService.refreshUsageCounts();
-
-    return _ProjectSeedResult(
-      projectName: project.name,
-      transactions: transactions.length,
-    );
-  }
-
-  String _randomSuffix() {
-    return '${1000 + _random.nextInt(9000)}';
-  }
-
-  Future<void> _clearAllData() async {
-    await _isar.writeTxn(() async {
-      await _isar.collection<JiveTransaction>().clear();
-      await _isar.collection<JiveAccount>().clear();
-      await _isar.collection<JiveCategory>().clear();
-      await _isar.collection<JiveAutoDraft>().clear();
-      await _isar.collection<JiveTag>().clear();
-      await _isar.collection<JiveTagGroup>().clear();
-      await _isar.collection<JiveTagRule>().clear();
-    });
-    await CategoryService(_isar).initDefaultCategories();
-    await AccountService(_isar).initDefaultAccounts();
-    await TagService(_isar).initDefaultGroups();
-    await TransactionService(_isar).migrateTransactionCategoryKeys();
-    await TransactionService(_isar).migrateTransactionAccountIds();
-    await _loadTransactions();
-    await _loadAutoDraftCount();
-    _notifyDataChanged();
-  }
-
-  Future<void> _exportBackup() async {
-    try {
-      final file = await JiveDataBackupService.exportToFile(_isar);
-      await SharePlus.instance.share(
-        ShareParams(files: [XFile(file.path)], text: 'Jive 数据备份'),
-      );
-      _showMessage('已导出数据');
-    } catch (e) {
-      _showMessage('导出失败：$e');
-    }
-  }
-
-  Future<void> _importBackup() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
-    if (result == null || result.files.single.path == null) return;
-    final file = File(result.files.single.path!);
-    if (!mounted) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('导入数据'),
-        content: const Text('导入将覆盖当前全部数据，是否继续？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('导入'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      final summary = await JiveDataBackupService.importFromFile(
-        _isar,
-        file,
-        clearBefore: true,
-      );
-      await TagService(_isar).refreshUsageCounts();
-      await TransactionService(_isar).migrateTransactionCategoryKeys();
-      await TransactionService(_isar).migrateTransactionAccountIds();
-      await _loadTransactions();
-      await _loadAutoDraftCount();
-      _notifyDataChanged();
-      _showMessage('导入完成：交易${summary.transactions}条，标签${summary.tags}个');
-    } catch (e) {
-      _showMessage('导入失败：$e');
-    }
-  }
-
-  Future<void> _loadTransactions() async {
-    List<JiveTransaction> list;
-    if (_currentBookId != null) {
-      list = await _isar.jiveTransactions
-          .where()
-          .filter()
-          .bookIdEqualTo(_currentBookId)
-          .sortByTimestampDesc()
-          .findAll();
-    } else {
-      list = await _isar.jiveTransactions
-          .where()
-          .sortByTimestampDesc()
-          .findAll();
-    }
-    final categories = await _isar.collection<JiveCategory>().where().findAll();
-    final categoryMap = {for (final c in categories) c.key: c};
-    final tags = await _isar.collection<JiveTag>().where().findAll();
-    final tagMap = {for (final t in tags) t.key: t};
-    final accountService = AccountService(_isar);
-    final accounts = await accountService.getActiveAccounts(bookId: _currentBookId);
-    final accountMap = {for (final a in accounts) a.id: a};
-    final balances = await accountService.computeBalances(accounts: accounts);
-    final totals = accountService.calculateTotals(accounts, balances);
-    final creditSummary = _computeCreditSummary(accounts, balances);
-
-    // 加载基础货币
-    _currencyService ??= CurrencyService(_isar);
-    final baseCurrency = await _currencyService!.getBaseCurrency();
-
-    if (mounted) {
-      setState(() {
-        _transactions = list;
-        _categoryByKey = categoryMap;
-        _tagByKey = tagMap;
-        _accountById = accountMap;
-        _totalAssets = totals.assets;
-        _totalLiabilities = totals.liabilities;
-        _totalCreditLimit = creditSummary.limit;
-        _totalCreditUsed = creditSummary.used;
-        _totalCreditAvailable = creditSummary.available;
-        _baseCurrency = baseCurrency;
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadBooks() async {
-    final books = await BookService(_isar).getActiveBooks();
-    final defaultBook = await BookService(_isar).getDefaultBook();
-    if (mounted) {
-      setState(() {
-        _books = books;
-        // 默认选中默认账本
-        _currentBookId ??= defaultBook?.id;
-      });
-    }
-  }
-
-  Future<void> _loadAutoDraftCount() async {
-    final count = await _isar.collection<JiveAutoDraft>().count();
-    if (!mounted) return;
-    setState(() {
-      _pendingDraftCount = count;
-    });
-  }
-
-  Future<void> _flushPendingAutoEvents() async {
-    if (_pendingAutoEvents.isEmpty) return;
-    final events = List<Map<String, dynamic>>.from(_pendingAutoEvents);
-    _pendingAutoEvents.clear();
-    for (final event in events) {
-      await _handleAutoEvent(event);
-    }
-  }
-
-  Future<void> _handleAutoEvent(Map<String, dynamic> data) async {
-    if (!_autoSettings.enabled) {
-      JiveLogger.w("AutoCapture ignored: auto disabled");
-      return;
-    }
-    final packageName = _resolveAutoPackageName(data);
-    if (!_isAutoAppEnabled(packageName)) {
-      JiveLogger.w("AutoCapture ignored: app disabled package=$packageName");
-      return;
-    }
-    if (_autoSettings.keywordFilterEnabled) {
-      final rawText = data['raw_text']?.toString() ?? '';
-      if (rawText.isNotEmpty &&
-          !_containsAnyKeyword(rawText, _autoSettings.keywordFilters)) {
-        JiveLogger.w("AutoCapture ignored: keyword filter raw=$rawText");
-        return;
-      }
-    }
-    final capture = AutoCapture.fromEvent(data);
-    if (!capture.isValid) {
-      JiveLogger.w(
-        "AutoCapture invalid: source=${capture.source} amount=${capture.amount}",
-      );
-      return;
-    }
-    JiveLogger.i(
-      "AutoCapture received: source=${capture.source} amount=${capture.amount} type=${capture.type} raw=${capture.rawText}",
-    );
-    final result = await AutoDraftService(_isar).ingestCapture(
-      capture,
-      directCommit: _autoSettings.directCommit,
-      settings: _autoSettings,
-    );
-    if (!mounted) return;
-    JiveLogger.i(
-      "AutoCapture result: inserted=${result.inserted} committed=${result.committed} duplicate=${result.duplicate}",
-    );
-    if (result.duplicate) {
-      _showMessage("已忽略重复自动记账");
-      return;
-    }
-    if (result.merged) {
-      _showMessage("已合并转账记录");
-      await _loadAutoDraftCount();
-      return;
-    }
-    await _loadAutoDraftCount();
-    if (result.committed) {
-      await _loadTransactions();
-      _notifyDataChanged();
-      _showMessage("已自动入账");
-      return;
-    }
-    if (result.inserted) {
-      _showMessage("已加入待确认");
-    }
-  }
-
-  bool _containsAnyKeyword(String text, List<String> keywords) {
-    if (keywords.isEmpty) return true;
-    for (final keyword in keywords) {
-      if (keyword.isEmpty) continue;
-      if (text.contains(keyword)) return true;
-    }
-    return false;
-  }
-
-  String? _resolveAutoPackageName(Map<String, dynamic> data) {
-    final pkg = data['package_name']?.toString();
-    if (pkg != null && pkg.isNotEmpty) return pkg;
-    final source = data['source']?.toString();
-    return AutoAppRegistry.resolvePackage(source);
-  }
-
-  bool _isAutoAppEnabled(String? packageName) {
-    if (packageName == null) return true;
-    if (!AutoAppRegistry.isSupported(packageName)) return true;
-    return AutoAppSettingsStore.isEnabled(_autoAppEnabled, packageName);
-  }
-
-  void _startListening() {
-    if (_isListening) return;
-    _isListening = true;
-    eventChannel.receiveBroadcastStream().listen((dynamic event) async {
-      if (event is! Map) return;
-      final payload = Map<String, dynamic>.from(event);
-      if (!_dbReady) {
-        _pendingAutoEvents.add(payload);
-        return;
-      }
-      await _handleAutoEvent(payload);
-    });
   }
 
   Future<void> _openAutoSettings() async {
-    if (!_dbReady) {
-      _showMessage("数据库尚未就绪");
+    if (!dbReady) {
+      showMessage("数据库尚未就绪");
       return;
     }
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => AutoSettingsScreen(isar: _isar)),
+      MaterialPageRoute(builder: (context) => AutoSettingsScreen(isar: isar)),
     );
-    await _loadAutoSettings();
-    await _loadAutoDraftCount();
+    await loadAutoSettings();
+    await loadAutoDraftCount();
   }
 
   Future<void> _openGlobalSearch() async {
@@ -1153,8 +101,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       MaterialPageRoute(builder: (context) => const GlobalSearchScreen()),
     );
     if (changed == true) {
-      await _loadTransactions();
-      _notifyDataChanged();
+      await loadTransactions();
+      notifyDataChanged();
     }
   }
 
@@ -1164,8 +112,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       MaterialPageRoute(builder: (context) => const CalendarScreen()),
     );
     if (changed == true) {
-      await _loadTransactions();
-      _notifyDataChanged();
+      await loadTransactions();
+      notifyDataChanged();
     }
   }
 
@@ -1175,9 +123,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       MaterialPageRoute(builder: (context) => const AutoDraftsScreen()),
     );
     if (changed == true) {
-      await _loadTransactions();
-      await _loadAutoDraftCount();
-      _notifyDataChanged();
+      await loadTransactions();
+      await loadAutoDraftCount();
+      notifyDataChanged();
     }
   }
 
@@ -1187,9 +135,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       MaterialPageRoute(builder: (context) => const ImportCenterScreen()),
     );
     if (changed == true) {
-      await _loadTransactions();
-      await _loadAutoDraftCount();
-      _notifyDataChanged();
+      await loadTransactions();
+      await loadAutoDraftCount();
+      notifyDataChanged();
     }
   }
 
@@ -1197,7 +145,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AutoRuleTesterScreen(isar: _isar),
+        builder: (context) => AutoRuleTesterScreen(isar: isar),
       ),
     );
   }
@@ -1207,23 +155,23 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       context,
       MaterialPageRoute(builder: (context) => const AutoSupportedAppsScreen()),
     );
-    await _loadAutoAppSettings();
+    await loadAutoAppSettings();
   }
 
   Future<void> _openCategoryManager() async {
-    if (!_dbReady) {
-      _showMessage("数据库尚未就绪");
+    if (!dbReady) {
+      showMessage("数据库尚未就绪");
       return;
     }
     final changed = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) =>
-            CategoryManagerScreen(isar: _isar, onlyUserCategories: true),
+            CategoryManagerScreen(isar: isar, onlyUserCategories: true),
       ),
     );
     if (changed == true) {
-      await _loadTransactions();
+      await loadTransactions();
     }
   }
 
@@ -1234,11 +182,11 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         index: _currentIndex,
         children: [
           _buildHomeContent(),
-          StatsHomeScreen(reloadSignal: _dataReloadSignal, bookId: _currentBookId),
+          StatsHomeScreen(reloadSignal: dataReloadSignal, bookId: currentBookId),
           AccountsScreen(
-            reloadSignal: _dataReloadSignal,
-            onDataChanged: _notifyDataChanged,
-            bookId: _currentBookId,
+            reloadSignal: dataReloadSignal,
+            onDataChanged: notifyDataChanged,
+            bookId: currentBookId,
           ),
         ],
       ),
@@ -1247,13 +195,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => AddTransactionScreen(bookId: _currentBookId),
+              builder: (context) => AddTransactionScreen(bookId: currentBookId),
             ),
           );
           if (result == true) {
-            await _loadTransactions();
-            await _loadAutoDraftCount();
-            _notifyDataChanged();
+            await loadTransactions();
+            await loadAutoDraftCount();
+            notifyDataChanged();
           }
         },
         child: const Icon(Icons.add, size: 32),
@@ -1265,7 +213,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         onDestinationSelected: (idx) {
           setState(() => _currentIndex = idx);
           if (idx == 1 || idx == 2) {
-            _notifyDataChanged();
+            notifyDataChanged();
           }
         },
         destinations: const [
@@ -1358,7 +306,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildBookSwitcher({bool compact = false}) {
-    final currentBook = _books.where((b) => b.id == _currentBookId).firstOrNull;
+    final currentBook = books.where((b) => b.id == currentBookId).firstOrNull;
     final label = currentBook?.name ?? '全部账本';
     final fontSize = compact ? 11.0 : 12.0;
     return GestureDetector(
@@ -1382,16 +330,16 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 ListTile(
                   leading: const Icon(Icons.all_inclusive, size: 20),
                   title: const Text('全部账本'),
-                  trailing: _currentBookId == null
+                  trailing: currentBookId == null
                       ? const Icon(Icons.check, color: Color(0xFF2E7D32))
                       : null,
                   onTap: () {
                     Navigator.pop(ctx);
-                    setState(() => _currentBookId = null);
-                    _loadTransactions();
+                    setState(() => currentBookId = null);
+                    loadTransactions();
                   },
                 ),
-                ..._books.map((book) => ListTile(
+                ...books.map((book) => ListTile(
                       leading: Icon(
                         book.isDefault ? Icons.book : Icons.book_outlined,
                         size: 20,
@@ -1405,13 +353,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                               style: TextStyle(
                                   fontSize: 11, color: Color(0xFF2E7D32)))
                           : null,
-                      trailing: _currentBookId == book.id
+                      trailing: currentBookId == book.id
                           ? const Icon(Icons.check, color: Color(0xFF2E7D32))
                           : null,
                       onTap: () {
                         Navigator.pop(ctx);
-                        setState(() => _currentBookId = book.id);
-                        _loadTransactions();
+                        setState(() => currentBookId = book.id);
+                        loadTransactions();
                       },
                     )),
                 const SizedBox(height: 8),
@@ -1472,7 +420,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            if (_books.length > 1) ...[
+            if (books.length > 1) ...[
               const SizedBox(height: 4),
               _buildBookSwitcher(compact: compact),
             ],
@@ -1532,36 +480,36 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   secondary: const Icon(Icons.science_outlined),
                                   title: const Text("测试数据开关"),
                                   subtitle: const Text("仅用于调试展示"),
-                                  value: _demoSeedEnabled,
+                                  value: demoSeedEnabled,
                                   onChanged: (value) async {
                                     setSheetState(() {
-                                      _demoSeedEnabled = value;
+                                      demoSeedEnabled = value;
                                     });
-                                    await _setDemoSeedEnabled(value);
-                                    _showMessage(value ? "已开启测试数据" : "已关闭测试数据");
+                                    await setDemoSeedEnabled(value);
+                                    showMessage(value ? "已开启测试数据" : "已关闭测试数据");
                                   },
                                 ),
                                 ListTile(
                                   leading: const Icon(Icons.auto_awesome),
                                   title: const Text("注入测试数据"),
                                   subtitle: Text(
-                                    _demoSeedEnabled
+                                    demoSeedEnabled
                                         ? "写入一批示例数据"
                                         : "请先开启测试数据开关",
                                   ),
                                   onTap: () async {
-                                    if (!_demoSeedEnabled) {
-                                      _showMessage("请先开启测试数据开关");
+                                    if (!demoSeedEnabled) {
+                                      showMessage("请先开启测试数据开关");
                                       return;
                                     }
                                     Navigator.pop(context);
                                     final inserted =
-                                        await _seedDemoDataIfNeeded();
-                                    await _loadTransactions();
+                                        await seedDemoDataIfNeeded();
+                                    await loadTransactions();
                                     if (inserted) {
-                                      _notifyDataChanged();
+                                      notifyDataChanged();
                                     }
-                                    _showMessage(
+                                    showMessage(
                                       inserted ? "已注入测试数据" : "已有数据，未注入测试数据",
                                     );
                                   },
@@ -1572,17 +520,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   ),
                                   title: const Text("生成随机测试数据"),
                                   subtitle: Text(
-                                    _demoSeedEnabled
+                                    demoSeedEnabled
                                         ? "随机生成账户/标签/交易"
                                         : "请先开启测试数据开关",
                                   ),
                                   onTap: () async {
-                                    if (!_demoSeedEnabled) {
-                                      _showMessage("请先开启测试数据开关");
+                                    if (!demoSeedEnabled) {
+                                      showMessage("请先开启测试数据开关");
                                       return;
                                     }
                                     Navigator.pop(context);
-                                    await _handleRandomSeed();
+                                    await handleRandomSeed();
                                   },
                                 ),
                                 ListTile(
@@ -1591,17 +539,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   ),
                                   title: const Text("生成项目测试数据（大量）"),
                                   subtitle: Text(
-                                    _demoSeedEnabled
+                                    demoSeedEnabled
                                         ? "生成一年以上交易并关联到项目"
                                         : "请先开启测试数据开关",
                                   ),
                                   onTap: () async {
-                                    if (!_demoSeedEnabled) {
-                                      _showMessage("请先开启测试数据开关");
+                                    if (!demoSeedEnabled) {
+                                      showMessage("请先开启测试数据开关");
                                       return;
                                     }
                                     Navigator.pop(context);
-                                    await _handleProjectSeedLarge();
+                                    await handleProjectSeedLarge();
                                   },
                                 ),
                                 if (kDebugMode)
@@ -1612,7 +560,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                     onTap: () async {
                                       Navigator.pop(context);
                                       final now = DateTime.now();
-                                      await _handleAutoEvent({
+                                      await handleAutoEvent({
                                         "source": "WeChat",
                                         "amount": "12.34",
                                         "raw_text": "微信 支付成功 测试 12.34",
@@ -1676,12 +624,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                             const ProjectListScreen(),
                                       ),
                                     );
-                                    await _loadTransactions();
+                                    await loadTransactions();
                                   },
                                 ),
                                 ListTile(
                                   leading: const Icon(Icons.currency_exchange),
-                                  title: const Text("货币与汇率"),
+                                  title: const Text("货币与汇���"),
                                   subtitle: const Text("管理多币种和汇率"),
                                   onTap: () async {
                                     Navigator.pop(context);
@@ -1724,8 +672,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                             const RecurringRuleListScreen(),
                                       ),
                                     );
-                                    await _loadTransactions();
-                                    await _loadAutoDraftCount();
+                                    await loadTransactions();
+                                    await loadAutoDraftCount();
                                   },
                                 ),
                                 ListTile(
@@ -1738,10 +686,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) =>
-                                            TagManagementScreen(isar: _isar),
+                                            TagManagementScreen(isar: isar),
                                       ),
                                     );
-                                    await _loadTransactions();
+                                    await loadTransactions();
                                   },
                                 ),
                                 ListTile(
@@ -1754,10 +702,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                       context,
                                       MaterialPageRoute(
                                         builder: (context) =>
-                                            AssistantScreen(isar: _isar),
+                                            AssistantScreen(isar: isar),
                                       ),
                                     );
-                                    await _loadTransactions();
+                                    await loadTransactions();
                                   },
                                 ),
                                 ListTile(
@@ -1937,13 +885,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                       );
                                       if (confirmed != true) return;
                                       await CategoryService(
-                                        _isar,
+                                        isar,
                                       ).resetCategories();
                                       await TransactionService(
-                                        _isar,
+                                        isar,
                                       ).migrateTransactionCategoryKeys();
-                                      await _loadTransactions();
-                                      _showMessage("已重置系统分类");
+                                      await loadTransactions();
+                                      showMessage("已重置系统分类");
                                     },
                                   ),
                                 ListTile(
@@ -1983,8 +931,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                       ),
                                     );
                                     if (confirmed != true) return;
-                                    await _clearAllData();
-                                    _showMessage("已清空数据");
+                                    await clearAllData();
+                                    showMessage("已清空数据");
                                   },
                                 ),
                                 ListTile(
@@ -1995,7 +943,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   subtitle: const Text("导出为备份文件"),
                                   onTap: () async {
                                     Navigator.pop(context);
-                                    await _exportBackup();
+                                    await exportBackup();
                                   },
                                 ),
                                 ListTile(
@@ -2006,7 +954,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   subtitle: const Text("导入将覆盖当前数据"),
                                   onTap: () async {
                                     Navigator.pop(context);
-                                    await _importBackup();
+                                    await importBackup();
                                   },
                                 ),
                                 ListTile(
@@ -2025,17 +973,17 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   secondary: const Icon(Icons.auto_awesome),
                                   title: const Text("自动记账"),
                                   subtitle: Text(
-                                    _autoSettings.enabled ? "已开启" : "已关闭",
+                                    autoSettings.enabled ? "已开启" : "已关闭",
                                   ),
-                                  value: _autoSettings.enabled,
+                                  value: autoSettings.enabled,
                                   onChanged: (value) async {
-                                    final updated = _autoSettings.copyWith(
+                                    final updated = autoSettings.copyWith(
                                       enabled: value,
                                     );
                                     setSheetState(() {
-                                      _autoSettings = updated;
+                                      autoSettings = updated;
                                     });
-                                    await _setAutoSettings(updated);
+                                    await setAutoSettings(updated);
                                   },
                                 ),
                                 SwitchListTile(
@@ -2044,22 +992,22 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                   ),
                                   title: const Text("自动入账"),
                                   subtitle: const Text("关闭则进入待确认"),
-                                  value: _autoSettings.directCommit,
+                                  value: autoSettings.directCommit,
                                   onChanged: (value) async {
-                                    final updated = _autoSettings.copyWith(
+                                    final updated = autoSettings.copyWith(
                                       directCommit: value,
                                     );
                                     setSheetState(() {
-                                      _autoSettings = updated;
+                                      autoSettings = updated;
                                     });
-                                    await _setAutoSettings(updated);
+                                    await setAutoSettings(updated);
                                   },
                                 ),
                                 ListTile(
                                   leading: const Icon(Icons.apps),
                                   title: const Text("自动记账支持的应用"),
                                   subtitle: Text(
-                                    "已启用 $_autoAppEnabledCount / ${AutoAppRegistry.apps.length}",
+                                    "已启用 $autoAppEnabledCount / ${AutoAppRegistry.apps.length}",
                                   ),
                                   onTap: () async {
                                     Navigator.pop(context);
@@ -2069,7 +1017,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
                                 ListTile(
                                   leading: const Icon(Icons.inbox_outlined),
                                   title: const Text("待确认自动记账"),
-                                  subtitle: Text("当前 $_pendingDraftCount 条"),
+                                  subtitle: Text("当前 $pendingDraftCount 条"),
                                   onTap: () async {
                                     Navigator.pop(context);
                                     await _openAutoDrafts();
@@ -2131,7 +1079,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final actionGap = tight ? 12.0 : (compact ? 18.0 : 32.0);
     final titleSize = tight ? 11.0 : (compact ? 12.0 : 14.0);
     final showActionLabels = !tight;
-    final netAssets = _totalAssets - _totalLiabilities;
+    final netAssets = totalAssets - totalLiabilities;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(padding),
@@ -2194,20 +1142,20 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             const SizedBox(height: 8),
             Row(
               children: [
-                _buildBalanceMeta("资产", _totalAssets),
+                _buildBalanceMeta("资产", totalAssets),
                 const SizedBox(width: 16),
-                _buildBalanceMeta("负债", _totalLiabilities),
+                _buildBalanceMeta("负债", totalLiabilities),
               ],
             ),
-            if (_totalCreditLimit > 0) ...[
+            if (totalCreditLimit > 0) ...[
               const SizedBox(height: 6),
               Wrap(
                 spacing: 16,
                 runSpacing: 4,
                 children: [
-                  _buildBalanceMeta("信用额度", _totalCreditLimit),
-                  _buildBalanceMeta("已用", _totalCreditUsed),
-                  _buildBalanceMeta("可用", _totalCreditAvailable),
+                  _buildBalanceMeta("信用额度", totalCreditLimit),
+                  _buildBalanceMeta("已用", totalCreditUsed),
+                  _buildBalanceMeta("可用", totalCreditAvailable),
                 ],
               ),
             ],
@@ -2309,7 +1257,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     bool shrinkWrap = false,
     ScrollPhysics? physics,
   }) {
-    if (_isLoading) {
+    if (isLoading) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
@@ -2317,15 +1265,15 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         ),
       );
     }
-    if (_transactions.isEmpty) {
+    if (transactions.isEmpty) {
       return _buildEmptyState();
     }
     return ListView.builder(
       shrinkWrap: shrinkWrap,
       physics: physics ?? const BouncingScrollPhysics(),
-      itemCount: _transactions.length,
+      itemCount: transactions.length,
       itemBuilder: (context, index) {
-        return _buildTransactionItem(_transactions[index]);
+        return _buildTransactionItem(transactions[index]);
       },
     );
   }
@@ -2347,13 +1295,13 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddTransactionScreen(initialType: txType, bookId: _currentBookId),
+        builder: (context) => AddTransactionScreen(initialType: txType, bookId: currentBookId),
       ),
     );
     if (result == true) {
-      await _loadTransactions();
-      await _loadAutoDraftCount();
-      _notifyDataChanged();
+      await loadTransactions();
+      await loadAutoDraftCount();
+      notifyDataChanged();
     }
   }
 
@@ -2434,34 +1382,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     );
   }
 
-  _CreditSummary _computeCreditSummary(
-    List<JiveAccount> accounts,
-    Map<int, double> balances,
-  ) {
-    double limit = 0;
-    double used = 0;
-    double available = 0;
-
-    for (final account in accounts) {
-      if (!AccountService.isCreditAccount(account)) continue;
-      final accountLimit = account.creditLimit;
-      if (accountLimit == null || accountLimit <= 0) continue;
-      final balance = balances[account.id] ?? account.openingBalance;
-      final usedForAccount = balance < 0 ? -balance : 0;
-      limit += accountLimit;
-      used += usedForAccount;
-      final availableForAccount = accountLimit - usedForAccount;
-      if (availableForAccount > 0) {
-        available += availableForAccount;
-      }
-    }
-
-    return _CreditSummary(limit: limit, used: used, available: available);
-  }
-
   String _displayCategoryName(String? key, String? fallback) {
-    if (key != null && _categoryByKey.containsKey(key)) {
-      return _categoryByKey[key]!.name;
+    if (key != null && categoryByKey.containsKey(key)) {
+      return categoryByKey[key]!.name;
     }
     if (fallback != null && fallback.isNotEmpty) return fallback;
     return "未分类";
@@ -2496,28 +1419,28 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     final subName = _displayCategoryName(item.subCategoryKey, item.subCategory);
     final note = (item.note ?? '').trim();
     final hasNote = note.isNotEmpty;
-    final showSmartBadge = _showSmartTagBadge && item.smartTagKeys.isNotEmpty;
+    final showSmartBadge = showSmartTagBadge && item.smartTagKeys.isNotEmpty;
     final tags = item.tagKeys
-        .map((key) => _tagByKey[key])
+        .map((key) => tagByKey[key])
         .whereType<JiveTag>()
         .toList();
 
     // 获取交易账户的货币信息
     final account = item.accountId != null
-        ? _accountById[item.accountId]
+        ? accountById[item.accountId]
         : null;
     final txCurrency = account?.currency ?? 'CNY';
     final txSymbol = CurrencyDefaults.getSymbol(txCurrency);
     final txDecimals = CurrencyDefaults.getDecimalPlaces(txCurrency);
-    final isMultiCurrency = txCurrency != _baseCurrency;
+    final isMultiCurrency = txCurrency != baseCurrency;
 
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () async {
         final updated = await showTransactionDetailSheet(context, item.id);
         if (updated == true) {
-          await _loadTransactions();
-          _notifyDataChanged();
+          await loadTransactions();
+          notifyDataChanged();
         }
       },
       child: Container(
@@ -2664,16 +1587,4 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       child: badge,
     );
   }
-}
-
-class _CreditSummary {
-  final double limit;
-  final double used;
-  final double available;
-
-  const _CreditSummary({
-    required this.limit,
-    required this.used,
-    required this.available,
-  });
 }
