@@ -1,0 +1,336 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
+import '../../../core/database/account_model.dart';
+import '../../../core/database/category_model.dart';
+import '../../../core/database/currency_model.dart';
+import '../../../core/database/tag_model.dart';
+import '../../../core/database/transaction_model.dart';
+import '../../../core/design_system/theme.dart';
+import '../../../core/service/account_service.dart';
+import '../../tag/tag_icon_catalog.dart';
+
+class HomeRecentTransactionsSection extends StatelessWidget {
+  final bool compact;
+  final List<JiveTransaction> transactions;
+  final Map<String, JiveCategory> categoryByKey;
+  final Map<String, JiveTag> tagByKey;
+  final Map<int, JiveAccount> accountById;
+  final bool isLoading;
+  final bool showSmartTagBadge;
+  final int? currentBookId;
+  final String baseCurrency;
+  final VoidCallback onViewAll;
+  final Future<bool?> Function(BuildContext context, int transactionId)
+      onTransactionDetail;
+  final VoidCallback onAddTransaction;
+  final VoidCallback onDataChanged;
+
+  const HomeRecentTransactionsSection({
+    super.key,
+    this.compact = false,
+    required this.transactions,
+    required this.categoryByKey,
+    required this.tagByKey,
+    required this.accountById,
+    required this.isLoading,
+    required this.showSmartTagBadge,
+    required this.currentBookId,
+    required this.baseCurrency,
+    required this.onViewAll,
+    required this.onTransactionDetail,
+    required this.onAddTransaction,
+    required this.onDataChanged,
+  });
+
+  Widget buildTitle() {
+    final titleSize = compact ? 18.0 : 20.0;
+    final actionSize = compact ? 12.0 : 14.0;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            "Recent Transactions",
+            style: GoogleFonts.lato(
+              fontSize: titleSize,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          GestureDetector(
+            key: const Key('home_view_all_transactions_button'),
+            onTap: onViewAll,
+            child: Text(
+              "View All",
+              style: GoogleFonts.lato(
+                color: JiveTheme.primaryGreen,
+                fontWeight: FontWeight.bold,
+                fontSize: actionSize,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildTransactionList() {
+    return Expanded(child: buildTransactionListBody());
+  }
+
+  Widget buildTransactionListBody({
+    bool shrinkWrap = false,
+    ScrollPhysics? physics,
+  }) {
+    if (isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    if (transactions.isEmpty) {
+      return _buildEmptyState();
+    }
+    return ListView.builder(
+      shrinkWrap: shrinkWrap,
+      physics: physics ?? const BouncingScrollPhysics(),
+      itemCount: transactions.length,
+      itemBuilder: (context, index) {
+        return _buildTransactionItem(context, transactions[index]);
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // This widget is used via its individual builder methods
+    // (buildTitle, buildTransactionList, buildTransactionListBody).
+    // The build method returns the title as a default.
+    return buildTitle();
+  }
+
+  String _displayCategoryName(String? key, String? fallback) {
+    if (key != null && categoryByKey.containsKey(key)) {
+      return categoryByKey[key]!.name;
+    }
+    if (fallback != null && fallback.isNotEmpty) return fallback;
+    return "未分类";
+  }
+
+  Widget _buildTransactionItem(BuildContext context, JiveTransaction item) {
+    final type = item.type ?? "expense";
+    final isIncome = type == "income";
+    final isTransfer = type == "transfer";
+    final isWeChat = item.source == 'WeChat';
+    IconData leadingIcon;
+    Color leadingColor;
+    Color leadingBg;
+    if (isTransfer) {
+      leadingIcon = Icons.swap_horiz;
+      leadingColor = Colors.blueGrey;
+      leadingBg = Colors.blueGrey.shade50;
+    } else if (isWeChat) {
+      leadingIcon = Icons.wechat;
+      leadingColor = Colors.green;
+      leadingBg = const Color(0xFFE8F5E9);
+    } else {
+      leadingIcon = Icons.payment;
+      leadingColor = Colors.blue;
+      leadingBg = const Color(0xFFE3F2FD);
+    }
+    final amountPrefix = isTransfer ? "" : (isIncome ? "+ " : "- ");
+    final amountColor = isTransfer
+        ? Colors.blueGrey
+        : (isIncome ? Colors.green : Colors.redAccent);
+    final parentName = _displayCategoryName(item.categoryKey, item.category);
+    final subName = _displayCategoryName(item.subCategoryKey, item.subCategory);
+    final note = (item.note ?? '').trim();
+    final hasNote = note.isNotEmpty;
+    final showSmartBadge = showSmartTagBadge && item.smartTagKeys.isNotEmpty;
+    final tags = item.tagKeys
+        .map((key) => tagByKey[key])
+        .whereType<JiveTag>()
+        .toList();
+
+    // 获取交易账户的货币信息
+    final account = item.accountId != null
+        ? accountById[item.accountId]
+        : null;
+    final txCurrency = account?.currency ?? 'CNY';
+    final txSymbol = CurrencyDefaults.getSymbol(txCurrency);
+    final txDecimals = CurrencyDefaults.getDecimalPlaces(txCurrency);
+    final isMultiCurrency = txCurrency != baseCurrency;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () async {
+        final updated = await onTransactionDetail(context, item.id);
+        if (updated == true) {
+          onDataChanged();
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: leadingBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(leadingIcon, color: leadingColor),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    parentName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "$subName • ${DateFormat('MM-dd HH:mm').format(item.timestamp)}",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      if (showSmartBadge) ...[
+                        const SizedBox(width: 6),
+                        _buildSmartTagBadge(),
+                      ],
+                    ],
+                  ),
+                  if (hasNote) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      note,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                  if (tags.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: tags.take(3).map((tag) {
+                        final color =
+                            AccountService.parseColorHex(tag.colorHex) ??
+                            Colors.blueGrey;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: color.withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Text(
+                            tagDisplayName(tag),
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  "$amountPrefix$txSymbol${item.amount.toStringAsFixed(txDecimals)}",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: amountColor,
+                  ),
+                ),
+                if (isMultiCurrency)
+                  Text(
+                    txCurrency,
+                    style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmartTagBadge() {
+    final badge = Container(
+      width: 18,
+      height: 18,
+      decoration: BoxDecoration(
+        color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: JiveTheme.primaryGreen.withValues(alpha: 0.4),
+        ),
+      ),
+      child: const Icon(
+        Icons.auto_awesome,
+        size: 12,
+        color: JiveTheme.primaryGreen,
+      ),
+    );
+    return Tooltip(
+      message: '该交易由智能标签自动打标',
+      triggerMode: TooltipTriggerMode.longPress,
+      child: badge,
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.spa, size: 64, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text(
+            "No transactions yet",
+            style: GoogleFonts.lato(color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+}
