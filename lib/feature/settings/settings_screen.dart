@@ -5,6 +5,7 @@ import '../../core/design_system/theme.dart';
 import '../../core/service/category_icon_style.dart';
 import '../installment/installment_manage_screen.dart';
 import '../budget/budget_settings_screen.dart';
+import 'speech_settings_screen.dart';
 import 'theme_settings_screen.dart';
 import 'webdav_settings_screen.dart';
 import '../export/csv_export_screen.dart';
@@ -207,6 +208,35 @@ class SettingsScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const BudgetSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _sectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("语音与智能", style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.mic_none_rounded),
+                  title: const Text("语音设置"),
+                  subtitle: const Text("语音记账开关、语言与线上增强状态"),
+                  trailing: Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: Colors.grey.shade500,
+                  ),
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SpeechSettingsScreen(),
                       ),
                     );
                   },
