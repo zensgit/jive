@@ -1,7 +1,7 @@
 # Jive 当前可执行开发路线图
 
 > 日期: 2026-03-29
-> 基线: `main` @ `b5691d7` → 更新至 `f82498c`（Phase A 完成后）
+> 基线: `main` @ `2ce62cc`（PR #72 合并后）
 > 目的: 将一份已部分过时的开发报告，重写为当前仓库可执行版本
 
 ---
@@ -14,7 +14,7 @@
 
 1. 部分任务已经在 `main` 落地
 2. 部分“待合并分支”在当前仓库视图里已不可直接作为执行对象
-3. 部分任务的复杂度被明显低估，尤其是 `installment/instalment` 双栈收敛
+3. 部分任务的复杂度被低估，或在执行中已被提前消化
 
 因此，当前更合理的做法不是“照单 merge”，而是先做一次去过时化，再按稳定性、迁移风险、功能增量三个层次重新排期。
 
@@ -30,6 +30,7 @@
 | 新增 `flutter_ci.yml` | 已存在 | `.github/workflows/flutter_ci.yml` 已包含 `analyze_and_test` 与 `android_integration_test` |
 | 投资模块新增 `latestPrice/priceUpdatedAt` | 已存在 | `lib/core/database/investment_model.dart` |
 | 投资模块手动价格更新 | 已存在 | `lib/core/service/investment_service.dart` 的 `updatePrice()` |
+| `installment/instalment` 双栈收敛 | 已由 PR #71 完成 | 英式拼写孤立模块已删除，保留 `installment` 作为唯一实现 |
 
 ### 2. 仍然成立，但需要重估工作量
 
@@ -39,14 +40,6 @@
 | 空 `catch` 清理 | 值得优先做 | 当前仍有多处空 `catch`/吞异常 |
 | 空 `setState(() {})` 清理 | 值得优先做 | 当前仍有多处空刷新 |
 | 语音 API 配置 UI | 可以做 | 语音引擎和偏好设置已有基础设施，但缺更完整配置入口 |
-
-### 3. 成立，但不是“清理任务”，而是“迁移项目”
-
-| 报告项 | 当前判断 | 原因 |
-|---|---|---|
-| `installment/instalment` 命名统一 | 高风险迁移项目 | 模型、服务、UI、测试同时并存，且新旧能力差异明显 |
-
----
 
 ## 三、当前仓库的真实优先级
 
@@ -97,7 +90,7 @@
 
 1. ✅ 修复高优先级空 `catch` — PR #70 (merged), 本次选中的 13 处已替换为 debugPrint；仓库中仍有其他 catch 块，属正常错误处理而非空吞
 2. ✅ 修复高优先级空 `setState` — PR #70 (merged), 本次选中的 22 处已消除
-3. ⏳ 校正 CI 文档与现状表述 — PR #72 (open), 69 个本地重复 docs 已清理，roadmap 入库
+3. ✅ 校正 CI 文档与现状表述 — PR #72 (merged), 69 个本地重复 docs 已清理，roadmap 已入库并同步修正
 4. ✅ 梳理当前 `flutter analyze` 的真实 blocker — PR #70 (merged), 修复 .g.dart 重复 case + schema 重复条目
 5. ✅ 额外完成: 删除孤立 instalment 模块 — PR #71 (merged), -1678 行
 
@@ -222,13 +215,13 @@ PR #71 (merged) 已完成收敛：
 ### 本周建议
 
 1. 完成 Phase A
-2. 启动 Phase B 的迁移设计，不立即动库表
-3. 只在 Phase A 绿灯后，再开始 Phase C
+2. 在有 Flutter SDK 的环境补跑 `flutter analyze`
+3. 如 analyze 无新增 error，直接进入 Phase C
 
 ### 不建议本周做的事
 
 1. 直接拆 `main.dart`
-2. 直接统一 `installment/instalment`
+2. 在未补跑 analyze 前启动大规模架构拆分
 3. 继续按旧分支名单做 cherry-pick
 
 ---
@@ -237,6 +230,6 @@ PR #71 (merged) 已完成收敛：
 
 如果只选一个下一步，我建议：
 
-**开一个专门的 analyzer/stability 清理分支，先完成 Phase A。**
+**先在有 Flutter SDK 的环境补跑 `flutter analyze`，确认 Phase A 的代码修复已完全收口。**
 
-这是当前最小风险、最大复利的一步。
+确认无新增 error 后，直接进入 Phase C。
