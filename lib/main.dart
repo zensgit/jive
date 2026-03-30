@@ -6,6 +6,8 @@ import 'app/jive_app.dart';
 import 'core/auth/auth_service.dart';
 import 'core/auth/guest_auth_service.dart';
 import 'core/entitlement/entitlement_service.dart';
+import 'core/payment/payment_service.dart';
+import 'core/payment/play_store_payment_service.dart';
 import 'core/service/category_icon_style.dart';
 import 'core/utils/logger_util.dart';
 import 'feature/theme/theme_provider.dart';
@@ -25,12 +27,19 @@ void main() async {
   final entitlementService = EntitlementService();
   await entitlementService.init();
 
+  // Payment service
+  final paymentService = PlayStorePaymentService(
+    entitlement: entitlementService,
+  );
+  await paymentService.init();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
         ChangeNotifierProvider<AuthService>.value(value: authService),
         ChangeNotifierProvider<EntitlementService>.value(value: entitlementService),
+        ChangeNotifierProvider<PaymentService>.value(value: paymentService),
       ],
       child: const JiveApp(),
     ),
