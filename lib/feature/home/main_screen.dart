@@ -16,6 +16,8 @@ import '../category/category_manager_screen.dart';
 import '../category/category_transactions_screen.dart';
 import '../currency/currency_converter_screen.dart';
 import 'main_screen_controller.dart';
+import 'mixins/auto_capture_mixin.dart';
+import 'mixins/debug_seed_mixin.dart';
 import 'widgets/home_asset_card.dart';
 import 'widgets/home_menu_sheet.dart';
 import 'widgets/home_recent_transactions_section.dart';
@@ -29,7 +31,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen>
-    with WidgetsBindingObserver, MainScreenController {
+    with WidgetsBindingObserver, MainScreenController, AutoCaptureMixin, DebugSeedMixin {
   int _currentIndex = 0;
 
   @override
