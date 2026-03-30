@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'app/jive_app.dart';
+import 'core/ads/ad_service.dart';
 import 'core/auth/auth_service.dart';
 import 'core/auth/guest_auth_service.dart';
 import 'core/entitlement/entitlement_service.dart';
@@ -33,6 +34,10 @@ void main() async {
   );
   await paymentService.init();
 
+  // Ad service
+  final adService = AdService(entitlementService);
+  await adService.init();
+
   runApp(
     MultiProvider(
       providers: [
@@ -40,6 +45,7 @@ void main() async {
         ChangeNotifierProvider<AuthService>.value(value: authService),
         ChangeNotifierProvider<EntitlementService>.value(value: entitlementService),
         ChangeNotifierProvider<PaymentService>.value(value: paymentService),
+        ChangeNotifierProvider<AdService>.value(value: adService),
       ],
       child: const JiveApp(),
     ),
