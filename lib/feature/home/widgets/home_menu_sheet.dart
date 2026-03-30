@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 
+import '../../../core/entitlement/feature_id.dart';
+import '../../../core/entitlement/gated_list_tile.dart';
 import '../../../core/service/auto_app_registry.dart';
 import '../../../core/service/auto_settings.dart';
 import '../../../core/service/category_service.dart';
@@ -199,10 +201,9 @@ void showHomeMenuSheet({
                       await actions.openCategoryManager();
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(
-                      Icons.table_view_outlined,
-                    ),
+                  GatedListTile(
+                    feature: FeatureId.csvExport,
+                    leading: const Icon(Icons.table_view_outlined),
                     title: const Text("导出 CSV"),
                     subtitle: const Text("按时间范围和分类导出交易"),
                     onTap: () async {
@@ -210,8 +211,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const CsvExportScreen(),
+                          builder: (context) => const CsvExportScreen(),
                         ),
                       );
                     },
@@ -231,7 +231,8 @@ void showHomeMenuSheet({
                       );
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.projectTracking,
                     leading: const Icon(Icons.folder_outlined),
                     title: const Text("项目追踪"),
                     subtitle: const Text("追踪旅行、装修等专项支出"),
@@ -240,14 +241,14 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const ProjectListScreen(),
+                          builder: (context) => const ProjectListScreen(),
                         ),
                       );
                       await actions.loadTransactions();
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.multiCurrency,
                     leading: const Icon(Icons.currency_exchange),
                     title: const Text("货币与汇率"),
                     subtitle: const Text("管理多币种和汇率"),
@@ -256,8 +257,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const CurrencySettingsScreen(),
+                          builder: (context) => const CurrencySettingsScreen(),
                         ),
                       );
                     },
@@ -279,7 +279,8 @@ void showHomeMenuSheet({
                       );
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.recurringRules,
                     leading: const Icon(Icons.repeat),
                     title: const Text("周期记账"),
                     subtitle: const Text("自动生成草稿或入账"),
@@ -288,8 +289,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const RecurringRuleListScreen(),
+                          builder: (context) => const RecurringRuleListScreen(),
                         ),
                       );
                       await actions.loadTransactions();
@@ -312,7 +312,8 @@ void showHomeMenuSheet({
                       await actions.loadTransactions();
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.voiceBookkeeping,
                     leading: const Icon(Icons.auto_awesome),
                     title: const Text("AI 助手"),
                     subtitle: const Text("语音记账、智能分类"),
@@ -328,7 +329,8 @@ void showHomeMenuSheet({
                       await actions.loadTransactions();
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.merchantMemory,
                     leading: const Icon(Icons.store_outlined),
                     title: const Text("商户记忆"),
                     subtitle: const Text("管理商户名称与分类偏好"),
@@ -337,8 +339,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const MerchantMemoryScreen(),
+                          builder: (context) => const MerchantMemoryScreen(),
                         ),
                       );
                     },
@@ -358,7 +359,8 @@ void showHomeMenuSheet({
                       );
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.debtManagement,
                     leading: const Icon(Icons.credit_card_outlined),
                     title: const Text("分期管理"),
                     subtitle: const Text("贷款与分期付款追踪"),
@@ -373,7 +375,8 @@ void showHomeMenuSheet({
                       );
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.billSplit,
                     leading: const Icon(Icons.group_outlined),
                     title: const Text("AA 分账"),
                     subtitle: const Text("多人分账与结算"),
@@ -388,7 +391,8 @@ void showHomeMenuSheet({
                       );
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.savingsGoals,
                     leading: const Icon(Icons.savings_outlined),
                     title: const Text("储蓄目标"),
                     subtitle: const Text("设置并追踪储蓄计划"),
@@ -403,7 +407,8 @@ void showHomeMenuSheet({
                       );
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.debtManagement,
                     leading: const Icon(Icons.receipt_long_outlined),
                     title: const Text("账单关联"),
                     subtitle: const Text("报销与退款追踪"),
@@ -418,7 +423,8 @@ void showHomeMenuSheet({
                       );
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.debtManagement,
                     leading: const Icon(Icons.handshake_outlined),
                     title: const Text("借贷管理"),
                     subtitle: const Text("借入借出与还款追踪"),
@@ -433,7 +439,8 @@ void showHomeMenuSheet({
                       );
                     },
                   ),
-                  ListTile(
+                  GatedListTile(
+                    feature: FeatureId.investmentTracking,
                     leading: const Icon(Icons.trending_up),
                     title: const Text("投资组合"),
                     subtitle: const Text("股票、基金与加密货币追踪"),
@@ -589,7 +596,8 @@ void showHomeMenuSheet({
                     },
                   ),
                   const Divider(height: 1),
-                  SwitchListTile(
+                  GatedSwitchListTile(
+                    feature: FeatureId.autoBookkeeping,
                     secondary: const Icon(Icons.auto_awesome),
                     title: const Text("自动记账"),
                     subtitle: Text(
