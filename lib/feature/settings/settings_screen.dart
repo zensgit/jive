@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/design_system/theme.dart';
+import '../../core/entitlement/entitlement_service.dart';
 import '../../core/service/category_icon_style.dart';
+import '../subscription/subscription_screen.dart';
 import '../installment/installment_manage_screen.dart';
 import '../budget/budget_settings_screen.dart';
 import 'speech_settings_screen.dart';
@@ -112,6 +114,29 @@ class SettingsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
+          Consumer<EntitlementService>(
+            builder: (context, entitlement, _) {
+              return _sectionCard(
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.workspace_premium,
+                    color: JiveTheme.primaryGreen,
+                  ),
+                  title: const Text("账户与订阅"),
+                  subtitle: Text('当前：${entitlement.tier.label}'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SubscriptionScreen(),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
           _sectionCard(
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
