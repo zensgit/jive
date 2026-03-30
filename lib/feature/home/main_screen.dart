@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../../core/ads/banner_ad_widget.dart';
 import '../accounts/accounts_screen.dart';
 import '../category/category_transactions_screen.dart';
 import '../stats/stats_home_screen.dart';
@@ -202,7 +203,9 @@ class _MainScreenState extends State<MainScreen>
         _buildTopBar(),
         const SizedBox(height: 24),
         _buildAssetCard(),
-        const SizedBox(height: 32),
+        const SizedBox(height: 16),
+        const BannerAdWidget(),
+        const SizedBox(height: 16),
         section.buildTitle(),
         const SizedBox(height: 16),
         section.buildTransactionList(),
