@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../design_system/theme.dart';
+import '../../feature/subscription/subscription_screen.dart';
 import 'entitlement_service.dart';
 import 'feature_id.dart';
 import 'feature_registry.dart';
@@ -158,7 +159,12 @@ void showUpgradePrompt(BuildContext context, FeatureId feature) {
               child: FilledButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  // TODO: navigate to subscription screen (Phase S3)
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SubscriptionScreen(),
+                    ),
+                  );
                 },
                 style: FilledButton.styleFrom(
                   backgroundColor: JiveTheme.primaryGreen,
