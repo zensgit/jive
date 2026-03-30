@@ -2,22 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '../accounts/accounts_screen.dart';
-import '../auto/auto_drafts_screen.dart';
-import '../auto/auto_rule_tester_screen.dart';
-import '../auto/auto_supported_apps_screen.dart';
-import '../auto/auto_settings_screen.dart';
-import '../import/import_center_screen.dart';
-import '../search/global_search_screen.dart';
-import '../calendar/calendar_screen.dart';
-import '../transactions/add_transaction_screen.dart';
-import '../transactions/transaction_detail_screen.dart';
-import '../stats/stats_home_screen.dart';
-import '../category/category_manager_screen.dart';
 import '../category/category_transactions_screen.dart';
-import '../currency/currency_converter_screen.dart';
+import '../stats/stats_home_screen.dart';
+import '../transactions/transaction_detail_screen.dart';
 import 'main_screen_controller.dart';
 import 'mixins/auto_capture_mixin.dart';
 import 'mixins/debug_seed_mixin.dart';
+import 'mixins/home_navigation_mixin.dart';
 import 'widgets/home_asset_card.dart';
 import 'widgets/home_menu_sheet.dart';
 import 'widgets/home_recent_transactions_section.dart';
@@ -31,14 +22,14 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen>
-    with WidgetsBindingObserver, MainScreenController, AutoCaptureMixin, DebugSeedMixin {
+    with WidgetsBindingObserver, MainScreenController, AutoCaptureMixin, DebugSeedMixin, HomeNavigationMixin {
   int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    onOpenAutoSettings = _openAutoSettings;
+    onOpenAutoSettings = openAutoSettings;
     initDatabase();
     startListening();
   }
@@ -58,99 +49,6 @@ class _MainScreenState extends State<MainScreen>
     }
   }
 
-  Future<void> _openAutoSettings() async {
-    if (!dbReady) {
-      showMessage("数据库尚未就绪");
-      return;
-    }
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => AutoSettingsScreen(isar: isar)),
-    );
-    await loadAutoSettings();
-    await loadAutoDraftCount();
-  }
-
-  Future<void> _openGlobalSearch() async {
-    final changed = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (context) => const GlobalSearchScreen()),
-    );
-    if (changed == true) {
-      await loadTransactions();
-      notifyDataChanged();
-    }
-  }
-
-  Future<void> _openCalendarView() async {
-    final changed = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(builder: (context) => const CalendarScreen()),
-    );
-    if (changed == true) {
-      await loadTransactions();
-      notifyDataChanged();
-    }
-  }
-
-  Future<void> _openAutoDrafts() async {
-    final changed = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const AutoDraftsScreen()),
-    );
-    if (changed == true) {
-      await loadTransactions();
-      await loadAutoDraftCount();
-      notifyDataChanged();
-    }
-  }
-
-  Future<void> _openImportCenter() async {
-    final changed = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ImportCenterScreen()),
-    );
-    if (changed == true) {
-      await loadTransactions();
-      await loadAutoDraftCount();
-      notifyDataChanged();
-    }
-  }
-
-  Future<void> _openAutoRuleTester() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AutoRuleTesterScreen(isar: isar),
-      ),
-    );
-  }
-
-  Future<void> _openAutoSupportedApps() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const AutoSupportedAppsScreen()),
-    );
-    await loadAutoAppSettings();
-  }
-
-  Future<void> _openCategoryManager() async {
-    if (!dbReady) {
-      showMessage("数据库尚未就绪");
-      return;
-    }
-    final changed = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            CategoryManagerScreen(isar: isar, onlyUserCategories: true),
-      ),
-    );
-    if (changed == true) {
-      await loadTransactions();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -167,19 +65,7 @@ class _MainScreenState extends State<MainScreen>
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AddTransactionScreen(bookId: currentBookId),
-            ),
-          );
-          if (result == true) {
-            await loadTransactions();
-            await loadAutoDraftCount();
-            notifyDataChanged();
-          }
-        },
+        onPressed: () => showAddTransaction('expense'),
         child: const Icon(Icons.add, size: 32),
       ),
       bottomNavigationBar: NavigationBar(
@@ -236,7 +122,7 @@ class _MainScreenState extends State<MainScreen>
         );
       },
       onTransactionDetail: showTransactionDetailSheet,
-      onAddTransaction: () => _showAddTransaction('expense'),
+      onAddTransaction: () => showAddTransaction('expense'),
       onDataChanged: () async {
         await loadTransactions();
         notifyDataChanged();
@@ -250,8 +136,8 @@ class _MainScreenState extends State<MainScreen>
       books: books,
       currentBookId: currentBookId,
       pendingDraftCount: pendingDraftCount,
-      onSearch: _openGlobalSearch,
-      onCalendar: _openCalendarView,
+      onSearch: openGlobalSearch,
+      onCalendar: openCalendarView,
       onGearMenu: () {
         showHomeMenuSheet(
           context: context,
@@ -274,12 +160,12 @@ class _MainScreenState extends State<MainScreen>
             loadAutoDraftCount: loadAutoDraftCount,
             notifyDataChanged: notifyDataChanged,
             showMessage: showMessage,
-            openCategoryManager: _openCategoryManager,
-            openImportCenter: _openImportCenter,
-            openAutoDrafts: _openAutoDrafts,
-            openAutoRuleTester: _openAutoRuleTester,
-            openAutoSupportedApps: _openAutoSupportedApps,
-            openAutoSettings: _openAutoSettings,
+            openCategoryManager: openCategoryManager,
+            openImportCenter: openImportCenter,
+            openAutoDrafts: openAutoDrafts,
+            openAutoRuleTester: openAutoRuleTester,
+            openAutoSupportedApps: openAutoSupportedApps,
+            openAutoSettings: openAutoSettings,
           ),
         );
       },
@@ -300,15 +186,10 @@ class _MainScreenState extends State<MainScreen>
       totalCreditUsed: totalCreditUsed,
       totalCreditAvailable: totalCreditAvailable,
       baseCurrency: baseCurrency,
-      onAddExpense: () => _showAddTransaction('expense'),
-      onAddIncome: () => _showAddTransaction('income'),
-      onAddTransfer: () => _showAddTransaction('transfer'),
-      onCurrencyConverter: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const CurrencyConverterScreen(),
-        ),
-      ),
+      onAddExpense: () => showAddTransaction('expense'),
+      onAddIncome: () => showAddTransaction('income'),
+      onAddTransfer: () => showAddTransaction('transfer'),
+      onCurrencyConverter: openCurrencyConverter,
     );
   }
 
@@ -378,32 +259,5 @@ class _MainScreenState extends State<MainScreen>
         ),
       ],
     );
-  }
-
-  /// 显示添加交易页面
-  Future<void> _showAddTransaction(String type) async {
-    TransactionType txType;
-    switch (type) {
-      case 'income':
-        txType = TransactionType.income;
-        break;
-      case 'transfer':
-        txType = TransactionType.transfer;
-        break;
-      default:
-        txType = TransactionType.expense;
-    }
-
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AddTransactionScreen(initialType: txType, bookId: currentBookId),
-      ),
-    );
-    if (result == true) {
-      await loadTransactions();
-      await loadAutoDraftCount();
-      notifyDataChanged();
-    }
   }
 }
