@@ -59,6 +59,7 @@ mixin DebugSeedMixin on MainScreenController {
   bool demoSeedEnabled = true;
   final Random random = Random();
 
+  @override
   Future<void> loadDemoSeedPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final demoSeed = prefs.getBool(_prefKeyDemoSeedEnabled) ?? true;

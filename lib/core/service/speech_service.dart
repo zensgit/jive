@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
-
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -78,11 +76,8 @@ class SpeechRecognitionResult {
         }
       }
 
-      final rawError = result['error'];
-      final errorCode = rawError == null ? null : rawError.toString();
-
-      final rawMessage = result['message'];
-      final errorMessage = rawMessage == null ? null : rawMessage.toString();
+      final errorCode = result['error']?.toString();
+      final errorMessage = result['message']?.toString();
 
       return SpeechRecognitionResult(
         text: text,
