@@ -3,11 +3,14 @@ import 'package:provider/provider.dart';
 
 import '../../core/design_system/theme.dart';
 import '../../core/entitlement/entitlement_service.dart';
+import '../../core/entitlement/feature_id.dart';
+import '../../core/entitlement/gated_list_tile.dart';
 import '../../core/service/category_icon_style.dart';
 import '../subscription/subscription_screen.dart';
 import '../installment/installment_manage_screen.dart';
 import '../budget/budget_settings_screen.dart';
 import 'speech_settings_screen.dart';
+import 'sync_settings_screen.dart';
 import 'theme_settings_screen.dart';
 import 'webdav_settings_screen.dart';
 import '../export/csv_export_screen.dart';
@@ -135,6 +138,24 @@ class SettingsScreen extends StatelessWidget {
                 ),
               );
             },
+          ),
+          const SizedBox(height: 12),
+          _sectionCard(
+            GatedListTile(
+              feature: FeatureId.cloudSync,
+              leading: Icon(
+                Icons.cloud_sync_outlined,
+                color: JiveTheme.primaryGreen,
+              ),
+              title: const Text('云同步设置'),
+              subtitle: const Text('云端备份与多设备同步'),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SyncSettingsScreen(),
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 12),
           _sectionCard(

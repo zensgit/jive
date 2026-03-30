@@ -8,6 +8,8 @@ import 'core/auth/auth_service.dart';
 import 'core/auth/guest_auth_service.dart';
 import 'core/entitlement/entitlement_service.dart';
 import 'core/payment/payment_service.dart';
+import 'core/service/database_service.dart';
+import 'core/sync/sync_engine.dart';
 import 'core/payment/play_store_payment_service.dart';
 import 'core/service/category_icon_style.dart';
 import 'core/utils/logger_util.dart';
@@ -38,6 +40,13 @@ void main() async {
   final adService = AdService(entitlementService);
   await adService.init();
 
+  // SyncEngine — init deferred until screen opens
+  final isar = await DatabaseService.getInstance();
+  final syncEngine = SyncEngine(
+    isar: isar,
+    entitlement: entitlementService,
+  );
+
   runApp(
     MultiProvider(
       providers: [
@@ -46,6 +55,7 @@ void main() async {
         ChangeNotifierProvider<EntitlementService>.value(value: entitlementService),
         ChangeNotifierProvider<PaymentService>.value(value: paymentService),
         ChangeNotifierProvider<AdService>.value(value: adService),
+        ChangeNotifierProvider<SyncEngine>.value(value: syncEngine),
       ],
       child: const JiveApp(),
     ),
