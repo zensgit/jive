@@ -26,6 +26,7 @@ mixin AutoCaptureMixin on MainScreenController {
   final List<Map<String, dynamic>> pendingAutoEvents = [];
   bool isListening = false;
   bool permissionDialogVisible = false;
+  @override
   AutoPermissionPromptPolicy? autoPermissionPromptPolicy;
   int pendingDraftCount = 0;
 
@@ -105,6 +106,7 @@ mixin AutoCaptureMixin on MainScreenController {
     }
   }
 
+  @override
   Future<void> flushPendingAutoEvents() async {
     if (pendingAutoEvents.isEmpty) return;
     final events = List<Map<String, dynamic>>.from(pendingAutoEvents);
@@ -136,6 +138,7 @@ mixin AutoCaptureMixin on MainScreenController {
     return AutoAppSettingsStore.isEnabled(autoAppEnabled, packageName);
   }
 
+  @override
   Future<void> loadAutoSettings() async {
     final settings = await AutoSettingsStore.load();
     if (!mounted) return;
@@ -144,6 +147,7 @@ mixin AutoCaptureMixin on MainScreenController {
     });
   }
 
+  @override
   Future<void> loadAutoAppSettings() async {
     final map = await AutoAppSettingsStore.loadEnabledMap();
     if (!mounted) return;
@@ -166,6 +170,7 @@ mixin AutoCaptureMixin on MainScreenController {
     await checkAutoPermissions();
   }
 
+  @override
   Future<void> loadAutoDraftCount() async {
     final count = await isar.collection<JiveAutoDraft>().count();
     if (!mounted) return;
@@ -174,6 +179,7 @@ mixin AutoCaptureMixin on MainScreenController {
     });
   }
 
+  @override
   Future<void> checkAutoPermissions() async {
     if (kE2eMode) return;
     if (!dbReady) return;

@@ -145,12 +145,10 @@ class MerchantMemoryService {
         .normalizedNameEqualTo(normalized)
         .findFirst();
 
-    if (memory == null) {
-      memory = JiveMerchantMemory()
-        ..normalizedName = normalized
-        ..displayName = merchantName
-        ..createdAt = DateTime.now();
-    }
+    memory ??= JiveMerchantMemory()
+      ..normalizedName = normalized
+      ..displayName = merchantName
+      ..createdAt = DateTime.now();
 
     // 更新分类频次
     if (tx.categoryKey != null) {
