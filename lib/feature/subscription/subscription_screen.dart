@@ -4,10 +4,12 @@ import 'package:provider/provider.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/entitlement/entitlement_service.dart';
 import '../../core/entitlement/user_tier.dart';
+import '../../core/payment/payment_service.dart';
+import '../../core/payment/product_ids.dart';
 
 /// Subscription comparison screen showing the 3-tier plan.
 ///
-/// Upgrade buttons are placeholders — will connect to payment in Phase S3.
+/// Upgrade buttons call [PaymentService.purchase] with the correct product ID.
 class SubscriptionScreen extends StatelessWidget {
   const SubscriptionScreen({super.key});
 
@@ -87,8 +89,37 @@ class SubscriptionScreen extends StatelessWidget {
             ],
             lockedFeatures: const [],
           ),
+          const SizedBox(height: 24),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => _restorePurchases(context),
+              icon: const Icon(Icons.restore, size: 18),
+              label: const Text('恢复购买'),
+            ),
+          ),
         ],
       ),
+    );
+  }
+
+  Future<void> _restorePurchases(BuildContext context) async {
+    final payment = context.read<PaymentService>();
+    if (!payment.isAvailable) {
+      _showSnackBar(context, '支付服务暂不可用');
+      return;
+    }
+    final result = await payment.restorePurchases();
+    if (!context.mounted) return;
+    if (result.success) {
+      _showSnackBar(context, '恢复购买成功');
+    } else {
+      _showSnackBar(context, result.errorMessage ?? '恢复购买失败');
+    }
+  }
+
+  static void _showSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -126,7 +157,7 @@ class SubscriptionScreen extends StatelessWidget {
   }
 }
 
-class _PlanCard extends StatelessWidget {
+class _PlanCard extends StatefulWidget {
   final UserTier tier;
   final bool isCurrent;
   final String price;
@@ -144,8 +175,51 @@ class _PlanCard extends StatelessWidget {
   });
 
   @override
+  State<_PlanCard> createState() => _PlanCardState();
+}
+
+class _PlanCardState extends State<_PlanCard> {
+  bool _loading = false;
+
+  Future<void> _handlePurchase(String productId, String tierLabel) async {
+    final payment = context.read<PaymentService>();
+    if (!payment.isAvailable) {
+      SubscriptionScreen._showSnackBar(context, '支付服务暂不可用');
+      return;
+    }
+
+    setState(() => _loading = true);
+    try {
+      final result = await payment.purchase(productId);
+      if (!mounted) return;
+      if (result.success) {
+        SubscriptionScreen._showSnackBar(context, '已升级到 $tierLabel');
+        Navigator.of(context).pop();
+      } else {
+        SubscriptionScreen._showSnackBar(
+          context,
+          result.errorMessage ?? '购买失败',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Look up the store price for [productId], falling back to [fallback].
+  String _storePrice(PaymentService payment, String productId, String fallback) {
+    if (!payment.isReady) return fallback;
+    final products = payment.products;
+    for (final p in products) {
+      if (p.id == productId) return p.price;
+    }
+    return fallback;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final borderColor = highlight
+    final payment = context.watch<PaymentService>();
+    final borderColor = widget.highlight
         ? JiveTheme.primaryGreen
         : Colors.grey.shade300;
 
@@ -153,11 +227,11 @@ class _PlanCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: highlight ? 2 : 1),
+        border: Border.all(color: borderColor, width: widget.highlight ? 2 : 1),
       ),
       child: Column(
         children: [
-          if (highlight)
+          if (widget.highlight)
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 6),
@@ -183,14 +257,14 @@ class _PlanCard extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      tier.label,
+                      widget.tier.label,
                       style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const Spacer(),
-                    if (isCurrent)
+                    if (widget.isCurrent)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
@@ -210,48 +284,115 @@ class _PlanCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  price,
+                  widget.price,
                   style: TextStyle(
                     fontSize: 16,
-                    color: highlight ? JiveTheme.primaryGreen : Colors.grey.shade700,
+                    color: widget.highlight ? JiveTheme.primaryGreen : Colors.grey.shade700,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 16),
-                ...features.map((f) => _FeatureRow(text: f, included: true)),
-                ...lockedFeatures.map((f) => _FeatureRow(text: f, included: false)),
-                if (!isCurrent && tier != UserTier.free) ...[
+                ...widget.features.map((f) => _FeatureRow(text: f, included: true)),
+                ...widget.lockedFeatures.map((f) => _FeatureRow(text: f, included: false)),
+                if (!widget.isCurrent && widget.tier != UserTier.free) ...[
                   const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton(
-                      onPressed: () {
-                        // TODO: connect to payment service (Phase S3)
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('${tier.label}支付功能即将上线')),
-                        );
-                      },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: highlight
-                            ? JiveTheme.primaryGreen
-                            : Colors.grey.shade800,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        '升级到${tier.label}',
-                        style: const TextStyle(fontSize: 15),
-                      ),
-                    ),
-                  ),
+                  if (_loading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (widget.tier == UserTier.subscriber)
+                    _buildSubscriberButtons(payment)
+                  else
+                    _buildSingleButton(payment),
                 ],
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSingleButton(PaymentService payment) {
+    final priceLabel = _storePrice(payment, ProductIds.paidUnlock, '¥28');
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: () => _handlePurchase(
+          ProductIds.paidUnlock,
+          widget.tier.label,
+        ),
+        style: FilledButton.styleFrom(
+          backgroundColor: widget.highlight
+              ? JiveTheme.primaryGreen
+              : Colors.grey.shade800,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Text(
+          '$priceLabel 升级到${widget.tier.label}',
+          style: const TextStyle(fontSize: 15),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubscriberButtons(PaymentService payment) {
+    final monthlyPrice = _storePrice(
+      payment,
+      ProductIds.subscriberMonthly,
+      '¥8/月',
+    );
+    final yearlyPrice = _storePrice(
+      payment,
+      ProductIds.subscriberYearly,
+      '¥68/年',
+    );
+
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: () => _handlePurchase(
+              ProductIds.subscriberMonthly,
+              widget.tier.label,
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.grey.shade800,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              '$monthlyPrice 订阅',
+              style: const TextStyle(fontSize: 15),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: () => _handlePurchase(
+              ProductIds.subscriberYearly,
+              widget.tier.label,
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: JiveTheme.primaryGreen,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              '$yearlyPrice 订阅（推荐）',
+              style: const TextStyle(fontSize: 15),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
