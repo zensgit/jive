@@ -59,7 +59,7 @@ void main() {
     }
   });
 
-  Future<JiveAccount> _seedCreditAccount() async {
+  Future<JiveAccount> seedCreditAccount() async {
     final account = JiveAccount()
       ..key = 'acct_credit_test'
       ..name = '测试信用卡'
@@ -83,7 +83,7 @@ void main() {
   test(
     'buildPlanPreview splits principal and fee with average_first',
     () async {
-      final account = await _seedCreditAccount();
+      final account = await seedCreditAccount();
       final installment = JiveInstallment()
         ..key = 'ins_preview'
         ..name = 'iPhone 分期'
@@ -114,7 +114,7 @@ void main() {
   );
 
   test('processDueInstallments in draft mode is idempotent', () async {
-    final account = await _seedCreditAccount();
+    final account = await seedCreditAccount();
     final installment = JiveInstallment()
       ..key = 'ins_draft_1'
       ..name = '测试分期'
@@ -149,7 +149,7 @@ void main() {
   test(
     'processDueInstallments in commit mode creates transaction and finishes',
     () async {
-      final account = await _seedCreditAccount();
+      final account = await seedCreditAccount();
       final installment = JiveInstallment()
         ..key = 'ins_commit_1'
         ..name = '测试分期入账'
@@ -188,7 +188,7 @@ void main() {
   );
 
   test('reimbursement and refund create linked bills and summary', () async {
-    final account = await _seedCreditAccount();
+    final account = await seedCreditAccount();
     final source = JiveTransaction()
       ..amount = 100
       ..source = 'Manual'
@@ -226,7 +226,7 @@ void main() {
   });
 
   test('refund count is capped at 25 per source bill', () async {
-    final account = await _seedCreditAccount();
+    final account = await seedCreditAccount();
     final source = JiveTransaction()
       ..amount = 500
       ..source = 'Manual'

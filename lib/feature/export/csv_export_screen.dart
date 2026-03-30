@@ -740,9 +740,10 @@ class CsvExportController extends ChangeNotifier {
       _previewCount = 0;
       _previewError = '预览笔数加载失败：$error';
     } finally {
-      if (_isDisposed || requestId != _previewRequestId) return;
-      _isCounting = false;
-      _safeNotifyListeners();
+      if (!_isDisposed && requestId == _previewRequestId) {
+        _isCounting = false;
+        _safeNotifyListeners();
+      }
     }
   }
 
