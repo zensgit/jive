@@ -129,6 +129,29 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
     });
   }
 
+  Future<void> _disableLock() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('关闭应用锁'),
+        content: const Text('关闭后进入 App 将不再需要 PIN 码或生物识别验证。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('关闭', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _lockService.disableLock();
+    if (mounted) Navigator.pop(context, true);
+  }
+
   void _onKeyTap(String key) {
     if (key == 'delete') {
       if (_enteredPin.isNotEmpty) {
@@ -159,6 +182,16 @@ class _PinSetupScreenState extends State<PinSetupScreen> {
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.pop(context, false),
         ),
+        actions: [
+          if (widget.isChange)
+            TextButton(
+              onPressed: _disableLock,
+              child: const Text(
+                '关闭应用锁',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+        ],
       ),
       body: SafeArea(
         child: Column(

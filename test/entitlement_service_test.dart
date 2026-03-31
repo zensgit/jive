@@ -45,26 +45,52 @@ void main() {
 
     test('paid features blocked for free tier', () {
       expect(
-        FeatureRegistry.canAccess(FeatureId.autoBookkeeping, UserTier.free),
+        FeatureRegistry.canAccess(FeatureId.multiCurrency, UserTier.free),
         isFalse,
       );
       expect(
-        FeatureRegistry.canAccess(FeatureId.autoBookkeeping, UserTier.paid),
+        FeatureRegistry.canAccess(FeatureId.multiCurrency, UserTier.paid),
         isTrue,
       );
       expect(
-        FeatureRegistry.canAccess(FeatureId.autoBookkeeping, UserTier.subscriber),
+        FeatureRegistry.canAccess(FeatureId.multiCurrency, UserTier.subscriber),
+        isTrue,
+      );
+    });
+
+    test('free tier includes autoBookkeeping and csvExport', () {
+      expect(
+        FeatureRegistry.canAccess(FeatureId.autoBookkeeping, UserTier.free),
+        isTrue,
+      );
+      expect(
+        FeatureRegistry.canAccess(FeatureId.csvExport, UserTier.free),
+        isTrue,
+      );
+    });
+
+    test('cloudSync and multiDevice are paid tier', () {
+      expect(
+        FeatureRegistry.canAccess(FeatureId.cloudSync, UserTier.free),
+        isFalse,
+      );
+      expect(
+        FeatureRegistry.canAccess(FeatureId.cloudSync, UserTier.paid),
+        isTrue,
+      );
+      expect(
+        FeatureRegistry.canAccess(FeatureId.multiDevice, UserTier.paid),
         isTrue,
       );
     });
 
     test('subscriber features blocked for paid tier', () {
       expect(
-        FeatureRegistry.canAccess(FeatureId.cloudSync, UserTier.paid),
+        FeatureRegistry.canAccess(FeatureId.investmentTracking, UserTier.paid),
         isFalse,
       );
       expect(
-        FeatureRegistry.canAccess(FeatureId.cloudSync, UserTier.subscriber),
+        FeatureRegistry.canAccess(FeatureId.investmentTracking, UserTier.subscriber),
         isTrue,
       );
     });
@@ -90,9 +116,10 @@ void main() {
         UserTier.free,
         UserTier.paid,
       );
-      expect(paidUnlocks, contains(FeatureId.autoBookkeeping));
+      expect(paidUnlocks, contains(FeatureId.multiCurrency));
+      expect(paidUnlocks, contains(FeatureId.cloudSync));
       expect(paidUnlocks, isNot(contains(FeatureId.manualTransaction)));
-      expect(paidUnlocks, isNot(contains(FeatureId.cloudSync)));
+      expect(paidUnlocks, isNot(contains(FeatureId.autoBookkeeping)));
     });
   });
 
@@ -132,11 +159,12 @@ void main() {
       await service.init();
 
       expect(service.canAccess(FeatureId.manualTransaction), isTrue);
-      expect(service.canAccess(FeatureId.autoBookkeeping), isFalse);
+      expect(service.canAccess(FeatureId.autoBookkeeping), isTrue); // free tier
+      expect(service.canAccess(FeatureId.multiCurrency), isFalse); // paid tier
 
       await service.setTier(UserTier.paid);
-      expect(service.canAccess(FeatureId.autoBookkeeping), isTrue);
-      expect(service.canAccess(FeatureId.cloudSync), isFalse);
+      expect(service.canAccess(FeatureId.multiCurrency), isTrue);
+      expect(service.canAccess(FeatureId.investmentTracking), isFalse); // subscriber
     });
 
     test('notifies listeners on tier change', () async {
