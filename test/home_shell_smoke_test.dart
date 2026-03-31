@@ -40,8 +40,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Good Evening,'), findsOneWidget);
-      expect(find.text('Huazhou'), findsOneWidget);
+      // Greeting is time-based
+      final greetingFinder = find.byWidgetPredicate(
+        (w) => w is Text && w.data != null && w.data!.endsWith(','),
+      );
+      expect(greetingFinder, findsOneWidget);
+      // No displayName passed → shows 访客
+      expect(find.text('访客'), findsOneWidget);
       expect(find.byIcon(Icons.search), findsOneWidget);
       expect(find.byIcon(Icons.calendar_month_outlined), findsOneWidget);
       expect(find.byIcon(Icons.settings), findsOneWidget);
@@ -66,7 +71,31 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Huazhou'), findsOneWidget);
+      expect(find.text('访客'), findsOneWidget);
+    });
+
+    testWidgets('shows custom display name when provided', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: HomeTopBar(
+              compact: false,
+              displayName: 'Alice',
+              books: const [],
+              currentBookId: null,
+              pendingDraftCount: 0,
+              onSearch: () {},
+              onCalendar: () {},
+              onGearMenu: () {},
+              onBookSwitch: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Alice'), findsOneWidget);
+      expect(find.text('访客'), findsNothing);
     });
   });
 

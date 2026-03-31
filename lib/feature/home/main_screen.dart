@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../core/ads/banner_ad_widget.dart';
+import '../../core/auth/auth_service.dart';
 import '../accounts/accounts_screen.dart';
 import '../category/category_transactions_screen.dart';
 import '../stats/stats_home_screen.dart';
@@ -132,8 +134,11 @@ class _MainScreenState extends State<MainScreen>
   }
 
   Widget _buildTopBar({bool compact = false}) {
+    final auth = context.watch<AuthService>();
+    final displayName = auth.currentUser?.displayName ?? auth.currentUser?.email?.split('@').first;
     return HomeTopBar(
       compact: compact,
+      displayName: displayName,
       books: books,
       currentBookId: currentBookId,
       pendingDraftCount: pendingDraftCount,
