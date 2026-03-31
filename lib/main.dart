@@ -6,7 +6,9 @@ import 'app/jive_app.dart';
 import 'core/ads/ad_service.dart';
 import 'core/auth/auth_service.dart';
 import 'core/auth/guest_auth_service.dart';
+import 'core/auth/supabase_auth_service.dart';
 import 'core/entitlement/entitlement_service.dart';
+import 'core/sync/sync_config.dart';
 import 'core/payment/payment_service.dart';
 import 'core/service/database_service.dart';
 import 'core/sync/sync_engine.dart';
@@ -24,8 +26,10 @@ void main() async {
   await themeProvider.init();
   CategoryIconStyleConfig.current = iconStyle;
 
-  // Auth + entitlement services
-  final authService = GuestAuthService();
+  // Auth: use Supabase when configured, otherwise guest mode
+  final AuthService authService = SyncConfig.isConfigured
+      ? SupabaseAuthService()
+      : GuestAuthService();
   await authService.init();
   final entitlementService = EntitlementService();
   await entitlementService.init();
