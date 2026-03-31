@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
+import '../core/auth/auth_service.dart';
 import '../core/service/category_icon_style.dart';
+import '../core/sync/sync_config.dart';
+import '../feature/auth/auth_screen.dart';
 import '../feature/home/main_screen.dart';
 import '../feature/onboarding/onboarding_screen.dart';
 import '../feature/security/lock_gate.dart';
@@ -48,7 +51,7 @@ class JiveApp extends StatelessWidget {
   }
 }
 
-/// 应用入口门控 — 先检查引导页是否完成
+/// 应用入口门控 — 引导页 → 登录页 → 首页
 class _AppEntry extends StatefulWidget {
   const _AppEntry();
 
@@ -58,6 +61,7 @@ class _AppEntry extends StatefulWidget {
 
 class _AppEntryState extends State<_AppEntry> {
   bool? _onboardingComplete;
+  bool _authSkipped = false;
 
   @override
   void initState() {
@@ -82,6 +86,19 @@ class _AppEntryState extends State<_AppEntry> {
         if (mounted) setState(() => _onboardingComplete = true);
       });
     }
+
+    // If Supabase is configured, show auth gate
+    if (SyncConfig.isConfigured && !_authSkipped) {
+      final auth = context.watch<AuthService>();
+      if (auth.isGuest) {
+        return AuthScreen(
+          onSkip: () {
+            if (mounted) setState(() => _authSkipped = true);
+          },
+        );
+      }
+    }
+
     return const MainScreen();
   }
 }
