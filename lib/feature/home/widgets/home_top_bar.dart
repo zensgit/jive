@@ -4,6 +4,7 @@ import '../../../core/database/book_model.dart';
 
 class HomeTopBar extends StatelessWidget {
   final bool compact;
+  final String? displayName;
   final List<JiveBook> books;
   final int? currentBookId;
   final int pendingDraftCount;
@@ -15,6 +16,7 @@ class HomeTopBar extends StatelessWidget {
   const HomeTopBar({
     super.key,
     this.compact = false,
+    this.displayName,
     required this.books,
     required this.currentBookId,
     required this.pendingDraftCount,
@@ -24,8 +26,21 @@ class HomeTopBar extends StatelessWidget {
     required this.onBookSwitch,
   });
 
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 6) return '夜深了,';
+    if (hour < 12) return '早上好,';
+    if (hour < 14) return '中午好,';
+    if (hour < 18) return '下午好,';
+    return '晚上好,';
+  }
+
+  String get _name => displayName?.isNotEmpty == true ? displayName! : '访客';
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final greetingSize = compact ? 12.0 : 14.0;
     final nameSize = compact ? 20.0 : 24.0;
     final avatarRadius = compact ? 18.0 : 20.0;
@@ -37,16 +52,16 @@ class HomeTopBar extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Good Evening,",
+              _greeting,
               style: GoogleFonts.lato(
-                color: Colors.grey,
+                color: isDark ? Colors.grey.shade400 : Colors.grey,
                 fontSize: greetingSize,
               ),
             ),
             Text(
-              "Huazhou",
+              _name,
               style: GoogleFonts.lato(
-                color: Colors.black87,
+                color: isDark ? Colors.white : Colors.black87,
                 fontSize: nameSize,
                 fontWeight: FontWeight.bold,
               ),
@@ -65,10 +80,10 @@ class HomeTopBar extends StatelessWidget {
               onPressed: onSearch,
               icon: CircleAvatar(
                 radius: avatarRadius,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                 child: Icon(
                   Icons.search,
-                  color: Colors.black54,
+                  color: isDark ? Colors.white70 : Colors.black54,
                   size: iconSize,
                 ),
               ),
@@ -79,10 +94,10 @@ class HomeTopBar extends StatelessWidget {
               onPressed: onCalendar,
               icon: CircleAvatar(
                 radius: avatarRadius,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                 child: Icon(
                   Icons.calendar_month_outlined,
-                  color: Colors.black54,
+                  color: isDark ? Colors.white70 : Colors.black54,
                   size: iconSize,
                 ),
               ),
@@ -92,10 +107,10 @@ class HomeTopBar extends StatelessWidget {
               onTap: onGearMenu,
               child: CircleAvatar(
                 radius: avatarRadius,
-                backgroundColor: Colors.grey.shade200,
+                backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
                 child: Icon(
                   Icons.settings,
-                  color: Colors.black54,
+                  color: isDark ? Colors.white70 : Colors.black54,
                   size: iconSize,
                 ),
               ),
