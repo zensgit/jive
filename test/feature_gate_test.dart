@@ -47,7 +47,7 @@ void main() {
       await tester.pumpWidget(_buildApp(
         service: service,
         child: FeatureGate(
-          feature: FeatureId.autoBookkeeping,
+          feature: FeatureId.multiCurrency,
           child: const Text('Paid Feature'),
         ),
       ));
@@ -100,7 +100,7 @@ void main() {
       await tester.pumpWidget(_buildApp(
         service: service,
         child: FeatureGate(
-          feature: FeatureId.autoBookkeeping,
+          feature: FeatureId.multiCurrency,
           child: const SizedBox(width: 200, height: 100),
         ),
       ));
@@ -120,7 +120,7 @@ void main() {
       await tester.pumpWidget(_buildApp(
         service: service,
         child: FeatureGate(
-          feature: FeatureId.autoBookkeeping,
+          feature: FeatureId.multiCurrency,
           child: const Text('Auto Feature'),
         ),
       ));

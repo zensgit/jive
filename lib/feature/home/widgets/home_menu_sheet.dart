@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 
 import '../../../core/entitlement/feature_id.dart';
+import '../../../core/service/app_lock_service.dart';
 import '../../../core/entitlement/gated_list_tile.dart';
 import '../../../core/service/auto_app_registry.dart';
 import '../../../core/service/auto_settings.dart';
@@ -461,11 +462,13 @@ void showHomeMenuSheet({
                     subtitle: const Text("PIN 码与生物识别设置"),
                     onTap: () async {
                       Navigator.pop(context);
+                      final isLocked = await AppLockService().isLockEnabled();
+                      if (!context.mounted) return;
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) =>
-                              const PinSetupScreen(),
+                              PinSetupScreen(isChange: isLocked),
                         ),
                       );
                     },

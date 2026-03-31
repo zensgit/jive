@@ -2392,19 +2392,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   // ══════════════════════════════════════════════════
 
   Widget _buildTypeSelector() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildTypeChip(TransactionType.expense, Icons.arrow_upward, "支出"),
-          _buildTypeChip(TransactionType.income, Icons.arrow_downward, "收入"),
-          _buildTypeChip(TransactionType.transfer, Icons.swap_horiz, "转账"),
-        ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildTypeChip(TransactionType.expense, Icons.arrow_upward, "支出"),
+            _buildTypeChip(TransactionType.income, Icons.arrow_downward, "收入"),
+            _buildTypeChip(TransactionType.transfer, Icons.swap_horiz, "转账"),
+          ],
+        ),
       ),
     );
   }

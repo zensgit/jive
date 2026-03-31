@@ -14,21 +14,21 @@ class FeatureRegistry {
     FeatureId.categoryManagement: UserTier.free,
     FeatureId.basicStats: UserTier.free,
     FeatureId.tagManagement: UserTier.free,
+    FeatureId.autoBookkeeping: UserTier.free,
+    FeatureId.csvExport: UserTier.free,
 
     // Paid tier
-    FeatureId.autoBookkeeping: UserTier.paid,
     FeatureId.multiCurrency: UserTier.paid,
-    FeatureId.csvExport: UserTier.paid,
     FeatureId.budgetUnlimited: UserTier.paid,
     FeatureId.recurringRules: UserTier.paid,
     FeatureId.projectTracking: UserTier.paid,
     FeatureId.billSplit: UserTier.paid,
     FeatureId.debtManagement: UserTier.paid,
     FeatureId.merchantMemory: UserTier.paid,
+    FeatureId.cloudSync: UserTier.paid,
+    FeatureId.multiDevice: UserTier.paid,
 
     // Subscriber tier
-    FeatureId.cloudSync: UserTier.subscriber,
-    FeatureId.multiDevice: UserTier.subscriber,
     FeatureId.investmentTracking: UserTier.subscriber,
     FeatureId.advancedAnalytics: UserTier.subscriber,
     FeatureId.savingsGoals: UserTier.subscriber,
