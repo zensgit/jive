@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/ads/banner_ad_widget.dart';
 import '../../core/auth/auth_service.dart';
+import '../../core/sync/sync_engine.dart';
 import '../accounts/accounts_screen.dart';
 import '../category/category_transactions_screen.dart';
 import '../stats/stats_home_screen.dart';
@@ -33,6 +34,7 @@ class _MainScreenState extends State<MainScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     onOpenAutoSettings = openAutoSettings;
+    onDataChanged = () => context.read<SyncEngine>().scheduleSync();
     initDatabase();
     startListening();
   }
@@ -49,6 +51,7 @@ class _MainScreenState extends State<MainScreen>
     if (state == AppLifecycleState.resumed) {
       checkAutoPermissions();
       unawaited(processRecurringRules());
+      context.read<SyncEngine>().onAppResumed();
     }
   }
 
