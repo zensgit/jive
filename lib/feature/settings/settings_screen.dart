@@ -6,6 +6,7 @@ import '../../core/entitlement/entitlement_service.dart';
 import '../../core/entitlement/feature_id.dart';
 import '../../core/entitlement/gated_list_tile.dart';
 import '../../core/service/category_icon_style.dart';
+import '../../core/service/daily_reminder_service.dart';
 import '../subscription/subscription_screen.dart';
 import '../installment/installment_manage_screen.dart';
 import '../budget/budget_settings_screen.dart';
@@ -263,6 +264,10 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _sectionCard(
+            _NotificationSettingsSection(),
+          ),
+          const SizedBox(height: 12),
+          _sectionCard(
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -381,6 +386,75 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NotificationSettingsSection extends StatefulWidget {
+  @override
+  State<_NotificationSettingsSection> createState() => _NotificationSettingsSectionState();
+}
+
+class _NotificationSettingsSectionState extends State<_NotificationSettingsSection> {
+  DailyReminderSettings? _settings;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final s = await DailyReminderService.loadSettings();
+    if (mounted) setState(() => _settings = s);
+  }
+
+  Future<void> _update(DailyReminderSettings s) async {
+    setState(() => _settings = s);
+    await DailyReminderService.saveSettings(s);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _settings;
+    if (s == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("通知与提醒", style: TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        SwitchListTile.adaptive(
+          contentPadding: EdgeInsets.zero,
+          secondary: const Icon(Icons.notifications_none),
+          title: const Text("每日记账提醒"),
+          subtitle: Text(s.enabled ? '每天 ${s.hourLabel} 提醒记账' : '关闭'),
+          value: s.enabled,
+          onChanged: (v) => _update(s.copyWith(enabled: v)),
+        ),
+        if (s.enabled) ...[
+          const Divider(height: 1),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.access_time),
+            title: const Text("提醒时间"),
+            subtitle: Text(s.hourLabel),
+            trailing: const Icon(Icons.chevron_right, size: 18),
+            onTap: () async {
+              final picked = await showTimePicker(
+                context: context,
+                initialTime: TimeOfDay(hour: s.hour, minute: 0),
+                builder: (context, child) => MediaQuery(
+                  data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+                  child: child!,
+                ),
+              );
+              if (picked != null) {
+                _update(s.copyWith(hour: picked.hour));
+              }
+            },
+          ),
+        ],
+      ],
     );
   }
 }

@@ -21,6 +21,8 @@ import '../../core/service/project_service.dart';
 import '../../core/service/recurring_service.dart';
 import '../../core/service/book_service.dart';
 import '../../core/service/reminder_service.dart';
+import '../../core/service/daily_reminder_service.dart';
+import '../../core/service/notification_service.dart';
 import 'main_screen.dart';
 
 class CreditSummary {
@@ -103,6 +105,8 @@ mixin MainScreenController on State<MainScreen> {
     await flushPendingAutoEvents();
     await processRecurringRules();
     await checkReminders();
+    await _checkDailyReminder();
+    await _showPendingNotifications();
     await checkAutoPermissions();
   }
 
@@ -131,6 +135,53 @@ mixin MainScreenController on State<MainScreen> {
       await ReminderService(isar).checkReminders();
     } catch (e) {
       debugPrint('Reminder check failed: $e');
+    }
+  }
+
+  Future<void> _checkDailyReminder() async {
+    try {
+      final shouldShow = await DailyReminderService.shouldShowReminder();
+      if (shouldShow) {
+        InAppNotificationService().addNotification(InAppNotification(
+          id: 'daily_reminder_${DateTime.now().toIso8601String().substring(0, 10)}',
+          title: '记账提醒',
+          body: '今天还没记账哦，花一分钟记一笔吧 📝',
+          type: NotificationType.info,
+        ));
+      }
+    } catch (e) {
+      debugPrint('Daily reminder check failed: $e');
+    }
+  }
+
+  Future<void> _showPendingNotifications() async {
+    if (!mounted) return;
+    final service = InAppNotificationService();
+    if (!service.hasPendingNotifications) return;
+    final notifications = service.consumePendingNotifications();
+    // Show as overlay notifications with delay between each
+    for (var i = 0; i < notifications.length; i++) {
+      if (!mounted) return;
+      if (i > 0) await Future.delayed(const Duration(seconds: 6));
+      if (!mounted) return;
+      final n = notifications[i];
+      final color = n.type == NotificationType.alert
+          ? Colors.orange
+          : const Color(0xFF2E7D32);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(n.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(n.body, style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+        backgroundColor: color,
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
     }
   }
 
