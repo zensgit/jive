@@ -11,6 +11,7 @@ import '../../core/database/transaction_model.dart';
 import '../../core/model/transaction_query_spec.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/search_history_service.dart';
 import '../../core/service/transaction_query_service.dart';
 import '../transactions/transaction_detail_screen.dart';
 
@@ -39,6 +40,16 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
   String? _error;
   int _searchToken = 0;
 
+  // Amount range filter
+  double? _minAmount;
+  double? _maxAmount;
+  bool _showAmountFilter = false;
+  final TextEditingController _minAmountController = TextEditingController();
+  final TextEditingController _maxAmountController = TextEditingController();
+
+  // Search history
+  List<String> _searchHistory = [];
+
   @override
   void initState() {
     super.initState();
@@ -50,6 +61,8 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     _searchDebounce?.cancel();
     _searchController.dispose();
     _searchFocus.dispose();
+    _minAmountController.dispose();
+    _maxAmountController.dispose();
     super.dispose();
   }
 
@@ -78,6 +91,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         _tagByKey = {for (final tag in tags) tag.key: tag};
         _isLoading = false;
       });
+      _searchHistory = await SearchHistoryService.load();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _searchFocus.requestFocus();
@@ -119,6 +133,10 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     if (service == null) return;
 
     try {
+      // Save to history
+      await SearchHistoryService.add(keyword);
+      _searchHistory = await SearchHistoryService.load();
+
       final allResults = <JiveTransaction>[];
       TransactionQueryCursor? cursor;
       var loops = 0;
@@ -128,6 +146,8 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         final page = await service.query(
           TransactionQuerySpec(
             keyword: keyword,
+            minAmount: _minAmount,
+            maxAmount: _maxAmount,
             sortField: TransactionSortField.date,
             sortDirection: TransactionSortDirection.desc,
           ),
@@ -219,9 +239,10 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         body: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: _buildSearchField(),
             ),
+            _buildAmountFilter(),
             if (_isSearching && _results.isNotEmpty)
               const LinearProgressIndicator(minHeight: 2),
             Expanded(child: _buildBody()),
@@ -292,6 +313,9 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
       return _buildMessageState(_error!, actionLabel: '重试', onPressed: _load);
     }
     if (keyword.isEmpty) {
+      if (_searchHistory.isNotEmpty) {
+        return _buildHistoryList();
+      }
       return _buildMessageState('输入关键词搜索交易');
     }
     if (_isSearching && _results.isEmpty) {
@@ -392,11 +416,11 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    category,
+                  DefaultTextStyle(
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    child: highlightText(category, _searchController.text.trim()),
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -404,11 +428,11 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
                     style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                   ),
                   const SizedBox(height: 2),
-                  Text(
-                    note.isEmpty ? '无备注' : note,
+                  DefaultTextStyle(
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                    child: highlightText(note.isEmpty ? '无备注' : note, _searchController.text.trim()),
                   ),
                 ],
               ),
@@ -459,5 +483,153 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
     final label = fallback?.trim() ?? '';
     if (label.isNotEmpty) return label;
     return '未分类';
+  }
+
+  Widget _buildAmountFilter() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: () => setState(() => _showAmountFilter = !_showAmountFilter),
+            child: Row(
+              children: [
+                Icon(Icons.filter_list, size: 16, color: Colors.grey.shade500),
+                const SizedBox(width: 4),
+                Text(
+                  '金额筛选',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                ),
+                Icon(
+                  _showAmountFilter ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: Colors.grey.shade500,
+                ),
+                if (_minAmount != null || _maxAmount != null) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${_minAmount?.toStringAsFixed(0) ?? '0'} - ${_maxAmount?.toStringAsFixed(0) ?? '∞'}',
+                      style: TextStyle(fontSize: 10, color: Colors.green.shade700),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (_showAmountFilter)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _minAmountController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        hintText: '最小金额',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      ),
+                      style: const TextStyle(fontSize: 13),
+                      onChanged: (_) => _applyAmountFilter(),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('—', style: TextStyle(color: Colors.grey.shade400)),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _maxAmountController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        hintText: '最大金额',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                      ),
+                      style: const TextStyle(fontSize: 13),
+                      onChanged: (_) => _applyAmountFilter(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _applyAmountFilter() {
+    _minAmount = double.tryParse(_minAmountController.text);
+    _maxAmount = double.tryParse(_maxAmountController.text);
+    _onSearchChanged(_searchController.text);
+  }
+
+  Widget _buildHistoryList() {
+    return ListView(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      children: [
+        Row(
+          children: [
+            Text('最近搜索', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade600)),
+            const Spacer(),
+            TextButton(
+              onPressed: () async {
+                await SearchHistoryService.clear();
+                setState(() => _searchHistory = []);
+              },
+              child: Text('清空', style: TextStyle(fontSize: 12, color: Colors.grey.shade400)),
+            ),
+          ],
+        ),
+        ..._searchHistory.map((q) => ListTile(
+              dense: true,
+              leading: Icon(Icons.history, size: 18, color: Colors.grey.shade400),
+              title: Text(q),
+              trailing: IconButton(
+                icon: Icon(Icons.close, size: 16, color: Colors.grey.shade400),
+                onPressed: () async {
+                  await SearchHistoryService.remove(q);
+                  setState(() => _searchHistory.remove(q));
+                },
+              ),
+              onTap: () {
+                _searchController.text = q;
+                _searchController.selection = TextSelection.fromPosition(
+                  TextPosition(offset: q.length),
+                );
+                _onSearchChanged(q);
+              },
+            )),
+      ],
+    );
+  }
+
+  /// Highlight [keyword] in [text] with bold green.
+  static Widget highlightText(String text, String keyword) {
+    if (keyword.isEmpty) return Text(text);
+    final lowerText = text.toLowerCase();
+    final lowerKeyword = keyword.toLowerCase();
+    final index = lowerText.indexOf(lowerKeyword);
+    if (index < 0) return Text(text);
+
+    return Text.rich(TextSpan(
+      children: [
+        TextSpan(text: text.substring(0, index)),
+        TextSpan(
+          text: text.substring(index, index + keyword.length),
+          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+        ),
+        TextSpan(text: text.substring(index + keyword.length)),
+      ],
+    ));
   }
 }

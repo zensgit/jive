@@ -151,6 +151,10 @@ class TransactionQueryService {
 
     if (spec.bookId != null && tx.bookId != spec.bookId) return false;
 
+    // Amount range filter
+    if (spec.minAmount != null && tx.amount < spec.minAmount!) return false;
+    if (spec.maxAmount != null && tx.amount > spec.maxAmount!) return false;
+
     if (!_matchesDateRange(tx, spec.filterState.dateRange)) return false;
 
     final accountId = spec.filterState.accountId;
