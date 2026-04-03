@@ -41,6 +41,7 @@ class HomeAssetCard extends StatelessWidget {
     final titleSize = tight ? 11.0 : (compact ? 12.0 : 14.0);
     final showActionLabels = !tight;
     final netAssets = totalAssets - totalLiabilities;
+    final isNegativeNet = netAssets < 0;
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(padding),
@@ -89,10 +90,10 @@ class HomeAssetCard extends StatelessWidget {
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Text(
-                NumberFormat.currency(symbol: "¥").format(netAssets),
+                _formatAmount(netAssets, "¥"),
                 maxLines: 1,
                 style: GoogleFonts.rubik(
-                  color: Colors.white,
+                  color: isNegativeNet ? Colors.red.shade400 : Colors.white,
                   fontSize: amountSize,
                   fontWeight: FontWeight.w600,
                 ),
@@ -162,6 +163,18 @@ class HomeAssetCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _formatAmount(double amount, String currency) {
+    final abs = amount.abs();
+    final prefix = amount < 0 ? '-' : '';
+    if (abs >= 100000000) {
+      return '$prefix${currency}${(abs / 100000000).toStringAsFixed(1)}亿';
+    }
+    if (abs >= 10000) {
+      return '$prefix${currency}${(abs / 10000).toStringAsFixed(1)}万';
+    }
+    return '$prefix$currency${NumberFormat('#,##0.00').format(abs)}';
   }
 
   Widget _buildActionBtn(

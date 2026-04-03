@@ -323,11 +323,42 @@ class HomeRecentTransactionsSection extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.spa, size: 64, color: Colors.grey.shade300),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: JiveTheme.primaryGreen.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(Icons.receipt_long_outlined, size: 40, color: JiveTheme.primaryGreen),
+          ),
           const SizedBox(height: 16),
           Text(
-            "No transactions yet",
-            style: GoogleFonts.lato(color: Colors.grey),
+            "还没有交易记录",
+            style: GoogleFonts.lato(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "点击右下角 + 号记第一笔",
+            style: GoogleFonts.lato(
+              fontSize: 13,
+              color: Colors.grey.shade400,
+            ),
+          ),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: onAddTransaction,
+            icon: const Icon(Icons.add),
+            label: const Text('记一笔'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: JiveTheme.primaryGreen,
+              side: BorderSide(color: JiveTheme.primaryGreen),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
           ),
         ],
       ),
