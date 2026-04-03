@@ -12,6 +12,7 @@ import '../../core/database/category_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/csv_export_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/excel_export_service.dart';
 
 class CsvExportScreen extends StatelessWidget {
   const CsvExportScreen({super.key});
@@ -118,6 +119,39 @@ class _CsvExportView extends StatelessWidget {
         message: '保存失败：$error',
         isError: true,
       );
+    }
+  }
+
+  Future<void> _shareExcel(
+    BuildContext context,
+    CsvExportController controller,
+  ) async {
+    if (controller.previewCount == 0) {
+      _showSnackBar(context, message: '没有匹配的交易可导出', isError: true);
+      return;
+    }
+
+    try {
+      final isar = await DatabaseService.getInstance();
+      final service = ExcelExportService(isar);
+      final file = await service.exportTransactions(
+        controller.dateRange.start,
+        controller.dateRange.end,
+        categoryKey: controller.selectedCategoryKey,
+      );
+      if (!context.mounted) return;
+      await SharePlus.instance.share(
+        ShareParams(
+          files: [XFile(file.path)],
+          subject: 'Jive 交易数据导出',
+          text: '交易数据已导出为 Excel 格式。',
+        ),
+      );
+      if (!context.mounted) return;
+      _showSnackBar(context, message: 'Excel 导出成功');
+    } catch (error) {
+      if (!context.mounted) return;
+      _showSnackBar(context, message: 'Excel 导出失败：$error', isError: true);
     }
   }
 
@@ -551,6 +585,27 @@ class _CsvExportView extends StatelessWidget {
                   minimumSize: const Size.fromHeight(52),
                   side: BorderSide(
                     color: JiveTheme.primaryGreen.withValues(alpha: 0.28),
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: controller.canExport
+                    ? () => _shareExcel(context, controller)
+                    : null,
+                icon: const Icon(Icons.table_chart_outlined),
+                label: const Text('导出 Excel (.xlsx)'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.green.shade700,
+                  minimumSize: const Size.fromHeight(52),
+                  side: BorderSide(
+                    color: Colors.green.shade200,
                   ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
