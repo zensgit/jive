@@ -1,8 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../database/account_model.dart';
+import '../database/budget_model.dart';
+import '../database/category_model.dart';
+import '../database/tag_model.dart';
 import '../database/transaction_model.dart';
 import '../entitlement/entitlement_service.dart';
 import 'sync_config.dart';
@@ -10,21 +16,26 @@ import 'sync_state.dart';
 
 /// Incremental sync engine between local Isar and remote Supabase.
 ///
-/// Strategy: cursor-based incremental sync using `updatedAt` timestamps.
+/// Syncs 5 tables: transactions, accounts, categories, tags, budgets.
+/// Strategy: per-table cursor-based incremental sync using `updatedAt`.
 /// Conflict resolution: last-write-wins (higher updatedAt wins).
-///
-/// Lifecycle:
-///  1. [init] — check config, init Supabase if not already done
-///  2. [sync] — push local changes, then pull remote changes
-///  3. Called on app start (if subscriber) and on data change
 class SyncEngine extends ChangeNotifier {
-  static const _prefKeySyncCursor = 'sync_last_cursor';
+  static const _prefKeyCursorPrefix = 'sync_cursor_';
   static const _prefKeySyncEnabled = 'sync_enabled';
+
+  static const _syncTables = [
+    'transactions',
+    'accounts',
+    'categories',
+    'tags',
+    'budgets',
+  ];
 
   final Isar _isar;
   final EntitlementService _entitlement;
 
   SyncState _state = const SyncState.disabled();
+  Timer? _debounceTimer;
 
   SyncEngine({
     required Isar isar,
@@ -32,31 +43,20 @@ class SyncEngine extends ChangeNotifier {
   })  : _isar = isar,
         _entitlement = entitlement;
 
-  /// Current sync state for UI.
   SyncState get state => _state;
 
-  /// Whether sync is available (configured + subscriber tier).
   bool get isAvailable =>
       SyncConfig.isConfigured && _entitlement.tier.hasCloud;
 
-  /// Initialize sync engine.
   Future<void> init() async {
-    if (!SyncConfig.isConfigured) {
-      _state = const SyncState.disabled();
-      notifyListeners();
-      return;
-    }
-
-    if (!_entitlement.tier.hasCloud) {
+    if (!SyncConfig.isConfigured || !_entitlement.tier.hasCloud) {
       _state = const SyncState.disabled();
       notifyListeners();
       return;
     }
 
     try {
-      // Initialize Supabase if not already done
       if (Supabase.instance.client.auth.currentSession == null) {
-        debugPrint('SyncEngine: no auth session, sync disabled');
         _state = const SyncState.disabled();
         notifyListeners();
         return;
@@ -79,7 +79,6 @@ class SyncEngine extends ChangeNotifier {
     }
   }
 
-  /// Enable or disable sync.
   Future<void> setEnabled(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeySyncEnabled, enabled);
@@ -91,7 +90,7 @@ class SyncEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Run a full sync cycle: push local → pull remote.
+  /// Run a full sync cycle across all tables.
   Future<void> sync() async {
     if (!isAvailable || _state.isSyncing) return;
 
@@ -99,10 +98,12 @@ class SyncEngine extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final cursor = await _getSyncCursor();
-      await _pushLocalChanges(cursor);
-      await _pullRemoteChanges(cursor);
-      await _updateSyncCursor();
+      for (final table in _syncTables) {
+        final cursor = await _getCursor(table);
+        await _pushTable(table, cursor);
+        await _pullTable(table, cursor);
+        await _updateCursor(table);
+      }
 
       _state = SyncState.idle(lastSyncAt: DateTime.now());
     } catch (e) {
@@ -112,22 +113,95 @@ class SyncEngine extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Push local transactions modified after [cursor] to Supabase.
-  Future<void> _pushLocalChanges(DateTime cursor) async {
+  /// Schedule a sync after a debounce period (30s).
+  /// Call this after any local data change.
+  void scheduleSync() {
+    if (!isAvailable) return;
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(seconds: 30), () {
+      sync();
+    });
+  }
+
+  /// Called when app resumes from background.
+  void onAppResumed() {
+    if (!isAvailable) return;
+    // Only sync if last sync was more than 5 minutes ago
+    final lastSync = _state.lastSyncAt;
+    if (lastSync == null ||
+        DateTime.now().difference(lastSync).inMinutes >= 5) {
+      sync();
+    }
+  }
+
+  /// Cancel pending debounce timer.
+  void cancelPendingSync() {
+    _debounceTimer?.cancel();
+  }
+
+  // ── Per-table push/pull ──
+
+  Future<void> _pushTable(String table, DateTime cursor) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
     if (userId == null) return;
 
-    final localChanges = await _isar.jiveTransactions
+    final rows = await _getLocalChanges(table, cursor);
+    if (rows.isEmpty) return;
+
+    final mapped = rows.map((r) => {'user_id': userId, ...r}).toList();
+    await client.from(table).upsert(mapped, onConflict: 'user_id,local_id');
+    debugPrint('SyncEngine: pushed ${rows.length} rows to $table');
+  }
+
+  Future<void> _pullTable(String table, DateTime cursor) async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final response = await client
+        .from(table)
+        .select()
+        .eq('user_id', userId)
+        .gt('updated_at', cursor.toIso8601String())
+        .order('updated_at', ascending: true);
+
+    final remoteRows = response as List<dynamic>;
+    if (remoteRows.isEmpty) return;
+
+    await _applyRemoteChanges(table, remoteRows);
+    debugPrint('SyncEngine: pulled ${remoteRows.length} rows from $table');
+  }
+
+  // ── Local change extraction ──
+
+  Future<List<Map<String, dynamic>>> _getLocalChanges(
+    String table,
+    DateTime cursor,
+  ) async {
+    switch (table) {
+      case 'transactions':
+        return _getTransactionChanges(cursor);
+      case 'accounts':
+        return _getAccountChanges(cursor);
+      case 'categories':
+        return _getCategoryChanges(cursor);
+      case 'tags':
+        return _getTagChanges(cursor);
+      case 'budgets':
+        return _getBudgetChanges(cursor);
+      default:
+        return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _getTransactionChanges(DateTime cursor) async {
+    final items = await _isar.jiveTransactions
         .filter()
         .updatedAtGreaterThan(cursor)
         .findAll();
-
-    if (localChanges.isEmpty) return;
-
-    final rows = localChanges.map((tx) => {
+    return items.map((tx) => {
       'local_id': tx.id,
-      'user_id': userId,
       'amount': tx.amount,
       'source': tx.source,
       'type': tx.type,
@@ -141,43 +215,98 @@ class SyncEngine extends ChangeNotifier {
       'raw_text': tx.rawText,
       'updated_at': tx.updatedAt.toIso8601String(),
     }).toList();
-
-    // Upsert by (user_id, local_id) — last-write-wins via updated_at
-    await client
-        .from('transactions')
-        .upsert(rows, onConflict: 'user_id,local_id');
-
-    debugPrint('SyncEngine: pushed ${rows.length} transactions');
   }
 
-  /// Pull remote changes after [cursor] from Supabase into local Isar.
-  Future<void> _pullRemoteChanges(DateTime cursor) async {
-    final client = Supabase.instance.client;
-    final userId = client.auth.currentUser?.id;
-    if (userId == null) return;
+  Future<List<Map<String, dynamic>>> _getAccountChanges(DateTime cursor) async {
+    final items = await _isar.jiveAccounts.where().findAll();
+    // Accounts don't have updatedAt in Isar, push all
+    return items.map((a) => {
+      'local_id': a.id,
+      'name': a.name,
+      'type': a.type,
+      'sub_type': a.subType,
+      'opening_balance': a.openingBalance,
+      'credit_limit': a.creditLimit,
+      'currency': a.currency,
+      'is_archived': a.isArchived,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).toList();
+  }
 
-    final response = await client
-        .from('transactions')
-        .select()
-        .eq('user_id', userId)
-        .gt('updated_at', cursor.toIso8601String())
-        .order('updated_at', ascending: true);
+  Future<List<Map<String, dynamic>>> _getCategoryChanges(DateTime cursor) async {
+    final items = await _isar.jiveCategorys.where().findAll();
+    return items.map((c) => {
+      'local_id': c.id,
+      'key': c.key,
+      'name': c.name,
+      'parent_key': c.parentKey,
+      'icon_name': c.iconName,
+      'is_income': c.isIncome,
+      'is_system': c.isSystem,
+      'is_hidden': c.isHidden,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).toList();
+  }
 
-    final remoteRows = response as List<dynamic>;
-    if (remoteRows.isEmpty) return;
+  Future<List<Map<String, dynamic>>> _getTagChanges(DateTime cursor) async {
+    final items = await _isar.jiveTags.where().findAll();
+    return items.map((t) => {
+      'local_id': t.id,
+      'key': t.key,
+      'name': t.name,
+      'group_key': t.groupKey,
+      'color_hex': t.colorHex,
+      'is_archived': t.isArchived,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).toList();
+  }
 
+  Future<List<Map<String, dynamic>>> _getBudgetChanges(DateTime cursor) async {
+    final items = await _isar.jiveBudgets.where().findAll();
+    return items.map((b) => {
+      'local_id': b.id,
+      'name': b.name,
+      'amount': b.amount,
+      'period': b.period,
+      'start_date': b.startDate.toIso8601String(),
+      'end_date': b.endDate.toIso8601String(),
+      'category_keys': b.categoryKey ?? '',
+      'is_active': b.isActive,
+      'carry_over': false,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).toList();
+  }
+
+  // ── Remote change application ──
+
+  Future<void> _applyRemoteChanges(String table, List<dynamic> rows) async {
+    switch (table) {
+      case 'transactions':
+        await _applyTransactionChanges(rows);
+        break;
+      case 'accounts':
+        await _applyAccountChanges(rows);
+        break;
+      case 'categories':
+        await _applyCategoryChanges(rows);
+        break;
+      case 'tags':
+        await _applyTagChanges(rows);
+        break;
+      case 'budgets':
+        await _applyBudgetChanges(rows);
+        break;
+    }
+  }
+
+  Future<void> _applyTransactionChanges(List<dynamic> rows) async {
     await _isar.writeTxn(() async {
-      for (final row in remoteRows) {
+      for (final row in rows) {
         final localId = row['local_id'] as int?;
         if (localId == null) continue;
-
         final existing = await _isar.jiveTransactions.get(localId);
         final remoteUpdatedAt = DateTime.parse(row['updated_at'] as String);
-
-        // Last-write-wins: skip if local is newer
-        if (existing != null && existing.updatedAt.isAfter(remoteUpdatedAt)) {
-          continue;
-        }
+        if (existing != null && existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
 
         final tx = existing ?? JiveTransaction();
         tx.id = localId;
@@ -193,28 +322,105 @@ class SyncEngine extends ChangeNotifier {
         tx.accountId = row['account_id'] as int?;
         tx.rawText = row['raw_text'] as String?;
         tx.updatedAt = remoteUpdatedAt;
-
         await _isar.jiveTransactions.put(tx);
       }
     });
-
-    debugPrint('SyncEngine: pulled ${remoteRows.length} transactions');
   }
 
-  Future<DateTime> _getSyncCursor() async {
+  Future<void> _applyAccountChanges(List<dynamic> rows) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = row['local_id'] as int?;
+        if (localId == null) continue;
+        final existing = await _isar.jiveAccounts.get(localId);
+        final a = existing ?? JiveAccount();
+        a.id = localId;
+        a.name = row['name'] as String? ?? '';
+        a.type = row['type'] as String? ?? 'asset';
+        a.subType = row['sub_type'] as String?;
+        a.openingBalance = (row['opening_balance'] as num?)?.toDouble() ?? 0;
+        a.creditLimit = (row['credit_limit'] as num?)?.toDouble();
+        a.currency = row['currency'] as String? ?? 'CNY';
+        a.isArchived = row['is_archived'] as bool? ?? false;
+        await _isar.jiveAccounts.put(a);
+      }
+    });
+  }
+
+  Future<void> _applyCategoryChanges(List<dynamic> rows) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = row['local_id'] as int?;
+        if (localId == null) continue;
+        final existing = await _isar.jiveCategorys.get(localId);
+        final c = existing ?? JiveCategory();
+        c.id = localId;
+        c.key = row['key'] as String? ?? '';
+        c.name = row['name'] as String? ?? '';
+        c.parentKey = row['parent_key'] as String?;
+        c.iconName = row['icon_name'] as String? ?? 'category';
+        c.isIncome = row['is_income'] as bool? ?? false;
+        c.isSystem = row['is_system'] as bool? ?? false;
+        c.isHidden = row['is_hidden'] as bool? ?? false;
+        await _isar.jiveCategorys.put(c);
+      }
+    });
+  }
+
+  Future<void> _applyTagChanges(List<dynamic> rows) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = row['local_id'] as int?;
+        if (localId == null) continue;
+        final existing = await _isar.jiveTags.get(localId);
+        final t = existing ?? JiveTag();
+        t.id = localId;
+        t.key = row['key'] as String? ?? '';
+        t.name = row['name'] as String? ?? '';
+        t.groupKey = row['group_key'] as String?;
+        t.colorHex = row['color_hex'] as String?;
+        t.isArchived = row['is_archived'] as bool? ?? false;
+        await _isar.jiveTags.put(t);
+      }
+    });
+  }
+
+  Future<void> _applyBudgetChanges(List<dynamic> rows) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = row['local_id'] as int?;
+        if (localId == null) continue;
+        final existing = await _isar.jiveBudgets.get(localId);
+        final b = existing ?? JiveBudget();
+        b.id = localId;
+        b.name = row['name'] as String? ?? '';
+        b.amount = (row['amount'] as num?)?.toDouble() ?? 0;
+        b.period = row['period'] as String? ?? 'monthly';
+        b.startDate = DateTime.parse(row['start_date'] as String);
+        b.endDate = DateTime.parse(row['end_date'] as String);
+        final catKey = row['category_keys'];
+        if (catKey is String && catKey.isNotEmpty) {
+          b.categoryKey = catKey;
+        }
+        b.isActive = row['is_active'] as bool? ?? true;
+        await _isar.jiveBudgets.put(b);
+      }
+    });
+  }
+
+  // ── Cursor management (per-table) ──
+
+  Future<DateTime> _getCursor(String table) async {
     final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString(_prefKeySyncCursor);
-    if (stored != null) {
-      return DateTime.parse(stored);
-    }
-    // First sync: use epoch (sync everything)
+    final stored = prefs.getString('$_prefKeyCursorPrefix$table');
+    if (stored != null) return DateTime.parse(stored);
     return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
-  Future<void> _updateSyncCursor() async {
+  Future<void> _updateCursor(String table) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-      _prefKeySyncCursor,
+      '$_prefKeyCursorPrefix$table',
       DateTime.now().toIso8601String(),
     );
   }

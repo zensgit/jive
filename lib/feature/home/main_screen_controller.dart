@@ -74,9 +74,13 @@ mixin MainScreenController on State<MainScreen> {
   // Abstract - provided by DebugSeedMixin
   Future<void> loadDemoSeedPrefs();
 
+  /// Called after any data change. Override to add sync scheduling.
+  VoidCallback? onDataChanged;
+
   void notifyDataChanged() {
     dataReloadSignal.value += 1;
     DataReloadBus.notify();
+    onDataChanged?.call();
   }
 
   Future<void> initDatabase() async {
