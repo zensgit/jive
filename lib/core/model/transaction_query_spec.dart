@@ -16,6 +16,8 @@ class TransactionQuerySpec {
   final TransactionSortDirection sortDirection;
   final bool groupByDate;
   final int? bookId; // 多账本过滤
+  final double? minAmount; // 金额范围下限
+  final double? maxAmount; // 金额范围上限
 
   const TransactionQuerySpec({
     this.keyword,
@@ -27,6 +29,8 @@ class TransactionQuerySpec {
     this.sortDirection = TransactionSortDirection.desc,
     this.groupByDate = true,
     this.bookId,
+    this.minAmount,
+    this.maxAmount,
   });
 
   String? get normalizedKeyword {
