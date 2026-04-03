@@ -264,4 +264,57 @@ class StatsAggregationService {
 
     return trends;
   }
+
+  /// Get spending heatmap data: weekday (0=Mon..6=Sun) × hour (0..23).
+  ///
+  /// Returns a 7×24 grid of total expense amounts for the given [months].
+  Future<SpendingHeatmap> getSpendingHeatmap(
+    int months, {
+    int? bookId,
+  }) async {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month - months + 1, 1);
+
+    var query = isar.jiveTransactions
+        .filter()
+        .typeEqualTo('expense')
+        .timestampGreaterThan(start);
+
+    if (bookId != null) {
+      query = query.bookIdEqualTo(bookId);
+    }
+
+    final transactions = await query.findAll();
+
+    // 7 weekdays × 24 hours grid
+    final grid = List.generate(7, (_) => List.filled(24, 0.0));
+    var maxValue = 0.0;
+
+    for (final tx in transactions) {
+      final weekday = (tx.timestamp.weekday - 1) % 7; // 0=Mon
+      final hour = tx.timestamp.hour;
+      grid[weekday][hour] += tx.amount;
+      if (grid[weekday][hour] > maxValue) {
+        maxValue = grid[weekday][hour];
+      }
+    }
+
+    return SpendingHeatmap(grid: grid, maxValue: maxValue);
+  }
+}
+
+/// Spending heatmap: 7 weekdays × 24 hours.
+class SpendingHeatmap {
+  final List<List<double>> grid; // [weekday][hour]
+  final double maxValue;
+
+  const SpendingHeatmap({required this.grid, required this.maxValue});
+
+  double get(int weekday, int hour) => grid[weekday][hour];
+
+  /// Normalized intensity 0.0..1.0 for coloring.
+  double intensity(int weekday, int hour) {
+    if (maxValue <= 0) return 0;
+    return grid[weekday][hour] / maxValue;
+  }
 }
