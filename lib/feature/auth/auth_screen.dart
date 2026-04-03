@@ -82,7 +82,7 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 8),
               Text(
                 '轻松记账，积少成多',
-                style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
               const SizedBox(height: 40),
 
@@ -169,12 +169,12 @@ class _AuthScreenState extends State<AuthScreen> {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                  Expanded(child: Divider(color: Theme.of(context).dividerColor)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('或', style: TextStyle(color: Colors.grey.shade500)),
+                    child: Text('或', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
                   ),
-                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                  Expanded(child: Divider(color: Theme.of(context).dividerColor)),
                 ],
               ),
               const SizedBox(height: 16),
@@ -196,7 +196,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 onPressed: widget.onSkip,
                 child: Text(
                   '跳过，以游客身份使用',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 14),
                 ),
               ),
               const SizedBox(height: 40),
@@ -225,11 +225,11 @@ class _OAuthButton extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            side: BorderSide(color: Colors.grey.shade300),
+            side: BorderSide(color: Theme.of(context).dividerColor),
           ),
         ),
         const SizedBox(height: 4),
-        Text(label, style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+        Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ],
     );
   }
