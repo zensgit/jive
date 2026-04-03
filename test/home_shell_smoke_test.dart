@@ -125,8 +125,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Net worth = assets - liabilities = 40000
-      expect(find.textContaining('40,000'), findsOneWidget);
+      // Net worth = assets - liabilities = 40000, displayed as 4.0万
+      expect(find.textContaining('4.0万'), findsOneWidget);
       expect(find.text('支出'), findsOneWidget);
       expect(find.text('收入'), findsOneWidget);
       expect(find.text('转账'), findsOneWidget);
@@ -203,7 +203,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('No transactions yet'), findsOneWidget);
+      expect(find.text('还没有交易记录'), findsOneWidget);
     });
   });
 }

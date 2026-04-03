@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
@@ -1203,6 +1204,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _hasDataChanges = true;
 
     if (mounted) {
+      HapticFeedback.mediumImpact();
       DataReloadBus.notify();
       Navigator.pop(context, true);
     }

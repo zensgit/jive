@@ -95,12 +95,52 @@ class HomeRecentTransactionsSection extends StatelessWidget {
     if (transactions.isEmpty) {
       return _buildEmptyState();
     }
+    // Group transactions by date
+    final grouped = <String, List<JiveTransaction>>{};
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+
+    for (final tx in transactions) {
+      final txDate = DateTime(tx.timestamp.year, tx.timestamp.month, tx.timestamp.day);
+      String label;
+      if (txDate == today) {
+        label = '今天';
+      } else if (txDate == yesterday) {
+        label = '昨天';
+      } else if (txDate.year == now.year) {
+        label = DateFormat('M月d日').format(tx.timestamp);
+      } else {
+        label = DateFormat('yyyy年M月d日').format(tx.timestamp);
+      }
+      grouped.putIfAbsent(label, () => []).add(tx);
+    }
+
+    final entries = grouped.entries.toList();
+
     return ListView.builder(
       shrinkWrap: shrinkWrap,
       physics: physics ?? const BouncingScrollPhysics(),
-      itemCount: transactions.length,
+      itemCount: entries.fold<int>(0, (sum, e) => sum + 1 + e.value.length),
       itemBuilder: (context, index) {
-        return _buildTransactionItem(context, transactions[index]);
+        var cursor = 0;
+        for (final entry in entries) {
+          if (index == cursor) {
+            // Date header
+            final dayTotal = entry.value.fold<double>(0, (sum, tx) {
+              if (tx.type == 'expense') return sum - tx.amount;
+              if (tx.type == 'income') return sum + tx.amount;
+              return sum;
+            });
+            return _buildDateHeader(context, entry.key, dayTotal);
+          }
+          cursor++;
+          if (index < cursor + entry.value.length) {
+            return _buildTransactionItem(context, entry.value[index - cursor]);
+          }
+          cursor += entry.value.length;
+        }
+        return const SizedBox.shrink();
       },
     );
   }
@@ -315,6 +355,40 @@ class HomeRecentTransactionsSection extends StatelessWidget {
       message: '该交易由智能标签自动打标',
       triggerMode: TooltipTriggerMode.longPress,
       child: badge,
+    );
+  }
+
+  Widget _buildDateHeader(BuildContext context, String label, double dayTotal) {
+    final theme = Theme.of(context);
+    final totalStr = dayTotal >= 0
+        ? '+${NumberFormat('#,##0.00').format(dayTotal)}'
+        : NumberFormat('#,##0.00').format(dayTotal);
+    final totalColor = dayTotal >= 0
+        ? JiveTheme.primaryGreen
+        : Colors.red.shade400;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.lato(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            totalStr,
+            style: GoogleFonts.lato(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: totalColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
