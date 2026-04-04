@@ -9,7 +9,9 @@ import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/investment_service.dart';
+import '../../core/service/stock_quote_service.dart';
 import 'portfolio_chart_widget.dart';
+import 'stock_quote_card.dart';
 
 class InvestmentScreen extends StatefulWidget {
   final Isar? debugIsar;
@@ -37,8 +39,11 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
   late Isar _isar;
   late InvestmentService _service;
   late CurrencyService _currencyService;
+  StockQuoteService? _quoteService;
 
   bool _isLoading = true;
+  bool _isRefreshingQuotes = false;
+  Map<String, StockQuote> _quotes = {};
   PortfolioSummary? _portfolio;
   List<JiveSecurity> _securities = [];
   List<JiveCurrency> _currencies = [];
@@ -71,6 +76,7 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
     _isar = widget.debugIsar ?? await DatabaseService.getInstance();
     _service = InvestmentService(_isar);
     _currencyService = CurrencyService(_isar);
+    _quoteService = StockQuoteService(_isar, _service);
     _interactiveEnabled = true;
     await _currencyService.initCurrencies();
     await _load();
@@ -99,6 +105,35 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
       _baseCurrency = baseCurrency;
       _isLoading = false;
     });
+  }
+
+  Future<void> _refreshQuotes() async {
+    if (_quoteService == null || _isRefreshingQuotes) return;
+    setState(() => _isRefreshingQuotes = true);
+    try {
+      final count = await _quoteService!.refreshAllHoldings();
+      // Also fetch quotes for display in cards.
+      final tickers = _securities.map((s) => s.ticker).toList();
+      final quotes = await _quoteService!.fetchBatchQuotes(tickers);
+      if (!mounted) return;
+      setState(() => _quotes = quotes);
+      await _load();
+      if (mounted) {
+        _showMessage(count > 0 ? '已刷新 $count 只证券行情' : '未能获取行情数据');
+      }
+    } catch (_) {
+      if (mounted) _showMessage('刷新行情失败，请稍后重试');
+    } finally {
+      if (mounted) setState(() => _isRefreshingQuotes = false);
+    }
+  }
+
+  Future<void> _refreshSingleQuote(String ticker) async {
+    if (_quoteService == null) return;
+    final quote = await _quoteService!.fetchQuote(ticker);
+    if (quote != null && mounted) {
+      setState(() => _quotes[ticker.toUpperCase().trim()] = quote);
+    }
   }
 
   Future<void> _addSecurity() async {
@@ -451,6 +486,21 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
           style: GoogleFonts.lato(fontWeight: FontWeight.bold),
         ),
         actions: [
+          if (_interactiveEnabled)
+            _isRefreshingQuotes
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : TextButton.icon(
+                    onPressed: _refreshQuotes,
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('刷新行情', style: TextStyle(fontSize: 13)),
+                  ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: _interactiveEnabled ? _addSecurity : null,
@@ -470,6 +520,30 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
                     PortfolioChartWidget(portfolio: _portfolio!),
                   if (_portfolio != null && holdings.isNotEmpty)
                     const SizedBox(height: 16),
+                  if (_quotes.isNotEmpty) ...[
+                    Text(
+                      '实时行情',
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ..._securities
+                        .where(
+                          (s) =>
+                              _quotes.containsKey(s.ticker.toUpperCase().trim()),
+                        )
+                        .map(
+                          (s) => StockQuoteCard(
+                            ticker: s.ticker,
+                            name: s.name,
+                            quote: _quotes[s.ticker.toUpperCase().trim()],
+                            onRefresh: () => _refreshSingleQuote(s.ticker),
+                          ),
+                        ),
+                    const SizedBox(height: 16),
+                  ],
                   if (holdings.isNotEmpty) ...[
                     Text(
                       '持仓明细',
