@@ -378,6 +378,234 @@ class SpendingAnalysisService {
       }
     }
 
+    // --- 8. Quarter-over-quarter trend ---
+    if (sortedMonths.length >= 6) {
+      // Current quarter: last 3 months; previous quarter: 3 months before that
+      final curQuarterMonths = sortedMonths.sublist(sortedMonths.length - 3);
+      final prevQuarterMonths = sortedMonths.sublist(
+        sortedMonths.length - 6,
+        sortedMonths.length - 3,
+      );
+      double curQuarterTotal = 0;
+      for (final m in curQuarterMonths) {
+        curQuarterTotal += monthTotals[m] ?? 0;
+      }
+      double prevQuarterTotal = 0;
+      for (final m in prevQuarterMonths) {
+        prevQuarterTotal += monthTotals[m] ?? 0;
+      }
+      if (prevQuarterTotal > 0) {
+        final changePct =
+            (curQuarterTotal - prevQuarterTotal) / prevQuarterTotal * 100;
+        if (changePct > 20) {
+          insights.add(SpendingInsight(
+            title: '季度支出上升',
+            description:
+                '近三个月支出比上季度增长 ${changePct.toStringAsFixed(1)}%，注意整体趋势。',
+            type: InsightType.warning,
+            iconName: 'trending_up',
+          ));
+        } else if (changePct < -20) {
+          insights.add(SpendingInsight(
+            title: '季度支出下降',
+            description:
+                '近三个月支出比上季度减少 ${changePct.abs().toStringAsFixed(1)}%，做得很好！',
+            type: InsightType.achievement,
+            iconName: 'trending_down',
+          ));
+        }
+      }
+    }
+
+    // --- 9. Year-over-year comparison ---
+    if (sortedMonths.length >= 12) {
+      final currentMonthKey = sortedMonths.last;
+      // Build the same-month key from last year
+      final parts = currentMonthKey.split('-');
+      final lastYearKey =
+          '${int.parse(parts[0]) - 1}-${parts[1]}';
+      final curAmt = monthTotals[currentMonthKey] ?? 0;
+      final lastYearAmt = monthTotals[lastYearKey];
+      if (lastYearAmt != null && lastYearAmt > 0) {
+        final changePct = (curAmt - lastYearAmt) / lastYearAmt * 100;
+        if (changePct > 20) {
+          insights.add(SpendingInsight(
+            title: '同比支出增长',
+            description:
+                '本月支出比去年同月增长 ${changePct.toStringAsFixed(1)}%，请关注变化原因。',
+            type: InsightType.warning,
+            iconName: 'compare_arrows',
+          ));
+        } else if (changePct < -20) {
+          insights.add(SpendingInsight(
+            title: '同比支出下降',
+            description:
+                '本月支出比去年同月减少 ${changePct.abs().toStringAsFixed(1)}%，节省有成效！',
+            type: InsightType.achievement,
+            iconName: 'compare_arrows',
+          ));
+        }
+      }
+    }
+
+    // --- 10. Spending forecast (project month-end total) ---
+    if (sortedMonths.isNotEmpty) {
+      final currentMonthKey = sortedMonths.last;
+      final curMonthTotal = monthTotals[currentMonthKey] ?? 0;
+      final dayOfMonth = now.day;
+      final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+      if (dayOfMonth >= 5 && dayOfMonth < daysInMonth) {
+        final avgDaily = curMonthTotal / dayOfMonth;
+        final projected = avgDaily * daysInMonth;
+        // Compare to previous month if available
+        if (sortedMonths.length >= 2) {
+          final prevMonthTotal =
+              monthTotals[sortedMonths[sortedMonths.length - 2]] ?? 0;
+          if (prevMonthTotal > 0) {
+            final diffPct = (projected - prevMonthTotal) / prevMonthTotal * 100;
+            if (diffPct > 20) {
+              insights.add(SpendingInsight(
+                title: '本月预计超支',
+                description:
+                    '按当前节奏，本月预计支出 ${projected.toStringAsFixed(0)} 元，'
+                    '比上月多 ${diffPct.toStringAsFixed(0)}%。',
+                type: InsightType.warning,
+                iconName: 'auto_graph',
+              ));
+            } else if (diffPct < -20) {
+              insights.add(SpendingInsight(
+                title: '本月预计节省',
+                description:
+                    '按当前节奏，本月预计支出 ${projected.toStringAsFixed(0)} 元，'
+                    '比上月少 ${diffPct.abs().toStringAsFixed(0)}%。',
+                type: InsightType.achievement,
+                iconName: 'auto_graph',
+              ));
+            }
+          }
+        }
+      }
+    }
+
+    // --- 11. Month-end spike detection ---
+    if (sortedMonths.isNotEmpty) {
+      // Check the previous complete month for month-end spending spikes
+      final String targetMonth;
+      if (sortedMonths.length >= 2) {
+        targetMonth = sortedMonths[sortedMonths.length - 2];
+      } else {
+        targetMonth = sortedMonths.last;
+      }
+      final targetParts = targetMonth.split('-');
+      final targetYear = int.parse(targetParts[0]);
+      final targetMon = int.parse(targetParts[1]);
+      final daysInTarget = DateTime(targetYear, targetMon + 1, 0).day;
+      final cutoffDay = daysInTarget - 5;
+
+      double earlyTotal = 0;
+      int earlyDays = 0;
+      double lateTotal = 0;
+      int lateDays = 0;
+
+      // Group daily amounts for the target month
+      final Map<int, double> dailyAmounts = {};
+      for (final tx in txs) {
+        if (tx.amount <= 0) continue;
+        final txMonthKey =
+            '${tx.timestamp.year}-${tx.timestamp.month.toString().padLeft(2, '0')}';
+        if (txMonthKey != targetMonth) continue;
+
+        final account =
+            tx.accountId != null ? accountById[tx.accountId] : null;
+        final txCurrency = account?.currency ?? 'CNY';
+        double amount = tx.amount;
+        if (txCurrency != currency) {
+          amount =
+              await currencyService.convert(amount, txCurrency, currency) ??
+                  amount;
+        }
+        final day = tx.timestamp.day;
+        dailyAmounts[day] = (dailyAmounts[day] ?? 0) + amount;
+      }
+
+      for (final entry in dailyAmounts.entries) {
+        if (entry.key <= cutoffDay) {
+          earlyTotal += entry.value;
+          earlyDays++;
+        } else {
+          lateTotal += entry.value;
+          lateDays++;
+        }
+      }
+
+      if (earlyDays > 0 && lateDays > 0) {
+        final earlyAvg = earlyTotal / earlyDays;
+        final lateAvg = lateTotal / lateDays;
+        if (earlyAvg > 0 && lateAvg > earlyAvg * 1.3) {
+          final ratio = (lateAvg / earlyAvg).toStringAsFixed(1);
+          insights.add(SpendingInsight(
+            title: '月末消费偏高',
+            description:
+                '月末最后几天日均支出是月初的 ${ratio}x，建议均匀安排消费节奏。',
+            type: InsightType.tip,
+            iconName: 'event',
+          ));
+        }
+      }
+    }
+
+    // --- 12. Consistent saver achievement ---
+    if (sortedMonths.length >= 3) {
+      // Fetch income transactions for the same period
+      final incomeTxs = await isar.jiveTransactions
+          .filter()
+          .typeEqualTo('income')
+          .timestampBetween(start, end, includeUpper: false)
+          .findAll();
+
+      final Map<String, double> monthIncome = {};
+      for (final tx in incomeTxs) {
+        if (tx.amount <= 0) continue;
+        final account =
+            tx.accountId != null ? accountById[tx.accountId] : null;
+        final txCurrency = account?.currency ?? 'CNY';
+        double amount = tx.amount;
+        if (txCurrency != currency) {
+          amount =
+              await currencyService.convert(amount, txCurrency, currency) ??
+                  amount;
+        }
+        final monthKey =
+            '${tx.timestamp.year}-${tx.timestamp.month.toString().padLeft(2, '0')}';
+        monthIncome[monthKey] = (monthIncome[monthKey] ?? 0) + amount;
+      }
+
+      // Check consecutive months with positive balance (income > expense)
+      int consecutivePositive = 0;
+      int maxConsecutive = 0;
+      for (final m in sortedMonths) {
+        final income = monthIncome[m] ?? 0;
+        final expense = monthTotals[m] ?? 0;
+        if (income > expense) {
+          consecutivePositive++;
+          if (consecutivePositive > maxConsecutive) {
+            maxConsecutive = consecutivePositive;
+          }
+        } else {
+          consecutivePositive = 0;
+        }
+      }
+
+      if (maxConsecutive >= 3) {
+        insights.add(SpendingInsight(
+          title: '持续储蓄达人',
+          description: '已连续 $maxConsecutive 个月收入大于支出，理财习惯非常棒！',
+          type: InsightType.achievement,
+          iconName: 'emoji_events',
+        ));
+      }
+    }
+
     return SpendingAnalysis(insights: insights, generatedAt: now);
   }
 }
