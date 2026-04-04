@@ -11,6 +11,7 @@ import '../../../core/service/category_service.dart';
 import '../../../core/service/transaction_service.dart';
 import '../../../core/utils/logger_util.dart';
 import '../../assistant/assistant_screen.dart';
+import '../../insights/spending_insights_screen.dart';
 import '../../settings/auto_rule_editor_screen.dart';
 import '../../bill_relation/bill_relation_screen.dart';
 import '../../report/annual_report_screen.dart';
@@ -27,6 +28,7 @@ import '../../savings/savings_goal_screen.dart';
 import '../../security/pin_setup_screen.dart';
 import '../../settings/csv_export_screen.dart';
 import '../../settings/settings_screen.dart';
+import '../../settings/widget_settings_screen.dart';
 import '../../split/bill_split_screen.dart';
 import '../../tag/tag_management_screen.dart';
 
@@ -243,6 +245,21 @@ void showHomeMenuSheet({
                         MaterialPageRoute(
                           builder: (context) =>
                               const SettingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.widgets),
+                    title: const Text("桌面小组件"),
+                    subtitle: const Text("查看与管理桌面小组件"),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const WidgetSettingsScreen(),
                         ),
                       );
                     },
