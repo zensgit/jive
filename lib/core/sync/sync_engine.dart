@@ -8,6 +8,7 @@ import '../database/account_model.dart';
 import '../database/budget_model.dart';
 import '../database/category_model.dart';
 import '../database/tag_model.dart';
+import '../database/shared_ledger_model.dart';
 import '../database/transaction_model.dart';
 import '../entitlement/entitlement_service.dart';
 import 'sync_config.dart';
@@ -33,6 +34,8 @@ class SyncEngine extends ChangeNotifier {
     'categories',
     'tags',
     'budgets',
+    'shared_ledgers',
+    'shared_ledger_members',
   ];
 
   final Isar _isar;
@@ -218,6 +221,10 @@ class SyncEngine extends ChangeNotifier {
         return _getTagChanges(cursor);
       case 'budgets':
         return _getBudgetChanges(cursor);
+      case 'shared_ledgers':
+        return _getSharedLedgerChanges(cursor);
+      case 'shared_ledger_members':
+        return _getSharedLedgerMemberChanges(cursor);
       default:
         return [];
     }
@@ -304,6 +311,35 @@ class SyncEngine extends ChangeNotifier {
     }).toList();
   }
 
+  Future<List<Map<String, dynamic>>> _getSharedLedgerChanges(DateTime cursor) async {
+    final items = await _isar.jiveSharedLedgers
+        .filter()
+        .updatedAtGreaterThan(cursor)
+        .findAll();
+    return items.map((l) => {
+      'local_id': l.id,
+      'key': l.key,
+      'name': l.name,
+      'owner_user_id': l.ownerUserId,
+      'currency': l.currency,
+      'invite_code': l.inviteCode,
+      'member_count': l.memberCount,
+      'updated_at': l.updatedAt.toIso8601String(),
+    }).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _getSharedLedgerMemberChanges(DateTime cursor) async {
+    final items = await _isar.jiveSharedLedgerMembers.where().findAll();
+    return items.map((m) => {
+      'local_id': m.id,
+      'ledger_key': m.ledgerKey,
+      'user_id': m.userId,
+      'display_name': m.displayName,
+      'role': m.role,
+      'joined_at': m.joinedAt.toIso8601String(),
+    }).toList();
+  }
+
   // ── Remote change application with conflict detection ──
 
   Future<void> _applyRemoteChanges(String table, List<dynamic> rows) async {
@@ -322,6 +358,12 @@ class SyncEngine extends ChangeNotifier {
         break;
       case 'budgets':
         await _applyBudgetChanges(rows);
+        break;
+      case 'shared_ledgers':
+        await _applySharedLedgerChanges(rows);
+        break;
+      case 'shared_ledger_members':
+        await _applySharedLedgerMemberChanges(rows);
         break;
     }
   }
@@ -478,6 +520,50 @@ class SyncEngine extends ChangeNotifier {
         }
         b.isActive = row['is_active'] as bool? ?? true;
         await _isar.jiveBudgets.put(b);
+      }
+    });
+  }
+
+  Future<void> _applySharedLedgerChanges(List<dynamic> rows) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = row['local_id'] as int?;
+        if (localId == null) continue;
+        final existing = await _isar.jiveSharedLedgers.get(localId);
+        final remoteUpdatedAt = DateTime.parse(row['updated_at'] as String);
+
+        if (existing != null) {
+          if (existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
+        }
+
+        final l = existing ?? JiveSharedLedger();
+        l.id = localId;
+        l.key = row['key'] as String? ?? '';
+        l.name = row['name'] as String? ?? '';
+        l.ownerUserId = row['owner_user_id'] as String? ?? '';
+        l.currency = row['currency'] as String? ?? 'CNY';
+        l.inviteCode = row['invite_code'] as String?;
+        l.memberCount = row['member_count'] as int? ?? 1;
+        l.updatedAt = remoteUpdatedAt;
+        await _isar.jiveSharedLedgers.put(l);
+      }
+    });
+  }
+
+  Future<void> _applySharedLedgerMemberChanges(List<dynamic> rows) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = row['local_id'] as int?;
+        if (localId == null) continue;
+        final existing = await _isar.jiveSharedLedgerMembers.get(localId);
+        final m = existing ?? JiveSharedLedgerMember();
+        m.id = localId;
+        m.ledgerKey = row['ledger_key'] as String? ?? '';
+        m.userId = row['user_id'] as String? ?? '';
+        m.displayName = row['display_name'] as String? ?? '';
+        m.role = row['role'] as String? ?? 'member';
+        m.joinedAt = DateTime.parse(row['joined_at'] as String);
+        await _isar.jiveSharedLedgerMembers.put(m);
       }
     });
   }
