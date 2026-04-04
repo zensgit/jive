@@ -9,6 +9,8 @@ import '../core/service/locale_service.dart';
 import '../core/sync/sync_config.dart';
 import '../feature/auth/auth_screen.dart';
 import '../feature/home/main_screen.dart';
+import '../core/service/onboarding_progress_service.dart';
+import '../feature/onboarding/guided_setup_screen.dart';
 import '../feature/onboarding/onboarding_screen.dart';
 import '../feature/security/lock_gate.dart';
 import '../feature/theme/theme_provider.dart';
@@ -56,6 +58,7 @@ class _AppEntry extends StatefulWidget {
 
 class _AppEntryState extends State<_AppEntry> {
   bool? _onboardingComplete;
+  bool? _guidedSetupComplete;
   bool _authSkipped = false;
 
   @override
@@ -65,9 +68,13 @@ class _AppEntryState extends State<_AppEntry> {
   }
 
   Future<void> _checkOnboarding() async {
-    final complete = await OnboardingScreen.isComplete();
+    final onboarding = await OnboardingScreen.isComplete();
+    final guided = await OnboardingProgressService.isGuidedSetupComplete();
     if (mounted) {
-      setState(() => _onboardingComplete = complete);
+      setState(() {
+        _onboardingComplete = onboarding;
+        _guidedSetupComplete = guided;
+      });
     }
   }
 
@@ -79,6 +86,11 @@ class _AppEntryState extends State<_AppEntry> {
     if (_onboardingComplete == false) {
       return OnboardingScreen(onComplete: () {
         if (mounted) setState(() => _onboardingComplete = true);
+      });
+    }
+    if (_guidedSetupComplete == false) {
+      return GuidedSetupScreen(onComplete: () {
+        if (mounted) setState(() => _guidedSetupComplete = true);
       });
     }
 
