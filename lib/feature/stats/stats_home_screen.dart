@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'asset_trend_screen.dart';
+import 'budget_progress_screen.dart';
+import 'income_expense_bar_screen.dart';
 import 'monthly_overview_screen.dart';
 import 'category_analysis_screen.dart';
 import 'spending_heatmap_screen.dart';
@@ -25,7 +28,7 @@ class _StatsHomeScreenState extends State<StatsHomeScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
   }
 
   @override
@@ -55,6 +58,9 @@ class _StatsHomeScreenState extends State<StatsHomeScreen> with SingleTickerProv
             Tab(text: '总览'),
             Tab(text: '分类'),
             Tab(text: '趋势'),
+            Tab(text: '收支'),
+            Tab(text: '资产'),
+            Tab(text: '预算'),
             Tab(text: '热力图'),
             Tab(text: '详情'),
           ],
@@ -66,6 +72,9 @@ class _StatsHomeScreenState extends State<StatsHomeScreen> with SingleTickerProv
           MonthlyOverviewScreen(bookId: widget.bookId),
           CategoryAnalysisScreen(bookId: widget.bookId),
           TrendChartScreen(bookId: widget.bookId),
+          IncomeExpenseBarScreen(bookId: widget.bookId),
+          AssetTrendScreen(bookId: widget.bookId),
+          BudgetProgressScreen(bookId: widget.bookId),
           SpendingHeatmapScreen(bookId: widget.bookId),
           StatsScreen(reloadSignal: widget.reloadSignal),
         ],

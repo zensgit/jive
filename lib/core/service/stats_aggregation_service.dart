@@ -265,6 +265,66 @@ class StatsAggregationService {
     return trends;
   }
 
+  /// Get asset trend: end-of-month net worth for the last [months] months.
+  Future<List<AssetTrendPoint>> getAssetTrend(
+    int months, {
+    int? bookId,
+  }) async {
+    final now = DateTime.now();
+    final points = <AssetTrendPoint>[];
+    final accountService = AccountService(isar);
+
+    for (int i = months - 1; i >= 0; i--) {
+      final m = DateTime(now.year, now.month - i, 1);
+      // End of month or today for current month
+      final endOfMonth = (i == 0)
+          ? now
+          : DateTime(m.year, m.month + 1, 0); // last day of month
+
+      final accounts = await accountService.getActiveAccounts(bookId: bookId);
+
+      // Compute balances as of endOfMonth by filtering transactions up to that date
+      double totalAssets = 0;
+      double totalLiabilities = 0;
+
+      for (final account in accounts) {
+        final txs = await isar.jiveTransactions
+            .filter()
+            .timestampLessThan(endOfMonth.add(const Duration(days: 1)))
+            .accountIdEqualTo(account.id)
+            .findAll();
+
+        double balance = account.openingBalance;
+        for (final tx in txs) {
+          final type = tx.type ?? 'expense';
+          if (type == 'income') {
+            balance += tx.amount;
+          } else if (type == 'expense') {
+            balance -= tx.amount;
+          } else if (type == 'transfer') {
+            if (tx.accountId == account.id) balance -= tx.amount;
+            if (tx.toAccountId == account.id) balance += tx.toAmount ?? tx.amount;
+          }
+        }
+
+        if (account.type == 'asset') {
+          totalAssets += balance;
+        } else {
+          totalLiabilities += balance.abs();
+        }
+      }
+
+      points.add(AssetTrendPoint(
+        date: endOfMonth,
+        netWorth: totalAssets - totalLiabilities,
+        assets: totalAssets,
+        liabilities: totalLiabilities,
+      ));
+    }
+
+    return points;
+  }
+
   /// Get spending heatmap data: weekday (0=Mon..6=Sun) × hour (0..23).
   ///
   /// Returns a 7×24 grid of total expense amounts for the given [months].
@@ -301,6 +361,21 @@ class StatsAggregationService {
 
     return SpendingHeatmap(grid: grid, maxValue: maxValue);
   }
+}
+
+/// A single data point for asset trend over time.
+class AssetTrendPoint {
+  final DateTime date;
+  final double netWorth;
+  final double assets;
+  final double liabilities;
+
+  const AssetTrendPoint({
+    required this.date,
+    required this.netWorth,
+    required this.assets,
+    required this.liabilities,
+  });
 }
 
 /// Spending heatmap: 7 weekdays × 24 hours.
