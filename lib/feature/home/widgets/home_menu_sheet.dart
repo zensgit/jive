@@ -15,6 +15,7 @@ import '../../insights/spending_insights_screen.dart';
 import '../../settings/auto_rule_editor_screen.dart';
 import '../../bill_relation/bill_relation_screen.dart';
 import '../../report/annual_report_screen.dart';
+import '../../shared/shared_ledger_screen.dart';
 import '../../books/book_manager_screen.dart';
 import '../../budget/budget_manager_screen.dart';
 import '../../currency/currency_settings_screen.dart';
@@ -405,6 +406,18 @@ void showHomeMenuSheet({
                           builder: (context) =>
                               const BookManagerScreen(),
                         ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.family_restroom),
+                    title: const Text("家庭共享账本"),
+                    subtitle: const Text("多人协同记账"),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SharedLedgerScreen()),
                       );
                     },
                   ),
