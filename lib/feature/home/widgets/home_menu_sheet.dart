@@ -29,7 +29,7 @@ import '../../savings/savings_goal_screen.dart';
 import '../../security/pin_setup_screen.dart';
 import '../../settings/csv_export_screen.dart';
 import '../../settings/settings_screen.dart';
-import '../../settings/widget_settings_screen.dart';
+import '../../settings/widget_gallery_screen.dart';
 import '../../split/bill_split_screen.dart';
 import '../../tag/tag_management_screen.dart';
 
@@ -260,7 +260,7 @@ void showHomeMenuSheet({
                         context,
                         MaterialPageRoute(
                           builder: (context) =>
-                              const WidgetSettingsScreen(),
+                              const WidgetGalleryScreen(),
                         ),
                       );
                     },
