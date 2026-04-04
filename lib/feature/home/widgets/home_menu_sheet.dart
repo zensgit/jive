@@ -13,6 +13,7 @@ import '../../../core/utils/logger_util.dart';
 import '../../assistant/assistant_screen.dart';
 import '../../settings/auto_rule_editor_screen.dart';
 import '../../bill_relation/bill_relation_screen.dart';
+import '../../report/annual_report_screen.dart';
 import '../../books/book_manager_screen.dart';
 import '../../budget/budget_manager_screen.dart';
 import '../../currency/currency_settings_screen.dart';
@@ -215,6 +216,19 @@ void showHomeMenuSheet({
                         MaterialPageRoute(
                           builder: (context) => const CsvExportScreen(),
                         ),
+                      );
+                    },
+                  ),
+                  GatedListTile(
+                    feature: FeatureId.pdfReport,
+                    leading: const Icon(Icons.picture_as_pdf),
+                    title: const Text("年度报告"),
+                    subtitle: const Text("生成 PDF 年度财务报告"),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AnnualReportScreen()),
                       );
                     },
                   ),
