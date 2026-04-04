@@ -44,6 +44,8 @@ mixin MainScreenController on State<MainScreen> {
   Map<String, JiveTag> tagByKey = {};
   Map<int, JiveAccount> accountById = {};
   bool isLoading = true;
+  bool hasMoreTransactions = false;
+  static const int _transactionPageSize = 50;
   double totalAssets = 0;
   double totalLiabilities = 0;
   double totalCreditLimit = 0;
@@ -108,10 +110,14 @@ mixin MainScreenController on State<MainScreen> {
     dbReady = true;
     await flushPendingAutoEvents();
     await processRecurringRules();
-    await checkReminders();
-    await _checkDailyReminder();
-    await _showPendingNotifications();
-    await checkAutoPermissions();
+
+    // Defer non-critical initialization so the home screen renders faster
+    Future.delayed(const Duration(seconds: 2), () async {
+      await checkReminders();
+      await _checkDailyReminder();
+      await _showPendingNotifications();
+      await checkAutoPermissions();
+    });
   }
 
   Future<void> processRecurringRules() async {
@@ -220,6 +226,33 @@ mixin MainScreenController on State<MainScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> loadMoreTransactions(int offset) async {
+    List<JiveTransaction> moreList;
+    if (currentBookId != null) {
+      moreList = await isar.jiveTransactions
+          .where()
+          .filter()
+          .bookIdEqualTo(currentBookId)
+          .sortByTimestampDesc()
+          .offset(offset)
+          .limit(_transactionPageSize)
+          .findAll();
+    } else {
+      moreList = await isar.jiveTransactions
+          .where()
+          .sortByTimestampDesc()
+          .offset(offset)
+          .limit(_transactionPageSize)
+          .findAll();
+    }
+    if (mounted) {
+      setState(() {
+        transactions = [...transactions, ...moreList];
+        hasMoreTransactions = moreList.length >= _transactionPageSize;
+      });
+    }
+  }
+
   Future<void> loadTransactions() async {
     List<JiveTransaction> list;
     if (currentBookId != null) {
@@ -228,11 +261,13 @@ mixin MainScreenController on State<MainScreen> {
           .filter()
           .bookIdEqualTo(currentBookId)
           .sortByTimestampDesc()
+          .limit(_transactionPageSize)
           .findAll();
     } else {
       list = await isar.jiveTransactions
           .where()
           .sortByTimestampDesc()
+          .limit(_transactionPageSize)
           .findAll();
     }
     final categories = await isar.collection<JiveCategory>().where().findAll();
@@ -253,6 +288,7 @@ mixin MainScreenController on State<MainScreen> {
     if (mounted) {
       setState(() {
         transactions = list;
+        hasMoreTransactions = list.length >= _transactionPageSize;
         categoryByKey = categoryMap;
         tagByKey = tagMap;
         accountById = accountMap;
