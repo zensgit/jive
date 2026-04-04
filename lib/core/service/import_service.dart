@@ -9,10 +9,12 @@ import '../database/import_job_model.dart';
 import '../database/import_job_record_model.dart';
 import '../database/transaction_model.dart';
 import '../repository/import_job_history_repository.dart';
+import 'alipay_csv_parser.dart';
 import 'auto_draft_service.dart';
 import 'auto_settings.dart';
 import 'data_reload_bus.dart';
 import 'ocr_service.dart';
+import 'wechat_csv_parser.dart';
 
 enum ImportSourceType { auto, csv, alipay, wechat, ocr }
 
@@ -787,6 +789,16 @@ class ImportService {
     final effectiveSource = sourceType == ImportSourceType.auto
         ? _detectSourceType(normalized)
         : sourceType;
+
+    // Try specialized parsers first
+    if (effectiveSource == ImportSourceType.wechat || WechatCsvParser.isWechatFormat(normalized)) {
+      final records = WechatCsvParser.parse(normalized);
+      if (records.isNotEmpty) return records;
+    }
+    if (effectiveSource == ImportSourceType.alipay || AlipayCsvParser.isAlipayFormat(normalized)) {
+      final records = AlipayCsvParser.parse(normalized);
+      if (records.isNotEmpty) return records;
+    }
 
     if (effectiveSource == ImportSourceType.csv) {
       return _parseCsv(normalized, effectiveSource);

@@ -29,6 +29,10 @@ class SpeechIntentParser {
     '转给',
     '还款',
     '还给',
+    '还钱',
+    '还信用卡',
+    '充值',
+    '提现',
   ];
 
   static const _incomeKeywords = [
@@ -40,6 +44,17 @@ class SpeechIntentParser {
     '返现',
     '报销',
     '补贴',
+    '奖金',
+    '红包',
+    '收到',
+    '入账',
+    '赚了',
+    '卖了',
+    '分红',
+    '利息',
+    '中奖',
+    '兼职',
+    '稿费',
   ];
 
   static const _expenseKeywords = [
@@ -47,6 +62,25 @@ class SpeechIntentParser {
     '消费',
     '花了',
     '用了',
+    '买了',
+    '付了',
+    '吃了',
+    '打车',
+    '打的',
+    '加油',
+    '充了',
+    '交了',
+    '缴费',
+    '水电',
+    '房租',
+    '外卖',
+    '点了',
+    '订了',
+    '看了',
+    '修了',
+    '剪了',
+    '洗了',
+    '停车',
   ];
 
   static const _cleanupTokens = [
