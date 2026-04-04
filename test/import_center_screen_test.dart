@@ -4,12 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'test_helpers.dart';
 import 'package:jive/core/database/import_job_model.dart';
 import 'package:jive/core/service/import_service.dart';
 import 'package:jive/feature/import/import_center_screen.dart';
 import 'package:jive/feature/import/import_failure_report_exporter.dart';
 
 void main() {
+  setUpAll(() async => setupGoogleFontsForTests());
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });

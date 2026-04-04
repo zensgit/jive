@@ -8,9 +8,12 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'test_helpers.dart';
 import 'package:jive/core/design_system/theme.dart';
 
 void main() {
+  setUpAll(() async => setupGoogleFontsForTests());
+
   testWidgets('Jive theme smoke test', (WidgetTester tester) async {
     await tester.pumpWidget(
       const Directionality(

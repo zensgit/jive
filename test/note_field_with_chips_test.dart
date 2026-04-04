@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'test_helpers.dart';
 import 'package:jive/feature/transactions/note_field_with_chips.dart';
 
 void main() {
+  setUpAll(() async => setupGoogleFontsForTests());
+
   testWidgets('note chips toggle text and selection state', (tester) async {
     TestWidgetsFlutterBinding.ensureInitialized();
     final controller = TextEditingController();

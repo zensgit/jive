@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'test_helpers.dart';
 import 'package:jive/core/database/import_job_model.dart';
 import 'package:jive/core/database/import_job_record_model.dart';
 import 'package:jive/core/service/import_service.dart';
 import 'package:jive/feature/import/import_job_detail_screen.dart';
 
 void main() {
+  setUpAll(() async => setupGoogleFontsForTests());
+
   testWidgets('dedup groups can switch sort by latest time and total amount', (
     WidgetTester tester,
   ) async {

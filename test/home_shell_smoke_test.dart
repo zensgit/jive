@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 
+import 'test_helpers.dart';
 import 'package:jive/app/jive_app.dart';
 import 'package:jive/feature/home/widgets/home_top_bar.dart';
 import 'package:jive/feature/home/widgets/home_asset_card.dart';
 import 'package:jive/feature/home/widgets/home_recent_transactions_section.dart';
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-  GoogleFonts.config.allowRuntimeFetching = false;
+  setUpAll(() async => setupGoogleFontsForTests());
 
   group('JiveApp smoke', () {
     testWidgets('JiveApp creates MaterialApp', (tester) async {

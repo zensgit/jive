@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'test_helpers.dart';
 import 'package:jive/core/database/investment_model.dart';
 import 'package:jive/core/service/investment_service.dart';
 import 'package:jive/feature/investment/investment_screen.dart';
 
 void main() {
+  setUpAll(() async => setupGoogleFontsForTests());
+
   testWidgets(
     'screen shows unheld securities alongside holdings and displays correct currency symbols',
     (tester) async {

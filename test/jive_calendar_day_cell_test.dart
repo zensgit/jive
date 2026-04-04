@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'test_helpers.dart';
 import 'package:jive/core/widgets/jive_calendar/jive_calendar_day_cell.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 void main() {
+  setUpAll(() async => setupGoogleFontsForTests());
+
   testWidgets('JiveCalendarDayCell does not overflow with long labels', (
     tester,
   ) async {

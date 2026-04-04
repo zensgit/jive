@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'test_helpers.dart';
 import 'package:jive/core/database/budget_model.dart';
 import 'package:jive/core/database/category_model.dart';
 import 'package:jive/core/service/budget_service.dart';
@@ -82,6 +83,8 @@ BudgetManagerDebugData _buildDebugData({
 }
 
 void main() {
+  setUpAll(() async => setupGoogleFontsForTests());
+
   testWidgets('top category row opens transaction screen', (tester) async {
     final navigatorKey = GlobalKey<NavigatorState>();
     final observer = _RecordingNavigatorObserver();
