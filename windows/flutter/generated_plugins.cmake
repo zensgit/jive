@@ -3,9 +3,11 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  app_links
   file_selector_windows
   isar_flutter_libs
   local_auth_windows
+  printing
   record_windows
   share_plus
   url_launcher_windows

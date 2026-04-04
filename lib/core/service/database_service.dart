@@ -22,6 +22,7 @@ import '../database/merchant_memory_model.dart';
 import '../database/installment_model.dart';
 import '../database/bill_split_model.dart';
 import '../database/savings_goal_model.dart';
+import '../database/dream_log_model.dart';
 import '../database/book_model.dart';
 import '../database/debt_model.dart';
 import '../database/investment_model.dart';
@@ -73,6 +74,7 @@ class DatabaseService {
     JiveUserAutoRuleSchema,
     JiveSharedLedgerSchema,
     JiveSharedLedgerMemberSchema,
+    JiveDreamLogSchema,
   ];
 
   /// 获取或创建 Isar 实例
