@@ -22,6 +22,7 @@ import '../category/category_transactions_screen.dart';
 import 'budget_exclude_screen.dart';
 import 'budget_list_screen.dart';
 import 'budget_settings_screen.dart';
+import 'budget_suggestion_screen.dart';
 
 /// yimu-like monthly budget manager:
 /// - Monthly total budget dashboard card
@@ -526,6 +527,18 @@ class _BudgetManagerScreenState extends State<BudgetManagerScreen> {
       appBar: AppBar(
         title: const Text('预算管理'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome),
+            tooltip: '智能建议',
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const BudgetSuggestionScreen(),
+                ),
+              );
+              _loadData();
+            },
+          ),
           TextButton.icon(
             onPressed: _pickMonth,
             icon: const Icon(Icons.calendar_month, size: 18),
