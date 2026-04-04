@@ -15,6 +15,7 @@ import 'core/sync/sync_engine.dart';
 import 'core/payment/play_store_payment_service.dart';
 import 'core/service/category_icon_style.dart';
 import 'core/utils/logger_util.dart';
+import 'core/service/locale_service.dart';
 import 'feature/theme/theme_provider.dart';
 
 void main() async {
@@ -24,6 +25,8 @@ void main() async {
   final iconStyle = await CategoryIconStyleStore.load();
   final themeProvider = ThemeProvider();
   await themeProvider.init();
+  final localeService = LocaleService();
+  await localeService.init();
   CategoryIconStyleConfig.current = iconStyle;
 
   // Auth: use Supabase when configured, otherwise guest mode
@@ -60,6 +63,7 @@ void main() async {
         ChangeNotifierProvider<PaymentService>.value(value: paymentService),
         ChangeNotifierProvider<AdService>.value(value: adService),
         ChangeNotifierProvider<SyncEngine>.value(value: syncEngine),
+        ChangeNotifierProvider<LocaleService>.value(value: localeService),
       ],
       child: const JiveApp(),
     ),

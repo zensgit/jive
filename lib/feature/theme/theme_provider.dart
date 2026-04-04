@@ -33,12 +33,36 @@ class ThemeProvider extends ChangeNotifier {
 
   ThemeData get themeData => _isDarkMode ? darkTheme : lightTheme;
 
-  ThemeMode get themeMode => _isDarkMode ? ThemeMode.dark : ThemeMode.light;
+  // 0=system, 1=light, 2=dark
+  int _themeModeIndex = 0;
+  static const String _themeModeKey = 'theme_mode_index';
+
+  ThemeMode get themeMode {
+    switch (_themeModeIndex) {
+      case 1: return ThemeMode.light;
+      case 2: return ThemeMode.dark;
+      default: return ThemeMode.system;
+    }
+  }
+
+  bool get isSystemMode => _themeModeIndex == 0;
 
   Future<void> init() async {
     final preferences = await _prefs;
     _currentPreset = ThemePresets.byName(preferences.getString(_presetKey));
     _isDarkMode = preferences.getBool(_darkModeKey) ?? false;
+    _themeModeIndex = preferences.getInt(_themeModeKey) ?? 0;
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    final index = mode == ThemeMode.light ? 1 : mode == ThemeMode.dark ? 2 : 0;
+    if (_themeModeIndex == index) return;
+    _themeModeIndex = index;
+    _isDarkMode = mode == ThemeMode.dark;
+    final preferences = await _prefs;
+    await preferences.setInt(_themeModeKey, index);
+    await preferences.setBool(_darkModeKey, _isDarkMode);
     notifyListeners();
   }
 

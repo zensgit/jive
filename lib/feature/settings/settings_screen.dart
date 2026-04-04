@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/design_system/theme.dart';
 import '../../core/entitlement/entitlement_service.dart';
+import '../../core/service/locale_service.dart';
 import '../../core/entitlement/feature_id.dart';
 import '../../core/entitlement/gated_list_tile.dart';
 import '../../core/service/category_icon_style.dart';
@@ -238,6 +239,30 @@ class SettingsScreen extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text("语言", style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                Consumer<LocaleService>(
+                  builder: (context, localeService, _) {
+                    final current = localeService.currentLocale;
+                    final label = _localeLabel(current);
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.language),
+                      title: const Text("应用语言"),
+                      subtitle: Text(label),
+                      trailing: Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade500),
+                      onTap: () => _showLanguagePicker(context, localeService),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _sectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 const Text("预算", style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
                 ListTile(
@@ -385,6 +410,51 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  String _localeLabel(Locale locale) {
+    switch ('${locale.languageCode}_${locale.countryCode}') {
+      case 'zh_CN': return '简体中文';
+      case 'zh_TW': return '繁體中文';
+      case 'en_US': case 'en_': case 'en_null': return 'English';
+      default: return locale.toString();
+    }
+  }
+
+  void _showLanguagePicker(BuildContext context, LocaleService service) {
+    final locales = service.getSupportedLocales();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 12),
+            const Text('选择语言', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            ...locales.map((locale) {
+              final isSelected = service.currentLocale == locale;
+              return ListTile(
+                leading: Icon(
+                  isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                  color: JiveTheme.primaryGreen,
+                ),
+                title: Text(_localeLabel(locale)),
+                onTap: () {
+                  service.setLocale(locale);
+                  Navigator.pop(ctx);
+                },
+              );
+            }),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     );
   }

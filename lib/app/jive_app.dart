@@ -3,7 +3,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 import '../core/auth/auth_service.dart';
+import '../core/l10n/app_localizations.dart';
 import '../core/service/category_icon_style.dart';
+import '../core/service/locale_service.dart';
 import '../core/sync/sync_config.dart';
 import '../feature/auth/auth_screen.dart';
 import '../feature/home/main_screen.dart';
@@ -16,8 +18,8 @@ class JiveApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, _) {
+    return Consumer2<ThemeProvider, LocaleService>(
+      builder: (context, themeProvider, localeService, _) {
         return ValueListenableBuilder<CategoryIconStyle>(
           valueListenable: CategoryIconStyleConfig.notifier,
           builder: (context, _, __) {
@@ -27,21 +29,14 @@ class JiveApp extends StatelessWidget {
               theme: themeProvider.lightTheme,
               darkTheme: themeProvider.darkTheme,
               themeMode: themeProvider.themeMode,
+              locale: localeService.currentLocale,
               localizationsDelegates: const [
+                AppLocalizationsDelegate(),
                 GlobalMaterialLocalizations.delegate,
                 GlobalWidgetsLocalizations.delegate,
                 GlobalCupertinoLocalizations.delegate,
               ],
-              supportedLocales: const [Locale('zh', 'CN'), Locale('en', 'US')],
-              localeResolutionCallback: (locale, supportedLocales) {
-                if (locale == null) return supportedLocales.first;
-                for (final supported in supportedLocales) {
-                  if (supported.languageCode == locale.languageCode) {
-                    return supported;
-                  }
-                }
-                return supportedLocales.first;
-              },
+              supportedLocales: localeService.getSupportedLocales(),
               home: const LockGate(child: _AppEntry()),
             );
           },
