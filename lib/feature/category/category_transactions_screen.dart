@@ -54,6 +54,10 @@ class _CategoryTransactionsScreenState
   final DateFormat _dateFormat = DateFormat('MM-dd HH:mm');
   final NumberFormat _currency = NumberFormat.currency(symbol: '¥');
   Map<int, JiveAccount> _accountById = {};
+  List<JiveCategory>? _sortedVisibleCategories;
+  List<JiveAccount>? _sortedAccounts;
+  List<_TransactionListItem>? _cachedListItems;
+  int _cachedListItemsHash = 0;
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   final ScrollController _listScrollController = ScrollController();
@@ -129,11 +133,21 @@ class _CategoryTransactionsScreenState
       final tags = await _isar.collection<JiveTag>().where().findAll();
       final tagMap = {for (final t in tags) t.key: t};
 
+      // Pre-sort for filter sheet (avoid sorting on UI thread when opening menu)
+      final sortedCats = categoryMap.values
+          .where((c) => !c.isHidden)
+          .toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+      final sortedAccts = accountMap.values.toList()
+        ..sort((a, b) => a.name.compareTo(b.name));
+
       if (mounted) {
         setState(() {
           _categoryByKey = categoryMap;
           _accountById = accountMap;
           _tagByKey = tagMap;
+          _sortedVisibleCategories = sortedCats;
+          _sortedAccounts = sortedAccts;
           _showSmartTagBadge = showBadge;
         });
       }
@@ -210,7 +224,12 @@ class _CategoryTransactionsScreenState
       );
     }
     final visible = _transactions;
-    final items = _buildListItems(visible);
+    final hash = Object.hashAll([visible.length, _sortField, _sortDirection, _shouldShowDateHeaders()]);
+    if (_cachedListItems == null || _cachedListItemsHash != hash) {
+      _cachedListItems = _buildListItems(visible);
+      _cachedListItemsHash = hash;
+    }
+    final items = _cachedListItems!;
     final bottomInset = _floatingBarHeight + 32;
     return Stack(
       children: [
@@ -764,11 +783,12 @@ class _CategoryTransactionsScreenState
 
   Future<void> _openSearchSheet() async {
     FocusScope.of(context).unfocus();
-    final categories =
-        _categoryByKey.values.where((category) => !category.isHidden).toList()
-          ..sort((a, b) => a.name.compareTo(b.name));
-    final accounts = _accountById.values.toList()
-      ..sort((a, b) => a.name.compareTo(b.name));
+    final categories = _sortedVisibleCategories ??
+        (_categoryByKey.values.where((c) => !c.isHidden).toList()
+          ..sort((a, b) => a.name.compareTo(b.name)));
+    final accounts = _sortedAccounts ??
+        (_accountById.values.toList()
+          ..sort((a, b) => a.name.compareTo(b.name)));
 
     await showModalBottomSheet<void>(
       context: context,

@@ -118,29 +118,28 @@ class HomeRecentTransactionsSection extends StatelessWidget {
 
     final entries = grouped.entries.toList();
 
+    // Pre-compute flat list with headers to avoid O(n²) in itemBuilder
+    final flatItems = <Object>[];
+    for (final entry in entries) {
+      final dayTotal = entry.value.fold<double>(0, (sum, tx) {
+        if (tx.type == 'expense') return sum - tx.amount;
+        if (tx.type == 'income') return sum + tx.amount;
+        return sum;
+      });
+      flatItems.add(_DateHeader(entry.key, dayTotal));
+      flatItems.addAll(entry.value);
+    }
+
     return ListView.builder(
       shrinkWrap: shrinkWrap,
       physics: physics ?? const BouncingScrollPhysics(),
-      itemCount: entries.fold<int>(0, (sum, e) => sum + 1 + e.value.length),
+      itemCount: flatItems.length,
       itemBuilder: (context, index) {
-        var cursor = 0;
-        for (final entry in entries) {
-          if (index == cursor) {
-            // Date header
-            final dayTotal = entry.value.fold<double>(0, (sum, tx) {
-              if (tx.type == 'expense') return sum - tx.amount;
-              if (tx.type == 'income') return sum + tx.amount;
-              return sum;
-            });
-            return _buildDateHeader(context, entry.key, dayTotal);
-          }
-          cursor++;
-          if (index < cursor + entry.value.length) {
-            return _buildTransactionItem(context, entry.value[index - cursor]);
-          }
-          cursor += entry.value.length;
+        final item = flatItems[index];
+        if (item is _DateHeader) {
+          return _buildDateHeader(context, item.label, item.total);
         }
-        return const SizedBox.shrink();
+        return _buildTransactionItem(context, item as JiveTransaction);
       },
     );
   }
@@ -438,4 +437,11 @@ class HomeRecentTransactionsSection extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Lightweight marker for pre-computed date headers in flat list.
+class _DateHeader {
+  final String label;
+  final double total;
+  const _DateHeader(this.label, this.total);
 }
