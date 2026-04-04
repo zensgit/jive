@@ -28,6 +28,7 @@ import '../../savings/savings_goal_screen.dart';
 import '../../security/pin_setup_screen.dart';
 import '../../settings/csv_export_screen.dart';
 import '../../settings/settings_screen.dart';
+import '../../settings/widget_settings_screen.dart';
 import '../../split/bill_split_screen.dart';
 import '../../tag/tag_management_screen.dart';
 
@@ -244,6 +245,21 @@ void showHomeMenuSheet({
                         MaterialPageRoute(
                           builder: (context) =>
                               const SettingsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.widgets),
+                    title: const Text("桌面小组件"),
+                    subtitle: const Text("查看与管理桌面小组件"),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const WidgetSettingsScreen(),
                         ),
                       );
                     },
