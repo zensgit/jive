@@ -32,63 +32,68 @@ const JiveBudgetSchema = CollectionSchema(
       name: r'amount',
       type: IsarType.double,
     ),
-    r'carryoverAmount': PropertySchema(
+    r'bookId': PropertySchema(
       id: 3,
+      name: r'bookId',
+      type: IsarType.long,
+    ),
+    r'carryoverAmount': PropertySchema(
+      id: 4,
       name: r'carryoverAmount',
       type: IsarType.double,
     ),
     r'categoryKey': PropertySchema(
-      id: 4,
+      id: 5,
       name: r'categoryKey',
       type: IsarType.string,
     ),
     r'createdAt': PropertySchema(
-      id: 5,
+      id: 6,
       name: r'createdAt',
       type: IsarType.dateTime,
     ),
     r'currency': PropertySchema(
-      id: 6,
+      id: 7,
       name: r'currency',
       type: IsarType.string,
     ),
     r'endDate': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'endDate',
       type: IsarType.dateTime,
     ),
     r'isActive': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'isActive',
       type: IsarType.bool,
     ),
     r'name': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'name',
       type: IsarType.string,
     ),
     r'period': PropertySchema(
-      id: 10,
+      id: 11,
       name: r'period',
       type: IsarType.string,
     ),
     r'positionWeight': PropertySchema(
-      id: 11,
+      id: 12,
       name: r'positionWeight',
       type: IsarType.long,
     ),
     r'rollover': PropertySchema(
-      id: 12,
+      id: 13,
       name: r'rollover',
       type: IsarType.bool,
     ),
     r'startDate': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'startDate',
       type: IsarType.dateTime,
     ),
     r'updatedAt': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -120,6 +125,19 @@ const JiveBudgetSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'startDate',
+          type: IndexType.value,
+          caseSensitive: false,
+        )
+      ],
+    ),
+    r'bookId': IndexSchema(
+      id: 3567540928881766442,
+      name: r'bookId',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'bookId',
           type: IndexType.value,
           caseSensitive: false,
         )
@@ -161,18 +179,19 @@ void _jiveBudgetSerialize(
   writer.writeBool(offsets[0], object.alertEnabled);
   writer.writeDouble(offsets[1], object.alertThreshold);
   writer.writeDouble(offsets[2], object.amount);
-  writer.writeDouble(offsets[3], object.carryoverAmount);
-  writer.writeString(offsets[4], object.categoryKey);
-  writer.writeDateTime(offsets[5], object.createdAt);
-  writer.writeString(offsets[6], object.currency);
-  writer.writeDateTime(offsets[7], object.endDate);
-  writer.writeBool(offsets[8], object.isActive);
-  writer.writeString(offsets[9], object.name);
-  writer.writeString(offsets[10], object.period);
-  writer.writeLong(offsets[11], object.positionWeight);
-  writer.writeBool(offsets[12], object.rollover);
-  writer.writeDateTime(offsets[13], object.startDate);
-  writer.writeDateTime(offsets[14], object.updatedAt);
+  writer.writeLong(offsets[3], object.bookId);
+  writer.writeDouble(offsets[4], object.carryoverAmount);
+  writer.writeString(offsets[5], object.categoryKey);
+  writer.writeDateTime(offsets[6], object.createdAt);
+  writer.writeString(offsets[7], object.currency);
+  writer.writeDateTime(offsets[8], object.endDate);
+  writer.writeBool(offsets[9], object.isActive);
+  writer.writeString(offsets[10], object.name);
+  writer.writeString(offsets[11], object.period);
+  writer.writeLong(offsets[12], object.positionWeight);
+  writer.writeBool(offsets[13], object.rollover);
+  writer.writeDateTime(offsets[14], object.startDate);
+  writer.writeDateTime(offsets[15], object.updatedAt);
 }
 
 JiveBudget _jiveBudgetDeserialize(
@@ -185,19 +204,20 @@ JiveBudget _jiveBudgetDeserialize(
   object.alertEnabled = reader.readBool(offsets[0]);
   object.alertThreshold = reader.readDoubleOrNull(offsets[1]);
   object.amount = reader.readDouble(offsets[2]);
-  object.carryoverAmount = reader.readDouble(offsets[3]);
-  object.categoryKey = reader.readStringOrNull(offsets[4]);
-  object.createdAt = reader.readDateTime(offsets[5]);
-  object.currency = reader.readString(offsets[6]);
-  object.endDate = reader.readDateTime(offsets[7]);
+  object.bookId = reader.readLongOrNull(offsets[3]);
+  object.carryoverAmount = reader.readDouble(offsets[4]);
+  object.categoryKey = reader.readStringOrNull(offsets[5]);
+  object.createdAt = reader.readDateTime(offsets[6]);
+  object.currency = reader.readString(offsets[7]);
+  object.endDate = reader.readDateTime(offsets[8]);
   object.id = id;
-  object.isActive = reader.readBool(offsets[8]);
-  object.name = reader.readString(offsets[9]);
-  object.period = reader.readString(offsets[10]);
-  object.positionWeight = reader.readLong(offsets[11]);
-  object.rollover = reader.readBool(offsets[12]);
-  object.startDate = reader.readDateTime(offsets[13]);
-  object.updatedAt = reader.readDateTime(offsets[14]);
+  object.isActive = reader.readBool(offsets[9]);
+  object.name = reader.readString(offsets[10]);
+  object.period = reader.readString(offsets[11]);
+  object.positionWeight = reader.readLong(offsets[12]);
+  object.rollover = reader.readBool(offsets[13]);
+  object.startDate = reader.readDateTime(offsets[14]);
+  object.updatedAt = reader.readDateTime(offsets[15]);
   return object;
 }
 
@@ -215,28 +235,30 @@ P _jiveBudgetDeserializeProp<P>(
     case 2:
       return (reader.readDouble(offset)) as P;
     case 3:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 4:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDouble(offset)) as P;
     case 5:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
-    case 7:
       return (reader.readDateTime(offset)) as P;
-    case 8:
-      return (reader.readBool(offset)) as P;
-    case 9:
+    case 7:
       return (reader.readString(offset)) as P;
+    case 8:
+      return (reader.readDateTime(offset)) as P;
+    case 9:
+      return (reader.readBool(offset)) as P;
     case 10:
       return (reader.readString(offset)) as P;
     case 11:
-      return (reader.readLong(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 12:
-      return (reader.readBool(offset)) as P;
+      return (reader.readLong(offset)) as P;
     case 13:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 14:
+      return (reader.readDateTime(offset)) as P;
+    case 15:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -267,6 +289,14 @@ extension JiveBudgetQueryWhereSort
     return QueryBuilder.apply(this, (query) {
       return query.addWhereClause(
         const IndexWhereClause.any(indexName: r'startDate'),
+      );
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhere> anyBookId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(
+        const IndexWhereClause.any(indexName: r'bookId'),
       );
     });
   }
@@ -494,6 +524,116 @@ extension JiveBudgetQueryWhere
       ));
     });
   }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhereClause> bookIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'bookId',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhereClause> bookIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'bookId',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhereClause> bookIdEqualTo(
+      int? bookId) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'bookId',
+        value: [bookId],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhereClause> bookIdNotEqualTo(
+      int? bookId) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'bookId',
+              lower: [],
+              upper: [bookId],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'bookId',
+              lower: [bookId],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'bookId',
+              lower: [bookId],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'bookId',
+              lower: [],
+              upper: [bookId],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhereClause> bookIdGreaterThan(
+    int? bookId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'bookId',
+        lower: [bookId],
+        includeLower: include,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhereClause> bookIdLessThan(
+    int? bookId, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'bookId',
+        lower: [],
+        upper: [bookId],
+        includeUpper: include,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhereClause> bookIdBetween(
+    int? lowerBookId,
+    int? upperBookId, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'bookId',
+        lower: [lowerBookId],
+        includeLower: includeLower,
+        upper: [upperBookId],
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension JiveBudgetQueryFilter
@@ -650,6 +790,76 @@ extension JiveBudgetQueryFilter
         upper: upper,
         includeUpper: includeUpper,
         epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> bookIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'bookId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      bookIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'bookId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> bookIdEqualTo(
+      int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'bookId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> bookIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'bookId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> bookIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'bookId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> bookIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'bookId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
       ));
     });
   }
@@ -1660,6 +1870,18 @@ extension JiveBudgetQuerySortBy
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortByBookId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'bookId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortByBookIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'bookId', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortByCarryoverAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'carryoverAmount', Sort.asc);
@@ -1846,6 +2068,18 @@ extension JiveBudgetQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenByBookId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'bookId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenByBookIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'bookId', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenByCarryoverAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'carryoverAmount', Sort.asc);
@@ -2025,6 +2259,12 @@ extension JiveBudgetQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QDistinct> distinctByBookId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'bookId');
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QDistinct> distinctByCarryoverAmount() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'carryoverAmount');
@@ -2125,6 +2365,12 @@ extension JiveBudgetQueryProperty
   QueryBuilder<JiveBudget, double, QQueryOperations> amountProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'amount');
+    });
+  }
+
+  QueryBuilder<JiveBudget, int?, QQueryOperations> bookIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'bookId');
     });
   }
 

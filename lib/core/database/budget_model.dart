@@ -34,6 +34,9 @@ class JiveBudget {
   double? alertThreshold; // 预警阈值（百分比，如 80 表示 80%）
   bool alertEnabled = false; // 是否启用预警
 
+  @Index()
+  int? bookId; // 关联账本（null = 全局预算）
+
   DateTime createdAt = DateTime.now();
   DateTime updatedAt = DateTime.now();
 }

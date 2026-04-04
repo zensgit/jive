@@ -4,6 +4,7 @@ import 'package:isar/isar.dart';
 
 import '../../core/database/book_model.dart';
 import '../../core/service/book_service.dart';
+import 'book_stats_screen.dart';
 
 /// 多账本管理屏幕
 class BookManagerScreen extends StatefulWidget {
@@ -146,6 +147,13 @@ class _BookManagerScreenState extends State<BookManagerScreen> {
       appBar: AppBar(
         title: const Text('账本管理'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: '账本统计',
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const BookStatsScreen()));
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.add),
             onPressed: _createBook,
