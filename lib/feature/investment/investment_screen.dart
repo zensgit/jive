@@ -9,6 +9,7 @@ import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/investment_service.dart';
+import 'portfolio_chart_widget.dart';
 
 class InvestmentScreen extends StatefulWidget {
   final Isar? debugIsar;
@@ -465,6 +466,10 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
                 children: [
                   if (_portfolio != null) _buildSummaryCard(),
                   const SizedBox(height: 16),
+                  if (_portfolio != null && holdings.isNotEmpty)
+                    PortfolioChartWidget(portfolio: _portfolio!),
+                  if (_portfolio != null && holdings.isNotEmpty)
+                    const SizedBox(height: 16),
                   if (holdings.isNotEmpty) ...[
                     Text(
                       '持仓明细',

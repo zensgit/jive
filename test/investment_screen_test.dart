@@ -62,6 +62,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('持仓明细'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('未持有证券'), 200);
       expect(find.text('未持有证券'), findsOneWidget);
       expect(find.text('Apple'), findsOneWidget);
       expect(find.text('Bitcoin (BTC-USD)'), findsOneWidget);

@@ -404,6 +404,9 @@ class _SavingsGoalScreenState extends State<SavingsGoalScreen>
                 );
                 return;
               }
+              final prevPercent = goal.targetAmount > 0
+                  ? goal.currentAmount / goal.targetAmount * 100
+                  : 0.0;
               final isar = Isar.getInstance()!;
               await isar.writeTxn(() async {
                 goal
@@ -413,6 +416,11 @@ class _SavingsGoalScreenState extends State<SavingsGoalScreen>
               });
               if (ctx.mounted) Navigator.pop(ctx);
               await _loadGoals();
+              // Check milestone celebrations
+              final newPercent = goal.targetAmount > 0
+                  ? goal.currentAmount / goal.targetAmount * 100
+                  : 0.0;
+              _checkMilestone(goal, prevPercent, newPercent);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: _kAccentGreen,
@@ -421,6 +429,67 @@ class _SavingsGoalScreenState extends State<SavingsGoalScreen>
                   borderRadius: BorderRadius.circular(8)),
             ),
             child: Text('确认', style: GoogleFonts.lato()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Milestone Celebration ───────────────────────────────────────────────────
+
+  void _checkMilestone(JiveSavingsGoal goal, double prevPct, double newPct) {
+    if (!mounted) return;
+    const milestones = [25.0, 50.0, 75.0, 100.0];
+    for (final m in milestones) {
+      if (prevPct < m && newPct >= m) {
+        _showMilestoneCelebration(goal, m.toInt());
+        break;
+      }
+    }
+  }
+
+  void _showMilestoneCelebration(JiveSavingsGoal goal, int percent) {
+    if (!mounted) return;
+    final emoji = percent == 100 ? '🎉' : percent >= 75 ? '🔥' : percent >= 50 ? '💪' : '👏';
+    final message = percent == 100
+        ? '恭喜！「${goal.name}」已达成目标！'
+        : '太棒了！「${goal.name}」已完成 $percent%！';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Text(emoji, style: const TextStyle(fontSize: 56)),
+            const SizedBox(height: 16),
+            Text(
+              '里程碑达成！',
+              style: GoogleFonts.lato(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.lato(fontSize: 14, color: Colors.grey[700], height: 1.5),
+            ),
+          ],
+        ),
+        actions: [
+          Center(
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kAccentGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+              ),
+              child: Text('继续加油！', style: GoogleFonts.lato(fontWeight: FontWeight.w600)),
+            ),
           ),
         ],
       ),
@@ -716,14 +785,41 @@ class _GoalCard extends StatelessWidget {
             const SizedBox(height: 6),
 
             // Progress bar
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: _progress,
-                minHeight: 8,
-                backgroundColor: Colors.grey[200],
-                valueColor: AlwaysStoppedAnimation<Color>(_progressColor),
-              ),
+            // Progress bar with milestone markers
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: _progress,
+                    minHeight: 8,
+                    backgroundColor: Colors.grey[200],
+                    valueColor: AlwaysStoppedAnimation<Color>(_progressColor),
+                  ),
+                ),
+                // Milestone markers at 25%, 50%, 75%
+                for (final m in [0.25, 0.5, 0.75])
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: m,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          width: 2,
+                          height: 8,
+                          color: _progress >= m
+                              ? Colors.white.withAlpha(150)
+                              : Colors.grey.shade400.withAlpha(80),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 10),
 
