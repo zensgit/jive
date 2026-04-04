@@ -258,24 +258,77 @@ create table public.user_subscriptions (
 
 ---
 
+## Git 工作流规范
+
+### 分支命名
+每个 task 在独立分支上开发，命名规范：
+```
+saas/b0.2-stable-cloud-ids
+saas/b1.1-sync-schema-book-key
+saas/b1.2-remove-local-id-dependency
+saas/b1.3-delete-tombstone-strategy
+saas/b2.1-server-subscription-truth
+saas/b2.2-subscription-webhook
+saas/b2.3-client-entitlement-wiring
+saas/b3.1-email-login
+saas/b3.2-phone-oauth
+saas/b4.1-sync-security-audit
+saas/b4.2-security-copy-fix
+saas/b5.1-analytics
+saas/b5.2-notifications
+saas/b5.3-admin-api
+```
+
+### 工作流程
+1. **从 main 创建分支**: `git checkout -b saas/b0.2-stable-cloud-ids main`
+2. **在分支上开发**: 小 commit，每个 commit 有清晰消息
+3. **完成后创建 PR**: `gh pr create --base main --title "B0.2: 定义稳定云端标识"`
+4. **不要直接合并到 main** — 等待审查后再合并
+5. **如果依赖前序 task**: 从前序 task 的分支创建，合并后 rebase 到 main
+
+### 冲突预防
+- Codex 主要修改: `supabase/`, `lib/core/sync/`, `lib/core/entitlement/`, `lib/core/auth/`
+- Claude 主要修改: `lib/feature/`, `lib/core/service/`, `lib/core/design_system/`, `test/`
+- 共同可能修改: `lib/core/database/`, `lib/main.dart` — 这些文件改动前先 pull 最新 main
+
+### Worktree 建议（可选）
+如果需要并行开发多个 task:
+```bash
+git worktree add ../jive-saas-b0.2 -b saas/b0.2-stable-cloud-ids main
+git worktree add ../jive-saas-b1.1 -b saas/b1.1-sync-schema-book-key main
+```
+
+---
+
 ## 交付要求
-- 每个 task 单独 PR 或小批量 PR
+- 每个 task 单独 PR
 - 每个 PR 必须汇报：
   1. 改了哪些文件
   2. 数据边界或行为边界如何变化
   3. 迁移风险
-  4. `flutter analyze`
-  5. `flutter test`
+  4. `flutter analyze` 结果
+  5. `flutter test` 结果
   6. 哪些问题刻意留到下一阶段
+- PR 标题格式: `B{phase}.{task}: {简要描述}`
+- PR body 包含 checklist:
+  ```
+  - [ ] flutter analyze 0 errors
+  - [ ] flutter test 全部通过
+  - [ ] SQL 迁移已测试
+  - [ ] 向后兼容（不破坏现有本地数据）
+  ```
+
+---
 
 ## 当前推荐顺序
-1. B0.1
+1. ~~B0.1~~ ✅ 已完成 (saas-beta-boundaries.md)
 2. B0.2
 3. B1.1
 4. B1.2
-5. B2.1
-6. B2.2
-7. B2.3
-8. B3.1
-9. B4.1
-10. 其余任务按资源推进
+5. B1.3
+6. B2.1
+7. B2.2
+8. B2.3
+9. B3.1
+10. B4.1
+11. 其余任务按资源推进
