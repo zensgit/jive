@@ -20,6 +20,7 @@ class SyncState {
   final String? errorMessage;
   final int pendingUploadCount;
   final int pendingDownloadCount;
+  final int conflictCount;
 
   const SyncState({
     this.status = SyncStatus.disabled,
@@ -27,12 +28,13 @@ class SyncState {
     this.errorMessage,
     this.pendingUploadCount = 0,
     this.pendingDownloadCount = 0,
+    this.conflictCount = 0,
   });
 
   const SyncState.disabled() : this();
 
-  const SyncState.idle({DateTime? lastSyncAt})
-      : this(status: SyncStatus.idle, lastSyncAt: lastSyncAt);
+  const SyncState.idle({DateTime? lastSyncAt, int conflictCount = 0})
+      : this(status: SyncStatus.idle, lastSyncAt: lastSyncAt, conflictCount: conflictCount);
 
   const SyncState.syncing()
       : this(status: SyncStatus.syncing);
@@ -42,4 +44,5 @@ class SyncState {
 
   bool get isSyncing => status == SyncStatus.syncing;
   bool get isEnabled => status != SyncStatus.disabled;
+  bool get hasConflicts => conflictCount > 0;
 }

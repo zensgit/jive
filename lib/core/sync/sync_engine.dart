@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,16 +11,21 @@ import '../database/tag_model.dart';
 import '../database/transaction_model.dart';
 import '../entitlement/entitlement_service.dart';
 import 'sync_config.dart';
+import 'sync_conflict_service.dart';
 import 'sync_state.dart';
 
 /// Incremental sync engine between local Isar and remote Supabase.
 ///
 /// Syncs 5 tables: transactions, accounts, categories, tags, budgets.
 /// Strategy: per-table cursor-based incremental sync using `updatedAt`.
-/// Conflict resolution: last-write-wins (higher updatedAt wins).
+/// Conflict resolution: detects conflicts and logs them for user resolution.
+/// Falls back to last-write-wins when both sides changed within a threshold.
 class SyncEngine extends ChangeNotifier {
   static const _prefKeyCursorPrefix = 'sync_cursor_';
   static const _prefKeySyncEnabled = 'sync_enabled';
+
+  /// If both local and remote changed within this window, it's a conflict.
+  static const _conflictThreshold = Duration(seconds: 60);
 
   static const _syncTables = [
     'transactions',
@@ -33,6 +37,7 @@ class SyncEngine extends ChangeNotifier {
 
   final Isar _isar;
   final EntitlementService _entitlement;
+  late final SyncConflictService _conflictService;
 
   SyncState _state = const SyncState.disabled();
   Timer? _debounceTimer;
@@ -41,9 +46,12 @@ class SyncEngine extends ChangeNotifier {
     required Isar isar,
     required EntitlementService entitlement,
   })  : _isar = isar,
-        _entitlement = entitlement;
+        _entitlement = entitlement {
+    _conflictService = SyncConflictService(isar);
+  }
 
   SyncState get state => _state;
+  SyncConflictService get conflictService => _conflictService;
 
   bool get isAvailable =>
       SyncConfig.isConfigured && _entitlement.tier.hasCloud;
@@ -70,7 +78,8 @@ class SyncEngine extends ChangeNotifier {
         return;
       }
 
-      _state = const SyncState.idle();
+      final conflictCount = await _conflictService.getPendingCount();
+      _state = SyncState.idle(conflictCount: conflictCount);
       notifyListeners();
     } catch (e) {
       debugPrint('SyncEngine: init failed: $e');
@@ -105,7 +114,14 @@ class SyncEngine extends ChangeNotifier {
         await _updateCursor(table);
       }
 
-      _state = SyncState.idle(lastSyncAt: DateTime.now());
+      // Clean up old resolved conflicts periodically
+      await _conflictService.cleanupOldConflicts();
+      final conflictCount = await _conflictService.getPendingCount();
+
+      _state = SyncState.idle(
+        lastSyncAt: DateTime.now(),
+        conflictCount: conflictCount,
+      );
     } catch (e) {
       debugPrint('SyncEngine: sync failed: $e');
       _state = SyncState.error('同步失败: $e');
@@ -137,6 +153,18 @@ class SyncEngine extends ChangeNotifier {
   /// Cancel pending debounce timer.
   void cancelPendingSync() {
     _debounceTimer?.cancel();
+  }
+
+  /// Refresh conflict count and notify listeners.
+  Future<void> refreshConflictCount() async {
+    final count = await _conflictService.getPendingCount();
+    if (_state.status == SyncStatus.idle) {
+      _state = SyncState.idle(
+        lastSyncAt: _state.lastSyncAt,
+        conflictCount: count,
+      );
+      notifyListeners();
+    }
   }
 
   // ── Per-table push/pull ──
@@ -219,7 +247,6 @@ class SyncEngine extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> _getAccountChanges(DateTime cursor) async {
     final items = await _isar.jiveAccounts.where().findAll();
-    // Accounts don't have updatedAt in Isar, push all
     return items.map((a) => {
       'local_id': a.id,
       'name': a.name,
@@ -277,7 +304,7 @@ class SyncEngine extends ChangeNotifier {
     }).toList();
   }
 
-  // ── Remote change application ──
+  // ── Remote change application with conflict detection ──
 
   Future<void> _applyRemoteChanges(String table, List<dynamic> rows) async {
     switch (table) {
@@ -299,14 +326,45 @@ class SyncEngine extends ChangeNotifier {
     }
   }
 
+  /// Check if both local and remote changed recently (true conflict).
+  /// Returns true if it's a real conflict that needs user attention.
+  bool _isRealConflict(DateTime localUpdatedAt, DateTime remoteUpdatedAt, DateTime cursor) {
+    // Both changed since last sync
+    final localChangedSinceCursor = localUpdatedAt.isAfter(cursor);
+    final remoteChangedSinceCursor = remoteUpdatedAt.isAfter(cursor);
+    if (!localChangedSinceCursor || !remoteChangedSinceCursor) return false;
+
+    // Both changed within a short window of each other
+    final diff = localUpdatedAt.difference(remoteUpdatedAt).abs();
+    return diff < _conflictThreshold;
+  }
+
   Future<void> _applyTransactionChanges(List<dynamic> rows) async {
+    final cursor = await _getCursor('transactions');
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = row['local_id'] as int?;
         if (localId == null) continue;
         final existing = await _isar.jiveTransactions.get(localId);
         final remoteUpdatedAt = DateTime.parse(row['updated_at'] as String);
-        if (existing != null && existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
+
+        if (existing != null) {
+          // Detect conflict: both sides changed since last sync
+          if (_isRealConflict(existing.updatedAt, remoteUpdatedAt, cursor)) {
+            await _conflictService.recordConflict(
+              table: 'transactions',
+              localId: localId,
+              localData: _transactionToMap(existing),
+              remoteData: Map<String, dynamic>.from(row as Map),
+              localUpdatedAt: existing.updatedAt,
+              remoteUpdatedAt: remoteUpdatedAt,
+            );
+            continue; // Skip update, let user resolve
+          }
+
+          // No conflict — last-write-wins
+          if (existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
+        }
 
         final tx = existing ?? JiveTransaction();
         tx.id = localId;
@@ -326,6 +384,22 @@ class SyncEngine extends ChangeNotifier {
       }
     });
   }
+
+  Map<String, dynamic> _transactionToMap(JiveTransaction tx) => {
+    'local_id': tx.id,
+    'amount': tx.amount,
+    'source': tx.source,
+    'type': tx.type,
+    'timestamp': tx.timestamp.toIso8601String(),
+    'category_key': tx.categoryKey,
+    'sub_category_key': tx.subCategoryKey,
+    'category': tx.category,
+    'sub_category': tx.subCategory,
+    'note': tx.note,
+    'account_id': tx.accountId,
+    'raw_text': tx.rawText,
+    'updated_at': tx.updatedAt.toIso8601String(),
+  };
 
   Future<void> _applyAccountChanges(List<dynamic> rows) async {
     await _isar.writeTxn(() async {

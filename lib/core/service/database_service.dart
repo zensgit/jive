@@ -25,6 +25,7 @@ import '../database/savings_goal_model.dart';
 import '../database/book_model.dart';
 import '../database/debt_model.dart';
 import '../database/investment_model.dart';
+import '../database/sync_conflict_model.dart';
 
 /// 统一的数据库服务，确保所有地方使用相同的 schema 列表
 class DatabaseService {
@@ -66,6 +67,7 @@ class DatabaseService {
     JiveHoldingSchema,
     JiveInvestmentTransactionSchema,
     JivePriceHistorySchema,
+    JiveSyncConflictSchema,
   ];
 
   /// 获取或创建 Isar 实例

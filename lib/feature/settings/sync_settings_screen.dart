@@ -8,6 +8,7 @@ import '../../core/entitlement/feature_gate.dart';
 import '../../core/entitlement/feature_id.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_state.dart';
+import 'sync_conflict_screen.dart';
 
 /// Settings screen for cloud sync status and controls.
 class SyncSettingsScreen extends StatefulWidget {
@@ -51,6 +52,8 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           ],
           if (isSubscriber) ...[
             _buildStatusCard(context),
+            const SizedBox(height: 12),
+            _buildConflictCard(context),
             const SizedBox(height: 12),
             _buildControlsCard(context),
             const SizedBox(height: 12),
@@ -233,6 +236,57 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildConflictCard(BuildContext context) {
+    final syncEngine = context.watch<SyncEngine>();
+    final conflictCount = syncEngine.state.conflictCount;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: conflictCount > 0 ? Colors.orange.shade300 : Colors.grey.shade200),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Icon(
+          conflictCount > 0 ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+          color: conflictCount > 0 ? Colors.orange : JiveTheme.primaryGreen,
+        ),
+        title: const Text('同步冲突'),
+        subtitle: Text(
+          conflictCount > 0 ? '$conflictCount 个冲突待处理' : '没有冲突',
+          style: TextStyle(
+            color: conflictCount > 0 ? Colors.orange.shade700 : Colors.grey.shade600,
+            fontSize: 13,
+          ),
+        ),
+        trailing: conflictCount > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '$conflictCount',
+                  style: TextStyle(
+                    color: Colors.orange.shade800,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              )
+            : const Icon(Icons.chevron_right, color: Colors.grey),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SyncConflictScreen()),
+          );
+        },
       ),
     );
   }
