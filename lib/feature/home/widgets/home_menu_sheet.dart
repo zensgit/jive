@@ -11,6 +11,7 @@ import '../../../core/service/category_service.dart';
 import '../../../core/service/transaction_service.dart';
 import '../../../core/utils/logger_util.dart';
 import '../../assistant/assistant_screen.dart';
+import '../../settings/auto_rule_editor_screen.dart';
 import '../../bill_relation/bill_relation_screen.dart';
 import '../../books/book_manager_screen.dart';
 import '../../budget/budget_manager_screen.dart';
@@ -660,6 +661,17 @@ void showHomeMenuSheet({
                     onTap: () async {
                       Navigator.pop(context);
                       await actions.openAutoRuleTester();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.auto_fix_high),
+                    title: const Text("自动分类规则管理"),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AutoRuleEditorScreen()),
+                      );
                     },
                   ),
                   ListTile(
