@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../entitlement/entitlement_service.dart';
 import '../entitlement/user_tier.dart';
 import 'payment_service.dart';
+import 'subscription_truth_model.dart';
+import 'subscription_truth_repository.dart';
 
 /// Checks subscription validity on app startup and handles expiry/downgrade.
 ///
@@ -18,12 +20,15 @@ class SubscriptionStatusService {
 
   final PaymentService _paymentService;
   final EntitlementService _entitlementService;
+  final SubscriptionTruthRepository? _truthRepository;
 
   SubscriptionStatusService({
     required PaymentService paymentService,
     required EntitlementService entitlementService,
-  })  : _paymentService = paymentService,
-        _entitlementService = entitlementService;
+    SubscriptionTruthRepository? truthRepository,
+  }) : _paymentService = paymentService,
+       _entitlementService = entitlementService,
+       _truthRepository = truthRepository;
 
   /// Check and sync subscription state on app start.
   ///
@@ -34,6 +39,31 @@ class SubscriptionStatusService {
   Future<void> checkAndSync() async {
     final currentTier = _entitlementService.tier;
 
+    final truthResult =
+        await _truthRepository?.fetchCurrentSubscription() ??
+        const SubscriptionTruthFetchResult.unavailable();
+
+    if (truthResult.isAuthoritative) {
+      final snapshot = truthResult.snapshot;
+      if (snapshot != null) {
+        await _entitlementService.applyTrustedSnapshot(snapshot);
+        if (snapshot.isEntitled || snapshot.tier == UserTier.paid) {
+          debugPrint(
+            'SubscriptionStatusService: loaded trusted tier ${snapshot.tier.name}',
+          );
+        }
+        return;
+      } else if (currentTier == UserTier.subscriber) {
+        debugPrint(
+          'SubscriptionStatusService: trusted source reports no subscription',
+        );
+        await _entitlementService.clearTrustedSnapshot(
+          downgradeSubscriber: true,
+        );
+        return;
+      }
+    }
+
     // Paid (one-time) purchases never expire.
     if (currentTier == UserTier.paid) {
       debugPrint('SubscriptionStatusService: paid tier — no expiry check');
@@ -42,7 +72,9 @@ class SubscriptionStatusService {
 
     // If payment service is not available, apply offline grace period.
     if (!_paymentService.isAvailable) {
-      debugPrint('SubscriptionStatusService: service unavailable — offline grace');
+      debugPrint(
+        'SubscriptionStatusService: service unavailable — offline grace',
+      );
       await _applyOfflineGrace(currentTier);
       return;
     }
@@ -54,7 +86,9 @@ class SubscriptionStatusService {
     // which calls EntitlementService.setTier on success.  If the restore did
     // not succeed (no active purchases) and user was subscriber, downgrade.
     if (!result.success && currentTier == UserTier.subscriber) {
-      debugPrint('SubscriptionStatusService: no active subscription — downgrading');
+      debugPrint(
+        'SubscriptionStatusService: no active subscription — downgrading',
+      );
       await _entitlementService.setTier(UserTier.free);
     }
   }
@@ -66,7 +100,9 @@ class SubscriptionStatusService {
       _prefKeyLastPurchase,
       DateTime.now().millisecondsSinceEpoch,
     );
-    debugPrint('SubscriptionStatusService: recorded purchase time for $productId');
+    debugPrint(
+      'SubscriptionStatusService: recorded purchase time for $productId',
+    );
   }
 
   /// Read the last purchase timestamp, if any.
@@ -84,13 +120,17 @@ class SubscriptionStatusService {
     final lastPurchase = await getLastPurchaseTime();
     if (lastPurchase == null) {
       // No record — cannot verify, keep current tier as a courtesy.
-      debugPrint('SubscriptionStatusService: no purchase record — keeping tier');
+      debugPrint(
+        'SubscriptionStatusService: no purchase record — keeping tier',
+      );
       return;
     }
 
     final elapsed = DateTime.now().difference(lastPurchase);
     if (elapsed > _gracePeriod) {
-      debugPrint('SubscriptionStatusService: grace period expired — downgrading');
+      debugPrint(
+        'SubscriptionStatusService: grace period expired — downgrading',
+      );
       await _entitlementService.setTier(UserTier.free);
     } else {
       debugPrint(
