@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/service/stats_aggregation_service.dart';
+import 'share_stats_button.dart';
 
 class MonthlyOverviewScreen extends StatefulWidget {
   final String? currencyCode;
@@ -117,6 +118,11 @@ class _MonthlyOverviewScreenState extends State<MonthlyOverviewScreen> {
         IconButton(icon: const Icon(Icons.chevron_left), onPressed: () => _changeMonth(-1)),
         Text(label, style: GoogleFonts.lato(fontSize: 18, fontWeight: FontWeight.bold)),
         IconButton(icon: const Icon(Icons.chevron_right), onPressed: () => _changeMonth(1)),
+        ShareStatsButton(
+          month: _currentMonth,
+          currencyCode: widget.currencyCode,
+          bookId: widget.bookId,
+        ),
       ],
     );
   }
