@@ -13,6 +13,7 @@ import '../database/shared_ledger_model.dart';
 import '../database/transaction_model.dart';
 import '../entitlement/entitlement_service.dart';
 import '../service/book_service.dart';
+import 'sync_account_scope.dart';
 import 'sync_book_scope.dart';
 import 'sync_config.dart';
 import 'sync_conflict_service.dart';
@@ -184,7 +185,7 @@ class SyncEngine extends ChangeNotifier {
     if (rows.isEmpty) return;
 
     final mapped = rows.map((r) => {'user_id': userId, ...r}).toList();
-    await client.from(table).upsert(mapped, onConflict: 'user_id,local_id');
+    await client.from(table).upsert(mapped, onConflict: _onConflictKeyFor(table));
     debugPrint('SyncEngine: pushed ${rows.length} rows to $table');
   }
 
@@ -235,6 +236,7 @@ class SyncEngine extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> _getTransactionChanges(DateTime cursor) async {
     final scope = await _loadBookScope();
+    final accountScope = await _loadAccountScope();
     final items = await _isar.jiveTransactions
         .filter()
         .updatedAtGreaterThan(cursor)
@@ -251,6 +253,9 @@ class SyncEngine extends ChangeNotifier {
       'sub_category': tx.subCategory,
       'note': tx.note,
       'account_id': tx.accountId,
+      'account_key': accountScope.accountKey(tx.accountId),
+      'to_account_id': tx.toAccountId,
+      'to_account_key': accountScope.accountKey(tx.toAccountId),
       'book_key': scope.transactionBookKey(tx.bookId),
       'raw_text': tx.rawText,
       'updated_at': tx.updatedAt.toIso8601String(),
@@ -262,6 +267,7 @@ class SyncEngine extends ChangeNotifier {
     final items = await _isar.jiveAccounts.where().findAll();
     return items.map((a) => {
       'local_id': a.id,
+      'key': a.key,
       'name': a.name,
       'type': a.type,
       'sub_type': a.subType,
@@ -395,6 +401,7 @@ class SyncEngine extends ChangeNotifier {
   Future<void> _applyTransactionChanges(List<dynamic> rows) async {
     final cursor = await _getCursor('transactions');
     final scope = await _loadBookScope();
+    final accountScope = await _loadAccountScope();
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = row['local_id'] as int?;
@@ -408,7 +415,7 @@ class SyncEngine extends ChangeNotifier {
             await _conflictService.recordConflict(
               table: 'transactions',
               localId: localId,
-              localData: _transactionToMap(existing, scope),
+              localData: _transactionToMap(existing, scope, accountScope),
               remoteData: Map<String, dynamic>.from(row as Map),
               localUpdatedAt: existing.updatedAt,
               remoteUpdatedAt: remoteUpdatedAt,
@@ -431,7 +438,14 @@ class SyncEngine extends ChangeNotifier {
         tx.category = row['category'] as String?;
         tx.subCategory = row['sub_category'] as String?;
         tx.note = row['note'] as String?;
-        tx.accountId = row['account_id'] as int?;
+        tx.accountId = accountScope.accountId(
+          row['account_key'] as String?,
+          fallbackAccountId: existing?.accountId ?? row['account_id'] as int?,
+        );
+        tx.toAccountId = accountScope.accountId(
+          row['to_account_key'] as String?,
+          fallbackAccountId: existing?.toAccountId ?? row['to_account_id'] as int?,
+        );
         tx.bookId = scope.transactionBookId(
           row['book_key'] as String?,
           fallbackBookId: existing?.bookId,
@@ -446,6 +460,7 @@ class SyncEngine extends ChangeNotifier {
   Map<String, dynamic> _transactionToMap(
     JiveTransaction tx,
     SyncBookScope scope,
+    SyncAccountScope accountScope,
   ) => {
     'local_id': tx.id,
     'amount': tx.amount,
@@ -458,6 +473,9 @@ class SyncEngine extends ChangeNotifier {
     'sub_category': tx.subCategory,
     'note': tx.note,
     'account_id': tx.accountId,
+    'account_key': accountScope.accountKey(tx.accountId),
+    'to_account_id': tx.toAccountId,
+    'to_account_key': accountScope.accountKey(tx.toAccountId),
     'book_key': scope.transactionBookKey(tx.bookId),
     'raw_text': tx.rawText,
     'updated_at': tx.updatedAt.toIso8601String(),
@@ -468,10 +486,16 @@ class SyncEngine extends ChangeNotifier {
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = row['local_id'] as int?;
-        if (localId == null) continue;
-        final existing = await _isar.jiveAccounts.get(localId);
+        final remoteKey = row['key'] as String?;
+        if (localId == null && (remoteKey == null || remoteKey.isEmpty)) continue;
+        JiveAccount? existing;
+        if (remoteKey != null && remoteKey.isNotEmpty) {
+          existing = await _isar.jiveAccounts.where().keyEqualTo(remoteKey).findFirst();
+        }
+        existing ??= localId != null ? await _isar.jiveAccounts.get(localId) : null;
         final a = existing ?? JiveAccount();
-        a.id = localId;
+        a.id = existing?.id ?? localId ?? Isar.autoIncrement;
+        a.key = remoteKey ?? existing?.key ?? 'acct_remote_${localId ?? DateTime.now().microsecondsSinceEpoch}';
         a.name = row['name'] as String? ?? '';
         a.type = row['type'] as String? ?? 'asset';
         a.subType = row['sub_type'] as String?;
@@ -601,6 +625,27 @@ class SyncEngine extends ChangeNotifier {
       defaultBookId: defaultBook?.id,
       defaultBookKey: defaultBook?.key ?? BookService.defaultBookKey,
     );
+  }
+
+  Future<SyncAccountScope> _loadAccountScope() async {
+    final accounts = await _isar.jiveAccounts.where().findAll();
+    return SyncAccountScope(
+      accountKeyById: {
+        for (final account in accounts) account.id: account.key,
+      },
+      accountIdByKey: {
+        for (final account in accounts) account.key: account.id,
+      },
+    );
+  }
+
+  String _onConflictKeyFor(String table) {
+    switch (table) {
+      case 'accounts':
+        return 'user_id,key';
+      default:
+        return 'user_id,local_id';
+    }
   }
 
   Future<void> _applySharedLedgerMemberChanges(List<dynamic> rows) async {
