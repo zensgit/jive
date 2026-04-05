@@ -75,6 +75,10 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
   DateTimeRange? _dateRange;
   late BudgetInclusionFilter _budgetFilter;
 
+  // Pre-built dropdown items to avoid rebuilding on every frame
+  late final List<DropdownMenuItem<String?>> _categoryItems;
+  late final List<DropdownMenuItem<int?>> _accountItems;
+
   @override
   void initState() {
     super.initState();
@@ -86,6 +90,23 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
     );
     _dateRange = state?.dateRange ?? widget.initialDateRange;
     _budgetFilter = state?.budgetFilter ?? widget.initialBudgetFilter;
+
+    // Build dropdown items once in initState instead of every build()
+    _categoryItems = [
+      const DropdownMenuItem<String?>(value: null, child: Text('全部分类')),
+      ...widget.categories.map((category) {
+        final label = category.parentKey == null
+            ? category.name
+            : '  └ ${category.name}';
+        return DropdownMenuItem<String?>(value: category.key, child: Text(label));
+      }),
+    ];
+    _accountItems = [
+      const DropdownMenuItem<int?>(value: null, child: Text('全部账户')),
+      ...widget.accounts.map((account) {
+        return DropdownMenuItem<int?>(value: account.id, child: Text(account.name));
+      }),
+    ];
   }
 
   @override
@@ -305,21 +326,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                 Icons.keyboard_arrow_down,
                 color: Colors.grey.shade600,
               ),
-              items: [
-                const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('全部分类'),
-                ),
-                ...widget.categories.map((category) {
-                  final label = category.parentKey == null
-                      ? category.name
-                      : '  └ ${category.name}';
-                  return DropdownMenuItem<String?>(
-                    value: category.key,
-                    child: Text(label),
-                  );
-                }),
-              ],
+              items: _categoryItems,
               onChanged: (value) {
                 setState(() => _categoryKey = value);
                 _notifyChange();
@@ -346,15 +353,7 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
                 Icons.keyboard_arrow_down,
                 color: Colors.grey.shade600,
               ),
-              items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('全部账户')),
-                ...widget.accounts.map((account) {
-                  return DropdownMenuItem<int?>(
-                    value: account.id,
-                    child: Text(account.name),
-                  );
-                }),
-              ],
+              items: _accountItems,
               onChanged: (value) {
                 setState(() => _accountId = value);
                 _notifyChange();
