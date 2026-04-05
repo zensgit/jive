@@ -14,6 +14,7 @@ import '../budget/budget_settings_screen.dart';
 import 'speech_settings_screen.dart';
 import 'sync_settings_screen.dart';
 import 'theme_settings_screen.dart';
+import 'privacy_policy_screen.dart';
 import 'webdav_settings_screen.dart';
 import '../export/csv_export_screen.dart';
 import '../theme/theme_provider.dart';
@@ -403,6 +404,40 @@ class SettingsScreen extends StatelessWidget {
                       MaterialPageRoute(
                         builder: (context) => const ReimbursementLabScreen(),
                       ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _sectionCard(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("关于", style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: const Text("隐私政策"),
+                  trailing: Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade500),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacyPolicyScreen()));
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text("关于 Jive 积叶"),
+                  subtitle: const Text("v1.0.0"),
+                  trailing: Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade500),
+                  onTap: () {
+                    showAboutDialog(
+                      context: context,
+                      applicationName: 'Jive 积叶',
+                      applicationVersion: '1.0.0',
+                      applicationLegalese: '© 2026 Jive Money. All rights reserved.',
                     );
                   },
                 ),
