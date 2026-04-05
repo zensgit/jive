@@ -204,20 +204,22 @@ class _MainScreenState extends State<MainScreen>
 
   Widget _buildHomeColumnContent() {
     final section = _recentSection();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 10),
-        _buildTopBar(),
-        const SizedBox(height: 24),
-        _buildAssetCard(),
-        const SizedBox(height: 16),
-        const BannerAdWidget(),
-        const SizedBox(height: 16),
-        section.buildTitle(),
-        const SizedBox(height: 16),
-        section.buildTransactionList(),
-      ],
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 10),
+          _buildTopBar(),
+          const SizedBox(height: 24),
+          _buildAssetCard(),
+          const SizedBox(height: 16),
+          const BannerAdWidget(),
+          const SizedBox(height: 16),
+          section.buildTitle(),
+          const SizedBox(height: 16),
+          section.buildTransactionListBody(shrinkWrap: true, physics: const NeverScrollableScrollPhysics()),
+        ],
+      ),
     );
   }
 

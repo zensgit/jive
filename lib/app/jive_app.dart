@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/auth/auth_service.dart';
 import '../core/l10n/app_localizations.dart';
@@ -57,6 +58,8 @@ class _AppEntry extends StatefulWidget {
 }
 
 class _AppEntryState extends State<_AppEntry> {
+  static const _prefKeyAuthSkipped = 'auth_skipped_as_guest';
+
   bool? _onboardingComplete;
   bool? _guidedSetupComplete;
   bool _authSkipped = false;
@@ -70,10 +73,13 @@ class _AppEntryState extends State<_AppEntry> {
   Future<void> _checkOnboarding() async {
     final onboarding = await OnboardingScreen.isComplete();
     final guided = await OnboardingProgressService.isGuidedSetupComplete();
+    final prefs = await SharedPreferences.getInstance();
+    final skipped = prefs.getBool(_prefKeyAuthSkipped) ?? false;
     if (mounted) {
       setState(() {
         _onboardingComplete = onboarding;
         _guidedSetupComplete = guided;
+        _authSkipped = skipped;
       });
     }
   }
@@ -99,7 +105,9 @@ class _AppEntryState extends State<_AppEntry> {
       final auth = context.watch<AuthService>();
       if (auth.isGuest) {
         return AuthScreen(
-          onSkip: () {
+          onSkip: () async {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool(_prefKeyAuthSkipped, true);
             if (mounted) setState(() => _authSkipped = true);
           },
         );
