@@ -1,17 +1,14 @@
-import 'dart:math';
+import 'package:uuid/uuid.dart';
 
 /// Generates stable sync keys for locally-created entities before they get a
 /// durable cloud identity.
 class SyncKeyGenerator {
   SyncKeyGenerator._();
 
-  /// Example: `tx_1712345678901_a3f2`
+  static const Uuid _uuid = Uuid();
+
+  /// Example: `tx_550e8400-e29b-41d4-a716-446655440000`
   static String generate(String prefix) {
-    final ts = DateTime.now().millisecondsSinceEpoch;
-    final rand = Random.secure()
-        .nextInt(0x10000)
-        .toRadixString(16)
-        .padLeft(4, '0');
-    return '${prefix}_${ts}_$rand';
+    return '${prefix}_${_uuid.v4()}';
   }
 }
