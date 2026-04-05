@@ -92,8 +92,13 @@ const JiveBudgetSchema = CollectionSchema(
       name: r'startDate',
       type: IsarType.dateTime,
     ),
-    r'updatedAt': PropertySchema(
+    r'syncKey': PropertySchema(
       id: 15,
+      name: r'syncKey',
+      type: IsarType.string,
+    ),
+    r'updatedAt': PropertySchema(
+      id: 16,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -142,6 +147,19 @@ const JiveBudgetSchema = CollectionSchema(
           caseSensitive: false,
         )
       ],
+    ),
+    r'syncKey': IndexSchema(
+      id: -4971009725215132130,
+      name: r'syncKey',
+      unique: true,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncKey',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
     )
   },
   links: {},
@@ -167,6 +185,7 @@ int _jiveBudgetEstimateSize(
   bytesCount += 3 + object.currency.length * 3;
   bytesCount += 3 + object.name.length * 3;
   bytesCount += 3 + object.period.length * 3;
+  bytesCount += 3 + object.syncKey.length * 3;
   return bytesCount;
 }
 
@@ -191,7 +210,8 @@ void _jiveBudgetSerialize(
   writer.writeLong(offsets[12], object.positionWeight);
   writer.writeBool(offsets[13], object.rollover);
   writer.writeDateTime(offsets[14], object.startDate);
-  writer.writeDateTime(offsets[15], object.updatedAt);
+  writer.writeString(offsets[15], object.syncKey);
+  writer.writeDateTime(offsets[16], object.updatedAt);
 }
 
 JiveBudget _jiveBudgetDeserialize(
@@ -217,7 +237,8 @@ JiveBudget _jiveBudgetDeserialize(
   object.positionWeight = reader.readLong(offsets[12]);
   object.rollover = reader.readBool(offsets[13]);
   object.startDate = reader.readDateTime(offsets[14]);
-  object.updatedAt = reader.readDateTime(offsets[15]);
+  object.syncKey = reader.readString(offsets[15]);
+  object.updatedAt = reader.readDateTime(offsets[16]);
   return object;
 }
 
@@ -259,6 +280,8 @@ P _jiveBudgetDeserializeProp<P>(
     case 14:
       return (reader.readDateTime(offset)) as P;
     case 15:
+      return (reader.readString(offset)) as P;
+    case 16:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -275,6 +298,61 @@ List<IsarLinkBase<dynamic>> _jiveBudgetGetLinks(JiveBudget object) {
 
 void _jiveBudgetAttach(IsarCollection<dynamic> col, Id id, JiveBudget object) {
   object.id = id;
+}
+
+extension JiveBudgetByIndex on IsarCollection<JiveBudget> {
+  Future<JiveBudget?> getBySyncKey(String syncKey) {
+    return getByIndex(r'syncKey', [syncKey]);
+  }
+
+  JiveBudget? getBySyncKeySync(String syncKey) {
+    return getByIndexSync(r'syncKey', [syncKey]);
+  }
+
+  Future<bool> deleteBySyncKey(String syncKey) {
+    return deleteByIndex(r'syncKey', [syncKey]);
+  }
+
+  bool deleteBySyncKeySync(String syncKey) {
+    return deleteByIndexSync(r'syncKey', [syncKey]);
+  }
+
+  Future<List<JiveBudget?>> getAllBySyncKey(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return getAllByIndex(r'syncKey', values);
+  }
+
+  List<JiveBudget?> getAllBySyncKeySync(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return getAllByIndexSync(r'syncKey', values);
+  }
+
+  Future<int> deleteAllBySyncKey(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndex(r'syncKey', values);
+  }
+
+  int deleteAllBySyncKeySync(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndexSync(r'syncKey', values);
+  }
+
+  Future<Id> putBySyncKey(JiveBudget object) {
+    return putByIndex(r'syncKey', object);
+  }
+
+  Id putBySyncKeySync(JiveBudget object, {bool saveLinks = true}) {
+    return putByIndexSync(r'syncKey', object, saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllBySyncKey(List<JiveBudget> objects) {
+    return putAllByIndex(r'syncKey', objects);
+  }
+
+  List<Id> putAllBySyncKeySync(List<JiveBudget> objects,
+      {bool saveLinks = true}) {
+    return putAllByIndexSync(r'syncKey', objects, saveLinks: saveLinks);
+  }
 }
 
 extension JiveBudgetQueryWhereSort
@@ -632,6 +710,51 @@ extension JiveBudgetQueryWhere
         upper: [upperBookId],
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhereClause> syncKeyEqualTo(
+      String syncKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncKey',
+        value: [syncKey],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterWhereClause> syncKeyNotEqualTo(
+      String syncKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [],
+              upper: [syncKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [syncKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [syncKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [],
+              upper: [syncKey],
+              includeUpper: false,
+            ));
+      }
     });
   }
 }
@@ -1770,6 +1893,138 @@ extension JiveBudgetQueryFilter
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> syncKeyEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      syncKeyGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> syncKeyLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> syncKeyBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> syncKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> syncKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> syncKeyContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> syncKeyMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> syncKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition>
+      syncKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncKey',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QAfterFilterCondition> updatedAtEqualTo(
       DateTime value) {
     return QueryBuilder.apply(this, (query) {
@@ -2016,6 +2271,18 @@ extension JiveBudgetQuerySortBy
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortBySyncKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortBySyncKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> sortByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -2226,6 +2493,18 @@ extension JiveBudgetQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenBySyncKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenBySyncKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QAfterSortBy> thenByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'updatedAt', Sort.asc);
@@ -2335,6 +2614,13 @@ extension JiveBudgetQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveBudget, JiveBudget, QDistinct> distinctBySyncKey(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncKey', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<JiveBudget, JiveBudget, QDistinct> distinctByUpdatedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'updatedAt');
@@ -2437,6 +2723,12 @@ extension JiveBudgetQueryProperty
   QueryBuilder<JiveBudget, DateTime, QQueryOperations> startDateProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'startDate');
+    });
+  }
+
+  QueryBuilder<JiveBudget, String, QQueryOperations> syncKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncKey');
     });
   }
 

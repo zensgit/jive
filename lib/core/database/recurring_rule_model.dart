@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import '../sync/sync_key_generator.dart';
+
 part 'recurring_rule_model.g.dart';
 
 @collection
@@ -41,6 +43,8 @@ class JiveRecurringRule {
   late DateTime nextRunAt;
 
   DateTime? lastRunAt;
+  @Index(unique: true)
+  String syncKey = SyncKeyGenerator.generate('recurring'); // 稳定云端同步标识
 
   late bool isActive;
 

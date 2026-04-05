@@ -57,13 +57,18 @@ const JiveSavingsGoalSchema = CollectionSchema(
       name: r'status',
       type: IsarType.string,
     ),
-    r'targetAmount': PropertySchema(
+    r'syncKey': PropertySchema(
       id: 8,
+      name: r'syncKey',
+      type: IsarType.string,
+    ),
+    r'targetAmount': PropertySchema(
+      id: 9,
       name: r'targetAmount',
       type: IsarType.double,
     ),
     r'updatedAt': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -95,6 +100,19 @@ const JiveSavingsGoalSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'status',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'syncKey': IndexSchema(
+      id: -4971009725215132130,
+      name: r'syncKey',
+      unique: true,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncKey',
           type: IndexType.hash,
           caseSensitive: true,
         )
@@ -135,6 +153,7 @@ int _jiveSavingsGoalEstimateSize(
     }
   }
   bytesCount += 3 + object.status.length * 3;
+  bytesCount += 3 + object.syncKey.length * 3;
   return bytesCount;
 }
 
@@ -152,8 +171,9 @@ void _jiveSavingsGoalSerialize(
   writer.writeString(offsets[5], object.name);
   writer.writeString(offsets[6], object.note);
   writer.writeString(offsets[7], object.status);
-  writer.writeDouble(offsets[8], object.targetAmount);
-  writer.writeDateTime(offsets[9], object.updatedAt);
+  writer.writeString(offsets[8], object.syncKey);
+  writer.writeDouble(offsets[9], object.targetAmount);
+  writer.writeDateTime(offsets[10], object.updatedAt);
 }
 
 JiveSavingsGoal _jiveSavingsGoalDeserialize(
@@ -172,8 +192,9 @@ JiveSavingsGoal _jiveSavingsGoalDeserialize(
   object.name = reader.readString(offsets[5]);
   object.note = reader.readStringOrNull(offsets[6]);
   object.status = reader.readString(offsets[7]);
-  object.targetAmount = reader.readDouble(offsets[8]);
-  object.updatedAt = reader.readDateTime(offsets[9]);
+  object.syncKey = reader.readString(offsets[8]);
+  object.targetAmount = reader.readDouble(offsets[9]);
+  object.updatedAt = reader.readDateTime(offsets[10]);
   return object;
 }
 
@@ -201,8 +222,10 @@ P _jiveSavingsGoalDeserializeProp<P>(
     case 7:
       return (reader.readString(offset)) as P;
     case 8:
-      return (reader.readDouble(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 9:
+      return (reader.readDouble(offset)) as P;
+    case 10:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -220,6 +243,61 @@ List<IsarLinkBase<dynamic>> _jiveSavingsGoalGetLinks(JiveSavingsGoal object) {
 void _jiveSavingsGoalAttach(
     IsarCollection<dynamic> col, Id id, JiveSavingsGoal object) {
   object.id = id;
+}
+
+extension JiveSavingsGoalByIndex on IsarCollection<JiveSavingsGoal> {
+  Future<JiveSavingsGoal?> getBySyncKey(String syncKey) {
+    return getByIndex(r'syncKey', [syncKey]);
+  }
+
+  JiveSavingsGoal? getBySyncKeySync(String syncKey) {
+    return getByIndexSync(r'syncKey', [syncKey]);
+  }
+
+  Future<bool> deleteBySyncKey(String syncKey) {
+    return deleteByIndex(r'syncKey', [syncKey]);
+  }
+
+  bool deleteBySyncKeySync(String syncKey) {
+    return deleteByIndexSync(r'syncKey', [syncKey]);
+  }
+
+  Future<List<JiveSavingsGoal?>> getAllBySyncKey(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return getAllByIndex(r'syncKey', values);
+  }
+
+  List<JiveSavingsGoal?> getAllBySyncKeySync(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return getAllByIndexSync(r'syncKey', values);
+  }
+
+  Future<int> deleteAllBySyncKey(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndex(r'syncKey', values);
+  }
+
+  int deleteAllBySyncKeySync(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndexSync(r'syncKey', values);
+  }
+
+  Future<Id> putBySyncKey(JiveSavingsGoal object) {
+    return putByIndex(r'syncKey', object);
+  }
+
+  Id putBySyncKeySync(JiveSavingsGoal object, {bool saveLinks = true}) {
+    return putByIndexSync(r'syncKey', object, saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllBySyncKey(List<JiveSavingsGoal> objects) {
+    return putAllByIndex(r'syncKey', objects);
+  }
+
+  List<Id> putAllBySyncKeySync(List<JiveSavingsGoal> objects,
+      {bool saveLinks = true}) {
+    return putAllByIndexSync(r'syncKey', objects, saveLinks: saveLinks);
+  }
 }
 
 extension JiveSavingsGoalQueryWhereSort
@@ -385,6 +463,51 @@ extension JiveSavingsGoalQueryWhere
               indexName: r'status',
               lower: [],
               upper: [status],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterWhereClause>
+      syncKeyEqualTo(String syncKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncKey',
+        value: [syncKey],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterWhereClause>
+      syncKeyNotEqualTo(String syncKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [],
+              upper: [syncKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [syncKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [syncKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [],
+              upper: [syncKey],
               includeUpper: false,
             ));
       }
@@ -1381,6 +1504,142 @@ extension JiveSavingsGoalQueryFilter
   }
 
   QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
+      syncKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterFilterCondition>
       targetAmountEqualTo(
     double value, {
     double epsilon = Query.epsilon,
@@ -1619,6 +1878,19 @@ extension JiveSavingsGoalQuerySortBy
     });
   }
 
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterSortBy> sortBySyncKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterSortBy>
+      sortBySyncKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterSortBy>
       sortByTargetAmount() {
     return QueryBuilder.apply(this, (query) {
@@ -1770,6 +2042,19 @@ extension JiveSavingsGoalQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterSortBy> thenBySyncKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterSortBy>
+      thenBySyncKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QAfterSortBy>
       thenByTargetAmount() {
     return QueryBuilder.apply(this, (query) {
@@ -1857,6 +2142,13 @@ extension JiveSavingsGoalQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QDistinct> distinctBySyncKey(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncKey', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<JiveSavingsGoal, JiveSavingsGoal, QDistinct>
       distinctByTargetAmount() {
     return QueryBuilder.apply(this, (query) {
@@ -1928,6 +2220,12 @@ extension JiveSavingsGoalQueryProperty
   QueryBuilder<JiveSavingsGoal, String, QQueryOperations> statusProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'status');
+    });
+  }
+
+  QueryBuilder<JiveSavingsGoal, String, QQueryOperations> syncKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncKey');
     });
   }
 
