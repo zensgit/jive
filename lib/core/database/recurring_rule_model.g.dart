@@ -107,23 +107,28 @@ const JiveRecurringRuleSchema = CollectionSchema(
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
-    r'tagKeys': PropertySchema(
+    r'syncKey': PropertySchema(
       id: 18,
+      name: r'syncKey',
+      type: IsarType.string,
+    ),
+    r'tagKeys': PropertySchema(
+      id: 19,
       name: r'tagKeys',
       type: IsarType.stringList,
     ),
     r'toAccountId': PropertySchema(
-      id: 19,
+      id: 20,
       name: r'toAccountId',
       type: IsarType.long,
     ),
     r'type': PropertySchema(
-      id: 20,
+      id: 21,
       name: r'type',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 21,
+      id: 22,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -144,6 +149,19 @@ const JiveRecurringRuleSchema = CollectionSchema(
           name: r'nextRunAt',
           type: IndexType.value,
           caseSensitive: false,
+        )
+      ],
+    ),
+    r'syncKey': IndexSchema(
+      id: -4971009725215132130,
+      name: r'syncKey',
+      unique: true,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncKey',
+          type: IndexType.hash,
+          caseSensitive: true,
         )
       ],
     )
@@ -183,6 +201,7 @@ int _jiveRecurringRuleEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.syncKey.length * 3;
   bytesCount += 3 + object.tagKeys.length * 3;
   {
     for (var i = 0; i < object.tagKeys.length; i++) {
@@ -218,10 +237,11 @@ void _jiveRecurringRuleSerialize(
   writer.writeLong(offsets[15], object.projectId);
   writer.writeDateTime(offsets[16], object.startDate);
   writer.writeString(offsets[17], object.subCategoryKey);
-  writer.writeStringList(offsets[18], object.tagKeys);
-  writer.writeLong(offsets[19], object.toAccountId);
-  writer.writeString(offsets[20], object.type);
-  writer.writeDateTime(offsets[21], object.updatedAt);
+  writer.writeString(offsets[18], object.syncKey);
+  writer.writeStringList(offsets[19], object.tagKeys);
+  writer.writeLong(offsets[20], object.toAccountId);
+  writer.writeString(offsets[21], object.type);
+  writer.writeDateTime(offsets[22], object.updatedAt);
 }
 
 JiveRecurringRule _jiveRecurringRuleDeserialize(
@@ -250,10 +270,11 @@ JiveRecurringRule _jiveRecurringRuleDeserialize(
   object.projectId = reader.readLongOrNull(offsets[15]);
   object.startDate = reader.readDateTime(offsets[16]);
   object.subCategoryKey = reader.readStringOrNull(offsets[17]);
-  object.tagKeys = reader.readStringList(offsets[18]) ?? [];
-  object.toAccountId = reader.readLongOrNull(offsets[19]);
-  object.type = reader.readString(offsets[20]);
-  object.updatedAt = reader.readDateTime(offsets[21]);
+  object.syncKey = reader.readString(offsets[18]);
+  object.tagKeys = reader.readStringList(offsets[19]) ?? [];
+  object.toAccountId = reader.readLongOrNull(offsets[20]);
+  object.type = reader.readString(offsets[21]);
+  object.updatedAt = reader.readDateTime(offsets[22]);
   return object;
 }
 
@@ -301,12 +322,14 @@ P _jiveRecurringRuleDeserializeProp<P>(
     case 17:
       return (reader.readStringOrNull(offset)) as P;
     case 18:
-      return (reader.readStringList(offset) ?? []) as P;
-    case 19:
-      return (reader.readLongOrNull(offset)) as P;
-    case 20:
       return (reader.readString(offset)) as P;
+    case 19:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 20:
+      return (reader.readLongOrNull(offset)) as P;
     case 21:
+      return (reader.readString(offset)) as P;
+    case 22:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -325,6 +348,61 @@ List<IsarLinkBase<dynamic>> _jiveRecurringRuleGetLinks(
 void _jiveRecurringRuleAttach(
     IsarCollection<dynamic> col, Id id, JiveRecurringRule object) {
   object.id = id;
+}
+
+extension JiveRecurringRuleByIndex on IsarCollection<JiveRecurringRule> {
+  Future<JiveRecurringRule?> getBySyncKey(String syncKey) {
+    return getByIndex(r'syncKey', [syncKey]);
+  }
+
+  JiveRecurringRule? getBySyncKeySync(String syncKey) {
+    return getByIndexSync(r'syncKey', [syncKey]);
+  }
+
+  Future<bool> deleteBySyncKey(String syncKey) {
+    return deleteByIndex(r'syncKey', [syncKey]);
+  }
+
+  bool deleteBySyncKeySync(String syncKey) {
+    return deleteByIndexSync(r'syncKey', [syncKey]);
+  }
+
+  Future<List<JiveRecurringRule?>> getAllBySyncKey(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return getAllByIndex(r'syncKey', values);
+  }
+
+  List<JiveRecurringRule?> getAllBySyncKeySync(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return getAllByIndexSync(r'syncKey', values);
+  }
+
+  Future<int> deleteAllBySyncKey(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndex(r'syncKey', values);
+  }
+
+  int deleteAllBySyncKeySync(List<String> syncKeyValues) {
+    final values = syncKeyValues.map((e) => [e]).toList();
+    return deleteAllByIndexSync(r'syncKey', values);
+  }
+
+  Future<Id> putBySyncKey(JiveRecurringRule object) {
+    return putByIndex(r'syncKey', object);
+  }
+
+  Id putBySyncKeySync(JiveRecurringRule object, {bool saveLinks = true}) {
+    return putByIndexSync(r'syncKey', object, saveLinks: saveLinks);
+  }
+
+  Future<List<Id>> putAllBySyncKey(List<JiveRecurringRule> objects) {
+    return putAllByIndex(r'syncKey', objects);
+  }
+
+  List<Id> putAllBySyncKeySync(List<JiveRecurringRule> objects,
+      {bool saveLinks = true}) {
+    return putAllByIndexSync(r'syncKey', objects, saveLinks: saveLinks);
+  }
 }
 
 extension JiveRecurringRuleQueryWhereSort
@@ -505,6 +583,51 @@ extension JiveRecurringRuleQueryWhere
         upper: [upperNextRunAt],
         includeUpper: includeUpper,
       ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterWhereClause>
+      syncKeyEqualTo(String syncKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncKey',
+        value: [syncKey],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterWhereClause>
+      syncKeyNotEqualTo(String syncKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [],
+              upper: [syncKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [syncKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [syncKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [],
+              upper: [syncKey],
+              includeUpper: false,
+            ));
+      }
     });
   }
 }
@@ -2182,6 +2305,142 @@ extension JiveRecurringRuleQueryFilter
   }
 
   QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
+      syncKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterFilterCondition>
       tagKeysElementEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -2934,6 +3193,20 @@ extension JiveRecurringRuleQuerySortBy
   }
 
   QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterSortBy>
+      sortBySyncKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterSortBy>
+      sortBySyncKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterSortBy>
       sortByToAccountId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'toAccountId', Sort.asc);
@@ -3244,6 +3517,20 @@ extension JiveRecurringRuleQuerySortThenBy
   }
 
   QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterSortBy>
+      thenBySyncKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterSortBy>
+      thenBySyncKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QAfterSortBy>
       thenByToAccountId() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'toAccountId', Sort.asc);
@@ -3416,6 +3703,13 @@ extension JiveRecurringRuleQueryWhereDistinct
   }
 
   QueryBuilder<JiveRecurringRule, JiveRecurringRule, QDistinct>
+      distinctBySyncKey({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncKey', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, JiveRecurringRule, QDistinct>
       distinctByTagKeys() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'tagKeys');
@@ -3567,6 +3861,12 @@ extension JiveRecurringRuleQueryProperty
       subCategoryKeyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'subCategoryKey');
+    });
+  }
+
+  QueryBuilder<JiveRecurringRule, String, QQueryOperations> syncKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncKey');
     });
   }
 

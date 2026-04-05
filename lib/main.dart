@@ -12,6 +12,7 @@ import 'core/sync/sync_config.dart';
 import 'core/payment/payment_service.dart';
 import 'core/service/database_service.dart';
 import 'core/sync/sync_engine.dart';
+import 'core/sync/sync_key_migration.dart';
 import 'core/payment/play_store_payment_service.dart';
 import 'core/service/category_icon_style.dart';
 import 'core/utils/logger_util.dart';
@@ -49,6 +50,7 @@ void main() async {
 
   // SyncEngine — init deferred until screen opens
   final isar = await DatabaseService.getInstance();
+  await SyncKeyMigration.migrateAllSyncKeys(isar);
   final syncEngine = SyncEngine(
     isar: isar,
     entitlement: entitlementService,

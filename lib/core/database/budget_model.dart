@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import '../sync/sync_key_generator.dart';
+
 part 'budget_model.g.dart';
 
 /// 预算模型 - 支持多币种
@@ -36,6 +38,8 @@ class JiveBudget {
 
   @Index()
   int? bookId; // 关联账本（null = 全局预算）
+  @Index(unique: true)
+  String syncKey = SyncKeyGenerator.generate('budget'); // 稳定云端同步标识
 
   DateTime createdAt = DateTime.now();
   DateTime updatedAt = DateTime.now();
