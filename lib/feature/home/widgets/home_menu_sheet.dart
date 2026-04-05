@@ -12,6 +12,7 @@ import '../../../core/service/transaction_service.dart';
 import '../../../core/utils/logger_util.dart';
 import '../../assistant/assistant_screen.dart';
 import '../../insights/spending_insights_screen.dart';
+import '../../settings/activity_log_screen.dart';
 import '../../settings/auto_rule_editor_screen.dart';
 import '../../bill_relation/bill_relation_screen.dart';
 import '../../report/annual_report_screen.dart';
@@ -26,6 +27,7 @@ import '../../merchant/merchant_analytics_screen.dart';
 import '../../project/project_list_screen.dart';
 import '../../recurring/recurring_rule_list_screen.dart';
 import '../../savings/savings_goal_screen.dart';
+import '../../travel/travel_screen.dart';
 import '../../security/pin_setup_screen.dart';
 import '../../settings/csv_export_screen.dart';
 import '../../settings/settings_screen.dart';
@@ -496,6 +498,21 @@ void showHomeMenuSheet({
                         MaterialPageRoute(
                           builder: (context) =>
                               const BillRelationScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.history),
+                    title: const Text("操作日志"),
+                    subtitle: const Text("查看数据变更记录"),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const ActivityLogScreen(),
                         ),
                       );
                     },
