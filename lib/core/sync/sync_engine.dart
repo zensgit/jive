@@ -18,6 +18,7 @@ import 'sync_book_scope.dart';
 import 'sync_config.dart';
 import 'sync_conflict_service.dart';
 import 'sync_state.dart';
+import 'sync_tombstone_store.dart';
 
 /// Incremental sync engine between local Isar and remote Supabase.
 ///
@@ -49,19 +50,16 @@ class SyncEngine extends ChangeNotifier {
   SyncState _state = const SyncState.disabled();
   Timer? _debounceTimer;
 
-  SyncEngine({
-    required Isar isar,
-    required EntitlementService entitlement,
-  })  : _isar = isar,
-        _entitlement = entitlement {
+  SyncEngine({required Isar isar, required EntitlementService entitlement})
+    : _isar = isar,
+      _entitlement = entitlement {
     _conflictService = SyncConflictService(isar);
   }
 
   SyncState get state => _state;
   SyncConflictService get conflictService => _conflictService;
 
-  bool get isAvailable =>
-      SyncConfig.isConfigured && _entitlement.tier.hasCloud;
+  bool get isAvailable => SyncConfig.isConfigured && _entitlement.tier.hasCloud;
 
   Future<void> init() async {
     if (!SyncConfig.isConfigured || !_entitlement.tier.hasCloud) {
@@ -181,11 +179,30 @@ class SyncEngine extends ChangeNotifier {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return;
 
+    final tombstones = await SyncTombstoneStore.listForTable(table);
+    if (tombstones.isNotEmpty) {
+      final mappedTombstones = tombstones
+          .map((entry) => {'user_id': userId, ...entry.payload})
+          .toList(growable: false);
+      await client
+          .from(table)
+          .upsert(mappedTombstones, onConflict: _onConflictKeyFor(table));
+      await SyncTombstoneStore.removeEntries(
+        table,
+        tombstones.map((entry) => entry.entityKey),
+      );
+      debugPrint(
+        'SyncEngine: pushed ${tombstones.length} tombstones to $table',
+      );
+    }
+
     final rows = await _getLocalChanges(table, cursor);
     if (rows.isEmpty) return;
 
     final mapped = rows.map((r) => {'user_id': userId, ...r}).toList();
-    await client.from(table).upsert(mapped, onConflict: _onConflictKeyFor(table));
+    await client
+        .from(table)
+        .upsert(mapped, onConflict: _onConflictKeyFor(table));
     debugPrint('SyncEngine: pushed ${rows.length} rows to $table');
   }
 
@@ -234,127 +251,165 @@ class SyncEngine extends ChangeNotifier {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _getTransactionChanges(DateTime cursor) async {
+  Future<List<Map<String, dynamic>>> _getTransactionChanges(
+    DateTime cursor,
+  ) async {
     final scope = await _loadBookScope();
     final accountScope = await _loadAccountScope();
     final items = await _isar.jiveTransactions
         .filter()
         .updatedAtGreaterThan(cursor)
         .findAll();
-    return items.map((tx) => {
-      'local_id': tx.id,
-      'amount': tx.amount,
-      'source': tx.source,
-      'type': tx.type,
-      'timestamp': tx.timestamp.toIso8601String(),
-      'category_key': tx.categoryKey,
-      'sub_category_key': tx.subCategoryKey,
-      'category': tx.category,
-      'sub_category': tx.subCategory,
-      'note': tx.note,
-      'account_id': tx.accountId,
-      'account_key': accountScope.accountKey(tx.accountId),
-      'to_account_id': tx.toAccountId,
-      'to_account_key': accountScope.accountKey(tx.toAccountId),
-      'book_key': scope.transactionBookKey(tx.bookId),
-      'raw_text': tx.rawText,
-      'updated_at': tx.updatedAt.toIso8601String(),
-    }).toList();
+    return items
+        .map(
+          (tx) => {
+            'local_id': tx.id,
+            'amount': tx.amount,
+            'source': tx.source,
+            'type': tx.type,
+            'timestamp': tx.timestamp.toIso8601String(),
+            'category_key': tx.categoryKey,
+            'sub_category_key': tx.subCategoryKey,
+            'category': tx.category,
+            'sub_category': tx.subCategory,
+            'note': tx.note,
+            'account_id': tx.accountId,
+            'account_key': accountScope.accountKey(tx.accountId),
+            'to_account_id': tx.toAccountId,
+            'to_account_key': accountScope.accountKey(tx.toAccountId),
+            'book_key': scope.transactionBookKey(tx.bookId),
+            'raw_text': tx.rawText,
+            'deleted_at': null,
+            'updated_at': tx.updatedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> _getAccountChanges(DateTime cursor) async {
     final scope = await _loadBookScope();
     final items = await _isar.jiveAccounts.where().findAll();
-    return items.map((a) => {
-      'local_id': a.id,
-      'key': a.key,
-      'name': a.name,
-      'type': a.type,
-      'sub_type': a.subType,
-      'opening_balance': a.openingBalance,
-      'credit_limit': a.creditLimit,
-      'currency': a.currency,
-      'is_archived': a.isArchived,
-      'book_key': scope.accountBookKey(a.bookId),
-      'updated_at': DateTime.now().toIso8601String(),
-    }).toList();
+    return items
+        .map(
+          (a) => {
+            'local_id': a.id,
+            'key': a.key,
+            'name': a.name,
+            'type': a.type,
+            'sub_type': a.subType,
+            'opening_balance': a.openingBalance,
+            'credit_limit': a.creditLimit,
+            'currency': a.currency,
+            'is_archived': a.isArchived,
+            'book_key': scope.accountBookKey(a.bookId),
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+        )
+        .toList();
   }
 
-  Future<List<Map<String, dynamic>>> _getCategoryChanges(DateTime cursor) async {
+  Future<List<Map<String, dynamic>>> _getCategoryChanges(
+    DateTime cursor,
+  ) async {
     final items = await _isar.jiveCategorys.where().findAll();
-    return items.map((c) => {
-      'local_id': c.id,
-      'key': c.key,
-      'name': c.name,
-      'parent_key': c.parentKey,
-      'icon_name': c.iconName,
-      'is_income': c.isIncome,
-      'is_system': c.isSystem,
-      'is_hidden': c.isHidden,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).toList();
+    return items
+        .map(
+          (c) => {
+            'local_id': c.id,
+            'key': c.key,
+            'name': c.name,
+            'parent_key': c.parentKey,
+            'icon_name': c.iconName,
+            'is_income': c.isIncome,
+            'is_system': c.isSystem,
+            'is_hidden': c.isHidden,
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+        )
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> _getTagChanges(DateTime cursor) async {
     final items = await _isar.jiveTags.where().findAll();
-    return items.map((t) => {
-      'local_id': t.id,
-      'key': t.key,
-      'name': t.name,
-      'group_key': t.groupKey,
-      'color_hex': t.colorHex,
-      'is_archived': t.isArchived,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).toList();
+    return items
+        .map(
+          (t) => {
+            'local_id': t.id,
+            'key': t.key,
+            'name': t.name,
+            'group_key': t.groupKey,
+            'color_hex': t.colorHex,
+            'is_archived': t.isArchived,
+            'updated_at': DateTime.now().toIso8601String(),
+          },
+        )
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> _getBudgetChanges(DateTime cursor) async {
     final scope = await _loadBookScope();
     final items = await _isar.jiveBudgets.where().findAll();
-    return items.map((b) => {
-      'local_id': b.id,
-      'name': b.name,
-      'amount': b.amount,
-      'period': b.period,
-      'start_date': b.startDate.toIso8601String(),
-      'end_date': b.endDate.toIso8601String(),
-      'category_keys': b.categoryKey ?? '',
-      'is_active': b.isActive,
-      'book_key': scope.budgetBookKey(b.bookId),
-      'carry_over': false,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).toList();
+    return items
+        .map(
+          (b) => {
+            'local_id': b.id,
+            'name': b.name,
+            'amount': b.amount,
+            'period': b.period,
+            'start_date': b.startDate.toIso8601String(),
+            'end_date': b.endDate.toIso8601String(),
+            'category_keys': b.categoryKey ?? '',
+            'is_active': b.isActive,
+            'book_key': scope.budgetBookKey(b.bookId),
+            'carry_over': false,
+            'deleted_at': null,
+            'updated_at': b.updatedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
-  Future<List<Map<String, dynamic>>> _getSharedLedgerChanges(DateTime cursor) async {
+  Future<List<Map<String, dynamic>>> _getSharedLedgerChanges(
+    DateTime cursor,
+  ) async {
     final scope = await _loadBookScope();
     final items = await _isar.jiveSharedLedgers
         .filter()
         .updatedAtGreaterThan(cursor)
         .findAll();
-    return items.map((l) => {
-      'local_id': l.id,
-      'key': l.key,
-      'name': l.name,
-      'owner_user_id': l.ownerUserId,
-      'currency': l.currency,
-      'invite_code': l.inviteCode,
-      'workspace_key': scope.sharedLedgerWorkspaceKey(null),
-      'member_count': l.memberCount,
-      'updated_at': l.updatedAt.toIso8601String(),
-    }).toList();
+    return items
+        .map(
+          (l) => {
+            'local_id': l.id,
+            'key': l.key,
+            'name': l.name,
+            'owner_user_id': l.ownerUserId,
+            'currency': l.currency,
+            'invite_code': l.inviteCode,
+            'workspace_key': scope.sharedLedgerWorkspaceKey(null),
+            'member_count': l.memberCount,
+            'updated_at': l.updatedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
-  Future<List<Map<String, dynamic>>> _getSharedLedgerMemberChanges(DateTime cursor) async {
+  Future<List<Map<String, dynamic>>> _getSharedLedgerMemberChanges(
+    DateTime cursor,
+  ) async {
     final items = await _isar.jiveSharedLedgerMembers.where().findAll();
-    return items.map((m) => {
-      'local_id': m.id,
-      'ledger_key': m.ledgerKey,
-      'user_id': m.userId,
-      'display_name': m.displayName,
-      'role': m.role,
-      'joined_at': m.joinedAt.toIso8601String(),
-    }).toList();
+    return items
+        .map(
+          (m) => {
+            'local_id': m.id,
+            'ledger_key': m.ledgerKey,
+            'user_id': m.userId,
+            'display_name': m.displayName,
+            'role': m.role,
+            'joined_at': m.joinedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
   // ── Remote change application with conflict detection ──
@@ -387,7 +442,11 @@ class SyncEngine extends ChangeNotifier {
 
   /// Check if both local and remote changed recently (true conflict).
   /// Returns true if it's a real conflict that needs user attention.
-  bool _isRealConflict(DateTime localUpdatedAt, DateTime remoteUpdatedAt, DateTime cursor) {
+  bool _isRealConflict(
+    DateTime localUpdatedAt,
+    DateTime remoteUpdatedAt,
+    DateTime cursor,
+  ) {
     // Both changed since last sync
     final localChangedSinceCursor = localUpdatedAt.isAfter(cursor);
     final remoteChangedSinceCursor = remoteUpdatedAt.isAfter(cursor);
@@ -402,12 +461,67 @@ class SyncEngine extends ChangeNotifier {
     final cursor = await _getCursor('transactions');
     final scope = await _loadBookScope();
     final accountScope = await _loadAccountScope();
+    final pendingTombstones = await SyncTombstoneStore.mapForTable(
+      'transactions',
+    );
+    final clearedTombstones = <String>{};
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = row['local_id'] as int?;
         if (localId == null) continue;
+        final entityKey = _localEntityKey(localId);
+        final pendingTombstone = pendingTombstones[entityKey];
         final existing = await _isar.jiveTransactions.get(localId);
-        final remoteUpdatedAt = DateTime.parse(row['updated_at'] as String);
+        final remoteUpdatedAt =
+            _parseRemoteDate(row['updated_at']) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final remoteDeletedAt = _parseRemoteDate(row['deleted_at']);
+
+        if (remoteDeletedAt != null) {
+          if (pendingTombstone != null) {
+            clearedTombstones.add(entityKey);
+          }
+
+          if (existing == null) continue;
+
+          if (_isRealConflict(existing.updatedAt, remoteUpdatedAt, cursor)) {
+            await _conflictService.recordConflict(
+              table: 'transactions',
+              localId: localId,
+              localData: _transactionToMap(existing, scope, accountScope),
+              remoteData: Map<String, dynamic>.from(row as Map),
+              localUpdatedAt: existing.updatedAt,
+              remoteUpdatedAt: remoteUpdatedAt,
+            );
+            continue;
+          }
+
+          if (existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
+
+          await _isar.jiveTransactions.delete(localId);
+          continue;
+        }
+
+        if (pendingTombstone != null) {
+          if (_isRealConflict(
+            pendingTombstone.deletedAt,
+            remoteUpdatedAt,
+            cursor,
+          )) {
+            await _conflictService.recordConflict(
+              table: 'transactions',
+              localId: localId,
+              localData: pendingTombstone.payload,
+              remoteData: Map<String, dynamic>.from(row as Map),
+              localUpdatedAt: pendingTombstone.deletedAt,
+              remoteUpdatedAt: remoteUpdatedAt,
+            );
+            continue;
+          }
+
+          if (pendingTombstone.deletedAt.isAfter(remoteUpdatedAt)) continue;
+          clearedTombstones.add(entityKey);
+        }
 
         if (existing != null) {
           // Detect conflict: both sides changed since last sync
@@ -444,7 +558,8 @@ class SyncEngine extends ChangeNotifier {
         );
         tx.toAccountId = accountScope.accountId(
           row['to_account_key'] as String?,
-          fallbackAccountId: existing?.toAccountId ?? row['to_account_id'] as int?,
+          fallbackAccountId:
+              existing?.toAccountId ?? row['to_account_id'] as int?,
         );
         tx.bookId = scope.transactionBookId(
           row['book_key'] as String?,
@@ -455,6 +570,10 @@ class SyncEngine extends ChangeNotifier {
         await _isar.jiveTransactions.put(tx);
       }
     });
+
+    if (clearedTombstones.isNotEmpty) {
+      await SyncTombstoneStore.removeEntries('transactions', clearedTombstones);
+    }
   }
 
   Map<String, dynamic> _transactionToMap(
@@ -478,6 +597,7 @@ class SyncEngine extends ChangeNotifier {
     'to_account_key': accountScope.accountKey(tx.toAccountId),
     'book_key': scope.transactionBookKey(tx.bookId),
     'raw_text': tx.rawText,
+    'deleted_at': null,
     'updated_at': tx.updatedAt.toIso8601String(),
   };
 
@@ -487,15 +607,25 @@ class SyncEngine extends ChangeNotifier {
       for (final row in rows) {
         final localId = row['local_id'] as int?;
         final remoteKey = row['key'] as String?;
-        if (localId == null && (remoteKey == null || remoteKey.isEmpty)) continue;
+        if (localId == null && (remoteKey == null || remoteKey.isEmpty)) {
+          continue;
+        }
         JiveAccount? existing;
         if (remoteKey != null && remoteKey.isNotEmpty) {
-          existing = await _isar.jiveAccounts.where().keyEqualTo(remoteKey).findFirst();
+          existing = await _isar.jiveAccounts
+              .where()
+              .keyEqualTo(remoteKey)
+              .findFirst();
         }
-        existing ??= localId != null ? await _isar.jiveAccounts.get(localId) : null;
+        existing ??= localId != null
+            ? await _isar.jiveAccounts.get(localId)
+            : null;
         final a = existing ?? JiveAccount();
         a.id = existing?.id ?? localId ?? Isar.autoIncrement;
-        a.key = remoteKey ?? existing?.key ?? 'acct_remote_${localId ?? DateTime.now().microsecondsSinceEpoch}';
+        a.key =
+            remoteKey ??
+            existing?.key ??
+            'acct_remote_${localId ?? DateTime.now().microsecondsSinceEpoch}';
         a.name = row['name'] as String? ?? '';
         a.type = row['type'] as String? ?? 'asset';
         a.subType = row['sub_type'] as String?;
@@ -551,12 +681,72 @@ class SyncEngine extends ChangeNotifier {
   }
 
   Future<void> _applyBudgetChanges(List<dynamic> rows) async {
+    final cursor = await _getCursor('budgets');
     final scope = await _loadBookScope();
+    final pendingTombstones = await SyncTombstoneStore.mapForTable('budgets');
+    final clearedTombstones = <String>{};
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = row['local_id'] as int?;
         if (localId == null) continue;
+        final entityKey = _localEntityKey(localId);
+        final pendingTombstone = pendingTombstones[entityKey];
         final existing = await _isar.jiveBudgets.get(localId);
+        final remoteUpdatedAt =
+            _parseRemoteDate(row['updated_at']) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final remoteDeletedAt = _parseRemoteDate(row['deleted_at']);
+
+        if (remoteDeletedAt != null) {
+          if (pendingTombstone != null) {
+            clearedTombstones.add(entityKey);
+          }
+
+          if (existing == null) continue;
+
+          if (_isRealConflict(existing.updatedAt, remoteUpdatedAt, cursor)) {
+            await _conflictService.recordConflict(
+              table: 'budgets',
+              localId: localId,
+              localData: _budgetToMap(existing, scope),
+              remoteData: Map<String, dynamic>.from(row as Map),
+              localUpdatedAt: existing.updatedAt,
+              remoteUpdatedAt: remoteUpdatedAt,
+            );
+            continue;
+          }
+
+          if (existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
+
+          await _isar.jiveBudgetUsages
+              .filter()
+              .budgetIdEqualTo(localId)
+              .deleteAll();
+          await _isar.jiveBudgets.delete(localId);
+          continue;
+        }
+
+        if (pendingTombstone != null) {
+          if (_isRealConflict(
+            pendingTombstone.deletedAt,
+            remoteUpdatedAt,
+            cursor,
+          )) {
+            await _conflictService.recordConflict(
+              table: 'budgets',
+              localId: localId,
+              localData: pendingTombstone.payload,
+              remoteData: Map<String, dynamic>.from(row as Map),
+              localUpdatedAt: pendingTombstone.deletedAt,
+              remoteUpdatedAt: remoteUpdatedAt,
+            );
+            continue;
+          }
+
+          if (pendingTombstone.deletedAt.isAfter(remoteUpdatedAt)) continue;
+          clearedTombstones.add(entityKey);
+        }
+
         final b = existing ?? JiveBudget();
         b.id = localId;
         b.name = row['name'] as String? ?? '';
@@ -573,9 +763,14 @@ class SyncEngine extends ChangeNotifier {
           row['book_key'] as String?,
           fallbackBookId: existing?.bookId,
         );
+        b.updatedAt = remoteUpdatedAt;
         await _isar.jiveBudgets.put(b);
       }
     });
+
+    if (clearedTombstones.isNotEmpty) {
+      await SyncTombstoneStore.removeEntries('budgets', clearedTombstones);
+    }
   }
 
   Future<void> _applySharedLedgerChanges(List<dynamic> rows) async {
@@ -616,12 +811,8 @@ class SyncEngine extends ChangeNotifier {
     }
 
     return SyncBookScope(
-      bookKeyById: {
-        for (final book in books) book.id: book.key,
-      },
-      bookIdByKey: {
-        for (final book in books) book.key: book.id,
-      },
+      bookKeyById: {for (final book in books) book.id: book.key},
+      bookIdByKey: {for (final book in books) book.key: book.id},
       defaultBookId: defaultBook?.id,
       defaultBookKey: defaultBook?.key ?? BookService.defaultBookKey,
     );
@@ -630,12 +821,8 @@ class SyncEngine extends ChangeNotifier {
   Future<SyncAccountScope> _loadAccountScope() async {
     final accounts = await _isar.jiveAccounts.where().findAll();
     return SyncAccountScope(
-      accountKeyById: {
-        for (final account in accounts) account.id: account.key,
-      },
-      accountIdByKey: {
-        for (final account in accounts) account.key: account.id,
-      },
+      accountKeyById: {for (final account in accounts) account.id: account.key},
+      accountIdByKey: {for (final account in accounts) account.key: account.id},
     );
   }
 
@@ -682,4 +869,27 @@ class SyncEngine extends ChangeNotifier {
       DateTime.now().toIso8601String(),
     );
   }
+
+  Map<String, dynamic> _budgetToMap(JiveBudget budget, SyncBookScope scope) => {
+    'local_id': budget.id,
+    'name': budget.name,
+    'amount': budget.amount,
+    'period': budget.period,
+    'start_date': budget.startDate.toIso8601String(),
+    'end_date': budget.endDate.toIso8601String(),
+    'category_keys': budget.categoryKey ?? '',
+    'is_active': budget.isActive,
+    'book_key': scope.budgetBookKey(budget.bookId),
+    'deleted_at': null,
+    'updated_at': budget.updatedAt.toIso8601String(),
+  };
+
+  DateTime? _parseRemoteDate(dynamic value) {
+    if (value is String && value.isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  String _localEntityKey(int localId) => 'local:$localId';
 }

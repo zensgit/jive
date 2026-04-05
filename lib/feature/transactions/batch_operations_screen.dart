@@ -5,6 +5,7 @@ import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/database_service.dart';
+import '../../core/sync/sync_delete_marker_service.dart';
 
 /// Multi-select batch operations on transactions.
 class BatchOperationsScreen extends StatefulWidget {
@@ -53,7 +54,9 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
                 }
               });
             },
-            child: Text(_selected.length == widget.transactions.length ? '取消全选' : '全选'),
+            child: Text(
+              _selected.length == widget.transactions.length ? '取消全选' : '全选',
+            ),
           ),
         ],
       ),
@@ -66,7 +69,8 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: widget.transactions.length,
-              itemBuilder: (_, i) => _buildTransactionTile(widget.transactions[i]),
+              itemBuilder: (_, i) =>
+                  _buildTransactionTile(widget.transactions[i]),
             ),
           ),
         ],
@@ -105,7 +109,9 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
 
   Widget _buildTransactionTile(JiveTransaction tx) {
     final isSelected = _selected.contains(tx.id);
-    final typeColor = tx.type == 'income' ? const Color(0xFF4CAF50) : const Color(0xFFEF5350);
+    final typeColor = tx.type == 'income'
+        ? const Color(0xFF4CAF50)
+        : const Color(0xFFEF5350);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -113,7 +119,9 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
         color: isSelected ? JiveTheme.primaryGreen.withAlpha(10) : Colors.white,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: isSelected ? JiveTheme.primaryGreen.withAlpha(80) : Colors.grey.shade200,
+          color: isSelected
+              ? JiveTheme.primaryGreen.withAlpha(80)
+              : Colors.grey.shade200,
         ),
       ),
       child: CheckboxListTile(
@@ -133,12 +141,19 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
             Expanded(
               child: Text(
                 tx.category ?? tx.categoryKey ?? '未分类',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
             Text(
               '${tx.type == 'income' ? '+' : '-'}${tx.amount.toStringAsFixed(2)}',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: typeColor),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: typeColor,
+              ),
             ),
           ],
         ),
@@ -155,17 +170,23 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
   Future<void> _batchRecategorize() async {
     final isar = await DatabaseService.getInstance();
     final categories = await isar.collection<JiveCategory>().where().findAll();
-    final parentCats = categories.where((c) => c.parentKey == null || c.parentKey!.isEmpty).toList();
+    final parentCats = categories
+        .where((c) => c.parentKey == null || c.parentKey!.isEmpty)
+        .toList();
 
     if (!mounted) return;
     final selected = await showDialog<JiveCategory>(
       context: context,
       builder: (ctx) => SimpleDialog(
         title: const Text('选择新分类'),
-        children: parentCats.map((c) => SimpleDialogOption(
-          onPressed: () => Navigator.pop(ctx, c),
-          child: Text(c.name),
-        )).toList(),
+        children: parentCats
+            .map(
+              (c) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(ctx, c),
+                child: Text(c.name),
+              ),
+            )
+            .toList(),
       ),
     );
 
@@ -184,7 +205,9 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已将 ${_selectedTxs.length} 笔改为"${selected.name}"')),
+        SnackBar(
+          content: Text('已将 ${_selectedTxs.length} 笔改为"${selected.name}"'),
+        ),
       );
       widget.onComplete();
     }
@@ -197,9 +220,18 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
       builder: (ctx) => SimpleDialog(
         title: const Text('选择类型'),
         children: [
-          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'expense'), child: const Text('支出')),
-          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'income'), child: const Text('收入')),
-          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'transfer'), child: const Text('转账')),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'expense'),
+            child: const Text('支出'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'income'),
+            child: const Text('收入'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 'transfer'),
+            child: const Text('转账'),
+          ),
         ],
       ),
     );
@@ -218,7 +250,11 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
     // Batch operation complete
 
     if (mounted) {
-      final label = selected == 'income' ? '收入' : selected == 'transfer' ? '转账' : '支出';
+      final label = selected == 'income'
+          ? '收入'
+          : selected == 'transfer'
+          ? '转账'
+          : '支出';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('已将 ${_selectedTxs.length} 笔改为"$label"')),
       );
@@ -234,7 +270,10 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
         title: const Text('批量删除'),
         content: Text('确定删除选中的 $count 笔交易吗？此操作不可撤销。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('删除', style: TextStyle(color: Colors.red)),
@@ -246,6 +285,10 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
     if (confirmed != true || !mounted) return;
 
     final isar = await DatabaseService.getInstance();
+    final transactions = await isar.jiveTransactions.getAll(_selected.toList());
+    await SyncDeleteMarkerService(
+      isar,
+    ).markTransactionsDeleted(transactions.whereType<JiveTransaction>());
     // Processing batch operation
     await isar.writeTxn(() async {
       await isar.jiveTransactions.deleteAll(_selected.toList());
@@ -253,9 +296,9 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
     // Batch operation complete
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已删除 $count 笔交易')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已删除 $count 笔交易')));
       widget.onComplete();
       Navigator.pop(context);
     }
@@ -282,11 +325,18 @@ class _ActionButton extends StatelessWidget {
       child: OutlinedButton.icon(
         onPressed: onTap,
         icon: Icon(icon, size: 18, color: onTap != null ? c : Colors.grey),
-        label: Text(label, style: TextStyle(color: onTap != null ? c : Colors.grey)),
+        label: Text(
+          label,
+          style: TextStyle(color: onTap != null ? c : Colors.grey),
+        ),
         style: OutlinedButton.styleFrom(
-          side: BorderSide(color: onTap != null ? c.withAlpha(100) : Colors.grey.shade300),
+          side: BorderSide(
+            color: onTap != null ? c.withAlpha(100) : Colors.grey.shade300,
+          ),
           padding: const EdgeInsets.symmetric(vertical: 10),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ),
     );
