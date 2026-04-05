@@ -22,7 +22,7 @@ import '../../currency/currency_settings_screen.dart';
 import '../../debt/debt_list_screen.dart';
 import '../../installment/installment_list_screen.dart';
 import '../../investment/investment_screen.dart';
-import '../../merchant/merchant_memory_screen.dart';
+import '../../merchant/merchant_analytics_screen.dart';
 import '../../project/project_list_screen.dart';
 import '../../recurring/recurring_rule_list_screen.dart';
 import '../../savings/savings_goal_screen.dart';
@@ -32,6 +32,7 @@ import '../../settings/settings_screen.dart';
 import '../../settings/widget_gallery_screen.dart';
 import '../../split/bill_split_screen.dart';
 import '../../tag/tag_management_screen.dart';
+import '../../travel/travel_screen.dart';
 
 /// Callbacks that the menu sheet needs from the parent screen.
 class HomeMenuActions {
@@ -383,13 +384,13 @@ void showHomeMenuSheet({
                     feature: FeatureId.merchantMemory,
                     leading: const Icon(Icons.store_outlined),
                     title: const Text("商户记忆"),
-                    subtitle: const Text("管理商户名称与分类偏好"),
+                    subtitle: const Text("商户消费分析与别名管理"),
                     onTap: () async {
                       Navigator.pop(context);
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const MerchantMemoryScreen(),
+                          builder: (context) => const MerchantAnalyticsScreen(),
                         ),
                       );
                     },
@@ -465,6 +466,20 @@ void showHomeMenuSheet({
                         MaterialPageRoute(
                           builder: (context) =>
                               const SavingsGoalScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.flight_takeoff),
+                    title: const Text("旅行模式"),
+                    subtitle: const Text("旅行消费追踪与预算"),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TravelScreen(),
                         ),
                       );
                     },
