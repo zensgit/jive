@@ -12,6 +12,7 @@ import '../../../core/service/transaction_service.dart';
 import '../../../core/utils/logger_util.dart';
 import '../../assistant/assistant_screen.dart';
 import '../../insights/spending_insights_screen.dart';
+import '../../settings/activity_log_screen.dart';
 import '../../settings/auto_rule_editor_screen.dart';
 import '../../bill_relation/bill_relation_screen.dart';
 import '../../report/annual_report_screen.dart';
@@ -22,10 +23,11 @@ import '../../currency/currency_settings_screen.dart';
 import '../../debt/debt_list_screen.dart';
 import '../../installment/installment_list_screen.dart';
 import '../../investment/investment_screen.dart';
-import '../../merchant/merchant_memory_screen.dart';
+import '../../merchant/merchant_analytics_screen.dart';
 import '../../project/project_list_screen.dart';
 import '../../recurring/recurring_rule_list_screen.dart';
 import '../../savings/savings_goal_screen.dart';
+import '../../travel/travel_screen.dart';
 import '../../security/pin_setup_screen.dart';
 import '../../settings/csv_export_screen.dart';
 import '../../settings/settings_screen.dart';
@@ -383,13 +385,13 @@ void showHomeMenuSheet({
                     feature: FeatureId.merchantMemory,
                     leading: const Icon(Icons.store_outlined),
                     title: const Text("商户记忆"),
-                    subtitle: const Text("管理商户名称与分类偏好"),
+                    subtitle: const Text("商户消费分析与别名管理"),
                     onTap: () async {
                       Navigator.pop(context);
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const MerchantMemoryScreen(),
+                          builder: (context) => const MerchantAnalyticsScreen(),
                         ),
                       );
                     },
@@ -469,6 +471,20 @@ void showHomeMenuSheet({
                       );
                     },
                   ),
+                  ListTile(
+                    leading: const Icon(Icons.flight_takeoff),
+                    title: const Text("旅行模式"),
+                    subtitle: const Text("旅行消费追踪与预算"),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TravelScreen(),
+                        ),
+                      );
+                    },
+                  ),
                   GatedListTile(
                     feature: FeatureId.debtManagement,
                     leading: const Icon(Icons.receipt_long_outlined),
@@ -481,6 +497,21 @@ void showHomeMenuSheet({
                         MaterialPageRoute(
                           builder: (context) =>
                               const BillRelationScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.history),
+                    title: const Text("操作日志"),
+                    subtitle: const Text("查看数据变更记录"),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const ActivityLogScreen(),
                         ),
                       );
                     },
