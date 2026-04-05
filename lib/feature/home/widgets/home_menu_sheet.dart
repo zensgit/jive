@@ -32,6 +32,7 @@ import '../../settings/settings_screen.dart';
 import '../../settings/widget_gallery_screen.dart';
 import '../../split/bill_split_screen.dart';
 import '../../tag/tag_management_screen.dart';
+import '../../travel/travel_screen.dart';
 
 /// Callbacks that the menu sheet needs from the parent screen.
 class HomeMenuActions {
@@ -465,6 +466,20 @@ void showHomeMenuSheet({
                         MaterialPageRoute(
                           builder: (context) =>
                               const SavingsGoalScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.flight_takeoff),
+                    title: const Text("旅行模式"),
+                    subtitle: const Text("旅行消费追踪与预算"),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TravelScreen(),
                         ),
                       );
                     },
