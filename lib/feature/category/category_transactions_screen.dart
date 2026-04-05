@@ -45,7 +45,8 @@ class CategoryTransactionsScreen extends StatefulWidget {
 }
 
 class _CategoryTransactionsScreenState
-    extends State<CategoryTransactionsScreen> {
+    extends State<CategoryTransactionsScreen>
+    with TickerProviderStateMixin {
   late Isar _isar;
   bool _isLoading = true;
   String? _error;
@@ -794,8 +795,14 @@ class _CategoryTransactionsScreenState
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.white,
+      enableDrag: true,
+      useSafeArea: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      transitionAnimationController: AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 300),
       ),
       builder: (context) {
         final enabledYears = _transactionYears.isNotEmpty
