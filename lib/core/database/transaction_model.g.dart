@@ -271,7 +271,7 @@ const JiveTransactionSchema = CollectionSchema(
     r'syncKey': IndexSchema(
       id: -4971009725215132130,
       name: r'syncKey',
-      unique: true,
+      unique: false,
       replace: false,
       properties: [
         IndexPropertySchema(
@@ -563,61 +563,6 @@ List<IsarLinkBase<dynamic>> _jiveTransactionGetLinks(JiveTransaction object) {
 void _jiveTransactionAttach(
     IsarCollection<dynamic> col, Id id, JiveTransaction object) {
   object.id = id;
-}
-
-extension JiveTransactionByIndex on IsarCollection<JiveTransaction> {
-  Future<JiveTransaction?> getBySyncKey(String syncKey) {
-    return getByIndex(r'syncKey', [syncKey]);
-  }
-
-  JiveTransaction? getBySyncKeySync(String syncKey) {
-    return getByIndexSync(r'syncKey', [syncKey]);
-  }
-
-  Future<bool> deleteBySyncKey(String syncKey) {
-    return deleteByIndex(r'syncKey', [syncKey]);
-  }
-
-  bool deleteBySyncKeySync(String syncKey) {
-    return deleteByIndexSync(r'syncKey', [syncKey]);
-  }
-
-  Future<List<JiveTransaction?>> getAllBySyncKey(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return getAllByIndex(r'syncKey', values);
-  }
-
-  List<JiveTransaction?> getAllBySyncKeySync(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return getAllByIndexSync(r'syncKey', values);
-  }
-
-  Future<int> deleteAllBySyncKey(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return deleteAllByIndex(r'syncKey', values);
-  }
-
-  int deleteAllBySyncKeySync(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return deleteAllByIndexSync(r'syncKey', values);
-  }
-
-  Future<Id> putBySyncKey(JiveTransaction object) {
-    return putByIndex(r'syncKey', object);
-  }
-
-  Id putBySyncKeySync(JiveTransaction object, {bool saveLinks = true}) {
-    return putByIndexSync(r'syncKey', object, saveLinks: saveLinks);
-  }
-
-  Future<List<Id>> putAllBySyncKey(List<JiveTransaction> objects) {
-    return putAllByIndex(r'syncKey', objects);
-  }
-
-  List<Id> putAllBySyncKeySync(List<JiveTransaction> objects,
-      {bool saveLinks = true}) {
-    return putAllByIndexSync(r'syncKey', objects, saveLinks: saveLinks);
-  }
 }
 
 extension JiveTransactionQueryWhereSort

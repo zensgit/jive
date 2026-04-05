@@ -151,7 +151,7 @@ const JiveBudgetSchema = CollectionSchema(
     r'syncKey': IndexSchema(
       id: -4971009725215132130,
       name: r'syncKey',
-      unique: true,
+      unique: false,
       replace: false,
       properties: [
         IndexPropertySchema(
@@ -298,61 +298,6 @@ List<IsarLinkBase<dynamic>> _jiveBudgetGetLinks(JiveBudget object) {
 
 void _jiveBudgetAttach(IsarCollection<dynamic> col, Id id, JiveBudget object) {
   object.id = id;
-}
-
-extension JiveBudgetByIndex on IsarCollection<JiveBudget> {
-  Future<JiveBudget?> getBySyncKey(String syncKey) {
-    return getByIndex(r'syncKey', [syncKey]);
-  }
-
-  JiveBudget? getBySyncKeySync(String syncKey) {
-    return getByIndexSync(r'syncKey', [syncKey]);
-  }
-
-  Future<bool> deleteBySyncKey(String syncKey) {
-    return deleteByIndex(r'syncKey', [syncKey]);
-  }
-
-  bool deleteBySyncKeySync(String syncKey) {
-    return deleteByIndexSync(r'syncKey', [syncKey]);
-  }
-
-  Future<List<JiveBudget?>> getAllBySyncKey(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return getAllByIndex(r'syncKey', values);
-  }
-
-  List<JiveBudget?> getAllBySyncKeySync(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return getAllByIndexSync(r'syncKey', values);
-  }
-
-  Future<int> deleteAllBySyncKey(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return deleteAllByIndex(r'syncKey', values);
-  }
-
-  int deleteAllBySyncKeySync(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return deleteAllByIndexSync(r'syncKey', values);
-  }
-
-  Future<Id> putBySyncKey(JiveBudget object) {
-    return putByIndex(r'syncKey', object);
-  }
-
-  Id putBySyncKeySync(JiveBudget object, {bool saveLinks = true}) {
-    return putByIndexSync(r'syncKey', object, saveLinks: saveLinks);
-  }
-
-  Future<List<Id>> putAllBySyncKey(List<JiveBudget> objects) {
-    return putAllByIndex(r'syncKey', objects);
-  }
-
-  List<Id> putAllBySyncKeySync(List<JiveBudget> objects,
-      {bool saveLinks = true}) {
-    return putAllByIndexSync(r'syncKey', objects, saveLinks: saveLinks);
-  }
 }
 
 extension JiveBudgetQueryWhereSort

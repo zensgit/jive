@@ -22,7 +22,7 @@ class JiveSavingsGoal {
   String status = 'active'; // active | achieved | abandoned
 
   DateTime? deadline;
-  @Index(unique: true)
+  @Index()
   String syncKey = SyncKeyGenerator.generate('saving'); // 稳定云端同步标识
 
   late DateTime createdAt;

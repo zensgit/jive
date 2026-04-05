@@ -155,7 +155,7 @@ const JiveRecurringRuleSchema = CollectionSchema(
     r'syncKey': IndexSchema(
       id: -4971009725215132130,
       name: r'syncKey',
-      unique: true,
+      unique: false,
       replace: false,
       properties: [
         IndexPropertySchema(
@@ -348,61 +348,6 @@ List<IsarLinkBase<dynamic>> _jiveRecurringRuleGetLinks(
 void _jiveRecurringRuleAttach(
     IsarCollection<dynamic> col, Id id, JiveRecurringRule object) {
   object.id = id;
-}
-
-extension JiveRecurringRuleByIndex on IsarCollection<JiveRecurringRule> {
-  Future<JiveRecurringRule?> getBySyncKey(String syncKey) {
-    return getByIndex(r'syncKey', [syncKey]);
-  }
-
-  JiveRecurringRule? getBySyncKeySync(String syncKey) {
-    return getByIndexSync(r'syncKey', [syncKey]);
-  }
-
-  Future<bool> deleteBySyncKey(String syncKey) {
-    return deleteByIndex(r'syncKey', [syncKey]);
-  }
-
-  bool deleteBySyncKeySync(String syncKey) {
-    return deleteByIndexSync(r'syncKey', [syncKey]);
-  }
-
-  Future<List<JiveRecurringRule?>> getAllBySyncKey(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return getAllByIndex(r'syncKey', values);
-  }
-
-  List<JiveRecurringRule?> getAllBySyncKeySync(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return getAllByIndexSync(r'syncKey', values);
-  }
-
-  Future<int> deleteAllBySyncKey(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return deleteAllByIndex(r'syncKey', values);
-  }
-
-  int deleteAllBySyncKeySync(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return deleteAllByIndexSync(r'syncKey', values);
-  }
-
-  Future<Id> putBySyncKey(JiveRecurringRule object) {
-    return putByIndex(r'syncKey', object);
-  }
-
-  Id putBySyncKeySync(JiveRecurringRule object, {bool saveLinks = true}) {
-    return putByIndexSync(r'syncKey', object, saveLinks: saveLinks);
-  }
-
-  Future<List<Id>> putAllBySyncKey(List<JiveRecurringRule> objects) {
-    return putAllByIndex(r'syncKey', objects);
-  }
-
-  List<Id> putAllBySyncKeySync(List<JiveRecurringRule> objects,
-      {bool saveLinks = true}) {
-    return putAllByIndexSync(r'syncKey', objects, saveLinks: saveLinks);
-  }
 }
 
 extension JiveRecurringRuleQueryWhereSort

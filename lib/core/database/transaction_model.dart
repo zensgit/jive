@@ -42,7 +42,7 @@ class JiveTransaction {
   int? recurringRuleId; // 关联周期规则 ID
   @Index()
   String? recurringKey; // 周期入账去重 Key
-  @Index(unique: true)
+  @Index()
   String syncKey = SyncKeyGenerator.generate('tx'); // 稳定云端同步标识
   @Index()
   DateTime updatedAt = DateTime.now(); // 同步游标与增量同步使用

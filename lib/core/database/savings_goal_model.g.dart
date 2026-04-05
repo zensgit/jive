@@ -108,7 +108,7 @@ const JiveSavingsGoalSchema = CollectionSchema(
     r'syncKey': IndexSchema(
       id: -4971009725215132130,
       name: r'syncKey',
-      unique: true,
+      unique: false,
       replace: false,
       properties: [
         IndexPropertySchema(
@@ -243,61 +243,6 @@ List<IsarLinkBase<dynamic>> _jiveSavingsGoalGetLinks(JiveSavingsGoal object) {
 void _jiveSavingsGoalAttach(
     IsarCollection<dynamic> col, Id id, JiveSavingsGoal object) {
   object.id = id;
-}
-
-extension JiveSavingsGoalByIndex on IsarCollection<JiveSavingsGoal> {
-  Future<JiveSavingsGoal?> getBySyncKey(String syncKey) {
-    return getByIndex(r'syncKey', [syncKey]);
-  }
-
-  JiveSavingsGoal? getBySyncKeySync(String syncKey) {
-    return getByIndexSync(r'syncKey', [syncKey]);
-  }
-
-  Future<bool> deleteBySyncKey(String syncKey) {
-    return deleteByIndex(r'syncKey', [syncKey]);
-  }
-
-  bool deleteBySyncKeySync(String syncKey) {
-    return deleteByIndexSync(r'syncKey', [syncKey]);
-  }
-
-  Future<List<JiveSavingsGoal?>> getAllBySyncKey(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return getAllByIndex(r'syncKey', values);
-  }
-
-  List<JiveSavingsGoal?> getAllBySyncKeySync(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return getAllByIndexSync(r'syncKey', values);
-  }
-
-  Future<int> deleteAllBySyncKey(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return deleteAllByIndex(r'syncKey', values);
-  }
-
-  int deleteAllBySyncKeySync(List<String> syncKeyValues) {
-    final values = syncKeyValues.map((e) => [e]).toList();
-    return deleteAllByIndexSync(r'syncKey', values);
-  }
-
-  Future<Id> putBySyncKey(JiveSavingsGoal object) {
-    return putByIndex(r'syncKey', object);
-  }
-
-  Id putBySyncKeySync(JiveSavingsGoal object, {bool saveLinks = true}) {
-    return putByIndexSync(r'syncKey', object, saveLinks: saveLinks);
-  }
-
-  Future<List<Id>> putAllBySyncKey(List<JiveSavingsGoal> objects) {
-    return putAllByIndex(r'syncKey', objects);
-  }
-
-  List<Id> putAllBySyncKeySync(List<JiveSavingsGoal> objects,
-      {bool saveLinks = true}) {
-    return putAllByIndexSync(r'syncKey', objects, saveLinks: saveLinks);
-  }
 }
 
 extension JiveSavingsGoalQueryWhereSort

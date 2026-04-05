@@ -43,7 +43,7 @@ class JiveRecurringRule {
   late DateTime nextRunAt;
 
   DateTime? lastRunAt;
-  @Index(unique: true)
+  @Index()
   String syncKey = SyncKeyGenerator.generate('recurring'); // 稳定云端同步标识
 
   late bool isActive;

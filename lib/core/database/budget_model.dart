@@ -38,7 +38,7 @@ class JiveBudget {
 
   @Index()
   int? bookId; // 关联账本（null = 全局预算）
-  @Index(unique: true)
+  @Index()
   String syncKey = SyncKeyGenerator.generate('budget'); // 稳定云端同步标识
 
   DateTime createdAt = DateTime.now();
