@@ -5,12 +5,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../database/account_model.dart';
+import '../database/book_model.dart';
 import '../database/budget_model.dart';
 import '../database/category_model.dart';
 import '../database/tag_model.dart';
 import '../database/shared_ledger_model.dart';
 import '../database/transaction_model.dart';
 import '../entitlement/entitlement_service.dart';
+import '../service/book_service.dart';
+import 'sync_book_scope.dart';
 import 'sync_config.dart';
 import 'sync_conflict_service.dart';
 import 'sync_state.dart';
@@ -34,8 +37,8 @@ class SyncEngine extends ChangeNotifier {
     'categories',
     'tags',
     'budgets',
-    'shared_ledgers',
-    'shared_ledger_members',
+    // Shared ledger sync needs dedicated ownership/member semantics and
+    // rejoins the batch after the workspace-aware cloud model lands.
   ];
 
   final Isar _isar;
@@ -231,6 +234,7 @@ class SyncEngine extends ChangeNotifier {
   }
 
   Future<List<Map<String, dynamic>>> _getTransactionChanges(DateTime cursor) async {
+    final scope = await _loadBookScope();
     final items = await _isar.jiveTransactions
         .filter()
         .updatedAtGreaterThan(cursor)
@@ -247,12 +251,14 @@ class SyncEngine extends ChangeNotifier {
       'sub_category': tx.subCategory,
       'note': tx.note,
       'account_id': tx.accountId,
+      'book_key': scope.transactionBookKey(tx.bookId),
       'raw_text': tx.rawText,
       'updated_at': tx.updatedAt.toIso8601String(),
     }).toList();
   }
 
   Future<List<Map<String, dynamic>>> _getAccountChanges(DateTime cursor) async {
+    final scope = await _loadBookScope();
     final items = await _isar.jiveAccounts.where().findAll();
     return items.map((a) => {
       'local_id': a.id,
@@ -263,6 +269,7 @@ class SyncEngine extends ChangeNotifier {
       'credit_limit': a.creditLimit,
       'currency': a.currency,
       'is_archived': a.isArchived,
+      'book_key': scope.accountBookKey(a.bookId),
       'updated_at': DateTime.now().toIso8601String(),
     }).toList();
   }
@@ -296,6 +303,7 @@ class SyncEngine extends ChangeNotifier {
   }
 
   Future<List<Map<String, dynamic>>> _getBudgetChanges(DateTime cursor) async {
+    final scope = await _loadBookScope();
     final items = await _isar.jiveBudgets.where().findAll();
     return items.map((b) => {
       'local_id': b.id,
@@ -306,12 +314,14 @@ class SyncEngine extends ChangeNotifier {
       'end_date': b.endDate.toIso8601String(),
       'category_keys': b.categoryKey ?? '',
       'is_active': b.isActive,
+      'book_key': scope.budgetBookKey(b.bookId),
       'carry_over': false,
       'updated_at': DateTime.now().toIso8601String(),
     }).toList();
   }
 
   Future<List<Map<String, dynamic>>> _getSharedLedgerChanges(DateTime cursor) async {
+    final scope = await _loadBookScope();
     final items = await _isar.jiveSharedLedgers
         .filter()
         .updatedAtGreaterThan(cursor)
@@ -323,6 +333,7 @@ class SyncEngine extends ChangeNotifier {
       'owner_user_id': l.ownerUserId,
       'currency': l.currency,
       'invite_code': l.inviteCode,
+      'workspace_key': scope.sharedLedgerWorkspaceKey(null),
       'member_count': l.memberCount,
       'updated_at': l.updatedAt.toIso8601String(),
     }).toList();
@@ -383,6 +394,7 @@ class SyncEngine extends ChangeNotifier {
 
   Future<void> _applyTransactionChanges(List<dynamic> rows) async {
     final cursor = await _getCursor('transactions');
+    final scope = await _loadBookScope();
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = row['local_id'] as int?;
@@ -396,7 +408,7 @@ class SyncEngine extends ChangeNotifier {
             await _conflictService.recordConflict(
               table: 'transactions',
               localId: localId,
-              localData: _transactionToMap(existing),
+              localData: _transactionToMap(existing, scope),
               remoteData: Map<String, dynamic>.from(row as Map),
               localUpdatedAt: existing.updatedAt,
               remoteUpdatedAt: remoteUpdatedAt,
@@ -420,6 +432,10 @@ class SyncEngine extends ChangeNotifier {
         tx.subCategory = row['sub_category'] as String?;
         tx.note = row['note'] as String?;
         tx.accountId = row['account_id'] as int?;
+        tx.bookId = scope.transactionBookId(
+          row['book_key'] as String?,
+          fallbackBookId: existing?.bookId,
+        );
         tx.rawText = row['raw_text'] as String?;
         tx.updatedAt = remoteUpdatedAt;
         await _isar.jiveTransactions.put(tx);
@@ -427,7 +443,10 @@ class SyncEngine extends ChangeNotifier {
     });
   }
 
-  Map<String, dynamic> _transactionToMap(JiveTransaction tx) => {
+  Map<String, dynamic> _transactionToMap(
+    JiveTransaction tx,
+    SyncBookScope scope,
+  ) => {
     'local_id': tx.id,
     'amount': tx.amount,
     'source': tx.source,
@@ -439,11 +458,13 @@ class SyncEngine extends ChangeNotifier {
     'sub_category': tx.subCategory,
     'note': tx.note,
     'account_id': tx.accountId,
+    'book_key': scope.transactionBookKey(tx.bookId),
     'raw_text': tx.rawText,
     'updated_at': tx.updatedAt.toIso8601String(),
   };
 
   Future<void> _applyAccountChanges(List<dynamic> rows) async {
+    final scope = await _loadBookScope();
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = row['local_id'] as int?;
@@ -458,6 +479,10 @@ class SyncEngine extends ChangeNotifier {
         a.creditLimit = (row['credit_limit'] as num?)?.toDouble();
         a.currency = row['currency'] as String? ?? 'CNY';
         a.isArchived = row['is_archived'] as bool? ?? false;
+        a.bookId = scope.accountBookId(
+          row['book_key'] as String?,
+          fallbackBookId: existing?.bookId,
+        );
         await _isar.jiveAccounts.put(a);
       }
     });
@@ -502,6 +527,7 @@ class SyncEngine extends ChangeNotifier {
   }
 
   Future<void> _applyBudgetChanges(List<dynamic> rows) async {
+    final scope = await _loadBookScope();
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = row['local_id'] as int?;
@@ -519,6 +545,10 @@ class SyncEngine extends ChangeNotifier {
           b.categoryKey = catKey;
         }
         b.isActive = row['is_active'] as bool? ?? true;
+        b.bookId = scope.budgetBookId(
+          row['book_key'] as String?,
+          fallbackBookId: existing?.bookId,
+        );
         await _isar.jiveBudgets.put(b);
       }
     });
@@ -548,6 +578,29 @@ class SyncEngine extends ChangeNotifier {
         await _isar.jiveSharedLedgers.put(l);
       }
     });
+  }
+
+  Future<SyncBookScope> _loadBookScope() async {
+    await BookService(_isar).initDefaultBook();
+    final books = await _isar.jiveBooks.where().findAll();
+    JiveBook? defaultBook;
+    for (final book in books) {
+      if (book.key == BookService.defaultBookKey || book.isDefault) {
+        defaultBook = book;
+        break;
+      }
+    }
+
+    return SyncBookScope(
+      bookKeyById: {
+        for (final book in books) book.id: book.key,
+      },
+      bookIdByKey: {
+        for (final book in books) book.key: book.id,
+      },
+      defaultBookId: defaultBook?.id,
+      defaultBookKey: defaultBook?.key ?? BookService.defaultBookKey,
+    );
   }
 
   Future<void> _applySharedLedgerMemberChanges(List<dynamic> rows) async {
