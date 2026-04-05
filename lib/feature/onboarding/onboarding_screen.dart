@@ -96,7 +96,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             right: 0,
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -183,17 +183,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         const Spacer(),
-        ElevatedButton(
-          onPressed: _nextPage,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
-            foregroundColor: _pages[_currentPage].color,
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          ),
-          child: Text(
-            isLast ? '开始使用' : '下一步',
-            style: GoogleFonts.lato(fontWeight: FontWeight.bold, fontSize: 16),
+        SizedBox(
+          height: 48,
+          child: ElevatedButton(
+            onPressed: _nextPage,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: _pages[_currentPage].color,
+              padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              elevation: 2,
+            ),
+            child: Text(
+              isLast ? '开始使用' : '下一步',
+              style: GoogleFonts.lato(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
           ),
         ),
       ],
