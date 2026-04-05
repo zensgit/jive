@@ -28,14 +28,14 @@ class JiveTodayWidget : AppWidgetProvider() {
 
         // Flutter shared_preferences stores doubles as raw long bits and ints
         // as longs.  Use Double.longBitsToDouble to decode.
-        val todayExpense = Double.longBitsToDouble(
+        val todayExpense = java.lang.Double.longBitsToDouble(
             prefs.getLong("flutter.today_expense", 0L)
         )
-        val todayIncome = Double.longBitsToDouble(
+        val todayIncome = java.lang.Double.longBitsToDouble(
             prefs.getLong("flutter.today_income", 0L)
         )
         val todayCount = prefs.getLong("flutter.today_count", 0L).toInt()
-        val monthExpense = Double.longBitsToDouble(
+        val monthExpense = java.lang.Double.longBitsToDouble(
             prefs.getLong("flutter.month_expense", 0L)
         )
 
