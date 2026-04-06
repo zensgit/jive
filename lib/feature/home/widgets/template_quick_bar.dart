@@ -33,7 +33,11 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
     final isar = await DatabaseService.getInstance();
     final svc = TemplateService(isar);
     final all = await svc.getTemplates();
-    // Top 5 by usage
+    // Sort: pinned first, then by usageCount descending
+    all.sort((a, b) {
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+      return b.usageCount.compareTo(a.usageCount);
+    });
     final top5 = all.take(5).toList();
     if (mounted) setState(() { _templates = top5; _isLoading = false; });
   }
@@ -95,7 +99,7 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
         ),
         const SizedBox(height: 8),
         SizedBox(
-          height: 40,
+          height: 52,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: _templates.length + 1, // +1 for "更多"
@@ -115,16 +119,54 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
                   : t.name;
               return GestureDetector(
                 onLongPress: () => _editTemplate(t),
-                child: ActionChip(
-                  label: Text(label),
-                  onPressed: () => _executeTemplate(t),
-                  backgroundColor: JiveTheme.primaryGreen.withAlpha(20),
-                  side: BorderSide(color: JiveTheme.primaryGreen.withAlpha(60)),
-                  labelStyle: TextStyle(
-                    color: JiveTheme.primaryGreen,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13,
-                  ),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    ActionChip(
+                      label: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(label),
+                          Text(
+                            '使用 ${t.usageCount} 次',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: JiveTheme.primaryGreen.withAlpha(160),
+                            ),
+                          ),
+                        ],
+                      ),
+                      onPressed: () => _executeTemplate(t),
+                      backgroundColor: JiveTheme.primaryGreen.withAlpha(20),
+                      side: BorderSide(color: JiveTheme.primaryGreen.withAlpha(60)),
+                      labelStyle: TextStyle(
+                        color: JiveTheme.primaryGreen,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    ),
+                    if (t.usageCount > 0)
+                      Positioned(
+                        top: -4,
+                        right: -4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: JiveTheme.primaryGreen,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${t.usageCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               );
             },
