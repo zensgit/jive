@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/design_system/date_quick_selector.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/budget_model.dart';
@@ -104,6 +105,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   SpeechEngine? _speechHoldEngine;
   SpeechService? _speechHoldService;
 
+  bool _continuousMode = false;
   String _amountStr = "0";
   String _toAmountStr = ""; // 跨币种转账的转入金额
   double? _crossCurrencyRate; // 跨币种转账时使用的汇率
@@ -1206,7 +1208,24 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (mounted) {
       HapticFeedback.mediumImpact();
       DataReloadBus.notify();
-      Navigator.pop(context, true);
+      if (_continuousMode) {
+        final keepAccount = _selectedAccount;
+        final keepDate = _selectedTime;
+        setState(() {
+          _amountStr = "0";
+          _noteController.clear();
+          _selectedSub = null;
+          _selectedTagKeys.clear();
+          _selectedProjectId = null;
+          _selectedAccount = keepAccount;
+          _selectedTime = keepDate;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已保存，继续记账'), duration: Duration(seconds: 1)),
+        );
+      } else {
+        Navigator.pop(context, true);
+      }
     }
   }
 
@@ -1380,16 +1399,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               fontSize: isLandscape ? 12 : 14,
             ),
           ),
-          SizedBox(height: isLandscape ? 4 : 8),
-          GestureDetector(
-            onTap: _pickTransactionDate,
-            child: Text(
-              _dateTimeFormat.format(_selectedTime),
-              style: GoogleFonts.lato(
-                color: Colors.grey.shade500,
-                fontSize: isLandscape ? 11 : 12,
-              ),
-            ),
+          SizedBox(height: isLandscape ? 4 : 6),
+          DateQuickSelector(
+            selectedDate: _selectedTime,
+            onDateSelected: (date) {
+              setState(() {
+                _selectedTime = DateTime(
+                  date.year, date.month, date.day,
+                  _selectedTime.hour, _selectedTime.minute,
+                );
+              });
+            },
           ),
           SizedBox(height: labelSpacing),
           Row(
@@ -1478,6 +1498,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             onPressed: () => Navigator.pop(context, _hasDataChanges),
           ),
           actions: [
+            if (!_isEditing)
+              IconButton(
+                icon: Icon(
+                  _continuousMode ? Icons.repeat_on : Icons.repeat,
+                  color: _continuousMode ? JiveTheme.primaryGreen : Colors.grey,
+                  size: 20,
+                ),
+                tooltip: _continuousMode ? '连续记账：开' : '连续记账：关',
+                onPressed: () => setState(() => _continuousMode = !_continuousMode),
+              ),
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _showHoldToTalkHint,
