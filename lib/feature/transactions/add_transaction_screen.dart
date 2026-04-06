@@ -1346,6 +1346,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         MediaQuery.of(context).orientation == Orientation.landscape;
     final amountFontSize = isLandscape ? 48.0 : 72.0;
     final currencyFontSize = isLandscape ? 22.0 : 32.0;
+    final amountColor = _txType == TransactionType.income
+        ? const Color(0xFF4CAF50)
+        : _txType == TransactionType.transfer
+            ? const Color(0xFF1976D2)
+            : const Color(0xFFEF5350);
     final labelSpacing = isLandscape ? 4.0 : 12.0;
     final parentTabHeight = isLandscape ? 44.0 : 68.0;
     final subGridAspectRatio = isLandscape ? 1.2 : 0.75;
@@ -1403,7 +1408,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               Text(
                 _amountStr,
                 style: GoogleFonts.rubik(
-                  color: JiveTheme.primaryGreen,
+                  color: amountColor,
                   fontSize: amountFontSize,
                   fontWeight: FontWeight.w600,
                   height: 1.0,
@@ -3767,16 +3772,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     bool isDel = key == 'DEL';
 
     if (isOk) {
+      final okColor = _txType == TransactionType.income
+          ? const Color(0xFF4CAF50)
+          : _txType == TransactionType.transfer
+              ? const Color(0xFF1976D2)
+              : const Color(0xFFEF5350);
       return InkWell(
         onTap: () => _onKeyPress(key),
         borderRadius: BorderRadius.circular(30),
         child: Container(
           decoration: BoxDecoration(
-            color: JiveTheme.primaryGreen,
+            color: okColor,
             borderRadius: BorderRadius.circular(30),
             boxShadow: [
               BoxShadow(
-                color: JiveTheme.primaryGreen.withValues(alpha: 0.3),
+                color: okColor.withValues(alpha: 0.3),
                 blurRadius: 12,
                 offset: const Offset(0, 6),
               ),
