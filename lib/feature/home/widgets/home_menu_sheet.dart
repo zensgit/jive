@@ -34,6 +34,7 @@ import '../../settings/settings_screen.dart';
 import '../../settings/widget_gallery_screen.dart';
 import '../../split/bill_split_screen.dart';
 import '../../settings/screenshot_capture_settings.dart';
+import '../../smart_list/smart_list_screen.dart';
 import '../../tag/tag_management_screen.dart';
 
 /// Callbacks that the menu sheet needs from the parent screen.
@@ -350,6 +351,20 @@ void showHomeMenuSheet({
                         ),
                       );
                       await actions.loadTransactions();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.bookmarks_outlined),
+                    title: const Text("我的视图"),
+                    subtitle: const Text("保存的筛选条件快速访问"),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SmartListScreen(),
+                        ),
+                      );
                     },
                   ),
                   GatedListTile(
