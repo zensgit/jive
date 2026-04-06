@@ -10,6 +10,8 @@ import 'core/auth/supabase_auth_service.dart';
 import 'core/entitlement/entitlement_service.dart';
 import 'core/sync/sync_config.dart';
 import 'core/payment/payment_service.dart';
+import 'core/payment/subscription_status_service.dart';
+import 'core/payment/supabase_subscription_truth_repository.dart';
 import 'core/service/database_service.dart';
 import 'core/sync/sync_engine.dart';
 import 'core/sync/sync_key_migration.dart';
@@ -37,12 +39,23 @@ void main() async {
   await authService.init();
   final entitlementService = EntitlementService();
   await entitlementService.init();
+  final subscriptionTruthRepository = SyncConfig.isConfigured
+      ? SupabaseSubscriptionTruthRepository()
+      : null;
 
   // Payment service
   final paymentService = PlayStorePaymentService(
     entitlement: entitlementService,
+    truthRepository: subscriptionTruthRepository,
   );
   await paymentService.init();
+
+  final subscriptionStatusService = SubscriptionStatusService(
+    paymentService: paymentService,
+    entitlementService: entitlementService,
+    truthRepository: subscriptionTruthRepository,
+  );
+  await subscriptionStatusService.checkAndSync();
 
   // Ad service
   final adService = AdService(entitlementService);
@@ -51,18 +64,20 @@ void main() async {
   // SyncEngine — init deferred until screen opens
   final isar = await DatabaseService.getInstance();
   await SyncKeyMigration.migrateAllSyncKeys(isar);
-  final syncEngine = SyncEngine(
-    isar: isar,
-    entitlement: entitlementService,
-  );
+  final syncEngine = SyncEngine(isar: isar, entitlement: entitlementService);
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
         ChangeNotifierProvider<AuthService>.value(value: authService),
-        ChangeNotifierProvider<EntitlementService>.value(value: entitlementService),
+        ChangeNotifierProvider<EntitlementService>.value(
+          value: entitlementService,
+        ),
         ChangeNotifierProvider<PaymentService>.value(value: paymentService),
+        Provider<SubscriptionStatusService>.value(
+          value: subscriptionStatusService,
+        ),
         ChangeNotifierProvider<AdService>.value(value: adService),
         ChangeNotifierProvider<SyncEngine>.value(value: syncEngine),
         ChangeNotifierProvider<LocaleService>.value(value: localeService),

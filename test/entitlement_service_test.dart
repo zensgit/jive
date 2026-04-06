@@ -5,6 +5,7 @@ import 'package:jive/core/entitlement/entitlement_service.dart';
 import 'package:jive/core/entitlement/feature_id.dart';
 import 'package:jive/core/entitlement/feature_registry.dart';
 import 'package:jive/core/entitlement/user_tier.dart';
+import 'package:jive/core/payment/subscription_truth_model.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -36,10 +37,7 @@ void main() {
           FeatureRegistry.canAccess(FeatureId.manualTransaction, tier),
           isTrue,
         );
-        expect(
-          FeatureRegistry.canAccess(FeatureId.basicStats, tier),
-          isTrue,
-        );
+        expect(FeatureRegistry.canAccess(FeatureId.basicStats, tier), isTrue);
       }
     });
 
@@ -90,7 +88,10 @@ void main() {
         isFalse,
       );
       expect(
-        FeatureRegistry.canAccess(FeatureId.investmentTracking, UserTier.subscriber),
+        FeatureRegistry.canAccess(
+          FeatureId.investmentTracking,
+          UserTier.subscriber,
+        ),
         isTrue,
       );
     });
@@ -105,7 +106,9 @@ void main() {
     test('availableFeatures count increases with tier', () {
       final freeCount = FeatureRegistry.availableFeatures(UserTier.free).length;
       final paidCount = FeatureRegistry.availableFeatures(UserTier.paid).length;
-      final subCount = FeatureRegistry.availableFeatures(UserTier.subscriber).length;
+      final subCount = FeatureRegistry.availableFeatures(
+        UserTier.subscriber,
+      ).length;
       expect(paidCount, greaterThan(freeCount));
       expect(subCount, greaterThan(paidCount));
       expect(subCount, equals(FeatureId.values.length));
@@ -164,7 +167,10 @@ void main() {
 
       await service.setTier(UserTier.paid);
       expect(service.canAccess(FeatureId.multiCurrency), isTrue);
-      expect(service.canAccess(FeatureId.investmentTracking), isFalse); // subscriber
+      expect(
+        service.canAccess(FeatureId.investmentTracking),
+        isFalse,
+      ); // subscriber
     });
 
     test('notifies listeners on tier change', () async {
@@ -176,6 +182,55 @@ void main() {
       service.addListener(() => notified = true);
       await service.setTier(UserTier.subscriber);
       expect(notified, isTrue);
+    });
+
+    test('trusted snapshot overrides cached local tier on init', () async {
+      SharedPreferences.setMockInitialValues({
+        'user_tier': 'free',
+        'trusted_subscription_plan': 'subscriber',
+        'trusted_subscription_status': 'active',
+        'trusted_subscription_platform': 'google_play',
+        'trusted_subscription_verified_at': DateTime(
+          2026,
+          4,
+          5,
+          10,
+        ).toIso8601String(),
+      });
+      final service = EntitlementService();
+      await service.init();
+      expect(service.tier, equals(UserTier.subscriber));
+    });
+
+    test('applyTrustedSnapshot persists trusted tier and metadata', () async {
+      SharedPreferences.setMockInitialValues({});
+      final service = EntitlementService();
+      await service.init();
+
+      await service.applyTrustedSnapshot(
+        TrustedSubscriptionSnapshot(
+          plan: SubscriptionPlan.paid,
+          status: SubscriptionStatusKind.active,
+          platform: 'google_play',
+          productId: 'jive_paid_unlock',
+          lastVerifiedAt: DateTime(2026, 4, 5, 11),
+          orderId: 'GPA.1234',
+        ),
+      );
+
+      expect(service.tier, equals(UserTier.paid));
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('user_tier'), equals('paid'));
+      expect(prefs.getString('trusted_subscription_plan'), equals('paid'));
+      expect(
+        prefs.getString('trusted_subscription_product_id'),
+        equals('jive_paid_unlock'),
+      );
+      expect(
+        prefs.getString('trusted_subscription_order_id'),
+        equals('GPA.1234'),
+      );
     });
   });
 }

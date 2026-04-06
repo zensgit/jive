@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../entitlement/entitlement_service.dart';
 import 'payment_service.dart';
 import 'product_ids.dart';
+import 'subscription_truth_repository.dart';
 
 /// Google Play Billing implementation of [PaymentService].
 ///
@@ -15,8 +17,11 @@ import 'product_ids.dart';
 ///  3. [purchase] initiates a buy flow
 ///  4. Completed purchases update [EntitlementService] tier
 class PlayStorePaymentService extends PaymentService {
+  static const _prefKeyLastPurchase = 'last_purchase_timestamp';
+
   final InAppPurchase _iap;
   final EntitlementService _entitlement;
+  final SubscriptionTruthRepository? _truthRepository;
 
   bool _isAvailable = false;
   bool _isReady = false;
@@ -29,9 +34,11 @@ class PlayStorePaymentService extends PaymentService {
 
   PlayStorePaymentService({
     required EntitlementService entitlement,
+    SubscriptionTruthRepository? truthRepository,
     InAppPurchase? iap,
-  })  : _entitlement = entitlement,
-        _iap = iap ?? InAppPurchase.instance;
+  }) : _entitlement = entitlement,
+       _truthRepository = truthRepository,
+       _iap = iap ?? InAppPurchase.instance;
 
   @override
   bool get isAvailable => _isAvailable;
@@ -66,9 +73,7 @@ class PlayStorePaymentService extends PaymentService {
       );
     }
 
-    _productDetailsById = {
-      for (final pd in response.productDetails) pd.id: pd,
-    };
+    _productDetailsById = {for (final pd in response.productDetails) pd.id: pd};
     _products = response.productDetails.map((pd) {
       return StoreProduct(
         id: pd.id,
@@ -107,8 +112,7 @@ class PlayStorePaymentService extends PaymentService {
 
     // If buyNonConsumable didn't throw but also didn't trigger stream yet,
     // wait for the stream to resolve it.
-    return _pendingPurchase?.future ??
-        const PurchaseResult.error('购买状态未知');
+    return _pendingPurchase?.future ?? const PurchaseResult.error('购买状态未知');
   }
 
   @override
@@ -137,6 +141,8 @@ class PlayStorePaymentService extends PaymentService {
         // Grant the tier
         final tier = PaymentService.tierForProduct(purchase.productID);
         await _entitlement.setTier(tier);
+        await _recordPurchaseTimestamp();
+        await _syncTrustedPurchase(purchase);
         _pendingPurchase?.complete(PurchaseResult.success(tier));
         _pendingPurchase = null;
 
@@ -153,9 +159,7 @@ class PlayStorePaymentService extends PaymentService {
         break;
 
       case PurchaseStatus.canceled:
-        _pendingPurchase?.complete(
-          const PurchaseResult.error('购买已取消'),
-        );
+        _pendingPurchase?.complete(const PurchaseResult.error('购买已取消'));
         _pendingPurchase = null;
         break;
 
@@ -169,6 +173,36 @@ class PlayStorePaymentService extends PaymentService {
 
   ProductDetails? _findProductDetails(String productId) {
     return _productDetailsById[productId];
+  }
+
+  Future<void> _recordPurchaseTimestamp() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      _prefKeyLastPurchase,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  Future<void> _syncTrustedPurchase(PurchaseDetails purchase) async {
+    final purchaseToken = purchase.verificationData.serverVerificationData;
+    if (_truthRepository == null || purchaseToken.isEmpty) return;
+
+    final result = await _truthRepository.verifyGooglePlayPurchase(
+      productId: purchase.productID,
+      purchaseToken: purchaseToken,
+      orderId: purchase.purchaseID,
+      transactionDateMs: purchase.transactionDate,
+    );
+    if (result.isAuthoritative && result.snapshot != null) {
+      await _entitlement.applyTrustedSnapshot(result.snapshot!);
+      debugPrint(
+        'PlayStorePaymentService: trusted subscription synced for ${purchase.productID}',
+      );
+    } else if (result.errorMessage != null) {
+      debugPrint(
+        'PlayStorePaymentService: trusted sync skipped: ${result.errorMessage}',
+      );
+    }
   }
 
   @override
