@@ -20,6 +20,7 @@ import '../../core/service/database_service.dart';
 import '../../core/service/project_service.dart';
 import '../../core/service/recurring_service.dart';
 import '../../core/service/book_service.dart';
+import '../../core/service/billing_reminder_service.dart';
 import '../../core/service/reminder_service.dart';
 import '../../core/service/daily_reminder_service.dart';
 import '../../core/service/notification_service.dart';
@@ -114,6 +115,7 @@ mixin MainScreenController on State<MainScreen> {
     // Defer non-critical initialization so the home screen renders faster
     Future.delayed(const Duration(seconds: 2), () async {
       await checkReminders();
+      await _checkBillingReminders();
       await _checkDailyReminder();
       await _showPendingNotifications();
       await checkAutoPermissions();
@@ -145,6 +147,32 @@ mixin MainScreenController on State<MainScreen> {
       await ReminderService(isar).checkReminders();
     } catch (e) {
       debugPrint('Reminder check failed: $e');
+    }
+  }
+
+  Future<void> _checkBillingReminders() async {
+    if (!dbReady) return;
+    try {
+      final reminders =
+          await BillingReminderService(isar).checkBillingReminders();
+      if (reminders.isEmpty) return;
+
+      for (final r in reminders) {
+        final label = r.type == 'billing' ? '账单日' : '还款日';
+        final daysText = r.daysUntil == 0
+            ? '今天'
+            : r.daysUntil == 1
+                ? '明天'
+                : '${r.daysUntil}天后';
+        InAppNotificationService().addNotification(InAppNotification(
+          id: 'billing_${r.type}_${r.accountName}_${DateTime.now().toIso8601String().substring(0, 10)}',
+          title: '$label提醒',
+          body: '${r.accountName} ${label}还有$daysText',
+          type: r.isUrgent ? NotificationType.alert : NotificationType.info,
+        ));
+      }
+    } catch (e) {
+      debugPrint('Billing reminder check failed: $e');
     }
   }
 

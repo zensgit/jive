@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:isar/isar.dart';
 import '../database/budget_model.dart';
 import '../database/category_model.dart';
+import '../database/project_model.dart';
 import '../database/transaction_model.dart';
 import 'budget_pref_service.dart';
 import 'currency_service.dart';
@@ -1327,6 +1328,146 @@ class BudgetService {
         final end = DateTime(ref.year, ref.month, ref.day, 23, 59, 59, 999);
         return (start, end);
     }
+  }
+
+  /// 获取项目预算摘要 — 按 projectId 过滤交易计算已用/剩余
+  Future<BudgetSummary> getProjectBudgetSummary(int projectId) async {
+    final now = DateTime.now();
+
+    // 查找绑定到该项目的预算
+    final budget = await _isar.jiveBudgets
+        .filter()
+        .isActiveEqualTo(true)
+        .projectIdEqualTo(projectId)
+        .findFirst();
+
+    if (budget == null) {
+      // 没有正式预算记录 → 用项目自身的 budget 字段构造虚拟预算
+      final project = await _isar.jiveProjects.get(projectId);
+      final virtualBudget = JiveBudget()
+        ..id = -projectId // 用负数 ID 表示虚拟
+        ..name = project?.name ?? '项目预算'
+        ..amount = project?.budget ?? 0
+        ..currency = 'CNY'
+        ..projectId = projectId
+        ..startDate = project?.startDate ?? now
+        ..endDate = project?.endDate ?? DateTime(now.year, now.month + 1, 0)
+        ..period = 'custom'
+        ..isActive = true;
+
+      return _calculateProjectBudgetUsage(virtualBudget, projectId);
+    }
+
+    return _calculateProjectBudgetUsage(budget, projectId);
+  }
+
+  /// 获取所有有预算的项目的摘要列表
+  Future<List<BudgetSummary>> getAllProjectBudgetSummaries() async {
+    // 查找所有绑定项目的预算
+    final budgets = await _isar.jiveBudgets
+        .filter()
+        .isActiveEqualTo(true)
+        .projectIdIsNotNull()
+        .findAll();
+
+    final summaries = <BudgetSummary>[];
+    for (final budget in budgets) {
+      if (budget.projectId == null) continue;
+      try {
+        final summary = await _calculateProjectBudgetUsage(
+          budget,
+          budget.projectId!,
+        );
+        summaries.add(summary);
+      } catch (_) {}
+    }
+    return summaries;
+  }
+
+  /// 创建项目预算
+  Future<JiveBudget> createProjectBudget({
+    required int projectId,
+    required String name,
+    required double amount,
+    required String currency,
+    required String period,
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    final budget = JiveBudget()
+      ..name = name
+      ..amount = amount
+      ..currency = currency
+      ..projectId = projectId
+      ..startDate = startDate
+      ..endDate = endDate
+      ..period = period
+      ..isActive = true
+      ..createdAt = DateTime.now()
+      ..updatedAt = DateTime.now();
+
+    await _isar.writeTxn(() async {
+      await _isar.jiveBudgets.put(budget);
+    });
+
+    return budget;
+  }
+
+  Future<BudgetSummary> _calculateProjectBudgetUsage(
+    JiveBudget budget,
+    int projectId,
+  ) async {
+    final now = DateTime.now();
+    final effectiveAmount = _effectiveDirectAmount(budget);
+
+    // 获取项目在预算周期内的支出交易
+    final transactions = await _isar.jiveTransactions
+        .filter()
+        .projectIdEqualTo(projectId)
+        .typeEqualTo('expense')
+        .excludeFromBudgetEqualTo(false)
+        .timestampBetween(budget.startDate, budget.endDate)
+        .findAll();
+
+    final exchangeRate = await _budgetExchangeRate(budget);
+    final usedAmount = transactions.fold<double>(
+      0,
+      (sum, tx) => sum + tx.amount * exchangeRate,
+    );
+
+    final remainingAmount = effectiveAmount - usedAmount;
+    final usedPercent =
+        effectiveAmount > 0 ? (usedAmount / effectiveAmount * 100) : 0.0;
+
+    BudgetStatus status;
+    if (usedAmount > effectiveAmount) {
+      status = BudgetStatus.exceeded;
+    } else if (budget.alertEnabled &&
+        budget.alertThreshold != null &&
+        usedPercent >= budget.alertThreshold!) {
+      status = BudgetStatus.warning;
+    } else {
+      status = BudgetStatus.normal;
+    }
+
+    final today = DateTime(now.year, now.month, now.day);
+    final endDay = DateTime(
+      budget.endDate.year,
+      budget.endDate.month,
+      budget.endDate.day,
+    );
+    final dayDiff = endDay.difference(today).inDays;
+    final daysRemaining = dayDiff >= 0 ? dayDiff + 1 : 0;
+
+    return BudgetSummary(
+      budget: budget,
+      effectiveAmount: effectiveAmount,
+      usedAmount: usedAmount,
+      remainingAmount: remainingAmount,
+      usedPercent: usedPercent.toDouble(),
+      status: status,
+      daysRemaining: daysRemaining,
+    );
   }
 
   /// 检查需要预警的预算

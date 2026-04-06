@@ -23,6 +23,9 @@ class JiveBudget {
   String? categoryKey; // 关联的分类（可选，null 表示总预算）
 
   @Index()
+  int? projectId; // 关联的项目（可选，用于项目预算）
+
+  @Index()
   late DateTime startDate; // 开始日期
   late DateTime endDate; // 结束日期
 
