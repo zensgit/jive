@@ -52,7 +52,7 @@ class HomeRecentTransactionsSection extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            "Recent Transactions",
+            "最近交易",
             style: GoogleFonts.lato(
               fontSize: titleSize,
               fontWeight: FontWeight.bold,
@@ -63,7 +63,7 @@ class HomeRecentTransactionsSection extends StatelessWidget {
             key: const Key('home_view_all_transactions_button'),
             onTap: onViewAll,
             child: Text(
-              "View All",
+              "查看全部",
               style: GoogleFonts.lato(
                 color: JiveTheme.primaryGreen,
                 fontWeight: FontWeight.bold,

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../core/service/auto_app_registry.dart';
 import '../../../core/service/auto_app_settings.dart';
 import '../../../core/database/auto_draft_model.dart';
+import '../../../core/database/transaction_model.dart';
 import '../../../core/service/auto_draft_service.dart';
 import '../../../core/service/auto_permission_service.dart';
 import '../../../core/service/auto_permission_prompt_policy.dart';
@@ -186,6 +187,9 @@ mixin AutoCaptureMixin on MainScreenController {
     final promptPolicy = autoPermissionPromptPolicy;
     if (promptPolicy == null) return;
     if (!autoSettings.enabled) return;
+    // Don't prompt new users — wait until they have at least 3 transactions
+    final txCount = await isar.collection<JiveTransaction>().count();
+    if (txCount < 3) return;
     final status = await AutoPermissionService.getStatus();
     if (!mounted) return;
     final shouldPrompt = await promptPolicy.shouldPrompt(
