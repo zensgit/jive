@@ -17,6 +17,7 @@ import 'widgets/home_asset_card.dart';
 import 'widgets/home_menu_sheet.dart';
 import 'widgets/home_recent_transactions_section.dart';
 import 'widgets/home_top_bar.dart';
+import 'widgets/template_quick_bar.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -214,6 +215,13 @@ class _MainScreenState extends State<MainScreen>
           _buildAssetCard(),
           const SizedBox(height: 16),
           const BannerAdWidget(),
+          const SizedBox(height: 16),
+          TemplateQuickBar(
+            onTransactionCreated: () async {
+              await loadTransactions();
+              notifyDataChanged();
+            },
+          ),
           const SizedBox(height: 16),
           section.buildTitle(),
           const SizedBox(height: 16),

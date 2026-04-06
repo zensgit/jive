@@ -9,6 +9,7 @@ import 'category_analysis_screen.dart';
 import 'capital_flow_screen.dart';
 import 'spending_heatmap_screen.dart';
 import 'trend_chart_screen.dart';
+import 'credit_analysis_screen.dart';
 import 'stats_screen.dart';
 
 /// New stats home page with tab navigation.
@@ -29,7 +30,7 @@ class _StatsHomeScreenState extends State<StatsHomeScreen> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 9, vsync: this);
+    _tabController = TabController(length: 10, vsync: this);
   }
 
   @override
@@ -64,6 +65,7 @@ class _StatsHomeScreenState extends State<StatsHomeScreen> with SingleTickerProv
             Tab(text: '预算'),
             Tab(text: '热力图'),
             Tab(text: '流向'),
+            Tab(text: '信用卡'),
             Tab(text: '详情'),
           ],
         ),
@@ -79,6 +81,7 @@ class _StatsHomeScreenState extends State<StatsHomeScreen> with SingleTickerProv
           BudgetProgressScreen(bookId: widget.bookId),
           SpendingHeatmapScreen(bookId: widget.bookId),
           CapitalFlowScreen(bookId: widget.bookId),
+          const CreditAnalysisScreen(),
           StatsScreen(reloadSignal: widget.reloadSignal),
         ],
       ),

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 
+import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
+import '../../core/database/tag_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/batch_operation_service.dart';
 import '../../core/service/database_service.dart';
 
 /// Multi-select batch operations on transactions.
@@ -61,6 +64,7 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
         children: [
           // Action bar
           _buildActionBar(),
+          _buildEnhancedActionBar(),
           // Transaction list
           Expanded(
             child: ListView.builder(
@@ -97,6 +101,40 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
             label: '删除',
             color: Colors.red,
             onTap: _selected.isEmpty ? null : _batchDelete,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEnhancedActionBar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.white,
+      child: Row(
+        children: [
+          _ActionButton(
+            icon: Icons.store,
+            label: '改商户',
+            onTap: _selected.isEmpty ? null : _batchUpdateMerchant,
+          ),
+          const SizedBox(width: 12),
+          _ActionButton(
+            icon: Icons.label_outline,
+            label: '改标签',
+            onTap: _selected.isEmpty ? null : _batchUpdateTags,
+          ),
+          const SizedBox(width: 12),
+          _ActionButton(
+            icon: Icons.account_balance_wallet,
+            label: '改账户',
+            onTap: _selected.isEmpty ? null : _batchUpdateAccount,
+          ),
+          const SizedBox(width: 12),
+          _ActionButton(
+            icon: Icons.clear_all,
+            label: '清除',
+            onTap: _selected.isEmpty ? null : _batchClearField,
           ),
         ],
       ),
@@ -150,6 +188,155 @@ class _BatchOperationsScreenState extends State<BatchOperationsScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _batchUpdateMerchant() async {
+    final controller = TextEditingController();
+    if (!mounted) return;
+    final merchant = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('设置商户名'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: '输入商户名称'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('确认'),
+          ),
+        ],
+      ),
+    );
+    if (merchant == null || merchant.isEmpty || !mounted) return;
+
+    final isar = await DatabaseService.getInstance();
+    final svc = BatchOperationService(isar);
+    final count = await svc.batchUpdateMerchant(_selected.toList(), merchant);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已更新 $count 笔交易的商户')),
+      );
+      widget.onComplete();
+    }
+  }
+
+  Future<void> _batchUpdateTags() async {
+    final isar = await DatabaseService.getInstance();
+    final allTags = await isar.collection<JiveTag>().where().findAll();
+    if (allTags.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('暂无标签，请先创建标签')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    final selectedKeys = <String>{};
+    final picked = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlgState) => AlertDialog(
+          title: const Text('选择标签'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: allTags.map((tag) {
+                final isOn = selectedKeys.contains(tag.key);
+                return FilterChip(
+                  label: Text(tag.name),
+                  selected: isOn,
+                  onSelected: (v) {
+                    setDlgState(() {
+                      if (v) {
+                        selectedKeys.add(tag.key);
+                      } else {
+                        selectedKeys.remove(tag.key);
+                      }
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认')),
+          ],
+        ),
+      ),
+    );
+    if (picked != true || !mounted) return;
+
+    final svc = BatchOperationService(isar);
+    final count = await svc.batchUpdateTags(_selected.toList(), selectedKeys.toList());
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已更新 $count 笔交易的标签')),
+      );
+      widget.onComplete();
+    }
+  }
+
+  Future<void> _batchUpdateAccount() async {
+    final isar = await DatabaseService.getInstance();
+    final accounts = await isar.collection<JiveAccount>().where().findAll();
+    if (!mounted) return;
+    final selected = await showDialog<JiveAccount>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('选择账户'),
+        children: accounts
+            .map((a) => SimpleDialogOption(
+                  onPressed: () => Navigator.pop(ctx, a),
+                  child: Text(a.name),
+                ))
+            .toList(),
+      ),
+    );
+    if (selected == null || !mounted) return;
+
+    final svc = BatchOperationService(isar);
+    final count = await svc.batchUpdateAccount(_selected.toList(), selected.id);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已将 $count 笔交易移至"${selected.name}"')),
+      );
+      widget.onComplete();
+    }
+  }
+
+  Future<void> _batchClearField() async {
+    if (!mounted) return;
+    final field = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('清除字段'),
+        children: [
+          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'note'), child: const Text('备注')),
+          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'tags'), child: const Text('标签')),
+          SimpleDialogOption(onPressed: () => Navigator.pop(ctx, 'merchant'), child: const Text('商户')),
+        ],
+      ),
+    );
+    if (field == null || !mounted) return;
+
+    final isar = await DatabaseService.getInstance();
+    final svc = BatchOperationService(isar);
+    final count = await svc.batchClearField(_selected.toList(), field);
+    final label = field == 'note' ? '备注' : field == 'tags' ? '标签' : '商户';
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已清除 $count 笔交易的$label')),
+      );
+      widget.onComplete();
+    }
   }
 
   Future<void> _batchRecategorize() async {
