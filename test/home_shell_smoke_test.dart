@@ -133,7 +133,7 @@ void main() {
   });
 
   group('HomeRecentTransactionsSection', () {
-    testWidgets('renders View All button with correct key', (tester) async {
+    testWidgets('renders 查看全部 button with correct key', (tester) async {
       final section = HomeRecentTransactionsSection(
         compact: false,
         transactions: const [],
@@ -169,8 +169,8 @@ void main() {
         find.byKey(const Key('home_view_all_transactions_button')),
         findsOneWidget,
       );
-      expect(find.text('View All'), findsOneWidget);
-      expect(find.text('Recent Transactions'), findsOneWidget);
+      expect(find.text('查看全部'), findsOneWidget);
+      expect(find.text('最近交易'), findsOneWidget);
     });
 
     testWidgets('shows empty state when no transactions', (tester) async {
