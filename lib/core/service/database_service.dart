@@ -32,6 +32,8 @@ import '../database/shared_ledger_model.dart';
 import '../database/travel_trip_model.dart';
 import '../database/user_auto_rule_model.dart';
 import '../database/activity_log_model.dart';
+import '../database/fixed_deposit_model.dart';
+import '../database/billing_cycle_model.dart';
 
 /// 统一的数据库服务，确保所有地方使用相同的 schema 列表
 class DatabaseService {
@@ -81,6 +83,8 @@ class DatabaseService {
     JiveReimbursementSchema,
     JiveTravelTripSchema,
     JiveActivityLogSchema,
+    JiveFixedDepositSchema,
+    JiveBillingCycleSchema,
   ];
 
   /// 获取或创建 Isar 实例
