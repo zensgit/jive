@@ -21,6 +21,7 @@ import '../../core/service/project_service.dart';
 import '../../core/service/recurring_service.dart';
 import '../../core/service/book_service.dart';
 import '../../core/service/billing_reminder_service.dart';
+import '../../core/service/deposit_interest_service.dart';
 import '../../core/service/reminder_service.dart';
 import '../../core/service/daily_reminder_service.dart';
 import '../../core/service/notification_service.dart';
@@ -117,6 +118,7 @@ mixin MainScreenController on State<MainScreen> {
       await checkReminders();
       await _checkBillingReminders();
       await _checkDailyReminder();
+      await _processMaturedDeposits();
       await _showPendingNotifications();
       await checkAutoPermissions();
     });
@@ -173,6 +175,21 @@ mixin MainScreenController on State<MainScreen> {
       }
     } catch (e) {
       debugPrint('Billing reminder check failed: $e');
+    }
+  }
+
+  Future<void> _processMaturedDeposits() async {
+    if (!dbReady) return;
+    try {
+      final service = DepositInterestService(isar);
+      final count = await service.processAllMaturedDeposits();
+      if (count > 0) {
+        await loadTransactions();
+        notifyDataChanged();
+        debugPrint('Processed $count matured deposit(s)');
+      }
+    } catch (e) {
+      debugPrint('Matured deposit processing failed: $e');
     }
   }
 
