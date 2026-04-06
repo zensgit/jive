@@ -19,6 +19,7 @@ import 'widgets/home_recent_transactions_section.dart';
 import 'widgets/daily_budget_widget.dart';
 import 'widgets/home_top_bar.dart';
 import 'widgets/template_quick_bar.dart';
+import '../quick_entry/quick_entry_hub_sheet.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -72,9 +73,12 @@ class _MainScreenState extends State<MainScreen>
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => showAddTransaction('expense'),
-        child: const Icon(Icons.add, size: 32),
+      floatingActionButton: GestureDetector(
+        onLongPress: () => _showQuickEntryHub(),
+        child: FloatingActionButton(
+          onPressed: () => showAddTransaction('expense'),
+          child: const Icon(Icons.add, size: 32),
+        ),
       ),
       bottomNavigationBar: NavigationBar(
         backgroundColor: Colors.white,
@@ -91,6 +95,21 @@ class _MainScreenState extends State<MainScreen>
           NavigationDestination(icon: Icon(Icons.pie_chart), label: "Stats"),
           NavigationDestination(icon: Icon(Icons.wallet), label: "Assets"),
         ],
+      ),
+    );
+  }
+
+  void _showQuickEntryHub() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => QuickEntryHubSheet(
+        bookId: currentBookId,
+        onTransactionCreated: () async {
+          await loadTransactions();
+          notifyDataChanged();
+        },
       ),
     );
   }
