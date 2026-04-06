@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/service/auto_capture_enhanced_service.dart';
 import '../../core/service/auto_settings.dart';
 import '../../core/service/payment_notification_parser.dart';
+import 'auto_capture_notification_settings.dart';
 
 class AutoCaptureSettingsScreen extends StatefulWidget {
   const AutoCaptureSettingsScreen({super.key});
@@ -381,6 +382,8 @@ class _AutoCaptureSettingsScreenState extends State<AutoCaptureSettingsScreen> {
                 _buildMasterToggle(),
                 const SizedBox(height: 14),
                 _buildSourceToggles(),
+                const SizedBox(height: 14),
+                const AutoCaptureNotificationSettings(),
                 const SizedBox(height: 14),
                 _buildStatsCard(),
                 const SizedBox(height: 14),

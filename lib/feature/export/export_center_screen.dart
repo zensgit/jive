@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/design_system/confirm_code_dialog.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/encrypted_backup_service.dart';
@@ -141,6 +142,14 @@ class _ExportCenterScreenState extends State<ExportCenterScreen> {
       _showSnackBar('请输入备份密码', isError: true);
       return;
     }
+
+    // Safety confirmation — user must type a random code to proceed.
+    final confirmed = await ConfirmCodeDialog.show(
+      context,
+      title: '恢复备份确认',
+      description: '此操作将覆盖现有数据',
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() => _isRestoring = true);
     try {
