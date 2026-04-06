@@ -34,7 +34,6 @@ import '../../settings/settings_screen.dart';
 import '../../settings/widget_gallery_screen.dart';
 import '../../split/bill_split_screen.dart';
 import '../../tag/tag_management_screen.dart';
-import '../../travel/travel_screen.dart';
 
 /// Callbacks that the menu sheet needs from the parent screen.
 class HomeMenuActions {
@@ -136,10 +135,10 @@ void showHomeMenuSheet({
                       }
                       Navigator.pop(context);
                       final inserted = await actions.seedDemoData();
+                      // Allow main screen to settle after sheet dismissal
+                      await Future.delayed(const Duration(milliseconds: 300));
                       await actions.loadTransactions();
-                      if (inserted) {
-                        actions.notifyDataChanged();
-                      }
+                      actions.notifyDataChanged();
                       actions.showMessage(
                         inserted ? "已注入测试数据" : "已有数据，未注入测试数据",
                       );
@@ -162,6 +161,9 @@ void showHomeMenuSheet({
                       }
                       Navigator.pop(context);
                       await actions.randomSeed();
+                      await Future.delayed(const Duration(milliseconds: 300));
+                      await actions.loadTransactions();
+                      actions.notifyDataChanged();
                     },
                   ),
                   ListTile(
