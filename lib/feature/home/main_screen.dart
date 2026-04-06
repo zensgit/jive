@@ -16,6 +16,7 @@ import 'mixins/home_navigation_mixin.dart';
 import 'widgets/home_asset_card.dart';
 import 'widgets/home_menu_sheet.dart';
 import 'widgets/home_recent_transactions_section.dart';
+import 'widgets/daily_budget_widget.dart';
 import 'widgets/home_top_bar.dart';
 import 'widgets/template_quick_bar.dart';
 
@@ -215,6 +216,8 @@ class _MainScreenState extends State<MainScreen>
           _buildAssetCard(),
           const SizedBox(height: 16),
           const BannerAdWidget(),
+          const SizedBox(height: 16),
+          DailyBudgetWidget(bookId: currentBookId),
           const SizedBox(height: 16),
           TemplateQuickBar(
             onTransactionCreated: () async {
