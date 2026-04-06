@@ -33,6 +33,7 @@ import '../../settings/csv_export_screen.dart';
 import '../../settings/settings_screen.dart';
 import '../../settings/widget_gallery_screen.dart';
 import '../../split/bill_split_screen.dart';
+import '../../settings/screenshot_capture_settings.dart';
 import '../../tag/tag_management_screen.dart';
 
 /// Callbacks that the menu sheet needs from the parent screen.
@@ -774,6 +775,18 @@ void showHomeMenuSheet({
                     onTap: () {
                       Navigator.pop(context);
                       actions.openAutoSettings();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.screenshot_monitor),
+                    title: const Text("截图监控"),
+                    subtitle: const Text("监控截图文件夹自动识别账单"),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const ScreenshotCaptureSettingsScreen()),
+                      );
                     },
                   ),
                   ListTile(
