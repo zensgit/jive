@@ -48,6 +48,7 @@ import '../tag/tag_picker_sheet.dart';
 import 'note_field_with_chips.dart';
 import 'widgets/account_selector_section.dart';
 import 'widgets/transaction_amount_display.dart';
+import 'widgets/transaction_field_chips.dart';
 import 'widgets/transaction_source_banner.dart';
 import 'transaction_entry_params.dart';
 
@@ -1459,10 +1460,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           _buildTagSelector(isLandscape: isLandscape),
           if (_txType == TransactionType.expense) ...[
             SizedBox(height: isLandscape ? 6 : 8),
-            _buildBudgetFlags(isLandscape: isLandscape),
+            BudgetExclusionChip(
+              excludeFromBudget: _excludeFromBudget,
+              isLandscape: isLandscape,
+              onChanged: (v) => setState(() => _excludeFromBudget = v),
+            ),
           ],
           SizedBox(height: isLandscape ? 6 : 8),
-          _buildProjectSelector(isLandscape: isLandscape),
+          ProjectSelectorChip(
+            selectedProject: _selectedProjectId != null
+                ? _projects.where((p) => p.id == _selectedProjectId).firstOrNull
+                : null,
+            isLandscape: isLandscape,
+            onPickProject: _showProjectPicker,
+            onClearProject: () => setState(() => _selectedProjectId = null),
+          ),
         ],
       ),
     );
@@ -2538,33 +2550,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
-  Widget _buildBudgetFlags({required bool isLandscape}) {
-    if (_txType != TransactionType.expense) return const SizedBox.shrink();
-    final textSize = isLandscape ? 10.0 : 12.0;
-    final color = _excludeFromBudget
-        ? Colors.orange.shade700
-        : Colors.grey.shade700;
-    return Align(
-      alignment: Alignment.center,
-      child: FilterChip(
-        label: Text(
-          '不计入预算',
-          style: TextStyle(
-            fontSize: textSize,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
-        ),
-        avatar: Icon(Icons.pie_chart_outline, size: 14, color: color),
-        selected: _excludeFromBudget,
-        onSelected: (value) => setState(() => _excludeFromBudget = value),
-        showCheckmark: true,
-        selectedColor: Colors.orange.withValues(alpha: 0.12),
-        checkmarkColor: Colors.orange.shade700,
-        side: BorderSide(color: color.withValues(alpha: 0.4)),
-      ),
-    );
-  }
 
   Future<void> _showTagPicker() async {
     final picked = await showModalBottomSheet<List<String>>(
@@ -2592,61 +2577,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     });
   }
 
-  Widget _buildProjectSelector({required bool isLandscape}) {
-    final textSize = isLandscape ? 10.0 : 12.0;
-    final selectedProject = _selectedProjectId != null
-        ? _projects.where((p) => p.id == _selectedProjectId).firstOrNull
-        : null;
-
-    if (selectedProject != null) {
-      final color = selectedProject.colorHex != null
-          ? Color(
-              int.parse(selectedProject.colorHex!.replaceFirst('#', '0xFF')),
-            )
-          : JiveTheme.primaryGreen;
-      return Align(
-        alignment: Alignment.center,
-        child: InputChip(
-          label: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              iconWidgetForName(
-                selectedProject.iconName,
-                size: 14,
-                color: color,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                selectedProject.name,
-                style: TextStyle(
-                  fontSize: textSize,
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: color.withValues(alpha: 0.12),
-          side: BorderSide(color: color.withValues(alpha: 0.4)),
-          onDeleted: () => setState(() => _selectedProjectId = null),
-          onPressed: _showProjectPicker,
-        ),
-      );
-    }
-
-    return Align(
-      alignment: Alignment.center,
-      child: ActionChip(
-        label: Text('关联项目', style: TextStyle(fontSize: textSize)),
-        avatar: const Icon(
-          Icons.folder_outlined,
-          size: 14,
-          color: Colors.black54,
-        ),
-        onPressed: _showProjectPicker,
-      ),
-    );
-  }
 
   Future<void> _showProjectPicker() async {
     if (_projects.isEmpty) {
@@ -2983,120 +2913,22 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _filterSearchResults(_searchQuery).isEmpty) {
       return _buildSystemSuggestionPanel();
     }
-    return _buildSubCategoryGrid(subGridAspectRatio, subGridMainAxisSpacing);
-  }
-
-  Widget _buildSubCategoryGrid(
-    double subGridAspectRatio,
-    double subGridMainAxisSpacing,
-  ) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 6,
-        childAspectRatio: subGridAspectRatio,
-        mainAxisSpacing: subGridMainAxisSpacing,
-        crossAxisSpacing: 8,
-      ),
-      itemCount: _subCategories.length + 1,
-      itemBuilder: (context, index) {
-        if (index == _subCategories.length) {
-          return GestureDetector(
-            onTap: () async {
-              final parent = _selectedParent;
-              if (parent != null) {
-                await _promptAddSubCategory(parent);
-              }
-            },
-            child: Column(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: const Icon(Icons.add, color: Colors.grey, size: 20),
-                ),
-                const SizedBox(height: 3),
-                const Text(
-                  "自定义",
-                  style: TextStyle(fontSize: 9, color: Colors.grey),
-                ),
-              ],
-            ),
-          );
+    return SubCategoryGrid(
+      subCategories: _subCategories,
+      selectedSub: _selectedSub,
+      aspectRatio: subGridAspectRatio,
+      mainAxisSpacing: subGridMainAxisSpacing,
+      onSelect: (cat) => setState(() => _selectedSub = cat),
+      onLongPress: _showSubCategoryActions,
+      onAddCustom: () async {
+        final parent = _selectedParent;
+        if (parent != null) {
+          await _promptAddSubCategory(parent);
         }
-
-        final cat = _subCategories[index];
-        final isSelected = cat.key == _selectedSub?.key;
-        final customColor = CategoryService.parseColorHex(cat.colorHex);
-        final activeColor = customColor ?? JiveTheme.primaryGreen;
-        final inactiveColor = JiveTheme.categoryIconInactive;
-        final isCategoryAssetIcon =
-            (cat.iconName.endsWith(".png") || cat.iconName.endsWith(".svg")) &&
-            (!cat.iconName.startsWith("assets/") ||
-                cat.iconName.startsWith("assets/category_icons/"));
-        final shouldTintIcon = isCategoryAssetIcon
-            ? (cat.iconForceTinted ||
-                  CategoryIconStyleConfig.current.shouldTintForCategory(
-                    isSystemCategory: cat.isSystem,
-                  ))
-            : true;
-        final coloredIcons = !shouldTintIcon;
-        return GestureDetector(
-          onTap: () => setState(() => _selectedSub = cat),
-          onLongPress: () => _showSubCategoryActions(cat),
-          child: Column(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? (coloredIcons
-                            ? activeColor.withValues(alpha: 0.14)
-                            : activeColor)
-                      : (coloredIcons
-                            ? Colors.white
-                            : JiveTheme.categoryIconInactiveBackground),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected
-                        ? activeColor
-                        : JiveTheme.categoryIconInactiveBorder,
-                  ),
-                ),
-                child: CategoryService.buildIcon(
-                  cat.iconName,
-                  size: 18,
-                  color: coloredIcons
-                      ? (isSelected ? null : inactiveColor)
-                      : (isSelected ? Colors.white : inactiveColor),
-                  isSystemCategory: cat.isSystem,
-                  forceTinted: cat.iconForceTinted,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                cat.name,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: isSelected
-                      ? Colors.black87
-                      : JiveTheme.categoryLabelInactive,
-                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        );
       },
     );
   }
+
 
   Widget _buildSystemSuggestionPanel() {
     final suggestions = _systemSuggestionsForQuery(_searchQuery);
