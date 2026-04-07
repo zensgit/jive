@@ -77,83 +77,88 @@ const JiveTransactionSchema = CollectionSchema(
       name: r'projectId',
       type: IsarType.long,
     ),
-    r'rawText': PropertySchema(
+    r'quickActionId': PropertySchema(
       id: 12,
+      name: r'quickActionId',
+      type: IsarType.long,
+    ),
+    r'rawText': PropertySchema(
+      id: 13,
       name: r'rawText',
       type: IsarType.string,
     ),
     r'recurringKey': PropertySchema(
-      id: 13,
+      id: 14,
       name: r'recurringKey',
       type: IsarType.string,
     ),
     r'recurringRuleId': PropertySchema(
-      id: 14,
+      id: 15,
       name: r'recurringRuleId',
       type: IsarType.long,
     ),
     r'smartTagKeys': PropertySchema(
-      id: 15,
+      id: 16,
       name: r'smartTagKeys',
       type: IsarType.stringList,
     ),
     r'smartTagOptOutAll': PropertySchema(
-      id: 16,
+      id: 17,
       name: r'smartTagOptOutAll',
       type: IsarType.bool,
     ),
     r'smartTagOptOutKeys': PropertySchema(
-      id: 17,
+      id: 18,
       name: r'smartTagOptOutKeys',
       type: IsarType.stringList,
     ),
     r'source': PropertySchema(
-      id: 18,
+      id: 19,
       name: r'source',
       type: IsarType.string,
     ),
     r'subCategory': PropertySchema(
-      id: 19,
+      id: 20,
       name: r'subCategory',
       type: IsarType.string,
     ),
     r'subCategoryKey': PropertySchema(
-      id: 20,
+      id: 21,
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
     r'syncKey': PropertySchema(
-      id: 21,
+      id: 22,
       name: r'syncKey',
       type: IsarType.string,
     ),
     r'tagKeys': PropertySchema(
-      id: 22,
+      id: 23,
       name: r'tagKeys',
       type: IsarType.stringList,
     ),
     r'timestamp': PropertySchema(
-      id: 23,
+      id: 24,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'toAccountId': PropertySchema(
-      id: 24,
+      id: 25,
       name: r'toAccountId',
       type: IsarType.long,
     ),
     r'toAmount': PropertySchema(
-      id: 25,
+      id: 26,
       name: r'toAmount',
       type: IsarType.double,
     ),
     r'type': PropertySchema(
-      id: 26,
+      id: 27,
       name: r'type',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 27,
+      id: 28,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -427,22 +432,23 @@ void _jiveTransactionSerialize(
   writer.writeBool(offsets[9], object.excludeFromBudget);
   writer.writeString(offsets[10], object.note);
   writer.writeLong(offsets[11], object.projectId);
-  writer.writeString(offsets[12], object.rawText);
-  writer.writeString(offsets[13], object.recurringKey);
-  writer.writeLong(offsets[14], object.recurringRuleId);
-  writer.writeStringList(offsets[15], object.smartTagKeys);
-  writer.writeBool(offsets[16], object.smartTagOptOutAll);
-  writer.writeStringList(offsets[17], object.smartTagOptOutKeys);
-  writer.writeString(offsets[18], object.source);
-  writer.writeString(offsets[19], object.subCategory);
-  writer.writeString(offsets[20], object.subCategoryKey);
-  writer.writeString(offsets[21], object.syncKey);
-  writer.writeStringList(offsets[22], object.tagKeys);
-  writer.writeDateTime(offsets[23], object.timestamp);
-  writer.writeLong(offsets[24], object.toAccountId);
-  writer.writeDouble(offsets[25], object.toAmount);
-  writer.writeString(offsets[26], object.type);
-  writer.writeDateTime(offsets[27], object.updatedAt);
+  writer.writeLong(offsets[12], object.quickActionId);
+  writer.writeString(offsets[13], object.rawText);
+  writer.writeString(offsets[14], object.recurringKey);
+  writer.writeLong(offsets[15], object.recurringRuleId);
+  writer.writeStringList(offsets[16], object.smartTagKeys);
+  writer.writeBool(offsets[17], object.smartTagOptOutAll);
+  writer.writeStringList(offsets[18], object.smartTagOptOutKeys);
+  writer.writeString(offsets[19], object.source);
+  writer.writeString(offsets[20], object.subCategory);
+  writer.writeString(offsets[21], object.subCategoryKey);
+  writer.writeString(offsets[22], object.syncKey);
+  writer.writeStringList(offsets[23], object.tagKeys);
+  writer.writeDateTime(offsets[24], object.timestamp);
+  writer.writeLong(offsets[25], object.toAccountId);
+  writer.writeDouble(offsets[26], object.toAmount);
+  writer.writeString(offsets[27], object.type);
+  writer.writeDateTime(offsets[28], object.updatedAt);
 }
 
 JiveTransaction _jiveTransactionDeserialize(
@@ -465,22 +471,23 @@ JiveTransaction _jiveTransactionDeserialize(
   object.id = id;
   object.note = reader.readStringOrNull(offsets[10]);
   object.projectId = reader.readLongOrNull(offsets[11]);
-  object.rawText = reader.readStringOrNull(offsets[12]);
-  object.recurringKey = reader.readStringOrNull(offsets[13]);
-  object.recurringRuleId = reader.readLongOrNull(offsets[14]);
-  object.smartTagKeys = reader.readStringList(offsets[15]) ?? [];
-  object.smartTagOptOutAll = reader.readBool(offsets[16]);
-  object.smartTagOptOutKeys = reader.readStringList(offsets[17]) ?? [];
-  object.source = reader.readString(offsets[18]);
-  object.subCategory = reader.readStringOrNull(offsets[19]);
-  object.subCategoryKey = reader.readStringOrNull(offsets[20]);
-  object.syncKey = reader.readString(offsets[21]);
-  object.tagKeys = reader.readStringList(offsets[22]) ?? [];
-  object.timestamp = reader.readDateTime(offsets[23]);
-  object.toAccountId = reader.readLongOrNull(offsets[24]);
-  object.toAmount = reader.readDoubleOrNull(offsets[25]);
-  object.type = reader.readStringOrNull(offsets[26]);
-  object.updatedAt = reader.readDateTime(offsets[27]);
+  object.quickActionId = reader.readLongOrNull(offsets[12]);
+  object.rawText = reader.readStringOrNull(offsets[13]);
+  object.recurringKey = reader.readStringOrNull(offsets[14]);
+  object.recurringRuleId = reader.readLongOrNull(offsets[15]);
+  object.smartTagKeys = reader.readStringList(offsets[16]) ?? [];
+  object.smartTagOptOutAll = reader.readBool(offsets[17]);
+  object.smartTagOptOutKeys = reader.readStringList(offsets[18]) ?? [];
+  object.source = reader.readString(offsets[19]);
+  object.subCategory = reader.readStringOrNull(offsets[20]);
+  object.subCategoryKey = reader.readStringOrNull(offsets[21]);
+  object.syncKey = reader.readString(offsets[22]);
+  object.tagKeys = reader.readStringList(offsets[23]) ?? [];
+  object.timestamp = reader.readDateTime(offsets[24]);
+  object.toAccountId = reader.readLongOrNull(offsets[25]);
+  object.toAmount = reader.readDoubleOrNull(offsets[26]);
+  object.type = reader.readStringOrNull(offsets[27]);
+  object.updatedAt = reader.readDateTime(offsets[28]);
   return object;
 }
 
@@ -516,36 +523,38 @@ P _jiveTransactionDeserializeProp<P>(
     case 11:
       return (reader.readLongOrNull(offset)) as P;
     case 12:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 13:
       return (reader.readStringOrNull(offset)) as P;
     case 14:
-      return (reader.readLongOrNull(offset)) as P;
-    case 15:
-      return (reader.readStringList(offset) ?? []) as P;
-    case 16:
-      return (reader.readBool(offset)) as P;
-    case 17:
-      return (reader.readStringList(offset) ?? []) as P;
-    case 18:
-      return (reader.readString(offset)) as P;
-    case 19:
       return (reader.readStringOrNull(offset)) as P;
+    case 15:
+      return (reader.readLongOrNull(offset)) as P;
+    case 16:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 17:
+      return (reader.readBool(offset)) as P;
+    case 18:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 19:
+      return (reader.readString(offset)) as P;
     case 20:
       return (reader.readStringOrNull(offset)) as P;
     case 21:
-      return (reader.readString(offset)) as P;
-    case 22:
-      return (reader.readStringList(offset) ?? []) as P;
-    case 23:
-      return (reader.readDateTime(offset)) as P;
-    case 24:
-      return (reader.readLongOrNull(offset)) as P;
-    case 25:
-      return (reader.readDoubleOrNull(offset)) as P;
-    case 26:
       return (reader.readStringOrNull(offset)) as P;
+    case 22:
+      return (reader.readString(offset)) as P;
+    case 23:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 24:
+      return (reader.readDateTime(offset)) as P;
+    case 25:
+      return (reader.readLongOrNull(offset)) as P;
+    case 26:
+      return (reader.readDoubleOrNull(offset)) as P;
     case 27:
+      return (reader.readStringOrNull(offset)) as P;
+    case 28:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3077,6 +3086,80 @@ extension JiveTransactionQueryFilter
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'quickActionId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'quickActionId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'quickActionId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'quickActionId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'quickActionId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'quickActionId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
       rawTextIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -5309,6 +5392,20 @@ extension JiveTransactionQuerySortBy
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByQuickActionId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quickActionId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByQuickActionIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quickActionId', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> sortByRawText() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rawText', Sort.asc);
@@ -5653,6 +5750,20 @@ extension JiveTransactionQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByQuickActionId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quickActionId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByQuickActionIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quickActionId', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> thenByRawText() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'rawText', Sort.asc);
@@ -5917,6 +6028,13 @@ extension JiveTransactionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByQuickActionId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'quickActionId');
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QDistinct> distinctByRawText(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -6114,6 +6232,13 @@ extension JiveTransactionQueryProperty
   QueryBuilder<JiveTransaction, int?, QQueryOperations> projectIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'projectId');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, int?, QQueryOperations>
+      quickActionIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'quickActionId');
     });
   }
 

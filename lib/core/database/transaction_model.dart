@@ -49,4 +49,5 @@ class JiveTransaction {
   @Index()
   int? bookId; // 多账本支持 - null 表示默认账本
   List<String> attachmentPaths = []; // 附件文件路径
+  int? quickActionId; // 来源快速动作 ID
 }
