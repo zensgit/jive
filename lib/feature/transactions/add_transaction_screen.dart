@@ -50,6 +50,7 @@ import 'widgets/account_selector_section.dart';
 import 'widgets/transaction_amount_display.dart';
 import 'widgets/transaction_calculator_key.dart';
 import 'widgets/transaction_field_chips.dart';
+import 'widgets/transaction_misc_widgets.dart';
 import 'widgets/transaction_source_banner.dart';
 import 'widgets/transaction_type_selector.dart';
 import 'transaction_entry_params.dart';
@@ -1459,7 +1460,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           SizedBox(height: isLandscape ? 6 : 10),
           _buildNoteField(isLandscape: isLandscape),
           SizedBox(height: isLandscape ? 6 : 8),
-          _buildTagSelector(isLandscape: isLandscape),
+          TagSelectorWrap(
+            tags: _tags,
+            selectedKeys: _selectedTagKeys,
+            isLandscape: isLandscape,
+            onRemoveTag: (key) =>
+                setState(() => _selectedTagKeys.remove(key)),
+            onPickTags: _showTagPicker,
+          ),
           if (_txType == TransactionType.expense) ...[
             SizedBox(height: isLandscape ? 6 : 8),
             BudgetExclusionChip(
@@ -1584,7 +1592,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       if (_isSearchMode) ...[
                         Padding(
                           padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                          child: _buildInlineSearchField(),
+                          child: InlineCategorySearchField(
+                            controller: _inlineSearchController,
+                            focusNode: _inlineSearchFocus,
+                            currentQuery: _searchQuery,
+                            onChanged: _onSearchChanged,
+                            onClear: () {
+                              _inlineSearchController.clear();
+                              setState(() => _searchQuery = "");
+                            },
+                          ),
                         ),
                         const Divider(height: 1, color: Colors.black12),
                       ] else ...[
@@ -1773,40 +1790,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     setState(() => _merchantSuggestion = null);
   }
 
-  Widget _buildMerchantSuggestionBanner() {
-    final suggestion = _merchantSuggestion;
-    if (suggestion == null) return const SizedBox.shrink();
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.green.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.green.shade200),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.store, size: 16, color: Colors.green.shade700),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              "建议分类: ${_parentCategories.where((c) => c.key == suggestion.categoryKey).map((c) => c.name).firstOrNull ?? '未知'}",
-              style: TextStyle(fontSize: 12, color: Colors.green.shade800),
-            ),
-          ),
-          GestureDetector(
-            onTap: _applyMerchantSuggestion,
-            child: Text("应用", style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
-          ),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: () => setState(() => _merchantSuggestion = null),
-            child: Icon(Icons.close, size: 14, color: Colors.green.shade400),
-          ),
-        ],
-      ),
-    );
-  }
 
   // ══════════════════════════════════════════════════
   // ── Voice Recognition Methods ──
@@ -2189,13 +2172,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    _buildSpeechPreviewRow("金额", amountLabel),
-                    _buildSpeechPreviewRow("类型", typeLabel),
+                    SpeechPreviewRow(label: "金额", value: amountLabel),
+                    SpeechPreviewRow(label: "类型", value: typeLabel),
                     if (preview?.type == 'transfer')
-                      _buildSpeechPreviewRow("账户", "$accountLabel → $toAccountLabel")
+                      SpeechPreviewRow(label: "账户", value: "$accountLabel → $toAccountLabel")
                     else
-                      _buildSpeechPreviewRow("账户", accountLabel),
-                    _buildSpeechPreviewRow("时间", timeLabel),
+                      SpeechPreviewRow(label: "账户", value: accountLabel),
+                    SpeechPreviewRow(label: "时间", value: timeLabel),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
@@ -2223,28 +2206,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return result;
   }
 
-  Widget _buildSpeechPreviewRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 56,
-            child: Text(
-              label,
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: Colors.black87, fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _applySpeechIntent(SpeechIntent intent) async {
     final nextType = _speechTypeFromIntent(intent.type);
@@ -2458,52 +2419,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
 
 
-  Widget _buildTagSelector({required bool isLandscape}) {
-    final textSize = isLandscape ? 10.0 : 12.0;
-    final selectedTags = _tags
-        .where((tag) => _selectedTagKeys.contains(tag.key))
-        .toList();
-    return Align(
-      alignment: Alignment.center,
-      child: Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        alignment: WrapAlignment.center,
-        children: [
-          for (final tag in selectedTags) _buildSelectedTagChip(tag, textSize),
-          ActionChip(
-            label: Text(
-              selectedTags.isEmpty ? '添加标签' : '编辑标签',
-              style: TextStyle(fontSize: textSize),
-            ),
-            avatar: const Icon(
-              Icons.label_outline,
-              size: 14,
-              color: Colors.black54,
-            ),
-            onPressed: _showTagPicker,
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildSelectedTagChip(JiveTag tag, double textSize) {
-    final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
-    return InputChip(
-      label: Text(
-        tagDisplayName(tag),
-        style: TextStyle(
-          fontSize: textSize,
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      backgroundColor: color.withValues(alpha: 0.12),
-      side: BorderSide(color: color.withValues(alpha: 0.4)),
-      onDeleted: () => setState(() => _selectedTagKeys.remove(tag.key)),
-    );
-  }
 
 
   Future<void> _showTagPicker() async {
@@ -2826,37 +2742,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
-  Widget _buildInlineSearchField() {
-    return TextField(
-      controller: _inlineSearchController,
-      focusNode: _inlineSearchFocus,
-      onChanged: _onSearchChanged,
-      decoration: InputDecoration(
-        hintText: "搜索分类",
-        prefixIcon: const Icon(Icons.search, size: 18),
-        suffixIcon: _searchQuery.isEmpty
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: () {
-                  _inlineSearchController.clear();
-                  setState(() => _searchQuery = "");
-                },
-              ),
-        filled: true,
-        isDense: true,
-        fillColor: Colors.grey.shade100,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 12,
-          vertical: 10,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
-        ),
-      ),
-    );
-  }
 
   Widget _buildCategoryBody(
     double subGridAspectRatio,
@@ -3285,7 +3170,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _buildMerchantSuggestionBanner(),
+        MerchantSuggestionBanner(
+          suggestion: _merchantSuggestion,
+          parentCategories: _parentCategories,
+          onApply: _applyMerchantSuggestion,
+          onDismiss: () => setState(() => _merchantSuggestion = null),
+        ),
         NoteFieldWithChips(
           controller: _noteController,
           isLandscape: isLandscape,
