@@ -123,10 +123,10 @@ class SupabaseAuthService extends AuthService {
       final message = e.reasons.isEmpty
           ? '密码强度不足，请更换更安全的密码'
           : '密码强度不足：${e.reasons.join('；')}';
-      debugPrint('SupabaseAuth: email sign-in weak password: $message');
+      if (kDebugMode) debugPrint('SupabaseAuth: email sign-in weak password');
       throw EmailAuthFlowException(message);
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: email sign-in failed: ${e.message}');
+      if (kDebugMode) debugPrint('SupabaseAuth: email sign-in failed (${e.statusCode})');
       throw EmailAuthFlowException(_mapEmailAuthError(e, isLogin: true));
     }
   }
@@ -153,10 +153,10 @@ class SupabaseAuthService extends AuthService {
       final message = e.reasons.isEmpty
           ? '密码强度不足，请更换更安全的密码'
           : '密码强度不足：${e.reasons.join('；')}';
-      debugPrint('SupabaseAuth: email register weak password: $message');
+      if (kDebugMode) debugPrint('SupabaseAuth: email register weak password');
       throw EmailAuthFlowException(message);
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: email register failed: ${e.message}');
+      if (kDebugMode) debugPrint('SupabaseAuth: email register failed (${e.statusCode})');
       throw EmailAuthFlowException(_mapEmailAuthError(e, isLogin: false));
     }
   }
@@ -166,7 +166,7 @@ class SupabaseAuthService extends AuthService {
     try {
       await _client.auth.signInWithOtp(phone: phone);
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: SMS request failed: ${e.message}');
+      if (kDebugMode) debugPrint('SupabaseAuth: SMS request failed (${e.statusCode})');
     }
   }
 
@@ -180,7 +180,7 @@ class SupabaseAuthService extends AuthService {
       );
       return _state;
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: phone sign-in failed: ${e.message}');
+      if (kDebugMode) debugPrint('SupabaseAuth: phone sign-in failed (${e.statusCode})');
       return _state;
     }
   }
@@ -199,10 +199,10 @@ class SupabaseAuthService extends AuthService {
       }
       return _state;
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: OAuth sign-in failed: ${e.message}');
+      if (kDebugMode) debugPrint('SupabaseAuth: OAuth sign-in failed (${e.statusCode})');
       throw OAuthAuthFlowException(_mapOAuthError(e, provider: provider));
     } on PlatformException catch (e) {
-      debugPrint('SupabaseAuth: OAuth launch failed: ${e.message}');
+      if (kDebugMode) debugPrint('SupabaseAuth: OAuth launch failed');
       throw OAuthAuthFlowException('无法打开 ${provider.label} 登录页面，请检查系统浏览器后重试');
     }
   }
@@ -223,7 +223,7 @@ class SupabaseAuthService extends AuthService {
     try {
       await _client.auth.signOut();
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: sign-out failed: ${e.message}');
+      if (kDebugMode) debugPrint('SupabaseAuth: sign-out failed (${e.statusCode})');
     }
     _state = const app.AuthGuest();
     notifyListeners();

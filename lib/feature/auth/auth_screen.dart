@@ -19,7 +19,11 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+  // RFC 5322 simplified: local part 1-64 chars, domain with at least one dot,
+  // each domain label 2+ chars, TLD 2+ alpha chars (rejects a@b.c style invalid emails).
+  static final RegExp _emailPattern = RegExp(
+    r'^[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9-]{2,}(\.[a-zA-Z0-9-]{2,})*\.[a-zA-Z]{2,}$',
+  );
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
