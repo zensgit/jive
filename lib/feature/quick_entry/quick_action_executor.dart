@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../core/database/transaction_model.dart';
 import '../../core/model/quick_action.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/quick_action_service.dart';
-import '../transactions/add_transaction_screen.dart';
+import '../transactions/transaction_entry_params.dart';
+import '../transactions/transaction_form_screen.dart';
 
 /// Orchestrates quick-action execution depending on the action's
 /// [QuickActionMode].
@@ -23,6 +23,7 @@ class QuickActionExecutor {
 
     switch (action.mode) {
       case QuickActionMode.direct:
+        if (!context.mounted) return;
         await _executeDirect(context, action, service);
       case QuickActionMode.confirm:
         if (context.mounted) {
@@ -92,35 +93,28 @@ class QuickActionExecutor {
   // Edit mode — navigate to full editor
   // ---------------------------------------------------------------------------
 
-  /// Opens the full transaction editor with fields prefilled from the action.
-  ///
-  /// Uses the existing [AddTransactionScreen] constructor parameters. Once
-  /// AddTransactionScreen is updated to accept [TransactionEntryParams], this
-  /// can be simplified to pass `entryParams` directly.
+  /// Opens the form-based transaction editor with fields prefilled from the
+  /// action via [TransactionEntryParams].
   static void _executeEdit(
     BuildContext context,
     QuickAction action,
     QuickActionService service,
   ) {
-    // Build a prefill transaction from the quick action fields.
-    final prefill = JiveTransaction()
-      ..amount = action.defaultAmount ?? 0
-      ..type = action.transactionType
-      ..categoryKey = action.categoryKey
-      ..subCategoryKey = action.subCategoryKey
-      ..accountId = action.accountId
-      ..bookId = action.bookId
-      ..note = action.defaultNote
-      ..tagKeys = List<String>.from(action.tagKeys)
-      ..source = 'quick_action'
-      ..timestamp = DateTime.now();
+    final params = TransactionEntryParams(
+      source: TransactionEntrySource.quickAction,
+      sourceLabel: '来自快速动作「${action.name}」',
+      quickActionId: action.id?.toString(),
+      prefillAmount: action.defaultAmount,
+      prefillType: action.transactionType,
+      prefillCategoryKey: action.categoryKey,
+      prefillAccountId: action.accountId,
+      prefillNote: action.defaultNote,
+      prefillTagKeys: action.tagKeys,
+    );
 
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => AddTransactionScreen(
-          prefillTransaction: prefill,
-          bookId: action.bookId,
-        ),
+        builder: (_) => TransactionFormScreen(params: params),
       ),
     );
   }

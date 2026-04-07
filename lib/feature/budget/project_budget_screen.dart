@@ -357,7 +357,7 @@ class _ProjectBudgetScreenState extends State<ProjectBudgetScreen> {
               children: [
                 DropdownButtonFormField<JiveProject>(
                   decoration: const InputDecoration(labelText: '选择项目'),
-                  value: selectedProject,
+                  initialValue: selectedProject,
                   items: availableProjects
                       .map((p) => DropdownMenuItem(
                           value: p, child: Text(p.name)))
@@ -378,7 +378,7 @@ class _ProjectBudgetScreenState extends State<ProjectBudgetScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   decoration: const InputDecoration(labelText: '预算周期'),
-                  value: selectedPeriod,
+                  initialValue: selectedPeriod,
                   items: BudgetPeriod.values
                       .where((p) => p != BudgetPeriod.custom)
                       .map((p) => DropdownMenuItem(

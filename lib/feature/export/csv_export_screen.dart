@@ -360,7 +360,7 @@ class _CsvExportView extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: controller.selectedCategoryKey ?? '',
+              initialValue: controller.selectedCategoryKey ?? '',
               isExpanded: true,
               decoration: _inputDecoration(
                 context,

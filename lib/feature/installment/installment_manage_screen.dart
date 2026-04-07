@@ -92,7 +92,7 @@ class _InstallmentManageScreenState extends State<InstallmentManageScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     DropdownButtonFormField<int>(
-                      value: selectedAccount.id,
+                      initialValue: selectedAccount.id,
                       decoration: const InputDecoration(labelText: '信用卡账户'),
                       items: _creditAccounts
                           .map(
@@ -141,7 +141,7 @@ class _InstallmentManageScreenState extends State<InstallmentManageScreen> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      value: commitMode.value,
+                      initialValue: commitMode.value,
                       decoration: const InputDecoration(labelText: '执行模式'),
                       items: const [
                         DropdownMenuItem(value: 'draft', child: Text('仅生成草稿')),

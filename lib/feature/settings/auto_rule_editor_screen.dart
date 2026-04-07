@@ -256,7 +256,7 @@ class _AutoRuleEditorScreenState extends State<AutoRuleEditorScreen> with Single
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: type,
+                  initialValue: type,
                   decoration: const InputDecoration(labelText: '类型', border: OutlineInputBorder()),
                   items: const [
                     DropdownMenuItem(value: 'expense', child: Text('支出')),
@@ -267,7 +267,7 @@ class _AutoRuleEditorScreenState extends State<AutoRuleEditorScreen> with Single
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String?>(
-                  value: parentKey,
+                  initialValue: parentKey,
                   decoration: const InputDecoration(labelText: '分类', border: OutlineInputBorder()),
                   items: [
                     const DropdownMenuItem(value: null, child: Text('不指定')),
@@ -333,6 +333,7 @@ class _AutoRuleEditorScreenState extends State<AutoRuleEditorScreen> with Single
         await _showAddRuleDialog(editing: rule);
         break;
       case 'delete':
+        if (!mounted) return;
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(

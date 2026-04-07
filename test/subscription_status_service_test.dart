@@ -203,6 +203,33 @@ void main() {
     );
 
     test(
+      'restore downgrade clears trusted subscriber snapshot metadata',
+      () async {
+        await entitlement.applyTrustedSnapshot(
+          TrustedSubscriptionSnapshot(
+            plan: SubscriptionPlan.subscriber,
+            status: SubscriptionStatusKind.active,
+            platform: 'google_play',
+            productId: 'jive_subscriber_monthly',
+            lastVerifiedAt: DateTime(2026, 4, 5, 10),
+          ),
+        );
+        fakeTruth.fetchResult =
+            const SubscriptionTruthFetchResult.unavailable();
+        fakePayment.fakeRestoreResult = const PurchaseResult.error(
+          'no active subscriptions',
+        );
+
+        await service.checkAndSync();
+
+        final prefs = await SharedPreferences.getInstance();
+        expect(entitlement.tier, equals(UserTier.free));
+        expect(prefs.getString('trusted_subscription_plan'), isNull);
+        expect(prefs.getString('trusted_subscription_status'), isNull);
+      },
+    );
+
+    test(
       'recordPurchaseTimestamp and getLastPurchaseTime round-trip',
       () async {
         await service.recordPurchaseTimestamp('jive_paid_unlock');

@@ -190,7 +190,7 @@ class _NlpInputSheetContentState extends State<_NlpInputSheetContent> {
     return Container(
       margin: const EdgeInsets.only(top: 16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withValues(alpha: 0.5),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: color.withValues(alpha: 0.25),
@@ -357,7 +357,7 @@ class _NlpInputSheetContentState extends State<_NlpInputSheetContent> {
                           height: 1.6,
                         ),
                         filled: true,
-                        fillColor: colorScheme.surfaceVariant.withValues(alpha: 0.4),
+                        fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,

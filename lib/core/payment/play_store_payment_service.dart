@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../entitlement/entitlement_service.dart';
+import '../entitlement/user_tier.dart';
 import 'payment_service.dart';
 import 'product_ids.dart';
 import 'subscription_truth_repository.dart';
@@ -121,6 +123,27 @@ class PlayStorePaymentService extends PaymentService {
       return const PurchaseResult.error('支付服务不可用');
     }
     try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        final androidAddition = _iap
+            .getPlatformAddition<InAppPurchaseAndroidPlatformAddition>();
+        final response = await androidAddition.queryPastPurchases();
+        if (response.error != null) {
+          return PurchaseResult.error('恢复购买失败: ${response.error!.message}');
+        }
+
+        final restoredPurchases = response.pastPurchases.map<PurchaseDetails>((
+          purchase,
+        ) {
+          purchase.status = PurchaseStatus.restored;
+          return purchase;
+        }).toList();
+        if (restoredPurchases.isEmpty) {
+          return const PurchaseResult.error('没有可恢复的有效购买');
+        }
+
+        return _processRestoredPurchases(restoredPurchases);
+      }
+
       await _iap.restorePurchases();
       return const PurchaseResult(success: true);
     } catch (e) {
@@ -129,22 +152,75 @@ class PlayStorePaymentService extends PaymentService {
   }
 
   void _handlePurchaseUpdates(List<PurchaseDetails> purchases) {
-    for (final purchase in purchases) {
-      _handlePurchase(purchase);
+    unawaited(_processPurchaseUpdates(purchases));
+  }
+
+  Future<void> _processPurchaseUpdates(List<PurchaseDetails> purchases) async {
+    for (final purchase in _sortPurchasesForEntitlement(purchases)) {
+      await _handlePurchase(purchase);
     }
   }
 
-  Future<void> _handlePurchase(PurchaseDetails purchase) async {
+  Future<PurchaseResult> _processRestoredPurchases(
+    List<PurchaseDetails> purchases,
+  ) async {
+    PurchaseResult? bestRestore;
+    for (final purchase in _sortPurchasesForEntitlement(purchases)) {
+      final result = await _handlePurchase(purchase);
+      final grantedTier = result?.grantedTier;
+      if (result == null || !result.success || grantedTier == null) {
+        continue;
+      }
+      if (bestRestore == null ||
+          _tierRank(grantedTier) > _tierRank(bestRestore.grantedTier!)) {
+        bestRestore = result;
+      }
+    }
+
+    return bestRestore ?? const PurchaseResult.error('没有可恢复的有效购买');
+  }
+
+  List<PurchaseDetails> _sortPurchasesForEntitlement(
+    List<PurchaseDetails> purchases,
+  ) {
+    final ordered = List<PurchaseDetails>.from(purchases);
+    ordered.sort((a, b) {
+      final left = _tierRank(PaymentService.tierForProduct(a.productID));
+      final right = _tierRank(PaymentService.tierForProduct(b.productID));
+      return left.compareTo(right);
+    });
+    return ordered;
+  }
+
+  int _tierRank(UserTier tier) {
+    switch (tier) {
+      case UserTier.free:
+        return 0;
+      case UserTier.paid:
+        return 1;
+      case UserTier.subscriber:
+        return 2;
+    }
+  }
+
+  Future<PurchaseResult?> _handlePurchase(PurchaseDetails purchase) async {
+    PurchaseResult? result;
     switch (purchase.status) {
       case PurchaseStatus.purchased:
       case PurchaseStatus.restored:
-        // Grant the tier
-        final tier = PaymentService.tierForProduct(purchase.productID);
-        await _entitlement.setTier(tier);
-        await _recordPurchaseTimestamp();
-        await _syncTrustedPurchase(purchase);
-        _pendingPurchase?.complete(PurchaseResult.success(tier));
-        _pendingPurchase = null;
+        final localTier = PaymentService.tierForProduct(purchase.productID);
+        final effectiveTier = await _applyPurchaseEntitlement(
+          purchase,
+          fallbackTier: localTier,
+        );
+        result = effectiveTier == UserTier.free
+            ? PurchaseResult.error(
+                purchase.status == PurchaseStatus.restored
+                    ? '没有可恢复的有效购买'
+                    : '购买验证未通过',
+              )
+            : PurchaseResult.success(effectiveTier);
+        _resolvePendingPurchase(result);
 
         // Complete the purchase on the platform side
         if (purchase.pendingCompletePurchase) {
@@ -154,13 +230,13 @@ class PlayStorePaymentService extends PaymentService {
 
       case PurchaseStatus.error:
         final message = purchase.error?.message ?? '购买失败';
-        _pendingPurchase?.complete(PurchaseResult.error(message));
-        _pendingPurchase = null;
+        result = PurchaseResult.error(message);
+        _resolvePendingPurchase(result);
         break;
 
       case PurchaseStatus.canceled:
-        _pendingPurchase?.complete(const PurchaseResult.error('购买已取消'));
-        _pendingPurchase = null;
+        result = const PurchaseResult.error('购买已取消');
+        _resolvePendingPurchase(result);
         break;
 
       case PurchaseStatus.pending:
@@ -169,6 +245,7 @@ class PlayStorePaymentService extends PaymentService {
         break;
     }
     notifyListeners();
+    return result;
   }
 
   ProductDetails? _findProductDetails(String productId) {
@@ -183,9 +260,31 @@ class PlayStorePaymentService extends PaymentService {
     );
   }
 
-  Future<void> _syncTrustedPurchase(PurchaseDetails purchase) async {
+  void _resolvePendingPurchase(PurchaseResult result) {
+    final pending = _pendingPurchase;
+    if (pending == null || pending.isCompleted) return;
+    pending.complete(result);
+    _pendingPurchase = null;
+  }
+
+  Future<UserTier> _applyPurchaseEntitlement(
+    PurchaseDetails purchase, {
+    required UserTier fallbackTier,
+  }) async {
+    final trustedTier = await _syncTrustedPurchase(purchase);
+    final effectiveTier = trustedTier ?? fallbackTier;
+    if (trustedTier == null) {
+      await _entitlement.setTier(fallbackTier);
+    }
+    if (effectiveTier != UserTier.free) {
+      await _recordPurchaseTimestamp();
+    }
+    return effectiveTier;
+  }
+
+  Future<UserTier?> _syncTrustedPurchase(PurchaseDetails purchase) async {
     final purchaseToken = purchase.verificationData.serverVerificationData;
-    if (_truthRepository == null || purchaseToken.isEmpty) return;
+    if (_truthRepository == null || purchaseToken.isEmpty) return null;
 
     final result = await _truthRepository.verifyGooglePlayPurchase(
       productId: purchase.productID,
@@ -198,11 +297,21 @@ class PlayStorePaymentService extends PaymentService {
       debugPrint(
         'PlayStorePaymentService: trusted subscription synced for ${purchase.productID}',
       );
+      return result.snapshot!.tier;
+    }
+    if (result.isAuthoritative) {
+      await _entitlement.clearTrustedSnapshot(downgradeSubscriber: true);
+      await _entitlement.setTier(UserTier.free);
+      debugPrint(
+        'PlayStorePaymentService: trusted sync returned no entitlement for ${purchase.productID}',
+      );
+      return UserTier.free;
     } else if (result.errorMessage != null) {
       debugPrint(
         'PlayStorePaymentService: trusted sync skipped: ${result.errorMessage}',
       );
     }
+    return null;
   }
 
   @override

@@ -34,7 +34,7 @@ class SubscriptionStatusService {
   ///
   /// Flow:
   ///  1. If payment service unavailable → offline grace logic
-  ///  2. Restore purchases (triggers purchase stream → tier update)
+  ///  2. Restore purchases from the store and apply any trusted snapshot
   ///  3. If restore finds nothing and user is subscriber → downgrade to free
   Future<void> checkAndSync() async {
     final currentTier = _entitlementService.tier;
@@ -82,14 +82,13 @@ class SubscriptionStatusService {
     // Attempt to restore purchases from the store.
     final result = await _paymentService.restorePurchases();
 
-    // restorePurchases triggers the purchase stream in PlayStorePaymentService,
-    // which calls EntitlementService.setTier on success.  If the restore did
-    // not succeed (no active purchases) and user was subscriber, downgrade.
+    // If restore did not surface an active entitlement and user was subscriber,
+    // clear the trusted cache and downgrade locally.
     if (!result.success && currentTier == UserTier.subscriber) {
       debugPrint(
         'SubscriptionStatusService: no active subscription — downgrading',
       );
-      await _entitlementService.setTier(UserTier.free);
+      await _entitlementService.clearTrustedSnapshot(downgradeSubscriber: true);
     }
   }
 

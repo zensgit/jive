@@ -46,6 +46,9 @@ import '../stats/stats_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
 import 'note_field_with_chips.dart';
+import 'widgets/transaction_amount_display.dart';
+import 'widgets/transaction_source_banner.dart';
+import 'transaction_entry_params.dart';
 
 enum TransactionType { expense, income, transfer }
 
@@ -1363,13 +1366,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
-    final amountFontSize = isLandscape ? 48.0 : 72.0;
-    final currencyFontSize = isLandscape ? 22.0 : 32.0;
-    final amountColor = _txType == TransactionType.income
-        ? const Color(0xFF4CAF50)
-        : _txType == TransactionType.transfer
-            ? const Color(0xFF1976D2)
-            : const Color(0xFFEF5350);
     final labelSpacing = isLandscape ? 4.0 : 12.0;
     final parentTabHeight = isLandscape ? 44.0 : 68.0;
     final subGridAspectRatio = isLandscape ? 1.2 : 0.75;
@@ -1412,29 +1408,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             },
           ),
           SizedBox(height: labelSpacing),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                CurrencyDefaults.getSymbol(_selectedAccount?.currency ?? 'CNY'),
-                style: GoogleFonts.rubik(
-                  color: Colors.black87,
-                  fontSize: currencyFontSize,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                _amountStr,
-                style: GoogleFonts.rubik(
-                  color: amountColor,
-                  fontSize: amountFontSize,
-                  fontWeight: FontWeight.w600,
-                  height: 1.0,
-                ),
-              ),
-            ],
+          TransactionAmountDisplay(
+            amountStr: _amountStr,
+            currencySymbol: CurrencyDefaults.getSymbol(_selectedAccount?.currency ?? 'CNY'),
+            transactionType: _txType == TransactionType.income
+                ? 'income'
+                : _txType == TransactionType.transfer
+                    ? 'transfer'
+                    : 'expense',
+            compact: isLandscape,
           ),
           if (_accounts.isNotEmpty) ...[
             SizedBox(height: isLandscape ? 6 : 10),
@@ -1963,6 +1945,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     if (errorCode == 'CANCELLED') return;
 
+    if (!mounted) return;
     if (errorCode != null && recognized == null) {
       final message = _speechErrorMessage(errorCode);
       if (message != null) {
@@ -2022,6 +2005,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           closing = true;
           FocusScope.of(dialogContext).unfocus();
           await Future<void>.delayed(const Duration(milliseconds: 50));
+          if (!dialogContext.mounted) return;
           if (!Navigator.of(dialogContext).canPop()) return;
           Navigator.pop(dialogContext, value);
         }
@@ -2082,6 +2066,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               closing = true;
               FocusScope.of(context).unfocus();
               await Future<void>.delayed(const Duration(milliseconds: 50));
+              if (!context.mounted) return;
               Navigator.pop(context, value);
             }
 
