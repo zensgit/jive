@@ -46,6 +46,7 @@ import '../stats/stats_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
 import 'note_field_with_chips.dart';
+import 'widgets/account_selector_section.dart';
 import 'widgets/transaction_amount_display.dart';
 import 'widgets/transaction_source_banner.dart';
 import 'transaction_entry_params.dart';
@@ -1420,7 +1421,28 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           ),
           if (_accounts.isNotEmpty) ...[
             SizedBox(height: isLandscape ? 6 : 10),
-            _buildAccountSelector(isLandscape: isLandscape),
+            AccountSelectorSection(
+              txType: _txType,
+              selectedAccount: _selectedAccount,
+              selectedToAccount: _selectedToAccount,
+              isLandscape: isLandscape,
+              toAmountController: _toAmountController,
+              crossCurrencyRate: _crossCurrencyRate,
+              crossCurrencyRateSource: _crossCurrencyRateSource,
+              onPickAccount: (pickTo) => _showAccountPicker(pickTo: pickTo),
+              onToAmountChanged: (value) {
+                setState(() {
+                  _toAmountStr = value;
+                  _isEditingToAmount = true;
+                });
+              },
+              onRecalculateRate: () {
+                setState(() {
+                  _isEditingToAmount = false;
+                  _calculateToAmount();
+                });
+              },
+            ),
             if (_selectedAccount != null &&
                 AccountService.isCreditAccount(_selectedAccount!))
               Padding(
@@ -2469,196 +2491,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
-  Widget _buildAccountSelector({required bool isLandscape}) {
-    final textSize = isLandscape ? 11.0 : 12.0;
-    if (_txType == TransactionType.transfer) {
-      // 检测是否为跨币种转账
-      final fromCurrency = _selectedAccount?.currency ?? 'CNY';
-      final toCurrency = _selectedToAccount?.currency ?? 'CNY';
-      final isCrossCurrency =
-          _selectedAccount != null &&
-          _selectedToAccount != null &&
-          fromCurrency != toCurrency;
-
-      return Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _buildAccountChip(
-                  label: "从",
-                  account: _selectedAccount,
-                  textSize: textSize,
-                  expand: true,
-                  onTap: () => _showAccountPicker(pickTo: false),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(Icons.arrow_forward, size: 14, color: Colors.grey.shade500),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildAccountChip(
-                  label: "到",
-                  account: _selectedToAccount,
-                  textSize: textSize,
-                  expand: true,
-                  onTap: () => _showAccountPicker(pickTo: true),
-                ),
-              ),
-            ],
-          ),
-          if (isCrossCurrency) ...[
-            const SizedBox(height: 8),
-            // 跨币种转账信息卡片
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.shade200),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 标题行
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.currency_exchange,
-                        size: 16,
-                        color: Colors.orange.shade700,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '跨币种转账',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.orange.shade800,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (_crossCurrencyRate != null) ...[
-                        _buildRateSourceBadge(
-                          _crossCurrencyRateSource ?? 'default',
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '1 $fromCurrency = ${_crossCurrencyRate!.toStringAsFixed(4)} $toCurrency',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Colors.orange.shade600,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  // 转入金额输入
-                  Row(
-                    children: [
-                      Text(
-                        '转入金额',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Container(
-                          height: 36,
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.orange.shade300),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                CurrencyDefaults.getSymbol(toCurrency),
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.orange.shade700,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: TextField(
-                                  controller: _toAmountController,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.orange.shade800,
-                                  ),
-                                  decoration: const InputDecoration(
-                                    border: InputBorder.none,
-                                    isDense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    hintText: '0.00',
-                                  ),
-                                  onChanged: (value) {
-                                    setState(() {
-                                      _toAmountStr = value;
-                                      _isEditingToAmount = true;
-                                    });
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // 重新计算按钮
-                      InkWell(
-                        onTap: () {
-                          setState(() {
-                            _isEditingToAmount = false;
-                            _calculateToAmount();
-                          });
-                        },
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade100,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Icon(
-                            Icons.refresh,
-                            size: 16,
-                            color: Colors.orange.shade700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      );
-    }
-
-    return Center(
-      child: _buildAccountChip(
-        label: "账户",
-        account: _selectedAccount,
-        textSize: textSize,
-        expand: false,
-        onTap: () => _showAccountPicker(pickTo: false),
-      ),
-    );
-  }
-
   Widget _buildTagSelector({required bool isLandscape}) {
     final textSize = isLandscape ? 10.0 : 12.0;
     final selectedTags = _tags
@@ -2902,98 +2734,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     setState(() {
       _selectedProjectId = selected == -1 ? null : selected;
     });
-  }
-
-  Widget _buildRateSourceBadge(String source) {
-    Color color;
-    String label;
-    switch (source) {
-      case 'frankfurter':
-      case 'exchangerate.host':
-        color = Colors.green;
-        label = '在线';
-        break;
-      case 'manual':
-        color = Colors.orange;
-        label = '手动';
-        break;
-      case 'default':
-        color = Colors.grey;
-        label = '默认';
-        break;
-      default:
-        color = Colors.grey;
-        label = '默认';
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 9,
-          color: color,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAccountChip({
-    required String label,
-    required JiveAccount? account,
-    required double textSize,
-    required bool expand,
-    required VoidCallback onTap,
-  }) {
-    final color =
-        AccountService.parseColorHex(account?.colorHex) ??
-        JiveTheme.primaryGreen;
-    final name = account?.name ?? "请选择";
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-            children: [
-              AccountService.buildIcon(
-                account?.iconName ?? 'account_balance_wallet',
-                size: 14,
-                color: color,
-              ),
-              const SizedBox(width: 6),
-              if (expand)
-                Expanded(
-                  child: Text(
-                    "$label $name",
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: textSize, color: Colors.black87),
-                  ),
-                )
-              else
-                Text(
-                  "$label $name",
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: textSize, color: Colors.black87),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildSelectedCreditSummary(
