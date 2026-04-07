@@ -8,8 +8,7 @@ import '../../core/design_system/theme.dart';
 
 /// Login / register screen.
 ///
-/// Supports email sign-in/register and guest skip.
-/// Phone (SMS) and OAuth are shown but gated on Supabase provider config.
+/// Supports email sign-in/register, Google OAuth, and guest skip.
 class AuthScreen extends StatefulWidget {
   final VoidCallback onSkip;
 
@@ -128,6 +127,51 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  Future<void> _handleGoogleSignIn() async {
+    if (_loading) return;
+
+    FocusScope.of(context).unfocus();
+
+    final auth = context.read<AuthService>();
+    if (auth is! SupabaseAuthService) {
+      setState(() {
+        _error = '当前环境未配置 Google 登录';
+        _notice = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _notice = null;
+    });
+
+    try {
+      final result = await auth.signInWithProvider(AuthProvider.google);
+      if (!mounted) return;
+
+      setState(() {
+        _loading = false;
+        _notice = result is AuthLoggedIn ? null : '已打开 Google 登录，请完成授权后返回应用';
+      });
+    } on OAuthAuthFlowException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.message;
+        _notice = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Google 登录失败，请稍后重试';
+        _notice = null;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -153,7 +197,7 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                '邮箱登录后可同步云端数据；游客模式仅保留本机数据。',
+                '使用邮箱或 Google 登录后可同步云端数据；游客模式仅保留本机数据。',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
@@ -285,16 +329,30 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 16),
 
-              // OAuth buttons (disabled until providers configured)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _OAuthButton(icon: Icons.phone_android, label: '手机号'),
-                  const SizedBox(width: 16),
-                  _OAuthButton(icon: Icons.g_mobiledata, label: 'Google'),
-                  const SizedBox(width: 16),
-                  _OAuthButton(icon: Icons.apple, label: 'Apple'),
-                ],
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _loading ? null : _handleGoogleSignIn,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(color: Theme.of(context).dividerColor),
+                  ),
+                  icon: const Text(
+                    'G',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                  label: const Text(
+                    '使用 Google 登录',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
               ),
 
               const SizedBox(height: 24),
@@ -313,39 +371,6 @@ class _AuthScreenState extends State<AuthScreen> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _OAuthButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-
-  const _OAuthButton({required this.icon, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        IconButton.outlined(
-          onPressed: null, // Enabled when OAuth providers are configured
-          icon: Icon(icon),
-          style: IconButton.styleFrom(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            side: BorderSide(color: Theme.of(context).dividerColor),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
     );
   }
 }

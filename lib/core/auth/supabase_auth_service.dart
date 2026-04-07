@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../sync/sync_config.dart';
@@ -20,10 +21,18 @@ class EmailConfirmationRequiredException extends EmailAuthFlowException {
   const EmailConfirmationRequiredException(super.message);
 }
 
+class OAuthAuthFlowException implements Exception {
+  const OAuthAuthFlowException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// Supabase implementation of [AuthService].
 ///
-/// Supports email/password and OTP (phone) sign-in.
-/// OAuth providers (Google, Apple, WeChat) can be added later.
+/// Supports email/password, OTP (phone), and OAuth sign-in.
 class SupabaseAuthService extends AuthService {
   app.AuthState _state = const app.AuthLoading();
   StreamSubscription<AuthState>? _authSubscription;
@@ -178,14 +187,23 @@ class SupabaseAuthService extends AuthService {
 
   @override
   Future<app.AuthState> signInWithProvider(app.AuthProvider provider) async {
+    final oauthProvider = _toOAuthProvider(provider);
+    if (oauthProvider == null) {
+      throw OAuthAuthFlowException('${provider.label} 登录暂未开放');
+    }
+
     try {
-      final oauthProvider = _toOAuthProvider(provider);
-      if (oauthProvider == null) return _state;
-      await _client.auth.signInWithOAuth(oauthProvider);
+      final launched = await _client.auth.signInWithOAuth(oauthProvider);
+      if (!launched) {
+        throw OAuthAuthFlowException('无法打开 ${provider.label} 登录页面，请稍后重试');
+      }
       return _state;
     } on AuthException catch (e) {
       debugPrint('SupabaseAuth: OAuth sign-in failed: ${e.message}');
-      return _state;
+      throw OAuthAuthFlowException(_mapOAuthError(e, provider: provider));
+    } on PlatformException catch (e) {
+      debugPrint('SupabaseAuth: OAuth launch failed: ${e.message}');
+      throw OAuthAuthFlowException('无法打开 ${provider.label} 登录页面，请检查系统浏览器后重试');
     }
   }
 
@@ -256,5 +274,29 @@ class SupabaseAuthService extends AuthService {
     }
 
     return '${isLogin ? '登录失败' : '注册失败'}：${error.message}';
+  }
+
+  String _mapOAuthError(
+    AuthException error, {
+    required app.AuthProvider provider,
+  }) {
+    final code = error.code?.toLowerCase();
+    final message = error.message.toLowerCase();
+
+    if (message.contains('provider is not enabled') ||
+        message.contains('unsupported provider') ||
+        (code == 'validation_failed' && message.contains('provider'))) {
+      return '${provider.label} 登录暂未配置完成';
+    }
+    if (message.contains('redirect') && message.contains('not allowed')) {
+      return '${provider.label} 登录回调地址未配置完成';
+    }
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('connection')) {
+      return '网络异常，请稍后重试';
+    }
+
+    return '${provider.label} 登录失败：${error.message}';
   }
 }
