@@ -29,6 +29,7 @@ import '../../recurring/recurring_rule_list_screen.dart';
 import '../../savings/savings_goal_screen.dart';
 import '../../travel/travel_screen.dart';
 import '../../security/pin_setup_screen.dart';
+import '../../plan/plan_hub_screen.dart';
 import '../../settings/csv_export_screen.dart';
 import '../../settings/settings_screen.dart';
 import '../../settings/widget_gallery_screen.dart';
@@ -316,6 +317,21 @@ void showHomeMenuSheet({
                         MaterialPageRoute(
                           builder: (context) =>
                               const BudgetManagerScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.event_note),
+                    title: const Text("计划中心"),
+                    subtitle: const Text("预算、目标、定期、旅行一览"),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              const PlanHubScreen(),
                         ),
                       );
                     },

@@ -35,6 +35,7 @@ import '../database/activity_log_model.dart';
 import '../database/fixed_deposit_model.dart';
 import '../database/billing_cycle_model.dart';
 import '../database/invoice_model.dart';
+import '../database/quick_action_model.dart';
 import '../database/smart_list_model.dart';
 
 /// 统一的数据库服务，确保所有地方使用相同的 schema 列表
@@ -89,6 +90,7 @@ class DatabaseService {
     JiveBillingCycleSchema,
     JiveInvoiceSchema,
     JiveSmartListSchema,
+    JiveQuickActionSchema,
   ];
 
   /// 获取或创建 Isar 实例
