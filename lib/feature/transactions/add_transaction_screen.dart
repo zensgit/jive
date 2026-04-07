@@ -51,6 +51,7 @@ import 'widgets/transaction_amount_display.dart';
 import 'widgets/transaction_calculator_key.dart';
 import 'widgets/transaction_field_chips.dart';
 import 'widgets/transaction_misc_widgets.dart';
+import 'widgets/transaction_panels.dart';
 import 'widgets/transaction_source_banner.dart';
 import 'widgets/transaction_type_selector.dart';
 import 'transaction_entry_params.dart';
@@ -1264,7 +1265,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   children: [
                     const Text('本次保存将触发以下预算提醒：'),
                     const SizedBox(height: 12),
-                    ...shown.map((impact) => _buildBudgetImpactRow(impact)),
+                    ...shown.map((impact) => BudgetImpactRow(impact: impact)),
                     if (more > 0) ...[
                       const SizedBox(height: 6),
                       Text(
@@ -1322,43 +1323,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return proceed;
   }
 
-  Widget _buildBudgetImpactRow(BudgetTransactionImpact impact) {
-    final budget = impact.budget;
-    final symbol = CurrencyDefaults.getSymbol(budget.currency);
-    final isExceeded = impact.projectedStatus == BudgetStatus.exceeded;
-    final color = isExceeded ? Colors.red.shade700 : Colors.orange.shade700;
-    final icon = isExceeded ? Icons.warning_amber_rounded : Icons.info_outline;
-    final message = isExceeded
-        ? '将超支 $symbol ${(impact.projectedUsedAmount - impact.effectiveAmount).abs().toStringAsFixed(0)}'
-        : '将达到预警 ${budget.alertThreshold?.toStringAsFixed(0) ?? '--'}%（${impact.projectedUsedPercent.toStringAsFixed(1)}%）';
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  budget.name,
-                  style: TextStyle(fontWeight: FontWeight.w700, color: color),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  message,
-                  style: TextStyle(color: color.withValues(alpha: 0.9)),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -1451,8 +1415,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 AccountService.isCreditAccount(_selectedAccount!))
               Padding(
                 padding: EdgeInsets.only(top: isLandscape ? 4 : 6),
-                child: _buildSelectedCreditSummary(
-                  _selectedAccount!,
+                child: CreditAccountSummary(
+                  account: _selectedAccount!,
+                  balance: _accountBalances[_selectedAccount!.id] ??
+                      _selectedAccount!.openingBalance,
                   isLandscape: isLandscape,
                 ),
               ),
@@ -2537,45 +2503,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     });
   }
 
-  Widget _buildSelectedCreditSummary(
-    JiveAccount account, {
-    required bool isLandscape,
-  }) {
-    final limit = account.creditLimit ?? 0;
-    if (limit <= 0) {
-      return const SizedBox.shrink();
-    }
-    final balance = _accountBalances[account.id] ?? account.openingBalance;
-    final used = balance < 0 ? -balance : 0.0;
-    final available = (limit - used).clamp(0, double.infinity).toDouble();
-    final fontSize = isLandscape ? 10.0 : 11.0;
-    return Wrap(
-      alignment: WrapAlignment.center,
-      spacing: isLandscape ? 10 : 12,
-      runSpacing: 4,
-      children: [
-        _buildCreditMetaText("额度", limit, Colors.blueGrey, fontSize),
-        _buildCreditMetaText("已用", used, Colors.redAccent, fontSize),
-        _buildCreditMetaText("可用", available, JiveTheme.primaryGreen, fontSize),
-      ],
-    );
-  }
 
-  Widget _buildCreditMetaText(
-    String label,
-    double value,
-    Color color,
-    double fontSize,
-  ) {
-    return Text(
-      "$label ¥${_formatMoney(value)}",
-      style: GoogleFonts.lato(
-        fontSize: fontSize,
-        color: color,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
 
   Future<void> _showAccountPicker({required bool pickTo}) async {
     if (_accounts.isEmpty) return;
@@ -2751,7 +2679,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (hasQuery &&
         _searchItemsLoaded &&
         _filterSearchResults(_searchQuery).isEmpty) {
-      return _buildSystemSuggestionPanel();
+      return SystemSuggestionPanel(
+        suggestions: _systemSuggestionsForQuery(_searchQuery),
+        onApply: _applySystemSuggestion,
+      );
     }
     return SubCategoryGrid(
       subCategories: _subCategories,
@@ -2770,67 +2701,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
 
-  Widget _buildSystemSuggestionPanel() {
-    final suggestions = _systemSuggestionsForQuery(_searchQuery);
-    if (suggestions.isEmpty) {
-      return const Center(child: Text("未找到匹配分类"));
-    }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      itemCount: suggestions.length + 1,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Text(
-                  "系统库建议",
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                ),
-                const Spacer(),
-                Text(
-                  "点击添加并选中",
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade400),
-                ),
-              ],
-            ),
-          );
-        }
-        final suggestion = suggestions[index - 1];
-        final title = suggestion.isSub
-            ? suggestion.name
-            : suggestion.parentName;
-        final subtitle = suggestion.isSub ? suggestion.parentName : "一级分类";
-        return ListTile(
-          dense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-          leading: CircleAvatar(
-            backgroundColor: Colors.grey.shade100,
-            child: CategoryService.buildIcon(
-              suggestion.iconName,
-              size: 18,
-              color: JiveTheme.categoryIconInactive,
-              isSystemCategory: true,
-            ),
-          ),
-          title: Text(title, style: TextStyle(color: Colors.grey.shade700)),
-          subtitle: Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 11,
-              color: JiveTheme.categoryLabelInactive,
-            ),
-          ),
-          trailing: const Icon(Icons.add, color: Colors.grey),
-          onTap: () => _applySystemSuggestion(suggestion),
-        );
-      },
-    );
-  }
 
-  List<_SystemSuggestion> _systemSuggestionsForQuery(String query) {
+  List<SystemSuggestion> _systemSuggestionsForQuery(String query) {
     final normalized = _normalizeSearch(query);
     if (normalized.isEmpty) return const [];
     final isIncome = _txType == TransactionType.income;
@@ -2844,7 +2716,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       existingChildren.add("${item.parent.name}::${sub.name}");
     }
 
-    final suggestions = <_SystemSuggestion>[];
+    final suggestions = <SystemSuggestion>[];
     for (final entry in lib.entries) {
       final parentName = entry.key;
       final parentIcon =
@@ -2856,7 +2728,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             _tokensForSystem(parentName, "p::$parentName"),
             normalized,
           )) {
-        suggestions.add(_SystemSuggestion.parent(parentName, parentIcon));
+        suggestions.add(SystemSuggestion.parent(parentName, parentIcon));
       }
       final children = entry.value['children'] as List<dynamic>? ?? const [];
       for (final child in children) {
@@ -2873,7 +2745,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ];
         if (_matchesSystemTokens(tokens, normalized)) {
           suggestions.add(
-            _SystemSuggestion.child(
+            SystemSuggestion.child(
               parentName,
               childName,
               childIcon,
@@ -2893,7 +2765,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return false;
   }
 
-  Future<void> _applySystemSuggestion(_SystemSuggestion suggestion) async {
+  Future<void> _applySystemSuggestion(SystemSuggestion suggestion) async {
     final service = CategoryService(_isar);
     final isIncome = _txType == TransactionType.income;
     JiveCategory? parent = await _isar
@@ -3212,43 +3084,3 @@ class _AccountPickerEntry {
   bool get isHeader => header != null;
 }
 
-class _SystemSuggestion {
-  final String parentName;
-  final String name;
-  final String parentIconName;
-  final String iconName;
-  final bool isSub;
-
-  const _SystemSuggestion._({
-    required this.parentName,
-    required this.name,
-    required this.parentIconName,
-    required this.iconName,
-    required this.isSub,
-  });
-
-  factory _SystemSuggestion.parent(String name, String iconName) {
-    return _SystemSuggestion._(
-      parentName: name,
-      name: name,
-      parentIconName: iconName,
-      iconName: iconName,
-      isSub: false,
-    );
-  }
-
-  factory _SystemSuggestion.child(
-    String parentName,
-    String name,
-    String iconName,
-    String parentIconName,
-  ) {
-    return _SystemSuggestion._(
-      parentName: parentName,
-      name: name,
-      parentIconName: parentIconName,
-      iconName: iconName,
-      isSub: true,
-    );
-  }
-}
