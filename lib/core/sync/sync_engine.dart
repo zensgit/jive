@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,15 +9,25 @@ import '../database/account_model.dart';
 import '../database/book_model.dart';
 import '../database/budget_model.dart';
 import '../database/category_model.dart';
-import '../database/tag_model.dart';
 import '../database/shared_ledger_model.dart';
+import '../database/tag_model.dart';
 import '../database/transaction_model.dart';
 import '../entitlement/entitlement_service.dart';
 import '../service/book_service.dart';
-import 'sync_book_scope.dart';
 import 'sync_config.dart';
 import 'sync_conflict_service.dart';
+import 'sync_key_generator.dart';
 import 'sync_state.dart';
+
+class _AccountSyncLookup {
+  const _AccountSyncLookup({
+    required this.localIds,
+    required this.localIdBySyncKey,
+  });
+
+  final Set<int> localIds;
+  final Map<String, int> localIdBySyncKey;
+}
 
 /// Incremental sync engine between local Isar and remote Supabase.
 ///
@@ -32,14 +43,26 @@ class SyncEngine extends ChangeNotifier {
   static const _conflictThreshold = Duration(seconds: 60);
 
   static const _syncTables = [
-    'transactions',
     'accounts',
     'categories',
     'tags',
     'budgets',
-    // Shared ledger sync needs dedicated ownership/member semantics and
-    // rejoins the batch after the workspace-aware cloud model lands.
+    'transactions',
+    'shared_ledgers',
+    'shared_ledger_members',
   ];
+
+  static const Map<String, String> _onConflictColumns = {
+    'transactions': 'user_id,sync_key',
+    'accounts': 'user_id,sync_key',
+    'categories': 'user_id,key',
+    'tags': 'user_id,key',
+    'budgets': 'user_id,sync_key',
+    'shared_ledgers': 'key',
+    'shared_ledger_members': 'ledger_key,user_id',
+  };
+
+  static const _stableSyncKeyTables = {'transactions', 'accounts', 'budgets'};
 
   final Isar _isar;
   final EntitlementService _entitlement;
@@ -48,19 +71,16 @@ class SyncEngine extends ChangeNotifier {
   SyncState _state = const SyncState.disabled();
   Timer? _debounceTimer;
 
-  SyncEngine({
-    required Isar isar,
-    required EntitlementService entitlement,
-  })  : _isar = isar,
-        _entitlement = entitlement {
+  SyncEngine({required Isar isar, required EntitlementService entitlement})
+    : _isar = isar,
+      _entitlement = entitlement {
     _conflictService = SyncConflictService(isar);
   }
 
   SyncState get state => _state;
   SyncConflictService get conflictService => _conflictService;
 
-  bool get isAvailable =>
-      SyncConfig.isConfigured && _entitlement.tier.hasCloud;
+  bool get isAvailable => SyncConfig.isConfigured && _entitlement.tier.hasCloud;
 
   Future<void> init() async {
     if (!SyncConfig.isConfigured || !_entitlement.tier.hasCloud) {
@@ -120,7 +140,6 @@ class SyncEngine extends ChangeNotifier {
         await _updateCursor(table);
       }
 
-      // Clean up old resolved conflicts periodically
       await _conflictService.cleanupOldConflicts();
       final conflictCount = await _conflictService.getPendingCount();
 
@@ -148,7 +167,6 @@ class SyncEngine extends ChangeNotifier {
   /// Called when app resumes from background.
   void onAppResumed() {
     if (!isAvailable) return;
-    // Only sync if last sync was more than 5 minutes ago
     final lastSync = _state.lastSyncAt;
     if (lastSync == null ||
         DateTime.now().difference(lastSync).inMinutes >= 5) {
@@ -183,8 +201,15 @@ class SyncEngine extends ChangeNotifier {
     final rows = await _getLocalChanges(table, cursor);
     if (rows.isEmpty) return;
 
-    final mapped = rows.map((r) => {'user_id': userId, ...r}).toList();
-    await client.from(table).upsert(mapped, onConflict: 'user_id,local_id');
+    await _backfillLegacyRemoteRows(table, userId, rows);
+
+    final mapped = rows
+        .map((row) => _decoratePushRow(table, userId, row))
+        .toList();
+    final onConflict = _onConflictColumns[table];
+    if (onConflict == null) return;
+
+    await client.from(table).upsert(mapped, onConflict: onConflict);
     debugPrint('SyncEngine: pushed ${rows.length} rows to $table');
   }
 
@@ -193,18 +218,212 @@ class SyncEngine extends ChangeNotifier {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return;
 
-    final response = await client
-        .from(table)
-        .select()
-        .eq('user_id', userId)
-        .gt('updated_at', cursor.toIso8601String())
-        .order('updated_at', ascending: true);
+    dynamic query = client.from(table).select();
+    switch (table) {
+      case 'shared_ledgers':
+        query = query
+            .gt('updated_at', cursor.toIso8601String())
+            .order('updated_at', ascending: true);
+        break;
+      case 'shared_ledger_members':
+        query = query
+            .gt('joined_at', cursor.toIso8601String())
+            .order('joined_at', ascending: true);
+        break;
+      default:
+        query = query
+            .eq('user_id', userId)
+            .gt('updated_at', cursor.toIso8601String())
+            .order('updated_at', ascending: true);
+        break;
+    }
 
-    final remoteRows = response as List<dynamic>;
+    final response = await query;
+    final remoteRows = (response as List<dynamic>)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
     if (remoteRows.isEmpty) return;
 
-    await _applyRemoteChanges(table, remoteRows);
+    await _applyRemoteChanges(table, remoteRows, userId);
+    await _backfillPulledRemoteRows(table, userId, remoteRows);
     debugPrint('SyncEngine: pulled ${remoteRows.length} rows from $table');
+  }
+
+  Map<String, dynamic> _decoratePushRow(
+    String table,
+    String userId,
+    Map<String, dynamic> row,
+  ) {
+    switch (table) {
+      case 'shared_ledgers':
+      case 'shared_ledger_members':
+        return row;
+      default:
+        return {'user_id': userId, ...row};
+    }
+  }
+
+  Future<void> _backfillLegacyRemoteRows(
+    String table,
+    String userId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (!_stableSyncKeyTables.contains(table)) return;
+
+    final localIds = rows
+        .map((row) => _readInt(row['local_id']))
+        .whereType<int>()
+        .toList();
+    if (localIds.isEmpty) return;
+
+    final selectColumns = switch (table) {
+      'transactions' =>
+        'id,local_id,sync_key,account_id,account_sync_key,to_account_id,to_account_sync_key',
+      _ => 'id,local_id,sync_key',
+    };
+
+    final response = await Supabase.instance.client
+        .from(table)
+        .select(selectColumns)
+        .eq('user_id', userId)
+        .inFilter('local_id', localIds);
+
+    final remoteRows = (response as List<dynamic>)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+    if (remoteRows.isEmpty) return;
+
+    final rowsByLocalId = <int, Map<String, dynamic>>{};
+    for (final row in rows) {
+      final localId = _readInt(row['local_id']);
+      if (localId != null) {
+        rowsByLocalId[localId] = row;
+      }
+    }
+
+    for (final remoteRow in remoteRows) {
+      final localId = _readInt(remoteRow['local_id']);
+      if (localId == null) continue;
+      final localRow = rowsByLocalId[localId];
+      if (localRow == null) continue;
+
+      final canonicalSyncKey =
+          _resolveRemoteSyncKey(table, userId, remoteRow) ??
+          _readString(localRow['sync_key']);
+      if (canonicalSyncKey == null) continue;
+
+      if (_readString(localRow['sync_key']) != canonicalSyncKey) {
+        await _updateLocalSyncKey(table, localId, canonicalSyncKey);
+        localRow['sync_key'] = canonicalSyncKey;
+      }
+
+      final patch = <String, dynamic>{};
+      if (_readString(remoteRow['sync_key']) != canonicalSyncKey) {
+        patch['sync_key'] = canonicalSyncKey;
+      }
+
+      if (table == 'transactions') {
+        final accountSyncKey =
+            _readString(remoteRow['account_sync_key']) ??
+            _readString(localRow['account_sync_key']) ??
+            _legacyAccountSyncKey(userId, remoteRow['account_id']);
+        final toAccountSyncKey =
+            _readString(remoteRow['to_account_sync_key']) ??
+            _readString(localRow['to_account_sync_key']) ??
+            _legacyAccountSyncKey(userId, remoteRow['to_account_id']);
+
+        if (accountSyncKey != null &&
+            _readString(remoteRow['account_sync_key']) != accountSyncKey) {
+          patch['account_sync_key'] = accountSyncKey;
+          localRow['account_sync_key'] = accountSyncKey;
+        }
+
+        if (toAccountSyncKey != null &&
+            _readString(remoteRow['to_account_sync_key']) != toAccountSyncKey) {
+          patch['to_account_sync_key'] = toAccountSyncKey;
+          localRow['to_account_sync_key'] = toAccountSyncKey;
+        }
+      }
+
+      if (patch.isNotEmpty) {
+        await Supabase.instance.client
+            .from(table)
+            .update(patch)
+            .eq('id', remoteRow['id'] as Object)
+            .eq('user_id', userId);
+      }
+    }
+  }
+
+  Future<void> _backfillPulledRemoteRows(
+    String table,
+    String userId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    if (!_stableSyncKeyTables.contains(table)) return;
+
+    for (final row in rows) {
+      final patch = <String, dynamic>{};
+      final syncKey = _resolveRemoteSyncKey(table, userId, row);
+      if (syncKey != null && _readString(row['sync_key']) != syncKey) {
+        patch['sync_key'] = syncKey;
+      }
+
+      if (table == 'transactions') {
+        final accountSyncKey =
+            _readString(row['account_sync_key']) ??
+            _legacyAccountSyncKey(userId, row['account_id']);
+        final toAccountSyncKey =
+            _readString(row['to_account_sync_key']) ??
+            _legacyAccountSyncKey(userId, row['to_account_id']);
+
+        if (accountSyncKey != null &&
+            _readString(row['account_sync_key']) != accountSyncKey) {
+          patch['account_sync_key'] = accountSyncKey;
+        }
+        if (toAccountSyncKey != null &&
+            _readString(row['to_account_sync_key']) != toAccountSyncKey) {
+          patch['to_account_sync_key'] = toAccountSyncKey;
+        }
+      }
+
+      if (patch.isEmpty) continue;
+
+      await Supabase.instance.client
+          .from(table)
+          .update(patch)
+          .eq('id', row['id'] as Object)
+          .eq('user_id', userId);
+    }
+  }
+
+  Future<void> _updateLocalSyncKey(
+    String table,
+    int localId,
+    String syncKey,
+  ) async {
+    await _isar.writeTxn(() async {
+      switch (table) {
+        case 'transactions':
+          final tx = await _isar.jiveTransactions.get(localId);
+          if (tx == null || tx.syncKey == syncKey) return;
+          tx.syncKey = syncKey;
+          await _isar.jiveTransactions.put(tx);
+          break;
+        case 'accounts':
+          final account = await _isar.jiveAccounts.get(localId);
+          if (account == null || account.syncKey == syncKey) return;
+          account.syncKey = syncKey;
+          await _isar.jiveAccounts.put(account);
+          break;
+        case 'budgets':
+          final budget = await _isar.jiveBudgets.get(localId);
+          if (budget == null || budget.syncKey == syncKey) return;
+          budget.syncKey = syncKey;
+          await _isar.jiveBudgets.put(budget);
+          break;
+      }
+    });
   }
 
   // ── Local change extraction ──
@@ -233,133 +452,202 @@ class SyncEngine extends ChangeNotifier {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _getTransactionChanges(DateTime cursor) async {
-    final scope = await _loadBookScope();
+  Future<List<Map<String, dynamic>>> _getTransactionChanges(
+    DateTime cursor,
+  ) async {
     final items = await _isar.jiveTransactions
         .filter()
         .updatedAtGreaterThan(cursor)
         .findAll();
-    return items.map((tx) => {
-      'local_id': tx.id,
-      'amount': tx.amount,
-      'source': tx.source,
-      'type': tx.type,
-      'timestamp': tx.timestamp.toIso8601String(),
-      'category_key': tx.categoryKey,
-      'sub_category_key': tx.subCategoryKey,
-      'category': tx.category,
-      'sub_category': tx.subCategory,
-      'note': tx.note,
-      'account_id': tx.accountId,
-      'book_key': scope.transactionBookKey(tx.bookId),
-      'raw_text': tx.rawText,
-      'updated_at': tx.updatedAt.toIso8601String(),
-    }).toList();
+    final accountSyncKeyById = await _loadAccountSyncKeyById();
+    final bookKeyById = await _loadBookKeyById();
+
+    return items
+        .map(
+          (tx) => {
+            'local_id': tx.id,
+            'sync_key': tx.syncKey,
+            'book_key': _bookKeyFor(tx.bookId, bookKeyById),
+            'amount': tx.amount,
+            'source': tx.source,
+            'type': tx.type,
+            'timestamp': tx.timestamp.toIso8601String(),
+            'category_key': tx.categoryKey,
+            'sub_category_key': tx.subCategoryKey,
+            'category': tx.category,
+            'sub_category': tx.subCategory,
+            'note': tx.note,
+            'account_id': tx.accountId,
+            'account_sync_key': _accountSyncKeyFor(
+              tx.accountId,
+              accountSyncKeyById,
+            ),
+            'to_account_id': tx.toAccountId,
+            'to_account_sync_key': _accountSyncKeyFor(
+              tx.toAccountId,
+              accountSyncKeyById,
+            ),
+            'raw_text': tx.rawText,
+            'updated_at': tx.updatedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> _getAccountChanges(DateTime cursor) async {
-    final scope = await _loadBookScope();
-    final items = await _isar.jiveAccounts.where().findAll();
-    return items.map((a) => {
-      'local_id': a.id,
-      'name': a.name,
-      'type': a.type,
-      'sub_type': a.subType,
-      'opening_balance': a.openingBalance,
-      'credit_limit': a.creditLimit,
-      'currency': a.currency,
-      'is_archived': a.isArchived,
-      'book_key': scope.accountBookKey(a.bookId),
-      'updated_at': DateTime.now().toIso8601String(),
-    }).toList();
+    final items = await _isar.jiveAccounts
+        .filter()
+        .updatedAtGreaterThan(cursor)
+        .findAll();
+    final bookKeyById = await _loadBookKeyById();
+
+    return items
+        .map(
+          (account) => {
+            'local_id': account.id,
+            'sync_key': account.syncKey,
+            'book_key': _bookKeyFor(account.bookId, bookKeyById),
+            'name': account.name,
+            'type': account.type,
+            'sub_type': account.subType,
+            'opening_balance': account.openingBalance,
+            'credit_limit': account.creditLimit,
+            'currency': account.currency,
+            'is_archived': account.isArchived,
+            'updated_at': account.updatedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
-  Future<List<Map<String, dynamic>>> _getCategoryChanges(DateTime cursor) async {
-    final items = await _isar.jiveCategorys.where().findAll();
-    return items.map((c) => {
-      'local_id': c.id,
-      'key': c.key,
-      'name': c.name,
-      'parent_key': c.parentKey,
-      'icon_name': c.iconName,
-      'is_income': c.isIncome,
-      'is_system': c.isSystem,
-      'is_hidden': c.isHidden,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).toList();
+  Future<List<Map<String, dynamic>>> _getCategoryChanges(
+    DateTime cursor,
+  ) async {
+    final items = await _isar.jiveCategorys
+        .filter()
+        .updatedAtGreaterThan(cursor)
+        .findAll();
+    return items
+        .map(
+          (category) => {
+            'local_id': category.id,
+            'key': category.key,
+            'name': category.name,
+            'parent_key': category.parentKey,
+            'icon_name': category.iconName,
+            'is_income': category.isIncome,
+            'is_system': category.isSystem,
+            'is_hidden': category.isHidden,
+            'sort_order': category.order,
+            'updated_at': category.updatedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> _getTagChanges(DateTime cursor) async {
-    final items = await _isar.jiveTags.where().findAll();
-    return items.map((t) => {
-      'local_id': t.id,
-      'key': t.key,
-      'name': t.name,
-      'group_key': t.groupKey,
-      'color_hex': t.colorHex,
-      'is_archived': t.isArchived,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).toList();
+    final items = await _isar.jiveTags
+        .filter()
+        .updatedAtGreaterThan(cursor)
+        .findAll();
+    return items
+        .map(
+          (tag) => {
+            'local_id': tag.id,
+            'key': tag.key,
+            'name': tag.name,
+            'group_key': tag.groupKey,
+            'color_hex': tag.colorHex,
+            'is_archived': tag.isArchived,
+            'sort_order': tag.order,
+            'updated_at': tag.updatedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> _getBudgetChanges(DateTime cursor) async {
-    final scope = await _loadBookScope();
-    final items = await _isar.jiveBudgets.where().findAll();
-    return items.map((b) => {
-      'local_id': b.id,
-      'name': b.name,
-      'amount': b.amount,
-      'period': b.period,
-      'start_date': b.startDate.toIso8601String(),
-      'end_date': b.endDate.toIso8601String(),
-      'category_keys': b.categoryKey ?? '',
-      'is_active': b.isActive,
-      'book_key': scope.budgetBookKey(b.bookId),
-      'carry_over': false,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).toList();
+    final items = await _isar.jiveBudgets
+        .filter()
+        .updatedAtGreaterThan(cursor)
+        .findAll();
+    final bookKeyById = await _loadBookKeyById();
+
+    return items
+        .map(
+          (budget) => {
+            'local_id': budget.id,
+            'sync_key': budget.syncKey,
+            'book_key': _bookKeyFor(budget.bookId, bookKeyById),
+            'name': budget.name,
+            'amount': budget.amount,
+            'period': budget.period,
+            'start_date': budget.startDate.toIso8601String(),
+            'end_date': budget.endDate.toIso8601String(),
+            'category_keys': budget.categoryKey ?? '',
+            'is_active': budget.isActive,
+            'carry_over': budget.rollover,
+            'updated_at': budget.updatedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
-  Future<List<Map<String, dynamic>>> _getSharedLedgerChanges(DateTime cursor) async {
-    final scope = await _loadBookScope();
+  Future<List<Map<String, dynamic>>> _getSharedLedgerChanges(
+    DateTime cursor,
+  ) async {
     final items = await _isar.jiveSharedLedgers
         .filter()
         .updatedAtGreaterThan(cursor)
         .findAll();
-    return items.map((l) => {
-      'local_id': l.id,
-      'key': l.key,
-      'name': l.name,
-      'owner_user_id': l.ownerUserId,
-      'currency': l.currency,
-      'invite_code': l.inviteCode,
-      'workspace_key': scope.sharedLedgerWorkspaceKey(null),
-      'member_count': l.memberCount,
-      'updated_at': l.updatedAt.toIso8601String(),
-    }).toList();
+    return items
+        .map(
+          (ledger) => {
+            'local_id': ledger.id,
+            'key': ledger.key,
+            'name': ledger.name,
+            'owner_user_id': ledger.ownerUserId,
+            'currency': ledger.currency,
+            'invite_code': ledger.inviteCode,
+            'workspace_key': BookService.defaultBookKey,
+            'member_count': ledger.memberCount,
+            'updated_at': ledger.updatedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
-  Future<List<Map<String, dynamic>>> _getSharedLedgerMemberChanges(DateTime cursor) async {
+  Future<List<Map<String, dynamic>>> _getSharedLedgerMemberChanges(
+    DateTime cursor,
+  ) async {
     final items = await _isar.jiveSharedLedgerMembers.where().findAll();
-    return items.map((m) => {
-      'local_id': m.id,
-      'ledger_key': m.ledgerKey,
-      'user_id': m.userId,
-      'display_name': m.displayName,
-      'role': m.role,
-      'joined_at': m.joinedAt.toIso8601String(),
-    }).toList();
+    return items
+        .map(
+          (member) => {
+            'local_id': member.id,
+            'ledger_key': member.ledgerKey,
+            'user_id': member.userId,
+            'display_name': member.displayName,
+            'role': member.role,
+            'joined_at': member.joinedAt.toIso8601String(),
+          },
+        )
+        .toList();
   }
 
   // ── Remote change application with conflict detection ──
 
-  Future<void> _applyRemoteChanges(String table, List<dynamic> rows) async {
+  Future<void> _applyRemoteChanges(
+    String table,
+    List<Map<String, dynamic>> rows,
+    String userId,
+  ) async {
     switch (table) {
       case 'transactions':
-        await _applyTransactionChanges(rows);
+        await _applyTransactionChanges(rows, userId);
         break;
       case 'accounts':
-        await _applyAccountChanges(rows);
+        await _applyAccountChanges(rows, userId);
         break;
       case 'categories':
         await _applyCategoryChanges(rows);
@@ -368,7 +656,7 @@ class SyncEngine extends ChangeNotifier {
         await _applyTagChanges(rows);
         break;
       case 'budgets':
-        await _applyBudgetChanges(rows);
+        await _applyBudgetChanges(rows, userId);
         break;
       case 'shared_ledgers':
         await _applySharedLedgerChanges(rows);
@@ -379,75 +667,91 @@ class SyncEngine extends ChangeNotifier {
     }
   }
 
-  /// Check if both local and remote changed recently (true conflict).
-  /// Returns true if it's a real conflict that needs user attention.
-  bool _isRealConflict(DateTime localUpdatedAt, DateTime remoteUpdatedAt, DateTime cursor) {
-    // Both changed since last sync
+  bool _isRealConflict(
+    DateTime localUpdatedAt,
+    DateTime remoteUpdatedAt,
+    DateTime cursor,
+  ) {
     final localChangedSinceCursor = localUpdatedAt.isAfter(cursor);
     final remoteChangedSinceCursor = remoteUpdatedAt.isAfter(cursor);
     if (!localChangedSinceCursor || !remoteChangedSinceCursor) return false;
 
-    // Both changed within a short window of each other
     final diff = localUpdatedAt.difference(remoteUpdatedAt).abs();
     return diff < _conflictThreshold;
   }
 
-  Future<void> _applyTransactionChanges(List<dynamic> rows) async {
+  Future<void> _applyTransactionChanges(
+    List<Map<String, dynamic>> rows,
+    String userId,
+  ) async {
     final cursor = await _getCursor('transactions');
-    final scope = await _loadBookScope();
+    final accountLookup = await _loadAccountSyncLookup();
+    final bookIdByKey = await _loadBookIdByKey();
+
     await _isar.writeTxn(() async {
       for (final row in rows) {
-        final localId = row['local_id'] as int?;
-        if (localId == null) continue;
-        final existing = await _isar.jiveTransactions.get(localId);
-        final remoteUpdatedAt = DateTime.parse(row['updated_at'] as String);
+        final localId = _readInt(row['local_id']);
+        final syncKey = _resolveRemoteSyncKey('transactions', userId, row);
+        if (localId == null && syncKey == null) continue;
 
+        JiveTransaction? existing;
+        if (syncKey != null) {
+          existing = await _isar.jiveTransactions
+              .filter()
+              .syncKeyEqualTo(syncKey)
+              .findFirst();
+        }
+        existing ??= localId == null
+            ? null
+            : await _isar.jiveTransactions.get(localId);
+
+        final remoteUpdatedAt =
+            _parseDateTime(row['updated_at']) ?? DateTime.now();
         if (existing != null) {
-          // Detect conflict: both sides changed since last sync
           if (_isRealConflict(existing.updatedAt, remoteUpdatedAt, cursor)) {
             await _conflictService.recordConflict(
               table: 'transactions',
-              localId: localId,
-              localData: _transactionToMap(existing, scope),
-              remoteData: Map<String, dynamic>.from(row as Map),
+              localId: existing.id,
+              localData: _transactionToMap(existing),
+              remoteData: row,
               localUpdatedAt: existing.updatedAt,
               remoteUpdatedAt: remoteUpdatedAt,
             );
-            continue; // Skip update, let user resolve
+            continue;
           }
-
-          // No conflict — last-write-wins
           if (existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
         }
 
         final tx = existing ?? JiveTransaction();
-        tx.id = localId;
-        tx.amount = (row['amount'] as num).toDouble();
-        tx.source = row['source'] as String? ?? '';
-        tx.type = row['type'] as String?;
-        tx.timestamp = DateTime.parse(row['timestamp'] as String);
-        tx.categoryKey = row['category_key'] as String?;
-        tx.subCategoryKey = row['sub_category_key'] as String?;
-        tx.category = row['category'] as String?;
-        tx.subCategory = row['sub_category'] as String?;
-        tx.note = row['note'] as String?;
-        tx.accountId = row['account_id'] as int?;
-        tx.bookId = scope.transactionBookId(
-          row['book_key'] as String?,
-          fallbackBookId: existing?.bookId,
+        if (syncKey != null) {
+          tx.syncKey = syncKey;
+        }
+        tx.amount = _readDouble(row['amount']) ?? 0;
+        tx.source = _readString(row['source']) ?? '';
+        tx.type = _readString(row['type']);
+        tx.timestamp = _parseDateTime(row['timestamp']) ?? remoteUpdatedAt;
+        tx.categoryKey = _readString(row['category_key']);
+        tx.subCategoryKey = _readString(row['sub_category_key']);
+        tx.category = _readString(row['category']);
+        tx.subCategory = _readString(row['sub_category']);
+        tx.note = _readString(row['note']);
+        tx.accountId = _resolveRemoteAccountId(row, userId, accountLookup);
+        tx.toAccountId = _resolveRemoteTransferAccountId(
+          row,
+          userId,
+          accountLookup,
         );
-        tx.rawText = row['raw_text'] as String?;
+        tx.bookId = _resolveRemoteBookId(row, bookIdByKey);
+        tx.rawText = _readString(row['raw_text']);
         tx.updatedAt = remoteUpdatedAt;
         await _isar.jiveTransactions.put(tx);
       }
     });
   }
 
-  Map<String, dynamic> _transactionToMap(
-    JiveTransaction tx,
-    SyncBookScope scope,
-  ) => {
+  Map<String, dynamic> _transactionToMap(JiveTransaction tx) => {
     'local_id': tx.id,
+    'sync_key': tx.syncKey,
     'amount': tx.amount,
     'source': tx.source,
     'type': tx.type,
@@ -458,167 +762,446 @@ class SyncEngine extends ChangeNotifier {
     'sub_category': tx.subCategory,
     'note': tx.note,
     'account_id': tx.accountId,
-    'book_key': scope.transactionBookKey(tx.bookId),
+    'to_account_id': tx.toAccountId,
     'raw_text': tx.rawText,
     'updated_at': tx.updatedAt.toIso8601String(),
   };
 
-  Future<void> _applyAccountChanges(List<dynamic> rows) async {
-    final scope = await _loadBookScope();
-    await _isar.writeTxn(() async {
-      for (final row in rows) {
-        final localId = row['local_id'] as int?;
-        if (localId == null) continue;
-        final existing = await _isar.jiveAccounts.get(localId);
-        final a = existing ?? JiveAccount();
-        a.id = localId;
-        a.name = row['name'] as String? ?? '';
-        a.type = row['type'] as String? ?? 'asset';
-        a.subType = row['sub_type'] as String?;
-        a.openingBalance = (row['opening_balance'] as num?)?.toDouble() ?? 0;
-        a.creditLimit = (row['credit_limit'] as num?)?.toDouble();
-        a.currency = row['currency'] as String? ?? 'CNY';
-        a.isArchived = row['is_archived'] as bool? ?? false;
-        a.bookId = scope.accountBookId(
-          row['book_key'] as String?,
-          fallbackBookId: existing?.bookId,
-        );
-        await _isar.jiveAccounts.put(a);
-      }
-    });
-  }
+  Future<void> _applyAccountChanges(
+    List<Map<String, dynamic>> rows,
+    String userId,
+  ) async {
+    final bookIdByKey = await _loadBookIdByKey();
 
-  Future<void> _applyCategoryChanges(List<dynamic> rows) async {
     await _isar.writeTxn(() async {
       for (final row in rows) {
-        final localId = row['local_id'] as int?;
-        if (localId == null) continue;
-        final existing = await _isar.jiveCategorys.get(localId);
-        final c = existing ?? JiveCategory();
-        c.id = localId;
-        c.key = row['key'] as String? ?? '';
-        c.name = row['name'] as String? ?? '';
-        c.parentKey = row['parent_key'] as String?;
-        c.iconName = row['icon_name'] as String? ?? 'category';
-        c.isIncome = row['is_income'] as bool? ?? false;
-        c.isSystem = row['is_system'] as bool? ?? false;
-        c.isHidden = row['is_hidden'] as bool? ?? false;
-        await _isar.jiveCategorys.put(c);
-      }
-    });
-  }
+        final localId = _readInt(row['local_id']);
+        final syncKey = _resolveRemoteSyncKey('accounts', userId, row);
+        if (localId == null && syncKey == null) continue;
 
-  Future<void> _applyTagChanges(List<dynamic> rows) async {
-    await _isar.writeTxn(() async {
-      for (final row in rows) {
-        final localId = row['local_id'] as int?;
-        if (localId == null) continue;
-        final existing = await _isar.jiveTags.get(localId);
-        final t = existing ?? JiveTag();
-        t.id = localId;
-        t.key = row['key'] as String? ?? '';
-        t.name = row['name'] as String? ?? '';
-        t.groupKey = row['group_key'] as String?;
-        t.colorHex = row['color_hex'] as String?;
-        t.isArchived = row['is_archived'] as bool? ?? false;
-        await _isar.jiveTags.put(t);
-      }
-    });
-  }
-
-  Future<void> _applyBudgetChanges(List<dynamic> rows) async {
-    final scope = await _loadBookScope();
-    await _isar.writeTxn(() async {
-      for (final row in rows) {
-        final localId = row['local_id'] as int?;
-        if (localId == null) continue;
-        final existing = await _isar.jiveBudgets.get(localId);
-        final b = existing ?? JiveBudget();
-        b.id = localId;
-        b.name = row['name'] as String? ?? '';
-        b.amount = (row['amount'] as num?)?.toDouble() ?? 0;
-        b.period = row['period'] as String? ?? 'monthly';
-        b.startDate = DateTime.parse(row['start_date'] as String);
-        b.endDate = DateTime.parse(row['end_date'] as String);
-        final catKey = row['category_keys'];
-        if (catKey is String && catKey.isNotEmpty) {
-          b.categoryKey = catKey;
+        JiveAccount? existing;
+        if (syncKey != null) {
+          existing = await _isar.jiveAccounts
+              .filter()
+              .syncKeyEqualTo(syncKey)
+              .findFirst();
         }
-        b.isActive = row['is_active'] as bool? ?? true;
-        b.bookId = scope.budgetBookId(
-          row['book_key'] as String?,
-          fallbackBookId: existing?.bookId,
-        );
-        await _isar.jiveBudgets.put(b);
-      }
-    });
-  }
+        existing ??= localId == null
+            ? null
+            : await _isar.jiveAccounts.get(localId);
 
-  Future<void> _applySharedLedgerChanges(List<dynamic> rows) async {
-    await _isar.writeTxn(() async {
-      for (final row in rows) {
-        final localId = row['local_id'] as int?;
-        if (localId == null) continue;
-        final existing = await _isar.jiveSharedLedgers.get(localId);
-        final remoteUpdatedAt = DateTime.parse(row['updated_at'] as String);
-
-        if (existing != null) {
-          if (existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
+        final remoteUpdatedAt =
+            _parseDateTime(row['updated_at']) ?? DateTime.now();
+        if (existing != null && existing.updatedAt.isAfter(remoteUpdatedAt)) {
+          continue;
         }
 
-        final l = existing ?? JiveSharedLedger();
-        l.id = localId;
-        l.key = row['key'] as String? ?? '';
-        l.name = row['name'] as String? ?? '';
-        l.ownerUserId = row['owner_user_id'] as String? ?? '';
-        l.currency = row['currency'] as String? ?? 'CNY';
-        l.inviteCode = row['invite_code'] as String?;
-        l.memberCount = row['member_count'] as int? ?? 1;
-        l.updatedAt = remoteUpdatedAt;
-        await _isar.jiveSharedLedgers.put(l);
+        final account = existing ?? JiveAccount();
+        if (syncKey != null) {
+          account.syncKey = syncKey;
+        }
+        account.key = existing?.key ?? syncKey ?? account.key;
+        account.name = _readString(row['name']) ?? existing?.name ?? '';
+        account.type = _readString(row['type']) ?? existing?.type ?? 'asset';
+        account.subType = _readString(row['sub_type']) ?? existing?.subType;
+        account.openingBalance =
+            _readDouble(row['opening_balance']) ??
+            existing?.openingBalance ??
+            0;
+        account.creditLimit =
+            _readDouble(row['credit_limit']) ?? existing?.creditLimit;
+        account.currency =
+            _readString(row['currency']) ?? existing?.currency ?? 'CNY';
+        account.iconName = existing?.iconName ?? 'account_balance_wallet';
+        account.groupName = existing?.groupName;
+        account.order = _readInt(row['sort_order']) ?? existing?.order ?? 0;
+        account.includeInBalance = existing?.includeInBalance ?? true;
+        account.isHidden = existing?.isHidden ?? false;
+        account.isArchived =
+            row['is_archived'] as bool? ?? existing?.isArchived ?? false;
+        account.bookId = _resolveRemoteBookId(row, bookIdByKey);
+        account.updatedAt = remoteUpdatedAt;
+        await _isar.jiveAccounts.put(account);
       }
     });
   }
 
-  Future<SyncBookScope> _loadBookScope() async {
-    await BookService(_isar).initDefaultBook();
+  Future<void> _applyCategoryChanges(List<Map<String, dynamic>> rows) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = _readInt(row['local_id']);
+        final key = _readString(row['key']);
+        if (localId == null && key == null) continue;
+
+        JiveCategory? existing;
+        if (key != null) {
+          existing = await _isar.jiveCategorys
+              .filter()
+              .keyEqualTo(key)
+              .findFirst();
+        }
+        existing ??= localId == null
+            ? null
+            : await _isar.jiveCategorys.get(localId);
+
+        final category = existing ?? JiveCategory();
+        category.key = key ?? existing?.key ?? '';
+        category.name = _readString(row['name']) ?? existing?.name ?? '';
+        category.parentKey =
+            _readString(row['parent_key']) ?? existing?.parentKey;
+        category.iconName =
+            _readString(row['icon_name']) ?? existing?.iconName ?? 'category';
+        category.isIncome =
+            row['is_income'] as bool? ?? existing?.isIncome ?? false;
+        category.isSystem =
+            row['is_system'] as bool? ?? existing?.isSystem ?? false;
+        category.isHidden =
+            row['is_hidden'] as bool? ?? existing?.isHidden ?? false;
+        category.order = _readInt(row['sort_order']) ?? existing?.order ?? 0;
+        category.iconForceTinted = existing?.iconForceTinted ?? false;
+        category.excludeFromBudget = existing?.excludeFromBudget ?? false;
+        category.updatedAt =
+            _parseDateTime(row['updated_at']) ??
+            existing?.updatedAt ??
+            DateTime.now();
+        await _isar.jiveCategorys.put(category);
+      }
+    });
+  }
+
+  Future<void> _applyTagChanges(List<Map<String, dynamic>> rows) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = _readInt(row['local_id']);
+        final key = _readString(row['key']);
+        if (localId == null && key == null) continue;
+
+        JiveTag? existing;
+        if (key != null) {
+          existing = await _isar.jiveTags.filter().keyEqualTo(key).findFirst();
+        }
+        existing ??= localId == null ? null : await _isar.jiveTags.get(localId);
+
+        final tag = existing ?? JiveTag();
+        final remoteUpdatedAt =
+            _parseDateTime(row['updated_at']) ?? DateTime.now();
+        tag.key = key ?? existing?.key ?? '';
+        tag.name = _readString(row['name']) ?? existing?.name ?? '';
+        tag.groupKey = _readString(row['group_key']) ?? existing?.groupKey;
+        tag.colorHex = _readString(row['color_hex']) ?? existing?.colorHex;
+        tag.iconName = existing?.iconName;
+        tag.iconText = existing?.iconText;
+        tag.order = _readInt(row['sort_order']) ?? existing?.order ?? 0;
+        tag.isArchived =
+            row['is_archived'] as bool? ?? existing?.isArchived ?? false;
+        tag.usageCount = existing?.usageCount ?? 0;
+        tag.lastUsedAt = existing?.lastUsedAt;
+        tag.createdAt = existing?.createdAt ?? remoteUpdatedAt;
+        tag.updatedAt = remoteUpdatedAt;
+        await _isar.jiveTags.put(tag);
+      }
+    });
+  }
+
+  Future<void> _applyBudgetChanges(
+    List<Map<String, dynamic>> rows,
+    String userId,
+  ) async {
+    final bookIdByKey = await _loadBookIdByKey();
+
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = _readInt(row['local_id']);
+        final syncKey = _resolveRemoteSyncKey('budgets', userId, row);
+        if (localId == null && syncKey == null) continue;
+
+        JiveBudget? existing;
+        if (syncKey != null) {
+          existing = await _isar.jiveBudgets
+              .filter()
+              .syncKeyEqualTo(syncKey)
+              .findFirst();
+        }
+        existing ??= localId == null
+            ? null
+            : await _isar.jiveBudgets.get(localId);
+
+        final remoteUpdatedAt =
+            _parseDateTime(row['updated_at']) ?? DateTime.now();
+        if (existing != null && existing.updatedAt.isAfter(remoteUpdatedAt)) {
+          continue;
+        }
+
+        final budget = existing ?? JiveBudget();
+        if (syncKey != null) {
+          budget.syncKey = syncKey;
+        }
+        budget.name = _readString(row['name']) ?? existing?.name ?? '';
+        budget.amount = _readDouble(row['amount']) ?? existing?.amount ?? 0;
+        budget.period =
+            _readString(row['period']) ?? existing?.period ?? 'monthly';
+        budget.startDate =
+            _parseDateTime(row['start_date']) ??
+            existing?.startDate ??
+            remoteUpdatedAt;
+        budget.endDate =
+            _parseDateTime(row['end_date']) ??
+            existing?.endDate ??
+            remoteUpdatedAt;
+        final categoryKeys = row['category_keys'];
+        if (categoryKeys is String) {
+          budget.categoryKey = categoryKeys.trim().isEmpty
+              ? null
+              : categoryKeys;
+        } else if (categoryKeys is List && categoryKeys.isNotEmpty) {
+          budget.categoryKey = categoryKeys.first.toString();
+        }
+        budget.isActive =
+            row['is_active'] as bool? ?? existing?.isActive ?? true;
+        budget.rollover =
+            row['carry_over'] as bool? ?? existing?.rollover ?? false;
+        budget.currency = existing?.currency ?? 'CNY';
+        budget.bookId = _resolveRemoteBookId(row, bookIdByKey);
+        budget.createdAt = existing?.createdAt ?? remoteUpdatedAt;
+        budget.updatedAt = remoteUpdatedAt;
+        await _isar.jiveBudgets.put(budget);
+      }
+    });
+  }
+
+  Future<void> _applySharedLedgerChanges(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = _readInt(row['local_id']);
+        final key = _readString(row['key']);
+        if (localId == null && key == null) continue;
+
+        JiveSharedLedger? existing;
+        if (key != null) {
+          existing = await _isar.jiveSharedLedgers
+              .filter()
+              .keyEqualTo(key)
+              .findFirst();
+        }
+        existing ??= localId == null
+            ? null
+            : await _isar.jiveSharedLedgers.get(localId);
+
+        final remoteUpdatedAt =
+            _parseDateTime(row['updated_at']) ?? DateTime.now();
+        if (existing != null && existing.updatedAt.isAfter(remoteUpdatedAt)) {
+          continue;
+        }
+
+        final ledger = existing ?? JiveSharedLedger();
+        ledger.key = key ?? existing?.key ?? '';
+        ledger.name = _readString(row['name']) ?? existing?.name ?? '';
+        ledger.ownerUserId =
+            _readString(row['owner_user_id']) ?? existing?.ownerUserId ?? '';
+        ledger.currency =
+            _readString(row['currency']) ?? existing?.currency ?? 'CNY';
+        ledger.inviteCode =
+            _readString(row['invite_code']) ?? existing?.inviteCode;
+        ledger.memberCount =
+            _readInt(row['member_count']) ?? existing?.memberCount ?? 1;
+        ledger.createdAt = existing?.createdAt ?? remoteUpdatedAt;
+        ledger.updatedAt = remoteUpdatedAt;
+        await _isar.jiveSharedLedgers.put(ledger);
+      }
+    });
+  }
+
+  Future<void> _applySharedLedgerMemberChanges(
+    List<Map<String, dynamic>> rows,
+  ) async {
+    await _isar.writeTxn(() async {
+      for (final row in rows) {
+        final localId = _readInt(row['local_id']);
+        final ledgerKey = _readString(row['ledger_key']);
+        final userId = _readString(row['user_id']);
+        if (ledgerKey == null || userId == null) {
+          if (localId == null) continue;
+        }
+
+        JiveSharedLedgerMember? existing;
+        if (ledgerKey != null && userId != null) {
+          existing = await _isar.jiveSharedLedgerMembers
+              .filter()
+              .ledgerKeyEqualTo(ledgerKey)
+              .and()
+              .userIdEqualTo(userId)
+              .findFirst();
+        }
+        existing ??= localId == null
+            ? null
+            : await _isar.jiveSharedLedgerMembers.get(localId);
+
+        final member = existing ?? JiveSharedLedgerMember();
+        member.ledgerKey = ledgerKey ?? existing?.ledgerKey ?? '';
+        member.userId = userId ?? existing?.userId ?? '';
+        member.displayName =
+            _readString(row['display_name']) ?? existing?.displayName ?? '';
+        member.role = _readString(row['role']) ?? existing?.role ?? 'member';
+        member.joinedAt =
+            _parseDateTime(row['joined_at']) ??
+            existing?.joinedAt ??
+            DateTime.now();
+        await _isar.jiveSharedLedgerMembers.put(member);
+      }
+    });
+  }
+
+  // ── Helpers ──
+
+  Future<Map<int, String>> _loadBookKeyById() async {
     final books = await _isar.jiveBooks.where().findAll();
-    JiveBook? defaultBook;
-    for (final book in books) {
-      if (book.key == BookService.defaultBookKey || book.isDefault) {
-        defaultBook = book;
-        break;
-      }
-    }
+    return {for (final book in books) book.id: book.key};
+  }
 
-    return SyncBookScope(
-      bookKeyById: {
-        for (final book in books) book.id: book.key,
+  Future<Map<String, int>> _loadBookIdByKey() async {
+    final books = await _isar.jiveBooks.where().findAll();
+    return {for (final book in books) book.key: book.id};
+  }
+
+  Future<Map<int, String>> _loadAccountSyncKeyById() async {
+    final accounts = await _isar.jiveAccounts.where().findAll();
+    return {for (final account in accounts) account.id: account.syncKey};
+  }
+
+  Future<_AccountSyncLookup> _loadAccountSyncLookup() async {
+    final accounts = await _isar.jiveAccounts.where().findAll();
+    return _AccountSyncLookup(
+      localIds: accounts.map((account) => account.id).toSet(),
+      localIdBySyncKey: {
+        for (final account in accounts)
+          if (account.syncKey.trim().isNotEmpty) account.syncKey: account.id,
       },
-      bookIdByKey: {
-        for (final book in books) book.key: book.id,
-      },
-      defaultBookId: defaultBook?.id,
-      defaultBookKey: defaultBook?.key ?? BookService.defaultBookKey,
     );
   }
 
-  Future<void> _applySharedLedgerMemberChanges(List<dynamic> rows) async {
-    await _isar.writeTxn(() async {
-      for (final row in rows) {
-        final localId = row['local_id'] as int?;
-        if (localId == null) continue;
-        final existing = await _isar.jiveSharedLedgerMembers.get(localId);
-        final m = existing ?? JiveSharedLedgerMember();
-        m.id = localId;
-        m.ledgerKey = row['ledger_key'] as String? ?? '';
-        m.userId = row['user_id'] as String? ?? '';
-        m.displayName = row['display_name'] as String? ?? '';
-        m.role = row['role'] as String? ?? 'member';
-        m.joinedAt = DateTime.parse(row['joined_at'] as String);
-        await _isar.jiveSharedLedgerMembers.put(m);
-      }
-    });
+  String _bookKeyFor(int? bookId, Map<int, String> bookKeyById) {
+    if (bookId == null) return BookService.defaultBookKey;
+    return bookKeyById[bookId] ?? BookService.defaultBookKey;
+  }
+
+  String? _accountSyncKeyFor(
+    int? accountId,
+    Map<int, String> accountSyncKeyById,
+  ) {
+    if (accountId == null) return null;
+    return accountSyncKeyById[accountId];
+  }
+
+  int? _resolveRemoteBookId(
+    Map<String, dynamic> row,
+    Map<String, int> bookIdByKey,
+  ) {
+    final bookKey = _readString(row['book_key']) ?? BookService.defaultBookKey;
+    return bookIdByKey[bookKey];
+  }
+
+  int? _resolveRemoteAccountId(
+    Map<String, dynamic> row,
+    String userId,
+    _AccountSyncLookup lookup,
+  ) {
+    final accountSyncKey =
+        _readString(row['account_sync_key']) ??
+        _legacyAccountSyncKey(userId, row['account_id']);
+    if (accountSyncKey != null) {
+      final localId = lookup.localIdBySyncKey[accountSyncKey];
+      if (localId != null) return localId;
+    }
+
+    final legacyLocalId = _readInt(row['account_id']);
+    if (legacyLocalId != null && lookup.localIds.contains(legacyLocalId)) {
+      return legacyLocalId;
+    }
+    return null;
+  }
+
+  int? _resolveRemoteTransferAccountId(
+    Map<String, dynamic> row,
+    String userId,
+    _AccountSyncLookup lookup,
+  ) {
+    final accountSyncKey =
+        _readString(row['to_account_sync_key']) ??
+        _legacyAccountSyncKey(userId, row['to_account_id']);
+    if (accountSyncKey != null) {
+      final localId = lookup.localIdBySyncKey[accountSyncKey];
+      if (localId != null) return localId;
+    }
+
+    final legacyLocalId = _readInt(row['to_account_id']);
+    if (legacyLocalId != null && lookup.localIds.contains(legacyLocalId)) {
+      return legacyLocalId;
+    }
+    return null;
+  }
+
+  String? _resolveRemoteSyncKey(
+    String table,
+    String userId,
+    Map<String, dynamic> row,
+  ) {
+    final syncKey = _readString(row['sync_key']);
+    if (syncKey != null) return syncKey;
+
+    final localId = _readInt(row['local_id']);
+    if (localId == null || !_stableSyncKeyTables.contains(table)) {
+      return null;
+    }
+    return _legacySyncKey(table, userId, localId);
+  }
+
+  String _legacySyncKey(String table, String userId, int localId) {
+    final prefix = switch (table) {
+      'transactions' => 'tx',
+      'accounts' => 'acct',
+      'budgets' => 'budget',
+      _ => table,
+    };
+    return SyncKeyGenerator.generateDeterministic(
+      prefix,
+      '$table:$userId:$localId',
+    );
+  }
+
+  String? _legacyAccountSyncKey(String userId, dynamic localIdValue) {
+    final localId = _readInt(localIdValue);
+    if (localId == null) return null;
+    return _legacySyncKey('accounts', userId, localId);
+  }
+
+  DateTime? _parseDateTime(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is String && value.trim().isNotEmpty) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  String? _readString(dynamic value) {
+    if (value == null) return null;
+    final text = value.toString().trim();
+    return text.isEmpty ? null : text;
+  }
+
+  int? _readInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
+
+  double? _readDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
   }
 
   // ── Cursor management (per-table) ──
