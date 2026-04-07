@@ -48,8 +48,10 @@ import '../tag/tag_picker_sheet.dart';
 import 'note_field_with_chips.dart';
 import 'widgets/account_selector_section.dart';
 import 'widgets/transaction_amount_display.dart';
+import 'widgets/transaction_calculator_key.dart';
 import 'widgets/transaction_field_chips.dart';
 import 'widgets/transaction_source_banner.dart';
+import 'widgets/transaction_type_selector.dart';
 import 'transaction_entry_params.dart';
 
 enum TransactionType { expense, income, transfer }
@@ -1548,7 +1550,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ),
           ],
           centerTitle: true,
-          title: _buildTypeSelector(),
+          title: TransactionTypeSelector(
+            currentType: _txType,
+            onChanged: _switchType,
+          ),
         ),
         body: Stack(
           children: [
@@ -1688,7 +1693,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                               ),
                           itemCount: _keys.length,
                           itemBuilder: (context, index) {
-                            return _buildKey(_keys[index]);
+                            return TransactionCalculatorKey(
+                              keyValue: _keys[index],
+                              txType: _txType,
+                              onKeyPress: _onKeyPress,
+                            );
                           },
                         ),
                       ),
@@ -2447,61 +2456,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   // ── End Voice Recognition Methods ──
   // ══════════════════════════════════════════════════
 
-  Widget _buildTypeSelector() {
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildTypeChip(TransactionType.expense, Icons.arrow_upward, "支出"),
-            _buildTypeChip(TransactionType.income, Icons.arrow_downward, "收入"),
-            _buildTypeChip(TransactionType.transfer, Icons.swap_horiz, "转账"),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildTypeChip(TransactionType type, IconData icon, String label) {
-    final isSelected = _txType == type;
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () => _switchType(type),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isSelected ? Colors.black87 : Colors.black38,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: GoogleFonts.lato(
-                color: isSelected ? Colors.black87 : Colors.black45,
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildTagSelector({required bool isLandscape}) {
     final textSize = isLandscape ? 10.0 : 12.0;
@@ -3354,75 +3309,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
-  Widget _buildKey(String key) {
-    bool isOk = key == 'OK';
-    bool isDel = key == 'DEL';
 
-    if (isOk) {
-      final okColor = _txType == TransactionType.income
-          ? const Color(0xFF4CAF50)
-          : _txType == TransactionType.transfer
-              ? const Color(0xFF1976D2)
-              : const Color(0xFFEF5350);
-      return InkWell(
-        onTap: () => _onKeyPress(key),
-        borderRadius: BorderRadius.circular(30),
-        child: Container(
-          decoration: BoxDecoration(
-            color: okColor,
-            borderRadius: BorderRadius.circular(30),
-            boxShadow: [
-              BoxShadow(
-                color: okColor.withValues(alpha: 0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: const Center(
-            child: Icon(Icons.check, color: Colors.white, size: 28),
-          ),
-        ),
-      );
-    }
-
-    return InkWell(
-      onTap: () => _onKeyPress(key),
-      borderRadius: BorderRadius.circular(20),
-      child: Center(
-        child: isDel
-            ? const Icon(
-                Icons.backspace_rounded,
-                size: 22,
-                color: Colors.black54,
-              )
-            : ['+', '-', 'date'].contains(key)
-            ? _buildOpIcon(key)
-            : Text(
-                key,
-                style: GoogleFonts.rubik(
-                  fontSize: 26,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-      ),
-    );
-  }
-
-  Widget _buildOpIcon(String key) {
-    if (key == 'date') {
-      return const Icon(
-        Icons.calendar_today_rounded,
-        size: 20,
-        color: Colors.black45,
-      );
-    }
-    return Text(
-      key,
-      style: const TextStyle(fontSize: 24, color: Colors.black45),
-    );
-  }
 }
 
 class _AccountPickerEntry {
