@@ -203,6 +203,57 @@ class InlineCategorySearchField extends StatelessWidget {
   }
 }
 
+/// Centered placeholder shown in place of the category grid when the user
+/// switches to transfer mode (transfers don't have a category).
+class TransferModeHint extends StatelessWidget {
+  const TransferModeHint({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.swap_horiz, size: 28, color: Colors.grey.shade400),
+          const SizedBox(height: 8),
+          Text('转账无需分类', style: TextStyle(color: Colors.grey.shade500)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Floating overlay shown at the top of the screen while the user is holding
+/// the mic button to record voice. Pure visual feedback — does not capture
+/// touches.
+class VoiceListeningOverlay extends StatelessWidget {
+  const VoiceListeningOverlay({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.75),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.mic, color: Colors.white, size: 16),
+            SizedBox(width: 8),
+            Text(
+              '正在聆听，松开结束',
+              style: TextStyle(color: Colors.white, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// A single label/value row used in the speech-recognition preview dialog.
 class SpeechPreviewRow extends StatelessWidget {
   final String label;

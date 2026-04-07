@@ -1655,7 +1655,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                               subGridAspectRatio,
                               subGridMainAxisSpacing,
                             )
-                          : _buildTransferHint(),
+                          : const TransferModeHint(),
                     ),
 
                     if (showCustomKeyboard) ...[
@@ -1693,27 +1693,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ),
             // Voice listening overlay
             if (_speechHoldActive)
-              Positioned(
+              const Positioned(
                 left: 20,
                 right: 20,
                 top: 12,
-                child: IgnorePointer(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.75),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.mic, color: Colors.white, size: 16),
-                        SizedBox(width: 8),
-                        Text("正在聆听，松开结束", style: TextStyle(color: Colors.white, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ),
+                child: VoiceListeningOverlay(),
               ),
           ],
         ),
@@ -3058,18 +3042,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
   }
 
-  Widget _buildTransferHint() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.swap_horiz, size: 28, color: Colors.grey.shade400),
-          const SizedBox(height: 8),
-          Text("转账无需分类", style: TextStyle(color: Colors.grey.shade500)),
-        ],
-      ),
-    );
-  }
 
 
 }
