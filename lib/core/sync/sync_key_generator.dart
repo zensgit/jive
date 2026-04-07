@@ -11,4 +11,9 @@ class SyncKeyGenerator {
   static String generate(String prefix) {
     return '${prefix}_${_uuid.v4()}';
   }
+
+  /// Generates a deterministic UUIDv5-based key from a stable seed.
+  static String generateDeterministic(String prefix, String seed) {
+    return '${prefix}_${_uuid.v5(Namespace.url.value, seed)}';
+  }
 }
