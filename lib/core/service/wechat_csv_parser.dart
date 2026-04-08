@@ -43,20 +43,20 @@ class WechatCsvParser {
   }
 
   static ImportParsedRecord? _parseRow(List<String> cols, Map<String, int> colMap, int lineNumber) {
-    String _col(String name) {
+    String col(String name) {
       final idx = colMap[name];
       if (idx == null || idx >= cols.length) return '';
       return cols[idx].replaceAll('"', '').trim();
     }
 
-    final timeStr = _col('交易时间');
-    final txType = _col('交易类型');
-    final counterparty = _col('交易对方');
-    final product = _col('商品');
-    final direction = _col('收/支');
-    final amountStr = _col('金额(元)').replaceAll('¥', '').replaceAll('￥', '').trim();
-    final payMethod = _col('支付方式');
-    final status = _col('当前状态');
+    final timeStr = col('交易时间');
+    final txType = col('交易类型');
+    final counterparty = col('交易对方');
+    final product = col('商品');
+    final direction = col('收/支');
+    final amountStr = col('金额(元)').replaceAll('¥', '').replaceAll('￥', '').trim();
+    final payMethod = col('支付方式');
+    final status = col('当前状态');
     // final remark = _col('备注');
 
     // Skip non-completed transactions

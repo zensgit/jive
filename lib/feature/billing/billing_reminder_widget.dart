@@ -75,7 +75,7 @@ class BillingReminderWidget extends StatelessWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              '${label}还有$daysText',
+              '$label还有$daysText',
               style: theme.textTheme.labelSmall?.copyWith(
                 color: color,
                 fontWeight: FontWeight.w600,

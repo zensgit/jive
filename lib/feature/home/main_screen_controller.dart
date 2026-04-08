@@ -169,7 +169,7 @@ mixin MainScreenController on State<MainScreen> {
         InAppNotificationService().addNotification(InAppNotification(
           id: 'billing_${r.type}_${r.accountName}_${DateTime.now().toIso8601String().substring(0, 10)}',
           title: '$label提醒',
-          body: '${r.accountName} ${label}还有$daysText',
+          body: '${r.accountName} $label还有$daysText',
           type: r.isUrgent ? NotificationType.alert : NotificationType.info,
         ));
       }

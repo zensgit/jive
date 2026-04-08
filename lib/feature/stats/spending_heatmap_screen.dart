@@ -139,7 +139,7 @@ class _SpendingHeatmapScreenState extends State<SpendingHeatmapScreen> {
               ...List.generate(24, (hour) {
                 final intensity = heatmap.intensity(day, hour);
                 return Tooltip(
-                  message: '${_weekdayLabels[day]} ${hour}时: ¥${NumberFormat('#,##0').format(heatmap.get(day, hour))}',
+                  message: '${_weekdayLabels[day]} $hour时: ¥${NumberFormat('#,##0').format(heatmap.get(day, hour))}',
                   child: Container(
                     width: cellSize,
                     height: cellSize,
@@ -234,7 +234,7 @@ class _SpendingHeatmapScreenState extends State<SpendingHeatmapScreen> {
           _insightRow(
             Icons.local_fire_department,
             '消费高峰',
-            '${_weekdayLabels[peakDay]}周 ${peakHour}:00 - ${peakHour + 1}:00',
+            '${_weekdayLabels[peakDay]}周 $peakHour:00 - ${peakHour + 1}:00',
             Colors.orange,
           ),
           const SizedBox(height: 8),

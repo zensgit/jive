@@ -169,10 +169,10 @@ class HomeAssetCard extends StatelessWidget {
     final abs = amount.abs();
     final prefix = amount < 0 ? '-' : '';
     if (abs >= 100000000) {
-      return '$prefix${currency}${(abs / 100000000).toStringAsFixed(1)}亿';
+      return '$prefix$currency${(abs / 100000000).toStringAsFixed(1)}亿';
     }
     if (abs >= 10000) {
-      return '$prefix${currency}${(abs / 10000).toStringAsFixed(1)}万';
+      return '$prefix$currency${(abs / 10000).toStringAsFixed(1)}万';
     }
     return '$prefix$currency${NumberFormat('#,##0.00').format(abs)}';
   }

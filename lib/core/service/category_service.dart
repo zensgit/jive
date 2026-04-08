@@ -228,30 +228,60 @@ class CategoryService {
   }
 
   Future<void> _migrateLegacyIconPaths() async {
-    final legacy = await isar
-        .collection<JiveCategory>()
-        .filter()
-        .iconNameStartsWith("qj/")
+    final categories = await isar.collection<JiveCategory>().where().findAll();
+    final overrides = await isar
+        .collection<JiveCategoryOverride>()
+        .where()
         .findAll();
-    if (legacy.isEmpty) return;
+    if (categories.isEmpty && overrides.isEmpty) return;
 
     final now = DateTime.now();
-    final updated = <JiveCategory>[];
-    for (final cat in legacy) {
-      var iconName = cat.iconName;
-      if (iconName.startsWith("qj/")) {
-        iconName = iconName.substring(3);
-      }
+    final updatedCategories = <JiveCategory>[];
+    for (final cat in categories) {
+      final iconName = _normalizeStoredAssetIconName(cat.iconName);
       if (iconName == cat.iconName) continue;
       cat.iconName = iconName;
       cat.updatedAt = now;
-      updated.add(cat);
+      updatedCategories.add(cat);
     }
 
-    if (updated.isEmpty) return;
+    final updatedOverrides = <JiveCategoryOverride>[];
+    for (final override in overrides) {
+      final current = override.iconOverride;
+      if (current == null) continue;
+      final iconName = _normalizeStoredAssetIconName(current);
+      if (iconName == current) continue;
+      override.iconOverride = iconName;
+      override.updatedAt = now;
+      updatedOverrides.add(override);
+    }
+
+    if (updatedCategories.isEmpty && updatedOverrides.isEmpty) return;
     await isar.writeTxn(() async {
-      await isar.collection<JiveCategory>().putAll(updated);
+      if (updatedCategories.isNotEmpty) {
+        await isar.collection<JiveCategory>().putAll(updatedCategories);
+      }
+      if (updatedOverrides.isNotEmpty) {
+        await isar.collection<JiveCategoryOverride>().putAll(updatedOverrides);
+      }
     });
+  }
+
+  String _normalizeStoredAssetIconName(String iconName) {
+    var normalized = iconName.trim();
+    if (normalized.isEmpty) return normalized;
+    if (normalized.startsWith('qj/')) {
+      normalized = normalized.substring(3);
+    }
+    if (normalized.startsWith('file:') ||
+        normalized.startsWith('emoji:') ||
+        normalized.startsWith('text:')) {
+      return normalized;
+    }
+    return normalized.replaceFirstMapped(
+      RegExp(r'\s+\d+(\.(png|svg))$', caseSensitive: false),
+      (match) => match.group(1) ?? '',
+    );
   }
 
   Future<void> _mergeSystemCategoryVariants() async {
@@ -705,8 +735,9 @@ class CategoryService {
       final desired = iconByKey[cat.key];
       if (desired == null || desired == "category") continue;
       if (_isFileIcon(cat.iconName) || _isTextIcon(cat.iconName)) continue;
-      if (_normalizeIconKey(cat.iconName) == _normalizeIconKey(desired))
+      if (_normalizeIconKey(cat.iconName) == _normalizeIconKey(desired)) {
         continue;
+      }
       cat.iconName = desired;
       cat.updatedAt = now;
       updated.add(cat);
@@ -774,10 +805,12 @@ class CategoryService {
     for (final cat in categories) {
       if (_isFileIcon(cat.iconName) ||
           _isTextIcon(cat.iconName) ||
-          _isEmojiIcon(cat.iconName))
+          _isEmojiIcon(cat.iconName)) {
         continue;
-      if (cat.isSystem && overridesByKey[cat.key]?.iconOverride != null)
+      }
+      if (cat.isSystem && overridesByKey[cat.key]?.iconOverride != null) {
         continue;
+      }
 
       String? desired;
       if (cat.parentKey == null) {
@@ -1649,8 +1682,9 @@ class CategoryService {
 
   static String _assetIconPath(String name) {
     if (name.startsWith("assets/")) return name;
-    if (name.startsWith("qj/"))
+    if (name.startsWith("qj/")) {
       return "assets/category_icons/${name.substring(3)}";
+    }
     return "assets/category_icons/$name";
   }
 
@@ -2321,37 +2355,46 @@ class CategoryService {
     if (containsAny(["88vip", "淘宝88VIP"])) return "brand_88vip.png";
     if (containsAny(["adidas", "Adidas"])) return "brand_adidas.png";
     if (containsAny(["adobe", "Adobe"])) return "brand_adobe.png";
-    if (containsAny(["阿里云盘", "aliyundrive", "aliyun_drive", "aliyun drive"]))
+    if (containsAny(["阿里云盘", "aliyundrive", "aliyun_drive", "aliyun drive"])) {
       return "brand_aliyun_drive.png";
+    }
     if (containsAny(["亚马逊", "amazon"])) return "brand_amazon.png";
     if (containsAny(["安踏", "anta"])) return "brand_anta.png";
-    if (containsAny(["App Store", "appstore", "app_store", "app store"]))
+    if (containsAny(["App Store", "appstore", "app_store", "app store"])) {
       return "brand_app_store.png";
-    if (containsAny(["apple", "iphone", "ipad", "苹果", "mac"]))
+    }
+    if (containsAny(["apple", "iphone", "ipad", "苹果", "mac"])) {
       return "brand_apple.png";
+    }
     if (containsAny(["Armani", "armani"])) return "brand_armani.png";
-    if (containsAny(["baidu netdisk", "baidu_netdisk", "百度网盘", "baidunetdisk"]))
+    if (containsAny(["baidu netdisk", "baidu_netdisk", "百度网盘", "baidunetdisk"])) {
       return "brand_baidu_netdisk.png";
+    }
     if (containsAny(["巴奴毛肚火锅", "banu"])) return "brand_banu.png";
     if (containsAny(["Bilibili", "bilibili"])) return "brand_bilibili.png";
     if (containsAny(["bosideng", "波司登"])) return "brand_bosideng.png";
     if (containsAny(["bulgari", "宝格丽"])) return "brand_bulgari.png";
     if (containsAny(["Burberry", "burberry"])) return "brand_burberry.png";
-    if (containsAny(["burger king", "burgerking", "汉堡王", "burger_king"]))
+    if (containsAny(["burger king", "burgerking", "汉堡王", "burger_king"])) {
       return "brand_burger_king.png";
+    }
     if (containsAny(["cainiao", "菜鸟"])) return "brand_cainiao.png";
-    if (containsAny(["canadagoose", "canada_goose", "canada goose", "加拿大鹅"]))
+    if (containsAny(["canadagoose", "canada_goose", "canada goose", "加拿大鹅"])) {
       return "brand_canada_goose.png";
+    }
     if (containsAny(["cartier", "卡地亚"])) return "brand_cartier.png";
     if (containsAny(["chagee", "霸王茶姬"])) return "brand_chagee.png";
     if (containsAny(["Chanel", "chanel"])) return "brand_chanel.png";
     if (containsAny(["chapanda", "茶百道"])) return "brand_chapanda.png";
-    if (containsAny(["china_mobile", "中国移动", "chinamobile", "china mobile"]))
+    if (containsAny(["china_mobile", "中国移动", "chinamobile", "china mobile"])) {
       return "brand_china_mobile.png";
-    if (containsAny(["chinatelecom", "中国电信", "china telecom", "china_telecom"]))
+    }
+    if (containsAny(["chinatelecom", "中国电信", "china telecom", "china_telecom"])) {
       return "brand_china_telecom.png";
-    if (containsAny(["chinaunicom", "china_unicom", "china unicom", "中国联通"]))
+    }
+    if (containsAny(["chinaunicom", "china_unicom", "china unicom", "中国联通"])) {
       return "brand_china_unicom.png";
+    }
     if (containsAny(["Coach", "coach"])) return "brand_coach.png";
     if (containsAny(["coco", "CoCo"])) return "brand_coco.png";
     if (containsAny(["columbia", "哥伦比亚"])) return "brand_columbia.png";
@@ -2361,8 +2404,9 @@ class CategoryService {
     if (containsAny(["德克士", "dicos"])) return "brand_dicos.png";
     if (containsAny(["didi", "滴滴"])) return "brand_didi.png";
     if (containsAny(["Dior", "dior"])) return "brand_dior.png";
-    if (containsAny(["disney plus", "disney_plus", "Disney+", "disneyplus"]))
+    if (containsAny(["disney plus", "disney_plus", "Disney+", "disneyplus"])) {
       return "brand_disney_plus.png";
+    }
     if (containsAny(["达美乐", "dominos"])) return "brand_dominos.png";
     if (containsAny(["eleme", "饿了么"])) return "brand_eleme.png";
     if (containsAny(["ems", "邮政"])) return "brand_ems.png";
@@ -2374,8 +2418,9 @@ class CategoryService {
       "google_play",
       "google play",
       "googleplay",
-    ]))
+    ])) {
       return "brand_google_play.png";
+    }
     if (containsAny(["gucci", "Gucci"])) return "brand_gucci.png";
     if (containsAny(["古茗", "guming"])) return "brand_guming.png";
     if (containsAny(["海底捞", "haidilao"])) return "brand_haidilao.png";
@@ -2387,13 +2432,16 @@ class CategoryService {
     if (containsAny(["华为", "huawei"])) return "brand_huawei.png";
     if (containsAny(["宜家", "ikea"])) return "brand_ikea.png";
     if (containsAny(["iqiyi", "爱奇艺"])) return "brand_iqiyi.png";
-    if (containsAny(["jack_jones", "jackjones", "杰克琼斯", "jack jones"]))
+    if (containsAny(["jack_jones", "jackjones", "杰克琼斯", "jack jones"])) {
       return "brand_jack_jones.png";
+    }
     if (containsAny(["京东", "jd"])) return "brand_jd.png";
-    if (containsAny(["jd logistics", "jd_logistics", "jdlogistics", "京东物流"]))
+    if (containsAny(["jd logistics", "jd_logistics", "jdlogistics", "京东物流"])) {
       return "brand_jd_logistics.png";
-    if (containsAny(["京东Plus", "jd plus", "jd_plus", "jdplus"]))
+    }
+    if (containsAny(["京东Plus", "jd plus", "jd_plus", "jdplus"])) {
       return "brand_jd_plus.png";
+    }
     if (containsAny(["网易考拉", "kaola"])) return "brand_kaola.png";
     if (containsAny(["kfc", "kentucky", "肯德基"])) return "brand_kfc.png";
     if (containsAny(["KKV", "kkv"])) return "brand_kkv.png";
@@ -2401,19 +2449,22 @@ class CategoryService {
     if (containsAny(["lining", "李宁"])) return "brand_lining.png";
     if (containsAny(["luckin", "瑞幸"])) return "brand_luckin.png";
     if (containsAny(["lv", "LV"])) return "brand_lv.png";
-    if (containsAny(["mango_tv", "mangotv", "mango tv", "芒果TV"]))
+    if (containsAny(["mango_tv", "mangotv", "mango tv", "芒果TV"])) {
       return "brand_mango_tv.png";
+    }
     if (containsAny(["mannings", "万宁"])) return "brand_mannings.png";
-    if (containsAny(["mcdonalds", "麦当劳", "mcdonald"]))
+    if (containsAny(["mcdonalds", "麦当劳", "mcdonald"])) {
       return "brand_mcdonalds.png";
+    }
     if (containsAny(["meituan", "美团"])) return "brand_meituan.png";
     if (containsAny([
       "美团外卖",
       "meituan_takeout",
       "meituan takeout",
       "meituantakeout",
-    ]))
+    ])) {
       return "brand_meituan_takeout.png";
+    }
     if (containsAny(["微软", "microsoft"])) return "brand_microsoft.png";
     if (containsAny(["名创优品", "miniso"])) return "brand_miniso.png";
     if (containsAny(["mixue", "蜜雪冰城"])) return "brand_mixue.png";
@@ -2421,13 +2472,15 @@ class CategoryService {
     if (containsAny(["muji", "无印良品"])) return "brand_muji.png";
     if (containsAny(["奈雪", "nayuki"])) return "brand_nayuki.png";
     if (containsAny(["netflix", "Netflix"])) return "brand_netflix.png";
-    if (containsAny(["new balance", "newbalance", "NewBalance", "new_balance"]))
+    if (containsAny(["new balance", "newbalance", "NewBalance", "new_balance"])) {
       return "brand_new_balance.png";
+    }
     if (containsAny(["Nike", "nike"])) return "brand_nike.png";
     if (containsAny(["nintendo", "任天堂"])) return "brand_nintendo.png";
     if (containsAny(["nome", "NOME"])) return "brand_nome.png";
-    if (containsAny(["north_face", "northface", "north face", "北面"]))
+    if (containsAny(["north_face", "northface", "north face", "北面"])) {
       return "brand_north_face.png";
+    }
     if (containsAny(["Ochirly", "ochirly"])) return "brand_ochirly.png";
     if (containsAny(["欧米茄", "omega"])) return "brand_omega.png";
     if (containsAny(["ONLY", "only"])) return "brand_only.png";
@@ -2435,33 +2488,40 @@ class CategoryService {
     if (containsAny(["peacebird", "太平鸟"])) return "brand_peacebird.png";
     if (containsAny(["petrochina", "中石油"])) return "brand_petrochina.png";
     if (containsAny(["拼多多", "pinduoduo"])) return "brand_pinduoduo.png";
-    if (containsAny(["pizza_hut", "pizzahut", "必胜客", "pizza hut"]))
+    if (containsAny(["pizza_hut", "pizzahut", "必胜客", "pizza hut"])) {
       return "brand_pizza_hut.png";
-    if (containsAny(["playstation", "PlayStation"]))
+    }
+    if (containsAny(["playstation", "PlayStation"])) {
       return "brand_playstation.png";
-    if (containsAny(["pop mart", "popmart", "pop_mart", "泡泡玛特"]))
+    }
+    if (containsAny(["pop mart", "popmart", "pop_mart", "泡泡玛特"])) {
       return "brand_pop_mart.png";
+    }
     if (containsAny(["prada", "Prada"])) return "brand_prada.png";
     if (containsAny(["Puma", "puma"])) return "brand_puma.png";
     if (containsAny(["夸克", "quark"])) return "brand_quark.png";
     if (containsAny(["rolex", "劳力士"])) return "brand_rolex.png";
     if (containsAny(["萨莉亚", "saizeriya"])) return "brand_saizeriya.png";
-    if (containsAny(["sams club", "sams_club", "samsclub", "山姆"]))
+    if (containsAny(["sams club", "sams_club", "samsclub", "山姆"])) {
       return "brand_sams_club.png";
+    }
     if (containsAny(["samsung", "三星"])) return "brand_samsung.png";
     if (containsAny(["森马", "semir"])) return "brand_semir.png";
     if (containsAny(["sephora", "丝芙兰"])) return "brand_sephora.png";
-    if (containsAny(["sfexpress", "顺丰", "sf express", "sf_express"]))
+    if (containsAny(["sfexpress", "顺丰", "sf express", "sf_express"])) {
       return "brand_sf_express.png";
+    }
     if (containsAny(["shuyi", "书亦烧仙草"])) return "brand_shuyi.png";
     if (containsAny(["sinopec", "中石化"])) return "brand_sinopec.png";
     if (containsAny(["斯凯奇", "skechers"])) return "brand_skechers.png";
     if (containsAny(["sony", "索尼"])) return "brand_sony.png";
     if (containsAny(["Spotify", "spotify"])) return "brand_spotify.png";
-    if (containsAny(["星巴克", "starbucks", "starbuck"]))
+    if (containsAny(["星巴克", "starbucks", "starbuck"])) {
       return "brand_starbucks.png";
-    if (containsAny(["state_grid", "state grid", "stategrid", "国家电网"]))
+    }
+    if (containsAny(["state_grid", "state grid", "stategrid", "国家电网"])) {
       return "brand_state_grid.png";
+    }
     if (containsAny(["steam", "Steam"])) return "brand_steam.png";
     if (containsAny(["sto", "申通"])) return "brand_sto.png";
     if (containsAny(["赛百味", "subway"])) return "brand_subway.png";
@@ -2473,39 +2533,48 @@ class CategoryService {
       "teenie_weenie",
       "teenie weenie",
       "teenieweenie",
-    ]))
+    ])) {
       return "brand_teenie_weenie.png";
-    if (containsAny(["tencentvideo", "腾讯视频", "tencent_video", "tencent video"]))
+    }
+    if (containsAny(["tencentvideo", "腾讯视频", "tencent_video", "tencent video"])) {
       return "brand_tencent_video.png";
+    }
     if (containsAny(["tiffany", "Tiffany"])) return "brand_tiffany.png";
     if (containsAny(["天猫", "tmall"])) return "brand_tmall.png";
-    if (containsAny(["玩具反斗城", "toysrus", "toys r us", "toys_r_us"]))
+    if (containsAny(["玩具反斗城", "toysrus", "toys r us", "toys_r_us"])) {
       return "brand_toys_r_us.png";
-    if (containsAny(["under armour", "under_armour", "underarmour", "安德玛"]))
+    }
+    if (containsAny(["under armour", "under_armour", "underarmour", "安德玛"])) {
       return "brand_under_armour.png";
+    }
     if (containsAny(["uniqlo", "优衣库"])) return "brand_uniqlo.png";
     if (containsAny(["ur", "UR"])) return "brand_ur.png";
     if (containsAny(["Vans", "vans"])) return "brand_vans.png";
-    if (containsAny(["vero moda", "veromoda", "Vero Moda", "vero_moda"]))
+    if (containsAny(["vero moda", "veromoda", "Vero Moda", "vero_moda"])) {
       return "brand_vero_moda.png";
+    }
     if (containsAny(["范思哲", "versace"])) return "brand_versace.png";
     if (containsAny(["唯品会", "vipshop"])) return "brand_vipshop.png";
     if (containsAny(["vivo"])) return "brand_vivo.png";
     if (containsAny(["wallace", "华莱士"])) return "brand_wallace.png";
     if (containsAny(["watsons", "屈臣氏"])) return "brand_watsons.png";
-    if (containsAny(["微信小程序", "wechatmini", "wechat mini", "wechat_mini"]))
+    if (containsAny(["微信小程序", "wechatmini", "wechat mini", "wechat_mini"])) {
       return "brand_wechat_mini.png";
+    }
     if (containsAny(["weidian", "微店"])) return "brand_weidian.png";
     if (containsAny(["Xbox", "xbox"])) return "brand_xbox.png";
     if (containsAny(["闲鱼", "xianyu"])) return "brand_xianyu.png";
     if (containsAny(["小红书", "xiaohongshu"])) return "brand_xiaohongshu.png";
     if (containsAny(["小龙坎", "xiaolongkan"])) return "brand_xiaolongkan.png";
-    if (containsAny(["小米", "xiaomibrand", "xiaomi_brand", "xiaomi brand"]))
+    if (containsAny(["小米", "xiaomibrand", "xiaomi_brand", "xiaomi brand"])) {
       return "brand_xiaomi_brand.png";
-    if (containsAny(["xiaomi_mall", "xiaomi mall", "小米商城", "xiaomimall"]))
+    }
+    if (containsAny(["xiaomi_mall", "xiaomi mall", "小米商城", "xiaomimall"])) {
       return "brand_xiaomi_mall.png";
-    if (containsAny(["xiaomiyoupin", "小米有品", "xiaomi youpin", "xiaomi_youpin"]))
+    }
+    if (containsAny(["xiaomiyoupin", "小米有品", "xiaomi youpin", "xiaomi_youpin"])) {
       return "brand_xiaomi_youpin.png";
+    }
     if (containsAny(["西贝莜面村", "xibei"])) return "brand_xibei.png";
     if (containsAny(["xunlei", "迅雷"])) return "brand_xunlei.png";
     if (containsAny(["yangguofu", "杨国福麻辣烫"])) return "brand_yangguofu.png";
@@ -2573,8 +2642,9 @@ class CategoryService {
       "小龙坎",
       "海底捞",
       "巴奴",
-    ]))
+    ])) {
       return "local_dining";
+    }
     if (containsAny([
       "面条",
       "面食",
@@ -2641,8 +2711,9 @@ class CategoryService {
     if (containsAny(["水果", "果蔬", "蔬菜", "fruit"])) return "nutrition";
     if (containsAny(["聚会", "party", "请客", "宴请"])) return "celebration";
     if (containsAny(["酒吧", "bar"])) return "wine_bar";
-    if (containsAny(["酒", "酒水", "liquor", "wine", "烟", "烟酒", "啤酒"]))
+    if (containsAny(["酒", "酒水", "liquor", "wine", "烟", "烟酒", "啤酒"])) {
       return "liquor";
+    }
 
     if (containsAny([
       "购物",
@@ -2660,8 +2731,9 @@ class CategoryService {
       "小红书",
       "得物",
       "美团",
-    ]))
+    ])) {
       return "shopping_bag";
+    }
     if (containsAny([
       "超市",
       "便利店",
@@ -2750,8 +2822,9 @@ class CategoryService {
     ])) {
       return "checkroom";
     }
-    if (containsAny(["鞋包", "鞋", "包", "bag", "饰品", "首饰", "耳环", "项链"]))
+    if (containsAny(["鞋包", "鞋", "包", "bag", "饰品", "首饰", "耳环", "项链"])) {
       return "cases";
+    }
     if (containsAny([
       "数码",
       "手机",
@@ -2821,8 +2894,9 @@ class CategoryService {
       "萨克斯",
       "手风琴",
       "乐器",
-    ]))
+    ])) {
       return "music_note";
+    }
     if (containsAny([
       "运动",
       "健身",
@@ -2900,8 +2974,9 @@ class CategoryService {
       return "spa";
     }
 
-    if (containsAny(["人情", "社交", "礼物", "gift", "家人", "父母", "朋友", "恋爱"]))
+    if (containsAny(["人情", "社交", "礼物", "gift", "家人", "父母", "朋友", "恋爱"])) {
       return "people";
+    }
     if (containsAny(["红包", "reward"])) return "redeem";
 
     if (containsAny(["宠物", "pet"])) return "pets";
@@ -2951,8 +3026,9 @@ class CategoryService {
     if (containsAny(["加密货币", "比特币", "虚拟币"])) return "show_chart";
     if (containsAny(["捐赠", "捐款", "公益", "慈善"])) return "volunteer_activism";
     if (containsAny(["学习", "教育", "培训", "课程", "学校", "校园"])) return "school";
-    if (containsAny(["考试", "报名", "文具", "教材", "课本"]))
+    if (containsAny(["考试", "报名", "文具", "教材", "课本"])) {
       return "cast_for_education";
+    }
     if (containsAny(["书籍", "阅读", "小说"])) return "menu_book";
     if (containsAny(["书法", "绘画", "美术", "手工"])) return "edit";
     if (containsAny(["公司", "办公", "办公用品"])) return "business";
