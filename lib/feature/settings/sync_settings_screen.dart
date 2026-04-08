@@ -89,7 +89,7 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            '升级到订阅版即可开启云同步，支持多设备数据实时同步。',
+            '升级到订阅版即可开启云同步，登录并联网后可在多设备间同步数据。',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.grey.shade600,
@@ -208,7 +208,7 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('启用云同步'),
-            subtitle: const Text('自动同步数据到云端'),
+            subtitle: const Text('登录并联网后自动同步数据到云端'),
             value: state.isEnabled,
             activeTrackColor: JiveTheme.primaryGreen,
             onChanged: (enabled) => syncEngine.setEnabled(enabled),
@@ -305,8 +305,8 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '云同步使用端到端加密，数据安全存储在云端。'
-              '同步功能需要订阅版，支持多设备间实时同步交易数据。',
+              '云同步通过 HTTPS 加密传输，并存储在 Supabase。'
+              '当前版本不提供端到端加密密钥管理；同步功能需要订阅版，登录并联网后可在多设备间同步交易数据。',
               style: TextStyle(
                 fontSize: 13,
                 color: Colors.blue.shade700,

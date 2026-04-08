@@ -51,7 +51,7 @@ Jive 积叶 — 你的智能私人财务管家
 👨‍👩‍👧‍👦 家庭共享
 • 家庭共享账本 — 邀请码加入
 • 多用户协同记账
-• 云同步 — 多设备数据实时同步
+• 云同步 — 登录并联网后支持多设备数据同步
 
 🔒 安全可靠
 • PIN 码 + 手势图案锁
@@ -65,7 +65,7 @@ Jive 积叶 — 你的智能私人财务管家
 
 支持简体中文、繁體中文、English 三种语言。
 
-免费使用核心功能，升级专业版解锁多设备同步、云备份、高级分析等更多能力。
+免费使用核心功能，升级专业版解锁多设备同步、高级分析等更多能力。
 
 ---
 
@@ -99,7 +99,7 @@ Key Features:
 👨‍👩‍👧‍👦 Family Sharing
 • Shared family ledgers with invite codes
 • Multi-user collaborative bookkeeping
-• Cloud sync across devices
+• Cloud sync across devices after sign-in and with network access
 
 🔒 Secure & Reliable
 • PIN + gesture pattern lock
@@ -113,7 +113,7 @@ Key Features:
 
 Supports Simplified Chinese, Traditional Chinese, and English.
 
-Free core features. Upgrade to Pro for multi-device sync, cloud backup, and advanced analytics.
+Free core features. Upgrade to Pro for multi-device sync and advanced analytics.
 
 ---
 
