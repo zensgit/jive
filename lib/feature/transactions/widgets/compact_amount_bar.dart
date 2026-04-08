@@ -72,14 +72,29 @@ class CompactAmountBar extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Amount (large, colored)
-          Text(
-            '$symbol $amountStr',
-            style: GoogleFonts.rubik(
-              color: _amountColor(),
-              fontSize: 28,
-              fontWeight: FontWeight.w600,
-              height: 1.0,
+          // Amount (large, colored) + currency code
+          Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(
+                  text: '$symbol $amountStr',
+                  style: GoogleFonts.rubik(
+                    color: _amountColor(),
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
+                    height: 1.0,
+                  ),
+                ),
+                TextSpan(
+                  text: '  $currency',
+                  style: GoogleFonts.rubik(
+                    color: _amountColor().withValues(alpha: 0.7),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    height: 1.0,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 12),

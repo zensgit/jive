@@ -1351,16 +1351,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             onPressed: () => Navigator.pop(context, _hasDataChanges),
           ),
           actions: [
-            if (!_isEditing)
-              IconButton(
-                icon: Icon(
-                  _continuousMode ? Icons.repeat_on : Icons.repeat,
-                  color: _continuousMode ? JiveTheme.primaryGreen : JiveTheme.secondaryTextColor(context),
-                  size: 20,
-                ),
-                tooltip: _continuousMode ? '连续记账：开' : '连续记账：关',
-                onPressed: () => setState(() => _continuousMode = !_continuousMode),
-              ),
             GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTap: _showHoldToTalkHint,
