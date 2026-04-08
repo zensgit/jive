@@ -76,6 +76,7 @@ class _SheetState extends State<_Sheet> {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_value),
+      initialEntryMode: TimePickerEntryMode.input,
     );
     if (picked != null && mounted) {
       setState(() {
