@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:isar/isar.dart';
 import '../database/budget_model.dart';
+import '../sync/sync_delete_marker_service.dart';
 import '../database/category_model.dart';
 import '../database/project_model.dart';
 import '../database/transaction_model.dart';
@@ -175,6 +176,10 @@ class BudgetService {
 
   /// 删除预算
   Future<void> deleteBudget(int id) async {
+    final budget = await _isar.jiveBudgets.get(id);
+    if (budget != null) {
+      await SyncDeleteMarkerService(_isar).markBudgetDeleted(budget);
+    }
     await _isar.writeTxn(() async {
       await _isar.jiveBudgets.delete(id);
       // 同时删除相关使用记录
@@ -183,7 +188,10 @@ class BudgetService {
   }
 
   /// 计算预算使用情况
-  Future<BudgetSummary> calculateBudgetUsage(JiveBudget budget, {int? bookId}) async {
+  Future<BudgetSummary> calculateBudgetUsage(
+    JiveBudget budget, {
+    int? bookId,
+  }) async {
     final now = DateTime.now();
 
     final effectiveDirectAmount = _effectiveDirectAmount(budget);
@@ -834,10 +842,11 @@ class BudgetService {
 
     for (final budget in budgets) {
       try {
-        final summary = await calculateBudgetUsage(budget, bookId: bookId).timeout(
-          _summaryTimeout,
-          onTimeout: () => throw TimeoutException('预算计算超时'),
-        );
+        final summary = await calculateBudgetUsage(budget, bookId: bookId)
+            .timeout(
+              _summaryTimeout,
+              onTimeout: () => throw TimeoutException('预算计算超时'),
+            );
         summaries.add(summary);
       } catch (e) {
         failed.add('${budget.name}: $e');
