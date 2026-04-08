@@ -40,6 +40,7 @@ import '../category/category_create_screen.dart';
 import '../category/category_edit_dialog.dart';
 import '../category/category_manager_screen.dart';
 import '../category/category_search_delegate.dart';
+import '../accounts/accounts_screen.dart';
 import '../stats/stats_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
@@ -2473,8 +2474,30 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         return SafeArea(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            itemCount: entries.length,
+            itemCount: entries.length + 1,
             itemBuilder: (context, index) {
+              if (index == entries.length) {
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: JiveTheme.primaryGreen.withValues(alpha: 0.15),
+                    child: Icon(
+                      Icons.add,
+                      size: 20,
+                      color: JiveTheme.primaryGreen,
+                    ),
+                  ),
+                  title: const Text('添加账户'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AccountsScreen(),
+                      ),
+                    ).then((_) => _loadAccounts());
+                  },
+                );
+              }
               final entry = entries[index];
               if (entry.isHeader) {
                 return Padding(
