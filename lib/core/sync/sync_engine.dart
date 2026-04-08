@@ -18,6 +18,7 @@ import 'sync_config.dart';
 import 'sync_conflict_service.dart';
 import 'sync_key_generator.dart';
 import 'sync_state.dart';
+import 'sync_tombstone_store.dart';
 
 class _AccountSyncLookup {
   const _AccountSyncLookup({
@@ -198,6 +199,36 @@ class SyncEngine extends ChangeNotifier {
     final userId = client.auth.currentUser?.id;
     if (userId == null) return;
 
+    final tombstones = await SyncTombstoneStore.listForTable(table);
+    final onConflict = _onConflictColumns[table];
+    if (tombstones.isNotEmpty && onConflict != null) {
+      final uploadedEntityKeys = <String>[];
+      final mappedTombstones = <Map<String, dynamic>>[];
+      for (final entry in tombstones) {
+        final prepared = _prepareTombstoneRow(
+          table,
+          userId,
+          Map<String, dynamic>.from(entry.payload),
+        );
+        if (_stableSyncKeyTables.contains(table) &&
+            _readString(prepared['sync_key']) == null) {
+          continue;
+        }
+        mappedTombstones.add(prepared);
+        uploadedEntityKeys.add(entry.entityKey);
+      }
+
+      if (mappedTombstones.isNotEmpty) {
+        await client
+            .from(table)
+            .upsert(mappedTombstones, onConflict: onConflict);
+        await SyncTombstoneStore.removeEntries(table, uploadedEntityKeys);
+        debugPrint(
+          'SyncEngine: pushed ${mappedTombstones.length} tombstones to $table',
+        );
+      }
+    }
+
     final rows = await _getLocalChanges(table, cursor);
     if (rows.isEmpty) return;
 
@@ -206,7 +237,6 @@ class SyncEngine extends ChangeNotifier {
     final mapped = rows
         .map((row) => _decoratePushRow(table, userId, row))
         .toList();
-    final onConflict = _onConflictColumns[table];
     if (onConflict == null) return;
 
     await client.from(table).upsert(mapped, onConflict: onConflict);
@@ -261,6 +291,37 @@ class SyncEngine extends ChangeNotifier {
       default:
         return {'user_id': userId, ...row};
     }
+  }
+
+  Map<String, dynamic> _prepareTombstoneRow(
+    String table,
+    String userId,
+    Map<String, dynamic> row,
+  ) {
+    final prepared = Map<String, dynamic>.from(row);
+    if (_stableSyncKeyTables.contains(table)) {
+      final localId = _readInt(prepared['local_id']);
+      if (_readString(prepared['sync_key']) == null && localId != null) {
+        prepared['sync_key'] = _legacySyncKey(table, userId, localId);
+      }
+    }
+
+    if (table == 'transactions') {
+      final accountSyncKey =
+          _readString(prepared['account_sync_key']) ??
+          _legacyAccountSyncKey(userId, prepared['account_id']);
+      final toAccountSyncKey =
+          _readString(prepared['to_account_sync_key']) ??
+          _legacyAccountSyncKey(userId, prepared['to_account_id']);
+      if (accountSyncKey != null) {
+        prepared['account_sync_key'] = accountSyncKey;
+      }
+      if (toAccountSyncKey != null) {
+        prepared['to_account_sync_key'] = toAccountSyncKey;
+      }
+    }
+
+    return _decoratePushRow(table, userId, prepared);
   }
 
   Future<void> _backfillLegacyRemoteRows(
@@ -488,6 +549,7 @@ class SyncEngine extends ChangeNotifier {
               accountSyncKeyById,
             ),
             'raw_text': tx.rawText,
+            'deleted_at': null,
             'updated_at': tx.updatedAt.toIso8601String(),
           },
         )
@@ -587,6 +649,7 @@ class SyncEngine extends ChangeNotifier {
             'category_keys': budget.categoryKey ?? '',
             'is_active': budget.isActive,
             'carry_over': budget.rollover,
+            'deleted_at': null,
             'updated_at': budget.updatedAt.toIso8601String(),
           },
         )
@@ -686,12 +749,24 @@ class SyncEngine extends ChangeNotifier {
     final cursor = await _getCursor('transactions');
     final accountLookup = await _loadAccountSyncLookup();
     final bookIdByKey = await _loadBookIdByKey();
+    final pendingTombstones = await SyncTombstoneStore.mapForTable(
+      'transactions',
+    );
+    final clearedTombstones = <String>{};
 
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = _readInt(row['local_id']);
         final syncKey = _resolveRemoteSyncKey('transactions', userId, row);
         if (localId == null && syncKey == null) continue;
+        final tombstoneEntityKey = _pendingEntityKeyForRow(
+          'transactions',
+          userId,
+          row,
+        );
+        final pendingTombstone = tombstoneEntityKey == null
+            ? null
+            : pendingTombstones[tombstoneEntityKey];
 
         JiveTransaction? existing;
         if (syncKey != null) {
@@ -706,6 +781,61 @@ class SyncEngine extends ChangeNotifier {
 
         final remoteUpdatedAt =
             _parseDateTime(row['updated_at']) ?? DateTime.now();
+        final remoteDeletedAt = _parseRemoteDate(row['deleted_at']);
+
+        if (remoteDeletedAt != null) {
+          if (pendingTombstone != null && tombstoneEntityKey != null) {
+            clearedTombstones.add(tombstoneEntityKey);
+          }
+
+          if (existing == null) continue;
+
+          if (_isRealConflict(existing.updatedAt, remoteUpdatedAt, cursor)) {
+            await _conflictService.recordConflict(
+              table: 'transactions',
+              localId: existing.id,
+              localData: _transactionToMap(existing),
+              remoteData: row,
+              localUpdatedAt: existing.updatedAt,
+              remoteUpdatedAt: remoteUpdatedAt,
+            );
+            continue;
+          }
+          if (existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
+
+          await _isar.jiveTransactions.delete(existing.id);
+          continue;
+        }
+
+        if (pendingTombstone != null) {
+          final pendingLocalId =
+              existing?.id ??
+              _readInt(pendingTombstone.payload['local_id']) ??
+              localId;
+          if (_isRealConflict(
+            pendingTombstone.deletedAt,
+            remoteUpdatedAt,
+            cursor,
+          )) {
+            if (pendingLocalId != null) {
+              await _conflictService.recordConflict(
+                table: 'transactions',
+                localId: pendingLocalId,
+                localData: pendingTombstone.payload,
+                remoteData: row,
+                localUpdatedAt: pendingTombstone.deletedAt,
+                remoteUpdatedAt: remoteUpdatedAt,
+              );
+            }
+            continue;
+          }
+
+          if (pendingTombstone.deletedAt.isAfter(remoteUpdatedAt)) continue;
+          if (tombstoneEntityKey != null) {
+            clearedTombstones.add(tombstoneEntityKey);
+          }
+        }
+
         if (existing != null) {
           if (_isRealConflict(existing.updatedAt, remoteUpdatedAt, cursor)) {
             await _conflictService.recordConflict(
@@ -746,6 +876,10 @@ class SyncEngine extends ChangeNotifier {
         await _isar.jiveTransactions.put(tx);
       }
     });
+
+    if (clearedTombstones.isNotEmpty) {
+      await SyncTombstoneStore.removeEntries('transactions', clearedTombstones);
+    }
   }
 
   Map<String, dynamic> _transactionToMap(JiveTransaction tx) => {
@@ -763,6 +897,7 @@ class SyncEngine extends ChangeNotifier {
     'account_id': tx.accountId,
     'to_account_id': tx.toAccountId,
     'raw_text': tx.rawText,
+    'deleted_at': null,
     'updated_at': tx.updatedAt.toIso8601String(),
   };
 
@@ -906,13 +1041,24 @@ class SyncEngine extends ChangeNotifier {
     List<Map<String, dynamic>> rows,
     String userId,
   ) async {
+    final cursor = await _getCursor('budgets');
     final bookIdByKey = await _loadBookIdByKey();
+    final pendingTombstones = await SyncTombstoneStore.mapForTable('budgets');
+    final clearedTombstones = <String>{};
 
     await _isar.writeTxn(() async {
       for (final row in rows) {
         final localId = _readInt(row['local_id']);
         final syncKey = _resolveRemoteSyncKey('budgets', userId, row);
         if (localId == null && syncKey == null) continue;
+        final tombstoneEntityKey = _pendingEntityKeyForRow(
+          'budgets',
+          userId,
+          row,
+        );
+        final pendingTombstone = tombstoneEntityKey == null
+            ? null
+            : pendingTombstones[tombstoneEntityKey];
 
         JiveBudget? existing;
         if (syncKey != null) {
@@ -927,8 +1073,77 @@ class SyncEngine extends ChangeNotifier {
 
         final remoteUpdatedAt =
             _parseDateTime(row['updated_at']) ?? DateTime.now();
-        if (existing != null && existing.updatedAt.isAfter(remoteUpdatedAt)) {
+        final remoteDeletedAt = _parseRemoteDate(row['deleted_at']);
+
+        if (remoteDeletedAt != null) {
+          if (pendingTombstone != null && tombstoneEntityKey != null) {
+            clearedTombstones.add(tombstoneEntityKey);
+          }
+
+          if (existing == null) continue;
+          if (_isRealConflict(existing.updatedAt, remoteUpdatedAt, cursor)) {
+            await _conflictService.recordConflict(
+              table: 'budgets',
+              localId: existing.id,
+              localData: _budgetToMap(existing),
+              remoteData: row,
+              localUpdatedAt: existing.updatedAt,
+              remoteUpdatedAt: remoteUpdatedAt,
+            );
+            continue;
+          }
+          if (existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
+
+          await _isar.jiveBudgetUsages
+              .filter()
+              .budgetIdEqualTo(existing.id)
+              .deleteAll();
+          await _isar.jiveBudgets.delete(existing.id);
           continue;
+        }
+
+        if (pendingTombstone != null) {
+          final pendingLocalId =
+              existing?.id ??
+              _readInt(pendingTombstone.payload['local_id']) ??
+              localId;
+          if (_isRealConflict(
+            pendingTombstone.deletedAt,
+            remoteUpdatedAt,
+            cursor,
+          )) {
+            if (pendingLocalId != null) {
+              await _conflictService.recordConflict(
+                table: 'budgets',
+                localId: pendingLocalId,
+                localData: pendingTombstone.payload,
+                remoteData: row,
+                localUpdatedAt: pendingTombstone.deletedAt,
+                remoteUpdatedAt: remoteUpdatedAt,
+              );
+            }
+            continue;
+          }
+
+          if (pendingTombstone.deletedAt.isAfter(remoteUpdatedAt)) continue;
+          if (tombstoneEntityKey != null) {
+            clearedTombstones.add(tombstoneEntityKey);
+          }
+        }
+
+        if (existing != null) {
+          if (_isRealConflict(existing.updatedAt, remoteUpdatedAt, cursor)) {
+            await _conflictService.recordConflict(
+              table: 'budgets',
+              localId: existing.id,
+              localData: _budgetToMap(existing),
+              remoteData: row,
+              localUpdatedAt: existing.updatedAt,
+              remoteUpdatedAt: remoteUpdatedAt,
+            );
+            continue;
+          }
+          if (existing.updatedAt.isAfter(remoteUpdatedAt)) continue;
         }
 
         final budget = existing ?? JiveBudget();
@@ -966,7 +1181,26 @@ class SyncEngine extends ChangeNotifier {
         await _isar.jiveBudgets.put(budget);
       }
     });
+
+    if (clearedTombstones.isNotEmpty) {
+      await SyncTombstoneStore.removeEntries('budgets', clearedTombstones);
+    }
   }
+
+  Map<String, dynamic> _budgetToMap(JiveBudget budget) => {
+    'local_id': budget.id,
+    'sync_key': budget.syncKey,
+    'name': budget.name,
+    'amount': budget.amount,
+    'period': budget.period,
+    'start_date': budget.startDate.toIso8601String(),
+    'end_date': budget.endDate.toIso8601String(),
+    'category_keys': budget.categoryKey ?? '',
+    'is_active': budget.isActive,
+    'carry_over': budget.rollover,
+    'deleted_at': null,
+    'updated_at': budget.updatedAt.toIso8601String(),
+  };
 
   Future<void> _applySharedLedgerChanges(
     List<Map<String, dynamic>> rows,
@@ -1183,6 +1417,11 @@ class SyncEngine extends ChangeNotifier {
     return null;
   }
 
+  DateTime? _parseRemoteDate(dynamic value) {
+    if (value == null) return null;
+    return _parseDateTime(value);
+  }
+
   String? _readString(dynamic value) {
     if (value == null) return null;
     final text = value.toString().trim();
@@ -1218,5 +1457,22 @@ class SyncEngine extends ChangeNotifier {
       '$_prefKeyCursorPrefix$table',
       DateTime.now().toIso8601String(),
     );
+  }
+
+  String _syncEntityKey(String syncKey) => 'sync:$syncKey';
+
+  String _localEntityKey(int localId) => 'local:$localId';
+
+  String? _pendingEntityKeyForRow(
+    String table,
+    String userId,
+    Map<String, dynamic> row,
+  ) {
+    final syncKey = _resolveRemoteSyncKey(table, userId, row);
+    if (syncKey != null) return _syncEntityKey(syncKey);
+
+    final localId = _readInt(row['local_id']);
+    if (localId != null) return _localEntityKey(localId);
+    return null;
   }
 }
