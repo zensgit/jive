@@ -14,10 +14,13 @@ class QuickFieldPillsBar extends StatelessWidget {
   final List<JiveTag> selectedTags;
   final JiveProject? selectedProject;
   final bool excludeFromBudget;
+  final bool excludeFromTotals;
   final bool isExpense;
+  final bool isTransfer;
   final VoidCallback onTapAccount;
   final VoidCallback onTapTags;
   final VoidCallback onTapProject;
+  final VoidCallback onTapBillFlag;
   final ValueChanged<bool> onToggleExcludeBudget;
   final VoidCallback? onTapPhoto;
 
@@ -27,13 +30,23 @@ class QuickFieldPillsBar extends StatelessWidget {
     required this.selectedTags,
     required this.selectedProject,
     required this.excludeFromBudget,
+    required this.excludeFromTotals,
     required this.isExpense,
+    required this.isTransfer,
     required this.onTapAccount,
     required this.onTapTags,
     required this.onTapProject,
+    required this.onTapBillFlag,
     required this.onToggleExcludeBudget,
     this.onTapPhoto,
   });
+
+  String _billFlagLabel() {
+    if (excludeFromBudget && excludeFromTotals) return '不计收支·预算';
+    if (excludeFromTotals) return '不计收支';
+    if (excludeFromBudget) return '不计预算';
+    return '标记';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -87,14 +100,14 @@ class QuickFieldPillsBar extends StatelessWidget {
             isActive: selectedProject != null,
             onTap: onTapProject,
           ),
-          if (isExpense)
-            _Pill(
-              icon: Icons.pie_chart_outline,
-              label: '不计预算',
-              color: Colors.orange,
-              isActive: excludeFromBudget,
-              onTap: () => onToggleExcludeBudget(!excludeFromBudget),
-            ),
+          // 账单标记 pill — combines 不计入收支 + 不计入预算 per 钱迹 UX
+          _Pill(
+            icon: Icons.flag_outlined,
+            label: _billFlagLabel(),
+            color: Colors.redAccent,
+            isActive: excludeFromBudget || excludeFromTotals,
+            onTap: onTapBillFlag,
+          ),
           if (onTapPhoto != null)
             _Pill(
               icon: Icons.image_outlined,

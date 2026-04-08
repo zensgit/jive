@@ -35,6 +35,7 @@ class JiveTransaction {
   int? projectId; // 关联项目 ID
   List<String> tagKeys = []; // 标签 Key 列表 (UUID)
   bool excludeFromBudget = false; // 不计入预算（预算/预算统计中忽略）
+  bool excludeFromTotals = false; // 不计入收支（收入/支出汇总中忽略，账单标记）
   List<String> smartTagKeys = []; // 智能规则自动添加的标签 Key
   List<String> smartTagOptOutKeys = []; // 对应标签不再自动打标
   bool smartTagOptOutAll = false; // 本笔交易停用全部智能标签

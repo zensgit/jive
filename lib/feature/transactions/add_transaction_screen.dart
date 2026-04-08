@@ -108,6 +108,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   bool _isSearchMode = false;
   bool _isEditing = false;
   bool _excludeFromBudget = false; // 不计入预算（仅对支出有效）
+  bool _excludeFromTotals = false; // 不计入收支（账单标记）
   TransactionType _txType = TransactionType.expense;
   DateTime _selectedTime = DateTime.now();
   final TextEditingController _noteController = TextEditingController();
@@ -220,6 +221,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _selectedProjectId = editing.projectId;
       _excludeFromBudget =
           _txType == TransactionType.expense && editing.excludeFromBudget;
+      _excludeFromTotals = editing.excludeFromTotals;
       // 跨币种转账数据
       if (editing.toAmount != null) {
         _toAmountStr = _formatAmountInput(editing.toAmount!);
@@ -246,6 +248,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _selectedProjectId = prefill.projectId;
       _excludeFromBudget =
           _txType == TransactionType.expense && prefill.excludeFromBudget;
+      _excludeFromTotals = prefill.excludeFromTotals;
       // 跨币种转账数据
       if (prefill.toAmount != null) {
         _toAmountStr = _formatAmountInput(prefill.toAmount!);
@@ -1248,6 +1251,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ..tagKeys = List<String>.from(_selectedTagKeys)
       ..excludeFromBudget =
           _txType == TransactionType.expense && _excludeFromBudget
+      ..excludeFromTotals = _excludeFromTotals
       ..smartTagKeys = List<String>.from(tx.smartTagKeys)
       ..timestamp = _selectedTime
       ..bookId = _currentBook?.id ?? widget.bookId ?? tx.bookId;
@@ -1656,10 +1660,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   selectedTags: selectedTagsList,
                   selectedProject: selectedProjectObj,
                   excludeFromBudget: _excludeFromBudget,
+                  excludeFromTotals: _excludeFromTotals,
                   isExpense: _txType == TransactionType.expense,
+                  isTransfer: _txType == TransactionType.transfer,
                   onTapAccount: () => _showAccountPicker(pickTo: false),
                   onTapTags: _showTagPicker,
                   onTapProject: _showProjectPicker,
+                  onTapBillFlag: _showBillFlagDialog,
                   onToggleExcludeBudget: (v) =>
                       setState(() => _excludeFromBudget = v),
                 ),
@@ -2386,6 +2393,69 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
 
 
+
+  Future<void> _showBillFlagDialog() async {
+    bool notTotals = _excludeFromTotals;
+    bool notBudget = _excludeFromBudget;
+    final isTransfer = _txType == TransactionType.transfer;
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('账单标记'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '可对账单进行标记，不计入收支、不计入预算。',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: JiveTheme.secondaryTextColor(ctx),
+                  ),
+                ),
+              ),
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.trailing,
+                title: const Text('不计入收支'),
+                value: notTotals,
+                onChanged: (v) => setDialogState(() => notTotals = v ?? false),
+              ),
+              // 转账交易本身不计入预算，所以隐藏这一行（对齐 钱迹）
+              if (!isTransfer)
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.trailing,
+                  title: const Text('不计入预算'),
+                  value: notBudget,
+                  onChanged: (v) =>
+                      setDialogState(() => notBudget = v ?? false),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('确定'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == true && mounted) {
+      setState(() {
+        _excludeFromTotals = notTotals;
+        _excludeFromBudget = isTransfer ? false : notBudget;
+      });
+    }
+  }
 
   Future<void> _showNoteInput() async {
     final controller = TextEditingController(text: _noteController.text);
