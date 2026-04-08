@@ -609,6 +609,7 @@ class SyncEngine extends ChangeNotifier {
             'owner_user_id': ledger.ownerUserId,
             'currency': ledger.currency,
             'invite_code': ledger.inviteCode,
+            'workspace_key': _sharedLedgerWorkspaceKey(),
             'member_count': ledger.memberCount,
             'updated_at': ledger.updatedAt.toIso8601String(),
           },
@@ -1083,6 +1084,10 @@ class SyncEngine extends ChangeNotifier {
   String _bookKeyFor(int? bookId, Map<int, String> bookKeyById) {
     if (bookId == null) return BookService.defaultBookKey;
     return bookKeyById[bookId] ?? BookService.defaultBookKey;
+  }
+
+  String _sharedLedgerWorkspaceKey() {
+    return BookService.defaultBookKey;
   }
 
   String? _accountSyncKeyFor(
