@@ -144,7 +144,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     '7',
     '8',
     '9',
-    'date',
+    'AGAIN',
     '4',
     '5',
     '6',
@@ -959,6 +959,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _pickTransactionDate();
       return;
     }
+    if (key == 'AGAIN') {
+      setState(() => _continuousMode = !_continuousMode);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(_continuousMode ? '连续记账：开' : '连续记账：关'),
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      return;
+    }
     setState(() {
       if (key == 'DEL') {
         if (_amountStr.length > 1) {
@@ -1351,20 +1363,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             onPressed: () => Navigator.pop(context, _hasDataChanges),
           ),
           actions: [
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _showHoldToTalkHint,
-              onLongPressStart: (_) => _startSpeechHold(),
-              onLongPressEnd: (_) => _stopSpeechHold(),
-              onLongPressCancel: _cancelSpeechHold,
-              child: SizedBox(
-                width: kMinInteractiveDimension,
-                height: kMinInteractiveDimension,
-                child: Center(
-                  child: Icon(Icons.mic, color: JiveTheme.textColor(context)),
-                ),
-              ),
-            ),
             if (_showCategories)
               IconButton(
                 icon: Icon(
@@ -1574,6 +1572,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                           keyValue: _keys[index],
                           txType: _txType,
                           onKeyPress: _onKeyPress,
+                          speechActive: _speechHoldActive || _speechHoldPending,
+                          onOkLongPressStart: _startSpeechHold,
+                          onOkLongPressEnd: _stopSpeechHold,
+                          onOkLongPressCancel: _cancelSpeechHold,
                         );
                       },
                     ),
