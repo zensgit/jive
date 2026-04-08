@@ -10,11 +10,13 @@ import 'package:lpinyin/lpinyin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
+import '../../core/database/book_model.dart';
 import '../../core/database/budget_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/project_model.dart';
+import '../../core/service/book_service.dart';
 import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/account_service.dart';
@@ -131,6 +133,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   List<String> _selectedTagKeys = [];
   List<JiveProject> _projects = [];
   int? _selectedProjectId;
+  List<JiveBook> _books = [];
+  JiveBook? _currentBook;
   List<CategorySearchResult> _searchItems = [];
   final Map<String, String> _searchKeyCache = {};
   final TextEditingController _inlineSearchController = TextEditingController();
@@ -270,6 +274,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       await _loadAccounts();
       await _loadTags();
       await _loadProjects();
+      await _loadBooks();
       await _loadParentsForType(
         selectParentKey: _editingParentKey,
         selectParentName: _editingParentName,
@@ -445,6 +450,87 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _selectedProjectId = null;
       }
     });
+  }
+
+  Future<void> _loadBooks() async {
+    final service = BookService(_isar);
+    await service.initDefaultBook();
+    final books = await service.getActiveBooks();
+    final defaultBook = await service.getDefaultBook();
+    if (!mounted) return;
+    setState(() {
+      _books = books;
+      // If caller passed a specific bookId, honor it; otherwise fall back
+      // to the user's default book.
+      if (widget.bookId != null) {
+        _currentBook = books.firstWhere(
+          (b) => b.id == widget.bookId,
+          orElse: () => defaultBook ?? (books.isNotEmpty ? books.first : _fallbackBook()),
+        );
+      } else {
+        _currentBook = defaultBook ?? (books.isNotEmpty ? books.first : null);
+      }
+    });
+  }
+
+  JiveBook _fallbackBook() {
+    return JiveBook()
+      ..key = BookService.defaultBookKey
+      ..name = '默认账本'
+      ..iconName = 'book'
+      ..currency = 'CNY'
+      ..isDefault = true;
+  }
+
+  Future<void> _showBookPicker() async {
+    if (_books.isEmpty) return;
+    final picked = await showModalBottomSheet<JiveBook>(
+      context: context,
+      backgroundColor: JiveTheme.cardColor(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text(
+                '选择账本',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: JiveTheme.secondaryTextColor(ctx),
+                ),
+              ),
+            ),
+            ..._books.map((book) {
+              final isSelected = book.id == _currentBook?.id;
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: JiveTheme.primaryGreen.withValues(alpha: 0.15),
+                  child: Icon(
+                    Icons.book_outlined,
+                    size: 20,
+                    color: JiveTheme.primaryGreen,
+                  ),
+                ),
+                title: Text(book.name),
+                subtitle: book.isDefault ? const Text('默认') : null,
+                trailing: isSelected
+                    ? Icon(Icons.check, color: JiveTheme.primaryGreen)
+                    : null,
+                onTap: () => Navigator.pop(ctx, book),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _currentBook = picked);
+    }
   }
 
   /// 加载跨币种转账的汇率
@@ -1164,7 +1250,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           _txType == TransactionType.expense && _excludeFromBudget
       ..smartTagKeys = List<String>.from(tx.smartTagKeys)
       ..timestamp = _selectedTime
-      ..bookId = widget.bookId ?? tx.bookId;
+      ..bookId = _currentBook?.id ?? widget.bookId ?? tx.bookId;
 
     if (!_isEditing) {
       final matched = await TagRuleService(_isar).resolveMatchingTags(tx);
@@ -1364,6 +1450,43 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             onPressed: () => Navigator.pop(context, _hasDataChanges),
           ),
           actions: [
+            if (_currentBook != null)
+              InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: _showBookPicker,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.book_outlined,
+                        size: 16,
+                        color: JiveTheme.secondaryTextColor(context),
+                      ),
+                      const SizedBox(width: 4),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 90),
+                        child: Text(
+                          _currentBook!.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: JiveTheme.textColor(context),
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_drop_down,
+                        size: 18,
+                        color: JiveTheme.secondaryTextColor(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             if (_showCategories)
               IconButton(
                 icon: Icon(
