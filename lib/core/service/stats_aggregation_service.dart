@@ -116,6 +116,8 @@ class StatsAggregationService {
       final type = tx.type ?? 'expense';
       if (type == 'transfer') continue;
       if (tx.amount <= 0) continue;
+      // 账单标记：不计入收支 -> 跳过统计汇总
+      if (tx.excludeFromTotals) continue;
       count++;
 
       final account = tx.accountId != null ? accountById[tx.accountId] : null;

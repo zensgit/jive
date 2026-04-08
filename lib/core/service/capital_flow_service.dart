@@ -90,6 +90,7 @@ class CapitalFlowService {
     for (final tx in txs) {
       final type = tx.type ?? 'expense';
       if (tx.amount <= 0) continue;
+      if (tx.excludeFromTotals) continue;
 
       // Currency conversion
       final account =

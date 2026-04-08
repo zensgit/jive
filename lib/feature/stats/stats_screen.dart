@@ -178,6 +178,8 @@ class _StatsScreenState extends State<StatsScreen> {
   bool _includeInStats(JiveTransaction tx, bool showIncome) {
     final type = tx.type ?? "expense";
     if (type == "transfer") return false;
+    // 账单标记：不计入收支 -> 从统计中排除
+    if (tx.excludeFromTotals) return false;
     if (showIncome) return type == "income";
     return type == "expense";
   }

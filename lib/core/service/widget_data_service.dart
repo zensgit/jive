@@ -249,6 +249,7 @@ class WidgetDataService {
     double totalIncome = 0;
 
     for (final tx in transactions) {
+      if (tx.excludeFromTotals) continue;
       if (tx.type == 'expense') {
         final day = tx.timestamp.day;
         dailyExpense[day] = (dailyExpense[day] ?? 0) + tx.amount;
