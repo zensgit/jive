@@ -2327,18 +2327,28 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Future<void> _showTimePicker() async {
-    final picked = await showTimePicker(
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedTime,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (pickedDate == null || !mounted) return;
+    final pickedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_selectedTime),
     );
-    if (picked != null && mounted) {
-      setState(() {
-        _selectedTime = DateTime(
-          _selectedTime.year, _selectedTime.month, _selectedTime.day,
-          picked.hour, picked.minute,
-        );
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _selectedTime = DateTime(
+        pickedDate.year,
+        pickedDate.month,
+        pickedDate.day,
+        pickedTime?.hour ?? _selectedTime.hour,
+        pickedTime?.minute ?? _selectedTime.minute,
+      );
+    });
   }
 
   Future<void> _showTagPicker() async {

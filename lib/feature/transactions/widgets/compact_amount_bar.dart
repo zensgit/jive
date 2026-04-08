@@ -49,7 +49,13 @@ class CompactAmountBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = JiveTheme.isDark(context);
     final symbol = CurrencyDefaults.getSymbol(currency);
-    final timeText = DateFormat('HH:mm').format(selectedTime);
+    final now = DateTime.now();
+    final isToday = selectedTime.year == now.year &&
+        selectedTime.month == now.month &&
+        selectedTime.day == now.day;
+    final timeText = isToday
+        ? DateFormat('HH:mm').format(selectedTime)
+        : DateFormat('MM-dd HH:mm').format(selectedTime);
     final hasNote = note != null && note!.isNotEmpty;
 
     return Container(
