@@ -103,7 +103,7 @@ class QuickActionExecutor {
     final params = TransactionEntryParams(
       source: TransactionEntrySource.quickAction,
       sourceLabel: '来自快速动作「${action.name}」',
-      quickActionId: action.id?.toString(),
+      quickActionId: action.id.toString(),
       prefillAmount: action.defaultAmount,
       prefillType: action.transactionType,
       prefillCategoryKey: action.categoryKey,

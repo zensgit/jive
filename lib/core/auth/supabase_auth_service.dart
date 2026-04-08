@@ -201,7 +201,7 @@ class SupabaseAuthService extends AuthService {
     } on AuthException catch (e) {
       if (kDebugMode) debugPrint('SupabaseAuth: OAuth sign-in failed (${e.statusCode})');
       throw OAuthAuthFlowException(_mapOAuthError(e, provider: provider));
-    } on PlatformException catch (e) {
+    } on PlatformException {
       if (kDebugMode) debugPrint('SupabaseAuth: OAuth launch failed');
       throw OAuthAuthFlowException('无法打开 ${provider.label} 登录页面，请检查系统浏览器后重试');
     }

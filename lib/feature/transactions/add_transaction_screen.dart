@@ -8,7 +8,6 @@ import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../core/design_system/date_quick_selector.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/budget_model.dart';
@@ -18,7 +17,6 @@ import '../../core/database/tag_model.dart';
 import '../../core/database/project_model.dart';
 import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
-import '../../core/service/category_icon_style.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/budget_pref_service.dart';
 import '../../core/service/budget_service.dart';
@@ -45,18 +43,14 @@ import '../category/category_search_delegate.dart';
 import '../stats/stats_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
-import 'note_field_with_chips.dart';
 import 'widgets/account_selector_section.dart';
 import 'widgets/compact_amount_bar.dart';
 import 'widgets/quick_field_pills_bar.dart';
-import 'widgets/transaction_amount_display.dart';
 import 'widgets/transaction_calculator_key.dart';
 import 'widgets/transaction_field_chips.dart';
 import 'widgets/transaction_misc_widgets.dart';
 import 'widgets/transaction_panels.dart';
-import 'widgets/transaction_source_banner.dart';
 import 'widgets/transaction_type_selector.dart';
-import 'transaction_entry_params.dart';
 
 enum TransactionType { expense, income, transfer }
 
@@ -84,25 +78,6 @@ class AddTransactionScreen extends StatefulWidget {
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
   static const List<String> _accountGroupOrder = [...AccountService.groupOrder];
-  static const List<String> _expenseNoteSuggestions = [
-    '早餐',
-    '午餐',
-    '晚餐',
-    '交通',
-    '打车',
-    '网购',
-    '房租',
-    '水电',
-  ];
-  static const List<String> _incomeNoteSuggestions = [
-    '工资',
-    '报销',
-    '奖金',
-    '退款',
-    '理财',
-    '兼职',
-  ];
-  static const List<String> _transferNoteSuggestions = ['还款', '储蓄', '调拨', '借还'];
   static const String _noteTagUsageKeyPrefix = 'note_tag_usage_v1_';
 
   // ── Voice recognition state ──
@@ -159,7 +134,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final Map<String, String> _searchKeyCache = {};
   final TextEditingController _inlineSearchController = TextEditingController();
   final FocusNode _inlineSearchFocus = FocusNode();
-  final DateFormat _dateTimeFormat = DateFormat('MM-dd HH:mm');
   String _searchQuery = "";
   final Map<String, List<String>> _searchTokenCache = {};
   final Map<String, List<String>> _systemTokenCache = {};
@@ -556,15 +530,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   bool get _showCategories => _txType != TransactionType.transfer;
-
-  String _currentCategoryLabel() {
-    if (_txType == TransactionType.transfer) return "转账";
-    final parentName = _selectedParent?.name ?? "";
-    final subName = _selectedSub?.name ?? "";
-    if (parentName.isEmpty) return "";
-    if (subName.isEmpty) return parentName;
-    return "$parentName · $subName";
-  }
 
   Future<void> _switchType(TransactionType type) async {
     if (_txType == type) return;
@@ -2979,54 +2944,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ..addAll(loaded);
     });
   }
-
-  Future<void> _persistNoteTagUsage(TransactionType type) async {
-    final prefs = await SharedPreferences.getInstance();
-    final usage = _noteTagUsage[type];
-    final key = '$_noteTagUsageKeyPrefix${type.name}';
-    if (usage == null || usage.isEmpty) {
-      await prefs.remove(key);
-      return;
-    }
-    await prefs.setString(key, jsonEncode(usage));
-  }
-
-  void _trackNoteTagUsage(TransactionType type, String tag) {
-    final usage = _noteTagUsage.putIfAbsent(type, () => {});
-    usage[tag] = (usage[tag] ?? 0) + 1;
-    _persistNoteTagUsage(type);
-    if (mounted) {
-      setState(() {
-        // trigger rebuild after note tag usage updated
-      });
-    }
-  }
-
-  List<String> _noteSuggestionsForType(TransactionType type) {
-    final base = switch (type) {
-      TransactionType.income => _incomeNoteSuggestions,
-      TransactionType.transfer => _transferNoteSuggestions,
-      _ => _expenseNoteSuggestions,
-    };
-    final usage = _noteTagUsage[type];
-    if (usage == null || usage.isEmpty) return base;
-    final order = <String, int>{
-      for (var i = 0; i < base.length; i++) base[i]: i,
-    };
-    final sorted = [...base];
-    sorted.sort((a, b) {
-      final countA = usage[a] ?? 0;
-      final countB = usage[b] ?? 0;
-      if (countA != countB) {
-        return countB.compareTo(countA);
-      }
-      return (order[a] ?? 0).compareTo(order[b] ?? 0);
-    });
-    return sorted;
-  }
-
-
-
 
 }
 

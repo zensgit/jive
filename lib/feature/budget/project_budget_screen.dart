@@ -39,8 +39,6 @@ class _ProjectBudgetScreenState extends State<ProjectBudgetScreen> {
     setState(() => _loading = true);
     final isar = await _ensureIsar();
     final projectService = ProjectService(isar);
-    final currencyService = CurrencyService(isar);
-    final budgetService = BudgetService(isar, currencyService);
 
     final projects = await projectService.getActiveProjects();
 
