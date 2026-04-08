@@ -39,6 +39,16 @@ where book_key is null or nullif(btrim(book_key), '') is null;
 alter table public.budgets
   alter column book_key set not null;
 
+alter table public.shared_ledgers
+  add column if not exists workspace_key text;
+
+alter table public.shared_ledgers
+  alter column workspace_key set default 'book_default';
+
+update public.shared_ledgers
+set workspace_key = 'book_default'
+where workspace_key is null or nullif(btrim(workspace_key), '') is null;
+
 create index if not exists idx_transactions_book_key
   on public.transactions(book_key);
 
@@ -47,6 +57,9 @@ create index if not exists idx_accounts_book_key
 
 create index if not exists idx_budgets_book_key
   on public.budgets(book_key);
+
+create index if not exists idx_shared_ledgers_owner_workspace
+  on public.shared_ledgers(owner_user_id, workspace_key, updated_at);
 
 drop policy if exists "Users can read own transactions" on public.transactions;
 drop policy if exists "Users can insert own transactions" on public.transactions;
