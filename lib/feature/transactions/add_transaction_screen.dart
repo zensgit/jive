@@ -49,6 +49,7 @@ import '../tag/tag_picker_sheet.dart';
 import 'widgets/account_selector_section.dart';
 import 'widgets/compact_amount_bar.dart';
 import 'widgets/quick_field_pills_bar.dart';
+import 'widgets/transaction_datetime_sheet.dart';
 import 'widgets/transaction_calculator_key.dart';
 import 'widgets/transaction_field_chips.dart';
 import 'widgets/transaction_misc_widgets.dart';
@@ -2513,28 +2514,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Future<void> _showTimePicker() async {
-    final now = DateTime.now();
-    final pickedDate = await showDatePicker(
-      context: context,
-      initialDate: _selectedTime,
-      firstDate: DateTime(now.year - 5),
-      lastDate: DateTime(now.year + 1),
+    final picked = await showTransactionDateTimeSheet(
+      context,
+      initial: _selectedTime,
     );
-    if (pickedDate == null || !mounted) return;
-    final pickedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_selectedTime),
-    );
-    if (!mounted) return;
-    setState(() {
-      _selectedTime = DateTime(
-        pickedDate.year,
-        pickedDate.month,
-        pickedDate.day,
-        pickedTime?.hour ?? _selectedTime.hour,
-        pickedTime?.minute ?? _selectedTime.minute,
-      );
-    });
+    if (picked != null && mounted) {
+      setState(() => _selectedTime = picked);
+    }
   }
 
   Future<void> _showTagPicker() async {
