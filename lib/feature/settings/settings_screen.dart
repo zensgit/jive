@@ -151,7 +151,7 @@ class SettingsScreen extends StatelessWidget {
                 color: JiveTheme.primaryGreen,
               ),
               title: const Text('云同步设置'),
-              subtitle: const Text('云端备份与多设备同步'),
+              subtitle: const Text('登录后云端同步与多设备访问'),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
