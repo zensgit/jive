@@ -1,4 +1,7 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import {
+  createClient,
+  type SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2.49.8";
 import {
   buildNotificationPlan,
   buildQueueRows,
@@ -101,7 +104,7 @@ Deno.serve(async (req) => {
 });
 
 async function buildPlan(
-  supabase: any,
+  supabase: SupabaseClient,
   input: {
     action: ReturnType<typeof normalizeNotificationAction>;
     body: SendNotificationRequest;
@@ -194,7 +197,7 @@ async function buildPlan(
 }
 
 async function fetchSubscriptions(
-  supabase: any,
+  supabase: SupabaseClient,
   configureQuery: (query: any) => any,
 ): Promise<SubscriptionRecord[]> {
   const baseQuery = supabase
@@ -212,7 +215,7 @@ async function fetchSubscriptions(
 }
 
 async function fetchActiveNoticeUserIds(
-  supabase: any,
+  supabase: SupabaseClient,
 ): Promise<string[]> {
   const { data, error } = await supabase
     .from("user_subscriptions")
@@ -236,7 +239,7 @@ async function fetchActiveNoticeUserIds(
 }
 
 async function enqueueNotificationJobs(
-  supabase: any,
+  supabase: SupabaseClient,
   queueRows: ReturnType<typeof buildQueueRows>,
 ): Promise<number> {
   let queued = 0;
