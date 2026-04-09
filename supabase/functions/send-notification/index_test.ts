@@ -137,6 +137,27 @@ Deno.test("buildSystemNoticeJobs targets distinct user ids and dedupes repeated 
   assertEquals(deduped.length, 2);
 });
 
+Deno.test("buildSystemNoticeJobs hashes notice keys incrementally for large broadcasts", () => {
+  const now = new Date("2026-04-08T10:00:00.000Z");
+  const userIds = Array.from({ length: 5000 }, (_, index) => `user-${index}`);
+
+  const jobs = buildSystemNoticeJobs(
+    {
+      title: "系统升级",
+      body: "今晚 23:00 进行维护",
+      user_ids: userIds,
+    },
+    now,
+  );
+
+  assertEquals(jobs.length, userIds.length);
+  assertEquals(
+    jobs[0].payload.notice_key,
+    jobs[jobs.length - 1].payload.notice_key,
+  );
+  assertFalse(String(jobs[0].payload.notice_key).length === 0);
+});
+
 Deno.test("buildNotificationPlan and buildQueueRows preserve job shape", () => {
   const now = new Date("2026-04-08T10:00:00.000Z");
   const jobs = buildNotificationPlan(

@@ -281,17 +281,39 @@ function buildNoticeKey(
   body: string,
   userIds: string[],
 ): string {
-  const raw = explicitKey?.trim() && explicitKey.trim().length > 0
-    ? explicitKey.trim()
-    : `${title}|${body}|${userIds.join(",")}`;
-  return hashString(raw);
+  const trimmedExplicitKey = explicitKey?.trim();
+  if (trimmedExplicitKey != null && trimmedExplicitKey.length > 0) {
+    return hashString(trimmedExplicitKey);
+  }
+
+  let hash = hashStringPart(title);
+  hash = hashStringPart("|", hash);
+  hash = hashStringPart(body, hash);
+  hash = hashStringPart("|", hash);
+
+  for (let index = 0; index < userIds.length; index += 1) {
+    if (index > 0) {
+      hash = hashStringPart(",", hash);
+    }
+    hash = hashStringPart(userIds[index], hash);
+  }
+
+  return finalizeHash(hash);
 }
 
 function hashString(value: string): string {
-  let hash = 0x811c9dc5;
+  return finalizeHash(hashStringPart(value));
+}
+
+function hashStringPart(value: string, seed = 0x811c9dc5): number {
+  let hash = seed;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193);
   }
-  return (hash >>> 0).toString(36);
+  return hash >>> 0;
+}
+
+function finalizeHash(hash: number): string {
+  return hash.toString(36);
 }
