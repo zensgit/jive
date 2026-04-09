@@ -22,16 +22,9 @@ create table if not exists public.analytics_events (
 
 alter table public.analytics_events enable row level security;
 
-create policy "analytics_events_insert_client"
-  on public.analytics_events for insert
-  with check (
-    (auth.uid() = user_id)
-    or (
-      auth.uid() is null
-      and user_id is null
-      and nullif(btrim(device_id), '') is not null
-    )
-  );
+-- Beta ingestion goes through the analytics Edge Function so tokens and
+-- event payloads are normalized in one place. Service-role writes used by
+-- the function bypass RLS, while direct client inserts stay disabled.
 
 create policy "analytics_events_select_own"
   on public.analytics_events for select
