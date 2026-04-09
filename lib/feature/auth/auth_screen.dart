@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/auth/guest_auth_service.dart';
-import '../../core/auth/supabase_auth_service.dart';
 import '../../core/design_system/theme.dart';
 
 enum _AuthMode { email, phone }
@@ -99,21 +98,6 @@ class _AuthScreenState extends State<AuthScreen> {
 
       setState(() {
         _error = _isLogin ? '登录未完成，请稍后重试' : '注册未完成，请稍后重试';
-      });
-    } on EmailConfirmationRequiredException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _isLogin = true;
-        _error = null;
-        _notice = e.message;
-      });
-      _passwordController.clear();
-    } on EmailAuthFlowException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.message;
       });
     } catch (_) {
       if (!mounted) return;
@@ -265,13 +249,6 @@ class _AuthScreenState extends State<AuthScreen> {
         _notice = result is AuthLoggedIn
             ? null
             : '已打开 ${provider.label} 登录，请完成授权后返回应用';
-      });
-    } on OAuthAuthFlowException catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.message;
-        _notice = null;
       });
     } catch (_) {
       if (!mounted) return;
