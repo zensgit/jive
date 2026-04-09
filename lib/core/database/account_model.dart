@@ -1,5 +1,7 @@
 import 'package:isar/isar.dart';
 
+import '../sync/sync_key_generator.dart';
+
 part 'account_model.g.dart';
 
 @collection
@@ -28,6 +30,9 @@ class JiveAccount {
   double? creditLimit;
 
   double openingBalance = 0;
+
+  @Index()
+  String syncKey = SyncKeyGenerator.generate('acct'); // 稳定云端同步标识
 
   late DateTime updatedAt;
   @Index()
