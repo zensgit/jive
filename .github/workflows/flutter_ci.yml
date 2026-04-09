@@ -2,6 +2,12 @@ name: Flutter CI
 
 on:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
   push:
     branches:
       - main
@@ -9,6 +15,11 @@ on:
     inputs:
       run_android_e2e:
         description: "Run Android integration_test on emulator"
+        required: false
+        type: boolean
+        default: false
+      run_saas_wave0_smoke:
+        description: "Run SaaS Wave 0 smoke lane"
         required: false
         type: boolean
         default: false
@@ -44,6 +55,32 @@ jobs:
 
       - name: Test
         run: flutter test
+
+  saas_wave0_smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_saas_wave0_smoke == 'true') ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'saas'))
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.5
+          channel: stable
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run SaaS Wave 0 smoke lane
+        run: bash scripts/run_saas_wave0_smoke.sh
 
   android_integration_test:
     runs-on: ubuntu-latest
