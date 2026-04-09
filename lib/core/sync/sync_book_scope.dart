@@ -12,13 +12,11 @@ class SyncBookScope {
   });
 
   String transactionBookKey(int? bookId) {
-    if (bookId == null) return defaultBookKey;
-    return bookKeyById[bookId] ?? defaultBookKey;
+    return _bookKeyOrDefault(bookId);
   }
 
   String accountBookKey(int? bookId) {
-    if (bookId == null) return defaultBookKey;
-    return bookKeyById[bookId] ?? defaultBookKey;
+    return _bookKeyOrDefault(bookId);
   }
 
   String? budgetBookKey(int? bookId) {
@@ -27,19 +25,11 @@ class SyncBookScope {
   }
 
   int? transactionBookId(String? bookKey, {int? fallbackBookId}) {
-    final normalized = _normalize(bookKey);
-    if (normalized == null) {
-      return fallbackBookId ?? defaultBookId;
-    }
-    return bookIdByKey[normalized] ?? fallbackBookId ?? defaultBookId;
+    return _bookIdOrDefault(bookKey, fallbackBookId: fallbackBookId);
   }
 
   int? accountBookId(String? bookKey, {int? fallbackBookId}) {
-    final normalized = _normalize(bookKey);
-    if (normalized == null) {
-      return fallbackBookId ?? defaultBookId;
-    }
-    return bookIdByKey[normalized] ?? fallbackBookId ?? defaultBookId;
+    return _bookIdOrDefault(bookKey, fallbackBookId: fallbackBookId);
   }
 
   int? budgetBookId(String? bookKey, {int? fallbackBookId}) {
@@ -50,6 +40,19 @@ class SyncBookScope {
 
   String sharedLedgerWorkspaceKey(String? workspaceKey) {
     return _normalize(workspaceKey) ?? defaultBookKey;
+  }
+
+  String _bookKeyOrDefault(int? bookId) {
+    if (bookId == null) return defaultBookKey;
+    return bookKeyById[bookId] ?? defaultBookKey;
+  }
+
+  int? _bookIdOrDefault(String? bookKey, {int? fallbackBookId}) {
+    final normalized = _normalize(bookKey);
+    if (normalized == null) {
+      return fallbackBookId ?? defaultBookId;
+    }
+    return bookIdByKey[normalized] ?? fallbackBookId ?? defaultBookId;
   }
 
   String? _normalize(String? value) {
