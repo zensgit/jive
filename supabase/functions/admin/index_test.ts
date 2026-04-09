@@ -1,6 +1,15 @@
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import {
+  assertEquals,
+  assertFalse,
+  assertThrows,
+} from "https://deno.land/std@0.224.0/assert/mod.ts";
 
-import { latestSubscriptionByUser } from "./index.ts";
+import {
+  constantTimeEquals,
+  corsHeadersForOrigin,
+  latestSubscriptionByUser,
+  parseAdminRequestBodyText,
+} from "./index.ts";
 
 Deno.test("latestSubscriptionByUser keeps the first row for each user", () => {
   const latest = latestSubscriptionByUser([
@@ -38,4 +47,94 @@ Deno.test("latestSubscriptionByUser keeps the first row for each user", () => {
 
   assertEquals(latest.get("user-1")?.platform, "admin_override");
   assertEquals(latest.get("user-2")?.entitlement_tier, "paid");
+});
+
+Deno.test("constantTimeEquals matches exact token only", () => {
+  assertEquals(constantTimeEquals("secret-token", "secret-token"), true);
+  assertFalse(constantTimeEquals("secret-token", "secret-token-x"));
+  assertFalse(constantTimeEquals("secret-token", "SECRET-token"));
+});
+
+Deno.test("corsHeadersForOrigin only reflects configured origins", () => {
+  const allowed = new Set([
+    "https://admin.example.com",
+    "http://localhost:3000",
+  ]);
+
+  assertEquals(
+    corsHeadersForOrigin("https://admin.example.com", allowed)[
+      "Access-Control-Allow-Origin"
+    ],
+    "https://admin.example.com",
+  );
+  assertEquals(
+    corsHeadersForOrigin("https://evil.example.com", allowed)[
+      "Access-Control-Allow-Origin"
+    ],
+    undefined,
+  );
+});
+
+Deno.test("parseAdminRequestBodyText validates supported admin actions", () => {
+  assertEquals(
+    parseAdminRequestBodyText(
+      JSON.stringify({
+        action: "set_tier",
+        user_id: "user-1",
+        plan: "subscriber",
+        status: "active",
+        expires_at: null,
+      }),
+    ),
+    {
+      action: "set_tier",
+      user_id: "user-1",
+      plan: "subscriber",
+      status: "active",
+      expires_at: null,
+    },
+  );
+
+  assertEquals(
+    parseAdminRequestBodyText(
+      JSON.stringify({
+        action: "clear_override",
+        user_id: "user-2",
+      }),
+    ),
+    {
+      action: "clear_override",
+      user_id: "user-2",
+    },
+  );
+});
+
+Deno.test("parseAdminRequestBodyText rejects invalid json and invalid fields", () => {
+  assertThrows(
+    () => parseAdminRequestBodyText("{"),
+    Error,
+    "invalid_json_body",
+  );
+  assertThrows(
+    () =>
+      parseAdminRequestBodyText(
+        JSON.stringify({
+          action: "set_tier",
+          plan: "enterprise",
+        }),
+      ),
+    Error,
+    "invalid_plan",
+  );
+  assertThrows(
+    () =>
+      parseAdminRequestBodyText(
+        JSON.stringify({
+          action: "clear_override",
+          user_id: 123,
+        }),
+      ),
+    Error,
+    "invalid_request_body",
+  );
 });
