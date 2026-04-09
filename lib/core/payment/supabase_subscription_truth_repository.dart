@@ -69,41 +69,79 @@ class SupabaseSubscriptionTruthRepository
     }
 
     try {
-      final response = await _resolvedClient.functions.invoke(
-        'verify-subscription',
-        body: {
-          'platform': 'google_play',
-          'product_id': productId,
-          'purchase_token': purchaseToken,
-          if (orderId != null && orderId.isNotEmpty) 'order_id': orderId,
-          if (transactionDateMs != null && transactionDateMs.isNotEmpty)
-            'transaction_date_ms': transactionDateMs,
-        },
-      );
+      final response = await _invokeVerifySubscription({
+        'platform': 'google_play',
+        'product_id': productId,
+        'purchase_token': purchaseToken,
+        if (orderId != null && orderId.isNotEmpty) 'order_id': orderId,
+        if (transactionDateMs != null && transactionDateMs.isNotEmpty)
+          'transaction_date_ms': transactionDateMs,
+      });
 
-      final data = response.data;
-      if (data is! Map) {
-        return const SubscriptionTruthFetchResult.unavailable(
-          'invalid_verify_response',
-        );
-      }
-
-      final map = Map<String, dynamic>.from(data);
-      final subscription = map['subscription'];
-      if (subscription is Map) {
-        return SubscriptionTruthFetchResult.authoritative(
-          snapshot: TrustedSubscriptionSnapshot.fromRow(
-            Map<String, dynamic>.from(subscription),
-          ),
-        );
-      }
-
-      return SubscriptionTruthFetchResult.unavailable(
-        map['error']?.toString() ?? 'verification_failed',
-      );
+      return _parseVerifyResponse(response.data);
     } catch (e) {
       debugPrint('SupabaseSubscriptionTruthRepository.verify failed: $e');
       return SubscriptionTruthFetchResult.unavailable(e.toString());
     }
+  }
+
+  @override
+  Future<SubscriptionTruthFetchResult> verifyAppleAppStorePurchase({
+    required String productId,
+    required String receiptData,
+    String? orderId,
+  }) async {
+    if (!SyncConfig.isConfigured) {
+      return const SubscriptionTruthFetchResult.unavailable(
+        'supabase_not_configured',
+      );
+    }
+
+    final userId = _resolvedClient.auth.currentUser?.id;
+    if (userId == null) {
+      return const SubscriptionTruthFetchResult.unavailable('auth_required');
+    }
+
+    try {
+      final response = await _invokeVerifySubscription({
+        'platform': 'apple_app_store',
+        'product_id': productId,
+        'receipt_data': receiptData,
+        if (orderId != null && orderId.isNotEmpty) 'order_id': orderId,
+      });
+
+      return _parseVerifyResponse(response.data);
+    } catch (e) {
+      debugPrint('SupabaseSubscriptionTruthRepository.verify failed: $e');
+      return SubscriptionTruthFetchResult.unavailable(e.toString());
+    }
+  }
+
+  Future<FunctionResponse> _invokeVerifySubscription(
+    Map<String, Object?> body,
+  ) {
+    return _resolvedClient.functions.invoke('verify-subscription', body: body);
+  }
+
+  SubscriptionTruthFetchResult _parseVerifyResponse(dynamic data) {
+    if (data is! Map) {
+      return const SubscriptionTruthFetchResult.unavailable(
+        'invalid_verify_response',
+      );
+    }
+
+    final map = Map<String, dynamic>.from(data);
+    final subscription = map['subscription'];
+    if (subscription is Map) {
+      return SubscriptionTruthFetchResult.authoritative(
+        snapshot: TrustedSubscriptionSnapshot.fromRow(
+          Map<String, dynamic>.from(subscription),
+        ),
+      );
+    }
+
+    return SubscriptionTruthFetchResult.unavailable(
+      map['error']?.toString() ?? 'verification_failed',
+    );
   }
 }

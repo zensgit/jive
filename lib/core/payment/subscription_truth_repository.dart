@@ -9,4 +9,10 @@ abstract class SubscriptionTruthRepository {
     String? orderId,
     String? transactionDateMs,
   });
+
+  Future<SubscriptionTruthFetchResult> verifyAppleAppStorePurchase({
+    required String productId,
+    required String receiptData,
+    String? orderId,
+  });
 }
