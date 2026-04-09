@@ -12,6 +12,7 @@ class FakeAuthService extends AuthService {
   String? lastSmsPhone;
   String? lastPhoneSignInPhone;
   String? lastPhoneSignInCode;
+  String? lastPasswordResetEmail;
   AuthProvider? lastProvider;
   int smsRequestCount = 0;
   bool phoneSignInSucceeds = false;
@@ -25,6 +26,11 @@ class FakeAuthService extends AuthService {
   @override
   Future<AuthState> registerWithEmail(String email, String password) async {
     return _state;
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    lastPasswordResetEmail = email;
   }
 
   @override
@@ -103,6 +109,20 @@ void main() {
     expect(auth.lastPhoneSignInPhone, '13800138000');
     expect(auth.lastPhoneSignInCode, '123456');
     expect(auth.isLoggedIn, isTrue);
+  });
+
+  testWidgets('email auth can request password reset', (tester) async {
+    final auth = FakeAuthService();
+
+    await tester.pumpWidget(buildScreen(auth));
+    await tester.enterText(find.byType(TextField).first, 'user@example.com');
+    final resetButton = find.text('忘记密码？发送重置邮件');
+    await tester.ensureVisible(resetButton);
+    await tester.tap(resetButton);
+    await tester.pumpAndSettle();
+
+    expect(auth.lastPasswordResetEmail, 'user@example.com');
+    expect(find.text('重置邮件已发送，请查收邮箱并按邮件提示操作'), findsOneWidget);
   });
 
   testWidgets('apple sign-in button calls provider auth', (tester) async {
