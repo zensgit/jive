@@ -89,6 +89,7 @@ class FakeSubscriptionTruthRepository implements SubscriptionTruthRepository {
   FakeSubscriptionTruthRepository({
     SubscriptionTruthFetchResult? fetchResult,
     SubscriptionTruthFetchResult? verifyResult,
+    SubscriptionTruthFetchResult? appleVerifyResult,
   }) : fetchResult =
            fetchResult ??
            const SubscriptionTruthFetchResult.authoritative(
@@ -100,10 +101,14 @@ class FakeSubscriptionTruthRepository implements SubscriptionTruthRepository {
              ),
            ),
        verifyResult =
-           verifyResult ?? const SubscriptionTruthFetchResult.unavailable();
+           verifyResult ?? const SubscriptionTruthFetchResult.unavailable(),
+       appleVerifyResult =
+           appleVerifyResult ??
+           const SubscriptionTruthFetchResult.unavailable();
 
   SubscriptionTruthFetchResult fetchResult;
   SubscriptionTruthFetchResult verifyResult;
+  SubscriptionTruthFetchResult appleVerifyResult;
   int fetchCallCount = 0;
 
   @override
@@ -120,6 +125,15 @@ class FakeSubscriptionTruthRepository implements SubscriptionTruthRepository {
     String? transactionDateMs,
   }) async {
     return verifyResult;
+  }
+
+  @override
+  Future<SubscriptionTruthFetchResult> verifyAppleAppStorePurchase({
+    required String productId,
+    required String receiptData,
+    String? orderId,
+  }) async {
+    return appleVerifyResult;
   }
 }
 
