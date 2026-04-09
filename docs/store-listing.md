@@ -99,7 +99,7 @@ Key Features:
 👨‍👩‍👧‍👦 Family Sharing
 • Shared family ledgers with invite codes
 • Multi-user collaborative bookkeeping
-• Cloud sync across devices after sign-in and with network access
+• Multi-device sync after sign-in and with network access
 
 🔒 Secure & Reliable
 • PIN + gesture pattern lock
