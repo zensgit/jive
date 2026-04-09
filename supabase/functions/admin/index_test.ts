@@ -9,6 +9,7 @@ import {
   corsHeadersForOrigin,
   latestSubscriptionByUser,
   parseAdminRequestBodyText,
+  summarizeLatestSubscriptionsFromRows,
 } from "./index.ts";
 
 Deno.test("latestSubscriptionByUser keeps the first row for each user", () => {
@@ -47,6 +48,56 @@ Deno.test("latestSubscriptionByUser keeps the first row for each user", () => {
 
   assertEquals(latest.get("user-1")?.platform, "admin_override");
   assertEquals(latest.get("user-2")?.entitlement_tier, "paid");
+});
+
+Deno.test("summarizeLatestSubscriptionsFromRows counts only the first row per user", () => {
+  const stats = summarizeLatestSubscriptionsFromRows([
+    {
+      user_id: "user-1",
+      plan: "subscriber",
+      status: "active",
+      platform: "admin_override",
+      entitlement_tier: "subscriber",
+      expires_at: null,
+      updated_at: "2026-04-08T10:00:00.000Z",
+      verification_source: "admin_api",
+    },
+    {
+      user_id: "user-1",
+      plan: "paid",
+      status: "expired",
+      platform: "google_play",
+      entitlement_tier: "paid",
+      expires_at: null,
+      updated_at: "2026-04-07T10:00:00.000Z",
+      verification_source: "google_play_api",
+    },
+    {
+      user_id: "user-2",
+      plan: "paid",
+      status: "grace",
+      platform: "google_play",
+      entitlement_tier: "paid",
+      expires_at: null,
+      updated_at: "2026-04-08T09:00:00.000Z",
+      verification_source: "google_play_api",
+    },
+    {
+      user_id: "user-3",
+      plan: "subscriber",
+      status: "revoked",
+      platform: "app_store",
+      entitlement_tier: "subscriber",
+      expires_at: null,
+      updated_at: "2026-04-08T08:00:00.000Z",
+      verification_source: "app_store_api",
+    },
+  ]);
+
+  assertEquals(stats.admin_overrides, 1);
+  assertEquals(stats.active_subscribers, 1);
+  assertEquals(stats.active_paid, 1);
+  assertEquals(stats.expired_or_revoked, 1);
 });
 
 Deno.test("constantTimeEquals matches exact token only", () => {

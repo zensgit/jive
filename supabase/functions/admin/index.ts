@@ -142,48 +142,14 @@ async function handlePostRequest(
 
 async function buildSummary(adminClient: SupabaseClient) {
   const userStats = await summarizeAuthUsers(adminClient, 500);
-  const subscriptions = await fetchSubscriptions(adminClient);
-  const latestByUser = latestSubscriptionByUser(subscriptions);
-
-  let activePaid = 0;
-  let activeSubscribers = 0;
-  let overrides = 0;
-  let expired = 0;
-
-  for (const subscription of latestByUser.values()) {
-    if (subscription.platform === "admin_override") {
-      overrides += 1;
-    }
-    if (
-      subscription.status === "expired" || subscription.status === "revoked"
-    ) {
-      expired += 1;
-    }
-    if (
-      (subscription.status === "active" || subscription.status === "grace") &&
-      subscription.entitlement_tier === "paid"
-    ) {
-      activePaid += 1;
-    }
-    if (
-      (subscription.status === "active" || subscription.status === "grace") &&
-      subscription.entitlement_tier === "subscriber"
-    ) {
-      activeSubscribers += 1;
-    }
-  }
+  const subscriptionStats = await summarizeLatestSubscriptions(adminClient, 500);
 
   return {
     users: {
       total: userStats.total,
       recent_signups_7d: userStats.recentSignups7d,
     },
-    subscriptions: {
-      active_paid: activePaid,
-      active_subscribers: activeSubscribers,
-      expired_or_revoked: expired,
-      admin_overrides: overrides,
-    },
+    subscriptions: subscriptionStats,
   };
 }
 
@@ -334,6 +300,55 @@ async function fetchSubscriptions(adminClient: SupabaseClient, userId?: string) 
   return ((data ?? []) as UserSubscriptionRow[]);
 }
 
+async function summarizeLatestSubscriptions(
+  adminClient: SupabaseClient,
+  pageSize: number,
+) {
+  let from = 0;
+  let activePaid = 0;
+  let activeSubscribers = 0;
+  let overrides = 0;
+  let expired = 0;
+  const seenUsers = new Set<string>();
+
+  while (true) {
+    const { data, error } = await adminClient
+      .from("user_subscriptions")
+      .select(
+        "user_id,plan,status,platform,entitlement_tier,expires_at,updated_at,verification_source",
+      )
+      .order("updated_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+
+    if (error != null) {
+      console.error("admin summarizeLatestSubscriptions failed", error);
+      throw new HttpError(500, "subscription_query_failed");
+    }
+
+    const batch = (data ?? []) as UserSubscriptionRow[];
+    const batchStats = summarizeLatestSubscriptionsFromRows(
+      batch,
+      seenUsers,
+    );
+    activePaid += batchStats.active_paid;
+    activeSubscribers += batchStats.active_subscribers;
+    overrides += batchStats.admin_overrides;
+    expired += batchStats.expired_or_revoked;
+
+    if (batch.length < pageSize) {
+      break;
+    }
+    from += pageSize;
+  }
+
+  return {
+    active_paid: activePaid,
+    active_subscribers: activeSubscribers,
+    expired_or_revoked: expired,
+    admin_overrides: overrides,
+  };
+}
+
 async function listAllAuthUsers(adminClient: SupabaseClient, pageSize: number) {
   const users: User[] = [];
   let page = 1;
@@ -477,6 +492,49 @@ export function latestSubscriptionByUser(
     }
   }
   return latest;
+}
+
+export function summarizeLatestSubscriptionsFromRows(
+  rows: UserSubscriptionRow[],
+  seenUsers = new Set<string>(),
+) {
+  let activePaid = 0;
+  let activeSubscribers = 0;
+  let overrides = 0;
+  let expired = 0;
+
+  for (const row of rows) {
+    if (seenUsers.has(row.user_id)) {
+      continue;
+    }
+    seenUsers.add(row.user_id);
+
+    if (row.platform === "admin_override") {
+      overrides += 1;
+    }
+    if (row.status === "expired" || row.status === "revoked") {
+      expired += 1;
+    }
+    if (
+      (row.status === "active" || row.status === "grace") &&
+      row.entitlement_tier === "paid"
+    ) {
+      activePaid += 1;
+    }
+    if (
+      (row.status === "active" || row.status === "grace") &&
+      row.entitlement_tier === "subscriber"
+    ) {
+      activeSubscribers += 1;
+    }
+  }
+
+  return {
+    active_paid: activePaid,
+    active_subscribers: activeSubscribers,
+    expired_or_revoked: expired,
+    admin_overrides: overrides,
+  };
 }
 
 function summarizeAuthUser(
