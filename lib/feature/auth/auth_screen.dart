@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/auth/guest_auth_service.dart';
+import '../../core/auth/supabase_auth_service.dart';
 import '../../core/design_system/theme.dart';
 
 enum _AuthMode { email, phone }
