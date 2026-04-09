@@ -620,7 +620,10 @@ class SyncEngine extends ChangeNotifier {
   Future<List<Map<String, dynamic>>> _getSharedLedgerMemberChanges(
     DateTime cursor,
   ) async {
-    final items = await _isar.jiveSharedLedgerMembers.where().findAll();
+    final items = await _isar.jiveSharedLedgerMembers
+        .filter()
+        .joinedAtGreaterThan(cursor)
+        .findAll();
     return items
         .map(
           (member) => {
@@ -844,6 +847,12 @@ class SyncEngine extends ChangeNotifier {
             ? null
             : await _isar.jiveCategorys.get(localId);
 
+        final remoteUpdatedAt =
+            _parseDateTime(row['updated_at']) ?? DateTime.now();
+        if (existing != null && existing.updatedAt.isAfter(remoteUpdatedAt)) {
+          continue;
+        }
+
         final category = existing ?? JiveCategory();
         category.key = key ?? existing?.key ?? '';
         category.name = _readString(row['name']) ?? existing?.name ?? '';
@@ -860,10 +869,7 @@ class SyncEngine extends ChangeNotifier {
         category.order = _readInt(row['sort_order']) ?? existing?.order ?? 0;
         category.iconForceTinted = existing?.iconForceTinted ?? false;
         category.excludeFromBudget = existing?.excludeFromBudget ?? false;
-        category.updatedAt =
-            _parseDateTime(row['updated_at']) ??
-            existing?.updatedAt ??
-            DateTime.now();
+        category.updatedAt = remoteUpdatedAt;
         await _isar.jiveCategorys.put(category);
       }
     });
@@ -885,6 +891,9 @@ class SyncEngine extends ChangeNotifier {
         final tag = existing ?? JiveTag();
         final remoteUpdatedAt =
             _parseDateTime(row['updated_at']) ?? DateTime.now();
+        if (existing != null && existing.updatedAt.isAfter(remoteUpdatedAt)) {
+          continue;
+        }
         tag.key = key ?? existing?.key ?? '';
         tag.name = _readString(row['name']) ?? existing?.name ?? '';
         tag.groupKey = _readString(row['group_key']) ?? existing?.groupKey;
