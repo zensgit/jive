@@ -247,6 +247,7 @@ void main() {
     final service = AppStorePaymentService(
       entitlement: entitlement,
       truthRepository: truthRepository,
+      iapClient: _FakeAppStorePurchaseClient(),
     );
 
     final tier = await service.syncTrustedReceipt(
@@ -277,6 +278,7 @@ void main() {
     final service = AppStorePaymentService(
       entitlement: entitlement,
       truthRepository: truthRepository,
+      iapClient: _FakeAppStorePurchaseClient(),
     );
 
     final tier = await service.syncTrustedReceipt(
