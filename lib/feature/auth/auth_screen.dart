@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_state.dart';
 import '../../core/auth/guest_auth_service.dart';
+import '../../core/auth/supabase_auth_service.dart';
 import '../../core/design_system/theme.dart';
 
 enum _AuthMode { email, phone }
@@ -99,11 +100,71 @@ class _AuthScreenState extends State<AuthScreen> {
       setState(() {
         _error = _isLogin ? '登录未完成，请稍后重试' : '注册未完成，请稍后重试';
       });
+    } on EmailConfirmationRequiredException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _isLogin = true;
+        _error = null;
+        _notice = e.message;
+      });
+      _passwordController.clear();
+    } on EmailAuthFlowException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.message;
+        _notice = null;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _error = _isLogin ? '登录失败，请稍后重试' : '注册失败，请稍后重试';
+      });
+    }
+  }
+
+  Future<void> _handlePasswordReset() async {
+    if (_loading) return;
+
+    FocusScope.of(context).unfocus();
+
+    final email = _emailController.text.trim().toLowerCase();
+    if (email.isEmpty) {
+      setState(() => _error = '请输入邮箱后再发送重置邮件');
+      return;
+    }
+    if (!_emailPattern.hasMatch(email)) {
+      setState(() => _error = '请输入有效的邮箱地址');
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _notice = null;
+    });
+
+    final auth = context.read<AuthService>();
+    try {
+      await auth.sendPasswordResetEmail(email);
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _notice = '重置邮件已发送，请查收邮箱并按邮件提示操作';
+      });
+    } on EmailAuthFlowException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.message;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = '发送重置邮件失败，请稍后重试';
       });
     }
   }
@@ -538,6 +599,15 @@ class _AuthScreenState extends State<AuthScreen> {
                         }),
                   child: Text(
                     _isLogin ? '没有账号？注册' : '已有账号？登录',
+                    style: TextStyle(color: JiveTheme.primaryGreen),
+                  ),
+                ),
+
+              if (_authMode == _AuthMode.email && _isLogin)
+                TextButton(
+                  onPressed: _loading ? null : _handlePasswordReset,
+                  child: Text(
+                    '忘记密码？发送重置邮件',
                     style: TextStyle(color: JiveTheme.primaryGreen),
                   ),
                 ),

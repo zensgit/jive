@@ -1,17 +1,43 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../sync/sync_config.dart';
 import 'auth_service.dart';
 import 'auth_state.dart' as app;
 
+class EmailAuthFlowException implements Exception {
+  const EmailAuthFlowException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+class EmailConfirmationRequiredException extends EmailAuthFlowException {
+  const EmailConfirmationRequiredException(super.message);
+}
+
+class OAuthAuthFlowException implements Exception {
+  const OAuthAuthFlowException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 /// Supabase implementation of [AuthService].
 ///
-/// Supports email/password and OTP (phone) sign-in.
-/// OAuth providers (Google, Apple, WeChat) can be added later.
+/// Supports email/password, OTP (phone), and OAuth sign-in.
 class SupabaseAuthService extends AuthService {
+  static final RegExp _emailPattern = RegExp(
+    r'^[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9-]{2,}(\.[a-zA-Z0-9-]{2,})*\.[a-zA-Z]{2,}$',
+  );
+
   app.AuthState _state = const app.AuthLoading();
   StreamSubscription<AuthState>? _authSubscription;
 
@@ -37,8 +63,9 @@ class SupabaseAuthService extends AuthService {
     }
 
     // Listen to auth state changes
-    _authSubscription = Supabase.instance.client.auth.onAuthStateChange
-        .listen((data) {
+    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
+      data,
+    ) {
       _syncState(data.session);
     });
 
@@ -51,14 +78,16 @@ class SupabaseAuthService extends AuthService {
       _state = const app.AuthGuest();
     } else {
       final user = session.user;
-      _state = app.AuthLoggedIn(app.AuthUser(
-        uid: user.id,
-        displayName: user.userMetadata?['display_name'] as String?,
-        email: user.email,
-        phone: user.phone,
-        avatarUrl: user.userMetadata?['avatar_url'] as String?,
-        provider: _mapProvider(user),
-      ));
+      _state = app.AuthLoggedIn(
+        app.AuthUser(
+          uid: user.id,
+          displayName: user.userMetadata?['display_name'] as String?,
+          email: user.email,
+          phone: user.phone,
+          avatarUrl: user.userMetadata?['avatar_url'] as String?,
+          provider: _mapProvider(user),
+        ),
+      );
     }
     notifyListeners();
   }
@@ -83,23 +112,80 @@ class SupabaseAuthService extends AuthService {
 
   @override
   Future<app.AuthState> signInWithEmail(String email, String password) async {
+    final normalizedEmail = email.trim().toLowerCase();
     try {
-      await _client.auth.signInWithPassword(email: email, password: password);
+      final response = await _client.auth.signInWithPassword(
+        email: normalizedEmail,
+        password: password,
+      );
+      if (response.session == null) {
+        throw const EmailAuthFlowException('登录未完成，请稍后重试');
+      }
+      _syncState(response.session);
       return _state;
+    } on AuthWeakPasswordException catch (e) {
+      final message = e.reasons.isEmpty
+          ? '密码强度不足，请更换更安全的密码'
+          : '密码强度不足：${e.reasons.join('；')}';
+      if (kDebugMode) debugPrint('SupabaseAuth: email sign-in weak password');
+      throw EmailAuthFlowException(message);
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: email sign-in failed: ${e.message}');
-      return _state;
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: email sign-in failed (${e.statusCode})');
+      }
+      throw EmailAuthFlowException(_mapEmailAuthError(e, isLogin: true));
     }
   }
 
   @override
   Future<app.AuthState> registerWithEmail(String email, String password) async {
+    final normalizedEmail = email.trim().toLowerCase();
     try {
-      await _client.auth.signUp(email: email, password: password);
-      return _state;
+      final response = await _client.auth.signUp(
+        email: normalizedEmail,
+        password: password,
+      );
+      if (response.session != null) {
+        _syncState(response.session);
+        return _state;
+      }
+      if (response.user != null) {
+        throw const EmailConfirmationRequiredException(
+          '注册成功，请先前往邮箱完成验证，再使用邮箱密码登录',
+        );
+      }
+      throw const EmailAuthFlowException('注册未完成，请稍后重试');
+    } on AuthWeakPasswordException catch (e) {
+      final message = e.reasons.isEmpty
+          ? '密码强度不足，请更换更安全的密码'
+          : '密码强度不足：${e.reasons.join('；')}';
+      if (kDebugMode) debugPrint('SupabaseAuth: email register weak password');
+      throw EmailAuthFlowException(message);
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: email register failed: ${e.message}');
-      return _state;
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: email register failed (${e.statusCode})');
+      }
+      throw EmailAuthFlowException(_mapEmailAuthError(e, isLogin: false));
+    }
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail.isEmpty) {
+      throw const EmailAuthFlowException('请输入邮箱地址');
+    }
+    if (!_emailPattern.hasMatch(normalizedEmail)) {
+      throw const EmailAuthFlowException('请输入有效的邮箱地址');
+    }
+
+    try {
+      await _client.auth.resetPasswordForEmail(normalizedEmail);
+    } on AuthException catch (e) {
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: password reset failed (${e.statusCode})');
+      }
+      throw EmailAuthFlowException(_mapPasswordResetError(e));
     }
   }
 
@@ -108,31 +194,50 @@ class SupabaseAuthService extends AuthService {
     try {
       await _client.auth.signInWithOtp(phone: phone);
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: SMS request failed: ${e.message}');
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: SMS request failed (${e.statusCode})');
+      }
     }
   }
 
   @override
   Future<app.AuthState> signInWithPhone(String phone, String code) async {
     try {
-      await _client.auth.verifyOTP(phone: phone, token: code, type: OtpType.sms);
+      await _client.auth.verifyOTP(
+        phone: phone,
+        token: code,
+        type: OtpType.sms,
+      );
       return _state;
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: phone sign-in failed: ${e.message}');
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: phone sign-in failed (${e.statusCode})');
+      }
       return _state;
     }
   }
 
   @override
   Future<app.AuthState> signInWithProvider(app.AuthProvider provider) async {
+    final oauthProvider = _toOAuthProvider(provider);
+    if (oauthProvider == null) {
+      throw OAuthAuthFlowException('${provider.label} 登录暂未开放');
+    }
+
     try {
-      final oauthProvider = _toOAuthProvider(provider);
-      if (oauthProvider == null) return _state;
-      await _client.auth.signInWithOAuth(oauthProvider);
+      final launched = await _client.auth.signInWithOAuth(oauthProvider);
+      if (!launched) {
+        throw OAuthAuthFlowException('无法打开 ${provider.label} 登录页面，请稍后重试');
+      }
       return _state;
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: OAuth sign-in failed: ${e.message}');
-      return _state;
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: OAuth sign-in failed (${e.statusCode})');
+      }
+      throw OAuthAuthFlowException(_mapOAuthError(e, provider: provider));
+    } on PlatformException {
+      if (kDebugMode) debugPrint('SupabaseAuth: OAuth launch failed');
+      throw OAuthAuthFlowException('无法打开 ${provider.label} 登录页面，请检查系统浏览器后重试');
     }
   }
 
@@ -152,7 +257,9 @@ class SupabaseAuthService extends AuthService {
     try {
       await _client.auth.signOut();
     } on AuthException catch (e) {
-      debugPrint('SupabaseAuth: sign-out failed: ${e.message}');
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: sign-out failed (${e.statusCode})');
+      }
     }
     _state = const app.AuthGuest();
     notifyListeners();
@@ -169,5 +276,82 @@ class SupabaseAuthService extends AuthService {
   void dispose() {
     _authSubscription?.cancel();
     super.dispose();
+  }
+
+  String _mapEmailAuthError(AuthException error, {required bool isLogin}) {
+    final code = error.code?.toLowerCase();
+    final message = error.message.toLowerCase();
+
+    if (code == 'email_not_confirmed' ||
+        message.contains('email not confirmed')) {
+      return '邮箱尚未验证，请先前往邮件完成验证';
+    }
+    if (code == 'invalid_credentials' ||
+        message.contains('invalid login credentials') ||
+        message.contains('invalid email or password')) {
+      return '邮箱或密码错误';
+    }
+    if (code == 'user_already_exists' ||
+        message.contains('user already registered') ||
+        message.contains('already been registered')) {
+      return '该邮箱已注册，请直接登录';
+    }
+    if (message.contains('password should be at least') ||
+        message.contains('password must be at least')) {
+      return '密码至少 6 位';
+    }
+    if (message.contains('email address') && message.contains('invalid')) {
+      return '邮箱格式不正确';
+    }
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('connection')) {
+      return '网络异常，请稍后重试';
+    }
+
+    return '${isLogin ? '登录失败' : '注册失败'}：${error.message}';
+  }
+
+  String _mapOAuthError(
+    AuthException error, {
+    required app.AuthProvider provider,
+  }) {
+    final code = error.code?.toLowerCase();
+    final message = error.message.toLowerCase();
+
+    if (message.contains('provider is not enabled') ||
+        message.contains('unsupported provider') ||
+        (code == 'validation_failed' && message.contains('provider'))) {
+      return '${provider.label} 登录暂未配置完成';
+    }
+    if (message.contains('redirect') && message.contains('not allowed')) {
+      return '${provider.label} 登录回调地址未配置完成';
+    }
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('connection')) {
+      return '网络异常，请稍后重试';
+    }
+
+    return '${provider.label} 登录失败：${error.message}';
+  }
+
+  String _mapPasswordResetError(AuthException error) {
+    final code = error.code?.toLowerCase();
+    final message = error.message.toLowerCase();
+
+    if (code == 'user_not_found' || message.contains('user not found')) {
+      return '未找到该邮箱对应的账号';
+    }
+    if (message.contains('email') && message.contains('invalid')) {
+      return '邮箱格式不正确';
+    }
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('connection')) {
+      return '网络异常，请稍后重试';
+    }
+
+    return '发送重置邮件失败：${error.message}';
   }
 }

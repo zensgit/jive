@@ -68,6 +68,11 @@ void main() {
       expect(result, isA<AuthGuest>());
     });
 
+    test('sendPasswordResetEmail is no-op', () async {
+      await service.sendPasswordResetEmail('a@b.com');
+      expect(service.isGuest, isTrue);
+    });
+
     test('signOut stays guest', () async {
       await service.signOut();
       expect(service.isGuest, isTrue);
