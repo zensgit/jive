@@ -32,11 +32,23 @@ type RetentionMetric = {
   retained_d30: number;
 };
 
+const DEFAULT_SUMMARY_DAYS = 30;
+const MIN_SUMMARY_DAYS = 7;
+const MAX_SUMMARY_DAYS = 90;
+const MAX_SUMMARY_ROWS = 20000;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+class AnalyticsHttpError extends Error {
+  constructor(readonly code: string, readonly status: number) {
+    super(code);
+    this.name = "AnalyticsHttpError";
+  }
+}
 
 if (import.meta.main) {
   Deno.serve(handleRequest);
@@ -71,6 +83,9 @@ export async function handleRequest(req: Request): Promise<Response> {
 
     return json({ error: "method_not_allowed" }, 405);
   } catch (error) {
+    if (error instanceof AnalyticsHttpError) {
+      return json({ error: error.code }, error.status);
+    }
     console.error("analytics unexpected error", error);
     return json(
       { error: error instanceof Error ? error.message : "unknown_error" },
@@ -79,55 +94,62 @@ export async function handleRequest(req: Request): Promise<Response> {
   }
 }
 
-async function handleTrackRequest(
+export async function handleTrackRequest(
   req: Request,
   anonClient: any,
   adminClient: any,
 ): Promise<Response> {
-  const body = (await req.json()) as AnalyticsTrackRequest;
-  const eventName = normalizeAnalyticsToken(body.event_name);
-  if (eventName == null) {
-    return json({ error: "invalid_event_name" }, 400);
+  try {
+    const body = await parseTrackRequestBody(req);
+    const eventName = normalizeAnalyticsToken(body.event_name);
+    if (eventName == null) {
+      return json({ error: "invalid_event_name" }, 400);
+    }
+
+    const eventGroup = normalizeAnalyticsToken(body.event_group) ?? "app";
+    const occurredAt = parseOccurredAt(body.occurred_at);
+    if (occurredAt == null) {
+      return json({ error: "invalid_occurred_at" }, 400);
+    }
+
+    const {
+      data: { user },
+    } = await anonClient.auth.getUser();
+
+    const deviceId = normalizeOptionalText(body.device_id);
+    if (user == null && deviceId == null) {
+      return json({ error: "device_id_required_for_guest_event" }, 400);
+    }
+
+    const payload = {
+      user_id: user?.id ?? null,
+      device_id: deviceId,
+      session_id: normalizeOptionalText(body.session_id),
+      event_name: eventName,
+      event_group: eventGroup,
+      platform: normalizeOptionalText(body.platform),
+      app_version: normalizeOptionalText(body.app_version),
+      properties: isJsonObject(body.properties) ? body.properties : {},
+      occurred_at: occurredAt.toISOString(),
+      occurred_on: occurredAt.toISOString().slice(0, 10),
+    };
+
+    const { error } = await adminClient.from("analytics_events").insert(payload);
+    if (error != null) {
+      console.error("analytics track insert failed", error);
+      return json({ error: "analytics_insert_failed" }, 500);
+    }
+
+    return json({ accepted: true }, 202);
+  } catch (error) {
+    if (error instanceof AnalyticsHttpError) {
+      return json({ error: error.code }, error.status);
+    }
+    throw error;
   }
-
-  const eventGroup = normalizeAnalyticsToken(body.event_group) ?? "app";
-  const occurredAt = parseOccurredAt(body.occurred_at);
-  if (occurredAt == null) {
-    return json({ error: "invalid_occurred_at" }, 400);
-  }
-
-  const {
-    data: { user },
-  } = await anonClient.auth.getUser();
-
-  const deviceId = normalizeOptionalText(body.device_id);
-  if (user == null && deviceId == null) {
-    return json({ error: "device_id_required_for_guest_event" }, 400);
-  }
-
-  const payload = {
-    user_id: user?.id ?? null,
-    device_id: deviceId,
-    session_id: normalizeOptionalText(body.session_id),
-    event_name: eventName,
-    event_group: eventGroup,
-    platform: normalizeOptionalText(body.platform),
-    app_version: normalizeOptionalText(body.app_version),
-    properties: isJsonObject(body.properties) ? body.properties : {},
-    occurred_at: occurredAt.toISOString(),
-    occurred_on: occurredAt.toISOString().slice(0, 10),
-  };
-
-  const { error } = await adminClient.from("analytics_events").insert(payload);
-  if (error != null) {
-    console.error("analytics track insert failed", error);
-    return json({ error: "analytics_insert_failed" }, 500);
-  }
-
-  return json({ accepted: true }, 202);
 }
 
-async function handleSummaryRequest(
+export async function handleSummaryRequest(
   req: Request,
   adminClient: any,
   env: ReturnType<typeof readEnv>,
@@ -141,48 +163,71 @@ async function handleSummaryRequest(
     return json({ error: "admin_auth_required" }, 401);
   }
 
-  const url = new URL(req.url);
-  const requestedDays = Number(url.searchParams.get("days") ?? "30");
-  const days = Number.isFinite(requestedDays)
-    ? Math.min(Math.max(Math.trunc(requestedDays), 7), 90)
-    : 30;
-  const now = new Date();
-  const since = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate() - Math.max(days, 30),
-  ));
-  const rows = await fetchAnalyticsRows(
-    adminClient,
-    since.toISOString().slice(0, 10),
-  );
-  const summary = summarizeAnalyticsRows(rows, now, days);
-  return json(summary, 200);
+  try {
+    const url = new URL(req.url);
+    const days = parseSummaryDays(url.searchParams.get("days"));
+    const now = new Date();
+    const { sinceDate, untilDate } = buildSummaryWindow(now, days);
+    const rows = await fetchAnalyticsRows(
+      adminClient,
+      { sinceDate, untilDate },
+    );
+    const summary = summarizeAnalyticsRows(rows, now, days);
+    return json(summary, 200);
+  } catch (error) {
+    if (error instanceof AnalyticsHttpError) {
+      return json({ error: error.code }, error.status);
+    }
+    throw error;
+  }
 }
 
-async function fetchAnalyticsRows(
+export async function fetchAnalyticsRows(
   adminClient: any,
-  sinceDate: string,
+  options: {
+    sinceDate: string;
+    untilDate: string;
+    maxRows?: number;
+  },
 ): Promise<AnalyticsRow[]> {
+  const { sinceDate, untilDate, maxRows = MAX_SUMMARY_ROWS } = options;
   const rows: AnalyticsRow[] = [];
   const pageSize = 1000;
   let from = 0;
+
+  const { count, error: countError } = await adminClient
+    .from("analytics_events")
+    .select("id", { head: true, count: "exact" })
+    .gte("occurred_on", sinceDate)
+    .lte("occurred_on", untilDate);
+
+  if (countError != null) {
+    console.error("analytics summary count failed", countError);
+    throw new AnalyticsHttpError("analytics_summary_fetch_failed", 502);
+  }
+  if (typeof count === "number" && count > maxRows) {
+    throw new AnalyticsHttpError("analytics_summary_window_too_large", 422);
+  }
 
   while (true) {
     const { data, error } = await adminClient
       .from("analytics_events")
       .select("user_id,device_id,event_name,occurred_on")
       .gte("occurred_on", sinceDate)
+      .lte("occurred_on", untilDate)
       .order("occurred_on", { ascending: true })
       .range(from, from + pageSize - 1);
 
     if (error != null) {
       console.error("analytics summary fetch failed", error);
-      throw new Error("analytics_summary_fetch_failed");
+      throw new AnalyticsHttpError("analytics_summary_fetch_failed", 502);
     }
 
     const batch = (data ?? []) as AnalyticsRow[];
     rows.push(...batch);
+    if (rows.length > maxRows) {
+      throw new AnalyticsHttpError("analytics_summary_window_too_large", 422);
+    }
     if (batch.length < pageSize) {
       break;
     }
@@ -345,6 +390,37 @@ export function normalizeAnalyticsToken(value?: string): string | null {
   return normalized;
 }
 
+async function parseTrackRequestBody(req: Request): Promise<AnalyticsTrackRequest> {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    throw new AnalyticsHttpError("invalid_json_body", 400);
+  }
+  if (!isJsonObject(body)) {
+    throw new AnalyticsHttpError("invalid_json_body", 400);
+  }
+  return body as AnalyticsTrackRequest;
+}
+
+export function parseSummaryDays(value: string | null): number {
+  if (value == null || value.trim().length === 0) {
+    return DEFAULT_SUMMARY_DAYS;
+  }
+
+  const trimmed = value.trim();
+  if (!/^-?\d+$/.test(trimmed)) {
+    throw new AnalyticsHttpError("invalid_days", 400);
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new AnalyticsHttpError("invalid_days", 400);
+  }
+
+  return Math.min(Math.max(parsed, MIN_SUMMARY_DAYS), MAX_SUMMARY_DAYS);
+}
+
 function normalizeOptionalText(value?: string): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -363,6 +439,14 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 
 function toIsoDate(value: Date): string {
   return value.toISOString().slice(0, 10);
+}
+
+export function buildSummaryWindow(now: Date, days: number) {
+  const untilDate = toIsoDate(now);
+  return {
+    sinceDate: shiftIsoDate(untilDate, -(days - 1)),
+    untilDate,
+  };
 }
 
 function shiftIsoDate(value: string, days: number): string {
