@@ -59,6 +59,8 @@ type IdempotencyClaim =
   | { state: "duplicate" }
   | { state: "in_progress" };
 
+type WebhookEnv = ReturnType<typeof readEnv>;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -67,8 +69,16 @@ const corsHeaders = {
 };
 
 const handledGoogleNotificationTypes = new Set([1, 2, 3, 4, 5, 6, 7, 12, 13]);
+const processingClaimTtlMs = 15 * 60 * 1000;
 
-Deno.serve(async (req) => {
+let cachedEnv: WebhookEnv | null = null;
+let cachedAdminClient: ReturnType<typeof createClient> | null = null;
+
+if (import.meta.main) {
+  Deno.serve(handleRequest);
+}
+
+export async function handleRequest(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -78,7 +88,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const env = readEnv();
+    const env = getEnv();
+    const adminClient = getAdminClient(env);
     const rawBody = await req.text();
     await validateIncomingRequest(req, rawBody, env);
 
@@ -87,7 +98,7 @@ Deno.serve(async (req) => {
       return await handleAppleAppStoreServerNotificationV2(body);
     }
 
-    return await handleGooglePlayRtdn(body, env);
+    return await handleGooglePlayRtdn(body, env, adminClient);
   } catch (error) {
     console.error("subscription-webhook unexpected error", error);
     return json(
@@ -95,13 +106,13 @@ Deno.serve(async (req) => {
       error instanceof HttpError ? error.status : 500,
     );
   }
-});
+}
 
 async function handleGooglePlayRtdn(
   body: unknown,
-  env: ReturnType<typeof readEnv>,
+  env: WebhookEnv,
+  adminClient: ReturnType<typeof createClient>,
 ): Promise<Response> {
-  const adminClient = createClient(env.supabaseUrl, env.supabaseServiceRoleKey);
   const pushPayload = parsePubSubPushPayload(body);
   const notificationId = pushPayload.message.messageId;
   const claim = await claimNotification(
@@ -220,17 +231,18 @@ async function handleGooglePlayRtdn(
       },
     });
 
+    const nextPlan = deriveWebhookPlan(subscription.plan);
     const { data, error } = await adminClient
       .from("user_subscriptions")
       .update({
-        plan: "subscriber",
+        plan: nextPlan,
         status,
         product_id:
           googleLookup?.productId ??
             subscriptionNotification.subscriptionId ??
             subscription.product_id,
         order_id: googleLookup?.orderId ?? subscription.order_id,
-        entitlement_tier: deriveEntitlementTier(status, expiresAt),
+        entitlement_tier: deriveEntitlementTier(nextPlan, status, expiresAt),
         expires_at: expiresAt,
         last_verified_at: now,
         verification_source: googleLookup == null
@@ -302,6 +314,19 @@ function readEnv() {
     webhookBearerToken: Deno.env.get("PUBSUB_BEARER_TOKEN"),
     webhookHmacSecret: Deno.env.get("WEBHOOK_HMAC_SECRET"),
   };
+}
+
+function getEnv(): WebhookEnv {
+  cachedEnv ??= readEnv();
+  return cachedEnv;
+}
+
+function getAdminClient(env: WebhookEnv): ReturnType<typeof createClient> {
+  cachedAdminClient ??= createClient(
+    env.supabaseUrl,
+    env.supabaseServiceRoleKey,
+  );
+  return cachedAdminClient;
 }
 
 async function validateIncomingRequest(
@@ -535,7 +560,7 @@ async function claimNotification(
 
   const { data, error: existingError } = await adminClient
     .from("subscription_webhook_notifications")
-    .select("status")
+    .select("status, updated_at")
     .eq("notification_id", notificationId)
     .maybeSingle();
 
@@ -545,11 +570,15 @@ async function claimNotification(
   }
 
   const existingStatus = data?.status;
+  const updatedAt = typeof data?.updated_at === "string" ? data.updated_at : null;
   if (existingStatus === "processed") {
     return { state: "duplicate" };
   }
 
-  if (existingStatus === "processing") {
+  if (
+    existingStatus === "processing" &&
+    !isClaimStale(updatedAt, now)
+  ) {
     return { state: "in_progress" };
   }
 
@@ -614,7 +643,7 @@ async function markNotificationFailed(
   }
 }
 
-function mapGoogleNotificationType(notificationType: number): SubscriptionStatus {
+export function mapGoogleNotificationType(notificationType: number): SubscriptionStatus {
   switch (notificationType) {
     case 1:
     case 2:
@@ -660,10 +689,15 @@ function googleNotificationTypeName(notificationType: number): string {
   }
 }
 
-function deriveEntitlementTier(
+export function deriveEntitlementTier(
+  plan: string,
   status: SubscriptionStatus,
   expiresAt: string | null,
 ): EntitlementTier {
+  if (plan === "paid") {
+    return status === "active" || status === "grace" ? "paid" : "free";
+  }
+
   if (status === "active" || status === "grace") {
     return "subscriber";
   }
@@ -676,6 +710,24 @@ function deriveEntitlementTier(
   }
 
   return "free";
+}
+
+export function deriveWebhookPlan(currentPlan: string): EntitlementTier {
+  return currentPlan === "paid" ? "paid" : "subscriber";
+}
+
+export function isClaimStale(updatedAt: string | null, nowIso: string): boolean {
+  if (updatedAt == null) {
+    return true;
+  }
+
+  const updatedAtMs = Date.parse(updatedAt);
+  const nowMs = Date.parse(nowIso);
+  if (Number.isNaN(updatedAtMs) || Number.isNaN(nowMs)) {
+    return true;
+  }
+
+  return nowMs - updatedAtMs >= processingClaimTtlMs;
 }
 
 function looksLikeAppleAppStoreServerNotificationV2(
