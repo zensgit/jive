@@ -25,6 +25,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-admin-token",
 };
 
+const queueUpsertBatchSize = 500;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -80,19 +82,6 @@ Deno.serve(async (req) => {
     }
 
     const queueRows = buildQueueRows(plan.jobs);
-    const { data, error } = await supabase
-      .from("notification_queue")
-      .upsert(queueRows, {
-        onConflict: "dedupe_key",
-        ignoreDuplicates: true,
-      })
-      .select("id,dedupe_key");
-
-    if (error != null) {
-      console.error("send-notification enqueue failed", error);
-      return json({ error: "notification_enqueue_failed" }, 500);
-    }
-
     return json({
       ok: true,
       action,
@@ -100,7 +89,7 @@ Deno.serve(async (req) => {
       matched_subscriptions: plan.matchedSubscriptions,
       recipients: plan.recipients,
       planned: plan.jobs.length,
-      queued: data?.length ?? 0,
+      queued: await enqueueNotificationJobs(supabase, queueRows),
     }, 200);
   } catch (error) {
     console.error("send-notification unexpected error", error);
@@ -174,9 +163,15 @@ async function buildPlan(
           entitlement_tier: "subscriber",
         }));
       } else {
-        subscriptions = await fetchSubscriptions(supabase, (query) =>
-          query.in("status", ["active", "grace", "pending"])
-        );
+        const userIds = await fetchActiveNoticeUserIds(supabase);
+        subscriptions = userIds.map((userId, index) => ({
+          id: index + 1,
+          user_id: userId,
+          plan: "subscriber",
+          status: "active",
+          expires_at: null,
+          entitlement_tier: "subscriber",
+        }));
       }
       const jobs = buildNotificationPlan(subscriptions, {
         action: input.action,
@@ -214,6 +209,57 @@ async function fetchSubscriptions(
   }
 
   return (data ?? []) as SubscriptionRecord[];
+}
+
+async function fetchActiveNoticeUserIds(
+  supabase: any,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("user_subscriptions")
+    .select("user_id")
+    .in("status", ["active", "grace", "pending"]);
+
+  if (error != null) {
+    console.error("send-notification fetch notice users failed", error);
+    throw new Error("subscription_lookup_failed");
+  }
+
+  return Array.from(
+    new Set(
+      (data ?? [])
+        .map((row: { user_id?: unknown }) => row.user_id)
+        .filter((userId: unknown): userId is string =>
+          typeof userId === "string" && userId.length > 0
+        ),
+    ),
+  );
+}
+
+async function enqueueNotificationJobs(
+  supabase: any,
+  queueRows: ReturnType<typeof buildQueueRows>,
+): Promise<number> {
+  let queued = 0;
+
+  for (let index = 0; index < queueRows.length; index += queueUpsertBatchSize) {
+    const batch = queueRows.slice(index, index + queueUpsertBatchSize);
+    const { data, error } = await supabase
+      .from("notification_queue")
+      .upsert(batch, {
+        onConflict: "dedupe_key",
+        ignoreDuplicates: true,
+      })
+      .select("id");
+
+    if (error != null) {
+      console.error("send-notification enqueue failed", error);
+      throw new Error("notification_enqueue_failed");
+    }
+
+    queued += data?.length ?? 0;
+  }
+
+  return queued;
 }
 
 function distinctRecipients(subscriptions: SubscriptionRecord[]): number {
