@@ -42,6 +42,37 @@
 - notification outbound delivery / provider 集成
 - 任何 E2EE / 密钥管理实现
 
+## 2026-04-10 集成更新
+
+当前 clean SaaS 主链已经完整集成到一条独立分支：
+- 分支: `codex/saas-beta-mainline`
+- head: `0793a2c`
+
+已集成范围：
+- 基础与文案: `#139`、`#142`
+- Sync: `#136`、`#140`、`#141`
+- Billing webhook: `#122`、`#131`
+- Billing truth: `#124`、`#133`、`#138`
+- Auth: `#134`、`#135`
+- Ops: `#127`、`#128`、`#129`、`#130`
+
+已完成的额外收口：
+- `#130` 已重放到新的 admin parent 上，远端 head 为 `e76de2e`
+- `#138` 已补 App Store fake client 测试注入，远端 head 为 `8378e16`
+- 集成线额外提交 `4ec2f49`，修掉只会在多链路合并后暴露的 smoke blockers
+
+当前最快的 Beta 收口路径已经变化：
+1. 继续保留现有 PR 作为 review/审计入口
+2. 以 `codex/saas-beta-mainline` 作为代码集成主线
+3. 用 `bash scripts/run_saas_wave0_smoke.sh` 作为统一最小验收入口
+
+当前已通过的统一验收：
+- `bash scripts/run_saas_wave0_smoke.sh` 在 `codex/saas-beta-mainline` 上通过
+
+因此，剩余工作不再是继续扩功能，而是二选一：
+- 继续按现有 PR 队列在 GitHub UI 逐条合并
+- 或以 `codex/saas-beta-mainline` 为新的快速收口入口，统一 review 后并入 `main`
+
 ---
 
 ## 当前代码现实

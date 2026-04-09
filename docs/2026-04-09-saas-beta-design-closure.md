@@ -13,6 +13,32 @@
 - 我们用什么产品和技术边界承接 SaaS 化
 - 哪些能力明确延后，不在这一轮继续扩 scope
 
+## 2026-04-10 集成更新
+
+当前设计已经不只是“主线候选”，而是已经被组装进一条可运行的集成分支：
+- 分支: `codex/saas-beta-mainline`
+- 当前 head: `0793a2c`
+
+这条集成分支包含了当前 clean PR 主链的全部能力：
+- 基础与文案: `#139`、`#142`
+- Sync: `#136`、`#140`、`#141`
+- Billing webhook: `#122`、`#131`
+- Billing truth: `#124`、`#133`、`#138`
+- Auth: `#134`、`#135`
+- Ops: `#127`、`#128`、`#129`、`#130`
+
+设计层面的结论没有改变，但当前状态已经从“待收口设计”升级为“已完成集成验证的 Beta 主线”：
+- Sync 主协议已经以 `book_key / workspace_key / sync_key / account_sync_key / tombstones` 跑通
+- 订阅真相继续固定为 `user_subscriptions`
+- Billing 仍按 `subscription-webhook -> verify-subscription -> PaymentServiceFactory` 这条链工作
+- Auth 继续固定在 `Email / Password Reset / Phone OTP / Google / Apple`
+- Ops 继续固定在 `analytics / send-notification / admin`
+- 对外安全口径继续固定为 `HTTPS 传输 + Supabase 存储 + 非端到端加密`
+
+本轮还补了两个只会在整链集成后暴露的 smoke blocker：
+- `AuthService.sendPasswordResetEmail` 引入后，`subscription_lifecycle_gate_test.dart` 的 fake 已补齐
+- `AppStorePaymentService.syncTrustedReceipt` 用例已改成显式注入 `_FakeAppStorePurchaseClient`，避免测试触发真实 `InAppPurchase.instance`
+
 ## 不在本轮范围
 - RevenueCat 切换
 - 端到端加密或密钥管理

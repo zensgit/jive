@@ -9,6 +9,34 @@
 
 这份文档不再把旧污染分支当执行入口，而是只围绕当前 clean PR 队列推进。
 
+## 2026-04-10 集成更新
+
+当前已经有一条集成分支把 clean SaaS 主链完整收口：
+- 分支: `codex/saas-beta-mainline`
+- 当前 head: `0793a2c`
+
+已集成的 clean PR 能力：
+- 基础与文案: `#139`、`#142`
+- Sync: `#136`、`#140`、`#141`
+- Billing webhook: `#122`、`#131`
+- Billing truth: `#124`、`#133`、`#138`
+- Auth: `#134`、`#135`
+- Ops: `#127`、`#128`、`#129`、`#130`
+
+本轮新增的集成 blocker 修复：
+- `4ec2f49` `test(saas): fix integrated smoke blockers`
+  - `test/subscription_lifecycle_gate_test.dart` 为 `AuthService.sendPasswordResetEmail` 补 no-op fake
+  - `test/app_store_payment_service_test.dart` 为 `syncTrustedReceipt` 用例注入 `_FakeAppStorePurchaseClient`
+- `#138` 源分支也已补回对应测试修复，当前远端 head 为 `8378e16`
+- `#130` rebase 到新的 admin parent 后，当前远端 head 为 `e76de2e`
+
+当前最重要的验证结果：
+- `bash scripts/run_saas_wave0_smoke.sh`
+  - 在 `codex/saas-beta-mainline` 上已通过
+- 这意味着 sync、billing webhook、billing truth、auth、ops analytics、ops notification、ops admin 这 7 组最小回归都已在同一条集成线上同时通过
+
+因此，这份文档下面保留的 PR 队列和 restack 步骤，应该视为 GitHub PR 收口路径；代码层面已经存在一条可工作的集成主线。
+
 ## 当前总原则
 - 不再开新的功能型 SaaS 分支
 - 继续只修 surviving PR 的 review/blocker
