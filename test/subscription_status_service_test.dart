@@ -12,6 +12,7 @@ import 'package:jive/core/payment/subscription_truth_repository.dart';
 class FakePaymentService extends PaymentService {
   bool fakeAvailable;
   PurchaseResult fakeRestoreResult;
+  int restoreCallCount = 0;
 
   FakePaymentService({this.fakeAvailable = true, PurchaseResult? restoreResult})
     : fakeRestoreResult = restoreResult ?? const PurchaseResult(success: true);
@@ -33,12 +34,16 @@ class FakePaymentService extends PaymentService {
       const PurchaseResult.error('not implemented');
 
   @override
-  Future<PurchaseResult> restorePurchases() async => fakeRestoreResult;
+  Future<PurchaseResult> restorePurchases() async {
+    restoreCallCount += 1;
+    return fakeRestoreResult;
+  }
 }
 
 class FakeSubscriptionTruthRepository implements SubscriptionTruthRepository {
   SubscriptionTruthFetchResult fetchResult;
   SubscriptionTruthFetchResult verifyResult;
+  int fetchCallCount = 0;
 
   FakeSubscriptionTruthRepository({
     SubscriptionTruthFetchResult? fetchResult,
@@ -50,6 +55,7 @@ class FakeSubscriptionTruthRepository implements SubscriptionTruthRepository {
 
   @override
   Future<SubscriptionTruthFetchResult> fetchCurrentSubscription() async {
+    fetchCallCount += 1;
     return fetchResult;
   }
 
@@ -209,6 +215,27 @@ void main() {
         final time = await service.getLastPurchaseTime();
         expect(time, isNotNull);
         expect(DateTime.now().difference(time!).inSeconds, lessThan(2));
+      },
+    );
+
+    test(
+      'checkAndSyncIfStale skips repeated refreshes within interval',
+      () async {
+        fakeTruth.fetchResult = SubscriptionTruthFetchResult.authoritative(
+          snapshot: TrustedSubscriptionSnapshot(
+            plan: SubscriptionPlan.subscriber,
+            status: SubscriptionStatusKind.active,
+            platform: 'google_play',
+            productId: 'jive_subscriber_monthly',
+            lastVerifiedAt: DateTime(2026, 4, 5, 10),
+          ),
+        );
+
+        await service.checkAndSyncIfStale();
+        await service.checkAndSyncIfStale();
+
+        expect(fakeTruth.fetchCallCount, equals(1));
+        expect(fakePayment.restoreCallCount, equals(0));
       },
     );
   });
