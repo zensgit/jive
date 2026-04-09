@@ -9,7 +9,9 @@ import {
   corsHeadersForOrigin,
   latestSubscriptionByUser,
   parseAdminRequestBodyText,
+  summarizeAnalyticsRows,
   summarizeLatestSubscriptionsFromRows,
+  summarizeNotificationQueueRows,
 } from "./index.ts";
 
 Deno.test("latestSubscriptionByUser keeps the first row for each user", () => {
@@ -188,4 +190,115 @@ Deno.test("parseAdminRequestBodyText rejects invalid json and invalid fields", (
     Error,
     "invalid_request_body",
   );
+});
+
+Deno.test("summarizeAnalyticsRows computes activity and conversions", () => {
+  const summary = summarizeAnalyticsRows(
+    [
+      {
+        user_id: "user-1",
+        device_id: null,
+        event_name: "auth_screen_viewed",
+        occurred_on: "2026-04-08",
+      },
+      {
+        user_id: "user-1",
+        device_id: null,
+        event_name: "auth_signed_in",
+        occurred_on: "2026-04-08",
+      },
+      {
+        user_id: "user-2",
+        device_id: null,
+        event_name: "auth_screen_viewed",
+        occurred_on: "2026-04-08",
+      },
+      {
+        user_id: "user-2",
+        device_id: null,
+        event_name: "auth_signed_in",
+        occurred_on: "2026-04-08",
+      },
+      {
+        user_id: "user-1",
+        device_id: null,
+        event_name: "subscription_purchase_started",
+        occurred_on: "2026-04-08",
+      },
+      {
+        user_id: "user-1",
+        device_id: null,
+        event_name: "subscription_purchase_completed",
+        occurred_on: "2026-04-08",
+      },
+      {
+        user_id: null,
+        device_id: "guest-1",
+        event_name: "auth_screen_viewed",
+        occurred_on: "2026-04-09",
+      },
+    ],
+    new Date("2026-04-09T12:00:00.000Z"),
+    30,
+  );
+
+  assertEquals(summary.active_users.dau, 1);
+  assertEquals(summary.active_users.mau, 3);
+  assertEquals(summary.conversions.auth_sign_in.viewed_or_started, 3);
+  assertEquals(summary.conversions.auth_sign_in.completed, 2);
+  assertEquals(summary.conversions.auth_sign_in.rate, 0.6667);
+  assertEquals(summary.conversions.purchase.rate, 1);
+  assertEquals(summary.events[0].event_name, "auth_screen_viewed");
+  assertEquals(summary.retention.length, 2);
+});
+
+Deno.test("summarizeNotificationQueueRows exposes queue health", () => {
+  const summary = summarizeNotificationQueueRows([
+    {
+      status: "queued",
+      queued_at: "2026-04-09T10:00:00.000Z",
+      sent_at: null,
+      attempt_count: 1,
+      action: "expiry_reminder",
+      last_error: null,
+      updated_at: "2026-04-09T10:00:00.000Z",
+    },
+    {
+      status: "sent",
+      queued_at: "2026-04-09T09:00:00.000Z",
+      sent_at: "2026-04-09T09:05:00.000Z",
+      attempt_count: 0,
+      action: "expired_notice",
+      last_error: null,
+      updated_at: "2026-04-09T09:05:00.000Z",
+    },
+    {
+      status: "failed",
+      queued_at: "2026-04-09T08:00:00.000Z",
+      sent_at: null,
+      attempt_count: 2,
+      action: "system_notice",
+      last_error: "timeout",
+      updated_at: "2026-04-09T08:10:00.000Z",
+    },
+    {
+      status: "canceled",
+      queued_at: "2026-04-09T07:00:00.000Z",
+      sent_at: null,
+      attempt_count: 0,
+      action: "system_notice",
+      last_error: null,
+      updated_at: "2026-04-09T07:30:00.000Z",
+    },
+  ], new Date("2026-04-09T12:00:00.000Z"));
+
+  assertEquals(summary.total, 4);
+  assertEquals(summary.queued, 1);
+  assertEquals(summary.sent, 1);
+  assertEquals(summary.failed, 1);
+  assertEquals(summary.canceled, 1);
+  assertEquals(summary.retrying, 1);
+  assertEquals(summary.queued_over_1h, 1);
+  assertEquals(summary.queued_over_24h, 0);
+  assertEquals(summary.oldest_queued_age_minutes, 120);
 });
