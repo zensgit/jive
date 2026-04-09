@@ -46,6 +46,11 @@ class GuestAuthService extends AuthService {
   }
 
   @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    // No-op in guest mode.
+  }
+
+  @override
   Future<void> signOut() async {
     _state = const AuthGuest();
     notifyListeners();

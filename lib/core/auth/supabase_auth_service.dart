@@ -34,6 +34,10 @@ class OAuthAuthFlowException implements Exception {
 ///
 /// Supports email/password, OTP (phone), and OAuth sign-in.
 class SupabaseAuthService extends AuthService {
+  static final RegExp _emailPattern = RegExp(
+    r'^[a-zA-Z0-9._%+-]{1,64}@[a-zA-Z0-9-]{2,}(\.[a-zA-Z0-9-]{2,})*\.[a-zA-Z]{2,}$',
+  );
+
   app.AuthState _state = const app.AuthLoading();
   StreamSubscription<AuthState>? _authSubscription;
 
@@ -126,7 +130,9 @@ class SupabaseAuthService extends AuthService {
       if (kDebugMode) debugPrint('SupabaseAuth: email sign-in weak password');
       throw EmailAuthFlowException(message);
     } on AuthException catch (e) {
-      if (kDebugMode) debugPrint('SupabaseAuth: email sign-in failed (${e.statusCode})');
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: email sign-in failed (${e.statusCode})');
+      }
       throw EmailAuthFlowException(_mapEmailAuthError(e, isLogin: true));
     }
   }
@@ -156,8 +162,30 @@ class SupabaseAuthService extends AuthService {
       if (kDebugMode) debugPrint('SupabaseAuth: email register weak password');
       throw EmailAuthFlowException(message);
     } on AuthException catch (e) {
-      if (kDebugMode) debugPrint('SupabaseAuth: email register failed (${e.statusCode})');
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: email register failed (${e.statusCode})');
+      }
       throw EmailAuthFlowException(_mapEmailAuthError(e, isLogin: false));
+    }
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail.isEmpty) {
+      throw const EmailAuthFlowException('请输入邮箱地址');
+    }
+    if (!_emailPattern.hasMatch(normalizedEmail)) {
+      throw const EmailAuthFlowException('请输入有效的邮箱地址');
+    }
+
+    try {
+      await _client.auth.resetPasswordForEmail(normalizedEmail);
+    } on AuthException catch (e) {
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: password reset failed (${e.statusCode})');
+      }
+      throw EmailAuthFlowException(_mapPasswordResetError(e));
     }
   }
 
@@ -166,7 +194,9 @@ class SupabaseAuthService extends AuthService {
     try {
       await _client.auth.signInWithOtp(phone: phone);
     } on AuthException catch (e) {
-      if (kDebugMode) debugPrint('SupabaseAuth: SMS request failed (${e.statusCode})');
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: SMS request failed (${e.statusCode})');
+      }
     }
   }
 
@@ -180,7 +210,9 @@ class SupabaseAuthService extends AuthService {
       );
       return _state;
     } on AuthException catch (e) {
-      if (kDebugMode) debugPrint('SupabaseAuth: phone sign-in failed (${e.statusCode})');
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: phone sign-in failed (${e.statusCode})');
+      }
       return _state;
     }
   }
@@ -199,7 +231,9 @@ class SupabaseAuthService extends AuthService {
       }
       return _state;
     } on AuthException catch (e) {
-      if (kDebugMode) debugPrint('SupabaseAuth: OAuth sign-in failed (${e.statusCode})');
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: OAuth sign-in failed (${e.statusCode})');
+      }
       throw OAuthAuthFlowException(_mapOAuthError(e, provider: provider));
     } on PlatformException {
       if (kDebugMode) debugPrint('SupabaseAuth: OAuth launch failed');
@@ -223,7 +257,9 @@ class SupabaseAuthService extends AuthService {
     try {
       await _client.auth.signOut();
     } on AuthException catch (e) {
-      if (kDebugMode) debugPrint('SupabaseAuth: sign-out failed (${e.statusCode})');
+      if (kDebugMode) {
+        debugPrint('SupabaseAuth: sign-out failed (${e.statusCode})');
+      }
     }
     _state = const app.AuthGuest();
     notifyListeners();
@@ -298,5 +334,24 @@ class SupabaseAuthService extends AuthService {
     }
 
     return '${provider.label} 登录失败：${error.message}';
+  }
+
+  String _mapPasswordResetError(AuthException error) {
+    final code = error.code?.toLowerCase();
+    final message = error.message.toLowerCase();
+
+    if (code == 'user_not_found' || message.contains('user not found')) {
+      return '未找到该邮箱对应的账号';
+    }
+    if (message.contains('email') && message.contains('invalid')) {
+      return '邮箱格式不正确';
+    }
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('connection')) {
+      return '网络异常，请稍后重试';
+    }
+
+    return '发送重置邮件失败：${error.message}';
   }
 }

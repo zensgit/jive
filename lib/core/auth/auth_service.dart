@@ -40,6 +40,9 @@ abstract class AuthService extends ChangeNotifier {
   /// Register a new account with email + password.
   Future<AuthState> registerWithEmail(String email, String password);
 
+  /// Send a password reset email for [email].
+  Future<void> sendPasswordResetEmail(String email);
+
   /// Sign out and return to guest state.
   Future<void> signOut();
 
