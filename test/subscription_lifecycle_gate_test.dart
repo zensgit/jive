@@ -38,6 +38,9 @@ class FakeAuthService extends AuthService {
       state;
 
   @override
+  Future<void> sendPasswordResetEmail(String email) async {}
+
+  @override
   Future<void> requestSmsCode(String phone) async {}
 
   @override
