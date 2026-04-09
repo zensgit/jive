@@ -332,7 +332,7 @@ class SettingsScreen extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.cloud_sync_outlined),
                   title: const Text("WebDAV 同步"),
-                  subtitle: const Text("云端备份与恢复"),
+                  subtitle: const Text("通过 WebDAV 备份与恢复"),
                   trailing: Icon(
                     Icons.chevron_right,
                     size: 18,

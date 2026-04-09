@@ -208,7 +208,7 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('启用云同步'),
-            subtitle: const Text('登录并联网后自动同步数据到云端'),
+            subtitle: const Text('登录并联网后与服务器同步交易数据'),
             value: state.isEnabled,
             activeTrackColor: JiveTheme.primaryGreen,
             onChanged: (enabled) => syncEngine.setEnabled(enabled),
