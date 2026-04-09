@@ -2,6 +2,7 @@ import 'package:isar/isar.dart';
 
 import '../database/bill_relation_model.dart';
 import '../database/transaction_model.dart';
+import '../sync/sync_delete_marker_service.dart';
 
 class ReimbursementService {
   ReimbursementService(this.isar);
@@ -172,6 +173,12 @@ class ReimbursementService {
     await isar.writeTxn(() async {
       await isar.collection<JiveBillRelation>().delete(relationId);
       if (deleteLinkedTransaction) {
+        final linkedTx = await isar.collection<JiveTransaction>().get(
+          relation.linkedTransactionId,
+        );
+        if (linkedTx != null) {
+          await SyncDeleteMarkerService(isar).markTransactionDeleted(linkedTx);
+        }
         await isar.collection<JiveTransaction>().delete(
           relation.linkedTransactionId,
         );
