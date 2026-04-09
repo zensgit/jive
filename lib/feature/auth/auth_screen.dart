@@ -100,6 +100,22 @@ class _AuthScreenState extends State<AuthScreen> {
       setState(() {
         _error = _isLogin ? '登录未完成，请稍后重试' : '注册未完成，请稍后重试';
       });
+    } on EmailConfirmationRequiredException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _isLogin = true;
+        _error = null;
+        _notice = e.message;
+      });
+      _passwordController.clear();
+    } on EmailAuthFlowException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.message;
+        _notice = null;
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {

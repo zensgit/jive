@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:jive/core/auth/auth_service.dart';
 import 'package:jive/core/auth/auth_state.dart';
+import 'package:jive/core/auth/supabase_auth_service.dart';
 import 'package:jive/feature/auth/auth_screen.dart';
 
 class FakeAuthService extends AuthService {
@@ -16,6 +17,8 @@ class FakeAuthService extends AuthService {
   AuthProvider? lastProvider;
   int smsRequestCount = 0;
   bool phoneSignInSucceeds = false;
+  Exception? signInWithEmailException;
+  Exception? registerWithEmailException;
 
   @override
   AuthState get state => _state;
@@ -25,6 +28,9 @@ class FakeAuthService extends AuthService {
 
   @override
   Future<AuthState> registerWithEmail(String email, String password) async {
+    if (registerWithEmailException != null) {
+      throw registerWithEmailException!;
+    }
     return _state;
   }
 
@@ -47,6 +53,9 @@ class FakeAuthService extends AuthService {
 
   @override
   Future<AuthState> signInWithEmail(String email, String password) async {
+    if (signInWithEmailException != null) {
+      throw signInWithEmailException!;
+    }
     return _state;
   }
 
@@ -124,6 +133,44 @@ void main() {
     expect(auth.lastPasswordResetEmail, 'user@example.com');
     expect(find.text('重置邮件已发送，请查收邮箱并按邮件提示操作'), findsOneWidget);
   });
+
+  testWidgets('email auth shows specific EmailAuthFlowException message', (
+    tester,
+  ) async {
+    final auth = FakeAuthService()
+      ..signInWithEmailException = const EmailAuthFlowException('邮箱或密码错误');
+
+    await tester.pumpWidget(buildScreen(auth));
+    await tester.enterText(find.byType(TextField).first, 'user@example.com');
+    await tester.enterText(find.byType(TextField).at(1), '123456');
+    await tester.tap(find.text('登录'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('邮箱或密码错误'), findsOneWidget);
+  });
+
+  testWidgets(
+    'email registration shows confirmation notice and switches back to login',
+    (tester) async {
+      final auth = FakeAuthService()
+        ..registerWithEmailException = const EmailConfirmationRequiredException(
+          '注册成功，请先前往邮箱完成验证，再使用邮箱密码登录',
+        );
+
+      await tester.pumpWidget(buildScreen(auth));
+      await tester.tap(find.text('没有账号？注册'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, 'user@example.com');
+      await tester.enterText(find.byType(TextField).at(1), '123456');
+      await tester.tap(find.text('注册'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('注册成功，请先前往邮箱完成验证，再使用邮箱密码登录'), findsOneWidget);
+      expect(find.text('登录'), findsOneWidget);
+      expect(find.text('没有账号？注册'), findsOneWidget);
+    },
+  );
 
   testWidgets('apple sign-in button calls provider auth', (tester) async {
     final auth = FakeAuthService();
