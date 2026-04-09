@@ -1,4 +1,7 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import {
+  createClient,
+  type SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2.49.8";
 
 type SubscriptionStatus =
   | "active"
@@ -8,7 +11,13 @@ type SubscriptionStatus =
   | "expired"
   | "revoked";
 
+type SubscriptionPlan = "free" | "paid" | "subscriber";
+
 type EntitlementTier = "free" | "paid" | "subscriber";
+
+type SubscriptionPlatform = "google_play" | "apple_app_store";
+
+type WebhookNotificationStatus = "processing" | "processed" | "failed";
 
 type PubSubPushPayload = {
   message: {
@@ -39,12 +48,16 @@ type AppleAppStoreServerNotificationV2Request = {
 
 type UserSubscriptionRow = {
   id: number;
+  user_id: string;
   plan: string;
+  status: SubscriptionStatus;
   product_id: string | null;
+  purchase_token: string | null;
   order_id: string | null;
   expires_at: string | null;
   receipt_data: Record<string, unknown> | null;
   raw_response: Record<string, unknown> | null;
+  updated_at: string;
 };
 
 type GoogleSubscriptionLookup = {
@@ -54,12 +67,170 @@ type GoogleSubscriptionLookup = {
   rawResponse: Record<string, unknown>;
 };
 
+type AppleNotificationData = {
+  environment?: string;
+  appAppleId?: number;
+  bundleId?: string;
+  bundleVersion?: string;
+  signedTransactionInfo?: string;
+  signedRenewalInfo?: string;
+  status?: number;
+};
+
+type AppleNotificationPayload = {
+  notificationType?: string;
+  subtype?: string;
+  notificationUUID?: string;
+  version?: string;
+  signedDate?: number;
+  data?: AppleNotificationData;
+};
+
+type AppleTransactionInfo = {
+  originalTransactionId?: string;
+  transactionId?: string;
+  webOrderLineItemId?: string;
+  bundleId?: string;
+  productId?: string;
+  purchaseDate?: number;
+  originalPurchaseDate?: number;
+  expiresDate?: number;
+  appAccountToken?: string;
+  environment?: string;
+  revocationDate?: number;
+  signedDate?: number;
+};
+
+type AppleRenewalInfo = {
+  expirationIntent?: number;
+  originalTransactionId?: string;
+  autoRenewProductId?: string;
+  productId?: string;
+  autoRenewStatus?: number;
+  isInBillingRetryPeriod?: boolean;
+  gracePeriodExpiresDate?: number;
+  signedDate?: number;
+  environment?: string;
+  renewalDate?: number;
+  appAccountToken?: string;
+};
+
+type AppleSubscriptionUpdate = {
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  entitlementTier: EntitlementTier;
+  productId: string | null;
+  purchaseToken: string | null;
+  orderId: string | null;
+  expiresAt: string | null;
+  notificationType: string;
+  notificationSubtype: string | null;
+  originalTransactionId: string | null;
+  transactionId: string | null;
+  appAccountToken: string | null;
+};
+
 type IdempotencyClaim =
   | { state: "claimed" }
   | { state: "duplicate" }
   | { state: "in_progress" };
 
 type WebhookEnv = ReturnType<typeof readEnv>;
+
+type SubscriptionWebhookDatabase = {
+  public: {
+    Tables: {
+      user_subscriptions: {
+        Row: UserSubscriptionRow & {
+          platform: SubscriptionPlatform;
+          entitlement_tier: EntitlementTier;
+          last_verified_at: string | null;
+          verification_source: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: never;
+          user_id: string;
+          plan: string;
+          status: SubscriptionStatus;
+          platform: SubscriptionPlatform;
+          product_id?: string | null;
+          purchase_token?: string | null;
+          order_id?: string | null;
+          entitlement_tier?: EntitlementTier;
+          expires_at?: string | null;
+          last_verified_at?: string | null;
+          verification_source?: string;
+          receipt_data?: Record<string, unknown>;
+          raw_response?: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          plan?: string;
+          status?: SubscriptionStatus;
+          platform?: SubscriptionPlatform;
+          product_id?: string | null;
+          purchase_token?: string | null;
+          order_id?: string | null;
+          entitlement_tier?: EntitlementTier;
+          expires_at?: string | null;
+          last_verified_at?: string | null;
+          verification_source?: string;
+          receipt_data?: Record<string, unknown>;
+          raw_response?: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      subscription_webhook_notifications: {
+        Row: {
+          notification_id: string;
+          provider: SubscriptionPlatform;
+          source: string;
+          status: WebhookNotificationStatus;
+          payload: Record<string, unknown>;
+          last_error: string | null;
+          processed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          notification_id: string;
+          provider: SubscriptionPlatform;
+          source: string;
+          status?: WebhookNotificationStatus;
+          payload?: Record<string, unknown>;
+          last_error?: string | null;
+          processed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          provider?: SubscriptionPlatform;
+          source?: string;
+          status?: WebhookNotificationStatus;
+          payload?: Record<string, unknown>;
+          last_error?: string | null;
+          processed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+};
+
+type AdminClient = SupabaseClient<SubscriptionWebhookDatabase>;
+
+type AppleLookupColumn = "purchase_token" | "order_id";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,9 +242,11 @@ const corsHeaders = {
 const handledGoogleNotificationTypes = new Set([1, 2, 3, 4, 5, 6, 7, 12, 13]);
 const processingClaimTtlMs = 15 * 60 * 1000;
 
-let cachedEnv: WebhookEnv | null = null;
-let cachedAdminClient: ReturnType<typeof createClient> | null = null;
+const userSubscriptionSelectColumns =
+  "id, user_id, plan, status, product_id, purchase_token, order_id, expires_at, receipt_data, raw_response, updated_at";
 
+let cachedEnv: WebhookEnv | null = null;
+let cachedAdminClient: AdminClient | null = null;
 if (import.meta.main) {
   Deno.serve(handleRequest);
 }
@@ -95,7 +268,7 @@ export async function handleRequest(req: Request): Promise<Response> {
 
     const body = parseJson<unknown>(rawBody);
     if (looksLikeAppleAppStoreServerNotificationV2(body)) {
-      return await handleAppleAppStoreServerNotificationV2(body);
+      return await handleAppleAppStoreServerNotificationV2(body, env);
     }
 
     return await handleGooglePlayRtdn(body, env, adminClient);
@@ -111,7 +284,7 @@ export async function handleRequest(req: Request): Promise<Response> {
 async function handleGooglePlayRtdn(
   body: unknown,
   env: WebhookEnv,
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: AdminClient,
 ): Promise<Response> {
   const pushPayload = parsePubSubPushPayload(body);
   const notificationId = pushPayload.message.messageId;
@@ -163,7 +336,8 @@ async function handleGooglePlayRtdn(
       });
     }
 
-    const subscriptionNotification = developerNotification.subscriptionNotification;
+    const subscriptionNotification =
+      developerNotification.subscriptionNotification;
     if (subscriptionNotification == null) {
       await markNotificationProcessed(adminClient, notificationId);
       return json({
@@ -177,7 +351,10 @@ async function handleGooglePlayRtdn(
 
     const notificationType = Number(subscriptionNotification.notificationType);
     const purchaseToken = subscriptionNotification.purchaseToken?.trim();
-    if (!Number.isInteger(notificationType) || purchaseToken == null || purchaseToken.length === 0) {
+    if (
+      !Number.isInteger(notificationType) || purchaseToken == null ||
+      purchaseToken.length === 0
+    ) {
       throw new HttpError(400, "invalid_subscription_notification");
     }
 
@@ -209,7 +386,8 @@ async function handleGooglePlayRtdn(
     }
 
     const status = mapGoogleNotificationType(notificationType);
-    const expiresAt = googleLookup?.expiresAt ?? subscription.expires_at ?? null;
+    const expiresAt = googleLookup?.expiresAt ?? subscription.expires_at ??
+      null;
     const now = new Date().toISOString();
     const receiptData = mergeJsonObject(subscription.receipt_data, {
       last_webhook: {
@@ -237,10 +415,9 @@ async function handleGooglePlayRtdn(
       .update({
         plan: nextPlan,
         status,
-        product_id:
-          googleLookup?.productId ??
-            subscriptionNotification.subscriptionId ??
-            subscription.product_id,
+        product_id: googleLookup?.productId ??
+          subscriptionNotification.subscriptionId ??
+          subscription.product_id,
         order_id: googleLookup?.orderId ?? subscription.order_id,
         entitlement_tier: deriveEntitlementTier(nextPlan, status, expiresAt),
         expires_at: expiresAt,
@@ -281,19 +458,175 @@ async function handleGooglePlayRtdn(
 }
 
 async function handleAppleAppStoreServerNotificationV2(
-  _body: AppleAppStoreServerNotificationV2Request,
+  body: AppleAppStoreServerNotificationV2Request,
+  env: ReturnType<typeof readEnv>,
 ): Promise<Response> {
-  // TODO: Verify the signedPayload JWS with Apple's App Store Server API keys.
-  // TODO: Decode notificationUUID and use it for the idempotency table.
-  // TODO: Map notificationType/subtype into user_subscriptions updates.
-  console.warn("subscription-webhook apple handler is not implemented");
+  // Follow-up: cryptographically verify the JWS with Apple's root certificates.
+  const adminClient = getAdminClient(env);
+  const notification = decodeJwsPayload<AppleNotificationPayload>(
+    body.signedPayload,
+  );
+  const notificationId = normalizeNonEmptyString(notification.notificationUUID);
+  if (notificationId == null) {
+    throw new HttpError(400, "missing_apple_notification_uuid");
+  }
 
-  return json({
-    received: true,
-    provider: "apple_app_store",
-    handled: false,
-    reason: "not_implemented",
-  }, 202);
+  const claim = await claimNotification(
+    adminClient,
+    notificationId,
+    "apple_app_store",
+    "apple_app_store_server_notification_v2",
+    asJsonObject(notification),
+  );
+
+  if (claim.state === "duplicate") {
+    return json({
+      received: true,
+      duplicate: true,
+      notification_id: notificationId,
+    });
+  }
+
+  if (claim.state === "in_progress") {
+    return json({
+      received: true,
+      duplicate: true,
+      notification_id: notificationId,
+      status: "processing",
+    }, 202);
+  }
+
+  try {
+    const transactionInfo = notification.data?.signedTransactionInfo != null
+      ? decodeJwsPayload<AppleTransactionInfo>(
+        notification.data.signedTransactionInfo,
+      )
+      : null;
+    const renewalInfo = notification.data?.signedRenewalInfo != null
+      ? decodeJwsPayload<AppleRenewalInfo>(notification.data.signedRenewalInfo)
+      : null;
+
+    assertAppleNotificationMatchesEnv(
+      notification,
+      transactionInfo,
+      renewalInfo,
+      env,
+    );
+
+    if (normalizeNotificationType(notification.notificationType) === "TEST") {
+      await markNotificationProcessed(adminClient, notificationId);
+      return json({
+        received: true,
+        provider: "apple_app_store",
+        notification_id: notificationId,
+        test: true,
+      });
+    }
+
+    const subscriptionUpdate = buildAppleSubscriptionUpdate(
+      notification,
+      transactionInfo,
+      renewalInfo,
+    );
+    if (subscriptionUpdate == null) {
+      await markNotificationProcessed(adminClient, notificationId);
+      return json({
+        received: true,
+        provider: "apple_app_store",
+        notification_id: notificationId,
+        ignored: true,
+        reason: "unsupported_notification_type",
+        notification_type: notification.notificationType ?? null,
+        subtype: notification.subtype ?? null,
+      }, 202);
+    }
+
+    const existingSubscription = await findAppleSubscription(
+      adminClient,
+      subscriptionUpdate,
+    );
+    const targetUserId = existingSubscription?.user_id ??
+      normalizeUuid(subscriptionUpdate.appAccountToken);
+    if (existingSubscription == null && targetUserId == null) {
+      throw new HttpError(404, "subscription_not_found");
+    }
+
+    const now = new Date().toISOString();
+    const receiptData = mergeJsonObject(
+      existingSubscription?.receipt_data ?? null,
+      {
+        original_transaction_id: subscriptionUpdate.originalTransactionId,
+        latest_transaction_id: subscriptionUpdate.transactionId,
+        last_webhook: {
+          provider: "apple_app_store",
+          notification_id: notificationId,
+          notification_type: subscriptionUpdate.notificationType,
+          subtype: subscriptionUpdate.notificationSubtype,
+          original_transaction_id: subscriptionUpdate.originalTransactionId,
+          transaction_id: subscriptionUpdate.transactionId,
+          app_account_token: subscriptionUpdate.appAccountToken,
+          received_at: now,
+        },
+      },
+    );
+    const rawResponse = mergeJsonObject(
+      existingSubscription?.raw_response ?? null,
+      {
+        apple_app_store_server_notification_v2: {
+          notification,
+          transaction: transactionInfo,
+          renewal: renewalInfo,
+        },
+      },
+    );
+
+    const payload: SubscriptionWebhookDatabase["public"]["Tables"]["user_subscriptions"]["Insert"] = {
+      user_id: targetUserId ?? existingSubscription!.user_id,
+      plan: subscriptionUpdate.plan,
+      status: subscriptionUpdate.status,
+      platform: "apple_app_store" as const,
+      product_id: subscriptionUpdate.productId,
+      purchase_token: subscriptionUpdate.purchaseToken,
+      order_id: subscriptionUpdate.orderId,
+      entitlement_tier: subscriptionUpdate.entitlementTier,
+      expires_at: subscriptionUpdate.expiresAt,
+      last_verified_at: now,
+      verification_source: "apple_notification_v2",
+      receipt_data: receiptData,
+      raw_response: rawResponse,
+      updated_at: now,
+    };
+
+    const query = existingSubscription == null
+      ? adminClient.from("user_subscriptions").insert(payload)
+      : adminClient.from("user_subscriptions").update(payload).eq(
+        "id",
+        existingSubscription.id,
+      );
+    const { data, error } = await query.select().single();
+    if (error != null) {
+      console.error("subscription-webhook apple upsert failed", error);
+      throw new HttpError(500, "subscription_update_failed");
+    }
+
+    await markNotificationProcessed(adminClient, notificationId);
+    return json({
+      received: true,
+      provider: "apple_app_store",
+      duplicate: false,
+      notification_id: notificationId,
+      notification_type: subscriptionUpdate.notificationType,
+      subtype: subscriptionUpdate.notificationSubtype,
+      subscription: data,
+    });
+  } catch (error) {
+    await markNotificationFailed(
+      adminClient,
+      notificationId,
+      error instanceof Error ? error.message : "unknown_error",
+    );
+    throw error;
+  }
 }
 
 function readEnv() {
@@ -313,6 +646,9 @@ function readEnv() {
     googlePlayPackageName: Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME"),
     webhookBearerToken: Deno.env.get("PUBSUB_BEARER_TOKEN"),
     webhookHmacSecret: Deno.env.get("WEBHOOK_HMAC_SECRET"),
+    appleAppStoreBundleId: Deno.env.get("APPLE_APP_STORE_BUNDLE_ID"),
+    appleAppStoreAppleId: Deno.env.get("APPLE_APP_STORE_APPLE_ID"),
+    appleAppStoreEnvironment: Deno.env.get("APPLE_APP_STORE_ENVIRONMENT"),
   };
 }
 
@@ -321,8 +657,8 @@ function getEnv(): WebhookEnv {
   return cachedEnv;
 }
 
-function getAdminClient(env: WebhookEnv): ReturnType<typeof createClient> {
-  cachedAdminClient ??= createClient(
+function getAdminClient(env: WebhookEnv): AdminClient {
+  cachedAdminClient ??= createClient<SubscriptionWebhookDatabase>(
     env.supabaseUrl,
     env.supabaseServiceRoleKey,
   );
@@ -386,7 +722,9 @@ function parsePubSubPushPayload(body: unknown): PubSubPushPayload {
         : null,
       attributes: stringRecord(message.attributes),
     },
-    subscription: typeof root.subscription === "string" ? root.subscription : null,
+    subscription: typeof root.subscription === "string"
+      ? root.subscription
+      : null,
   };
 }
 
@@ -396,12 +734,12 @@ function decodeDeveloperNotification(data: string): DeveloperNotification {
 }
 
 async function findSubscriptionByPurchaseToken(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: AdminClient,
   purchaseToken: string,
 ): Promise<UserSubscriptionRow | null> {
   const { data, error } = await adminClient
     .from("user_subscriptions")
-    .select("id, plan, product_id, order_id, expires_at, receipt_data, raw_response")
+    .select(userSubscriptionSelectColumns)
     .eq("platform", "google_play")
     .eq("purchase_token", purchaseToken)
     .maybeSingle();
@@ -442,13 +780,15 @@ async function maybeFetchGoogleSubscription(
   const lineItemRecord = isRecord(lineItem) ? lineItem : null;
 
   return {
-    productId: lineItemRecord != null && typeof lineItemRecord.productId === "string"
-      ? lineItemRecord.productId
-      : null,
+    productId:
+      lineItemRecord != null && typeof lineItemRecord.productId === "string"
+        ? lineItemRecord.productId
+        : null,
     orderId: typeof data.latestOrderId === "string" ? data.latestOrderId : null,
-    expiresAt: lineItemRecord != null && typeof lineItemRecord.expiryTime === "string"
-      ? lineItemRecord.expiryTime
-      : null,
+    expiresAt:
+      lineItemRecord != null && typeof lineItemRecord.expiryTime === "string"
+        ? lineItemRecord.expiryTime
+        : null,
     rawResponse: data,
   };
 }
@@ -529,9 +869,9 @@ async function importPrivateKey(pem: string): Promise<CryptoKey> {
 }
 
 async function claimNotification(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: AdminClient,
   notificationId: string,
-  provider: "google_play" | "apple_app_store",
+  provider: SubscriptionPlatform,
   source: string,
   payload: Record<string, unknown>,
 ): Promise<IdempotencyClaim> {
@@ -565,7 +905,10 @@ async function claimNotification(
     .maybeSingle();
 
   if (existingError != null) {
-    console.error("subscription-webhook idempotency fetch failed", existingError);
+    console.error(
+      "subscription-webhook idempotency fetch failed",
+      existingError,
+    );
     throw new HttpError(500, "webhook_idempotency_lookup_failed");
   }
 
@@ -604,7 +947,7 @@ async function claimNotification(
 }
 
 async function markNotificationProcessed(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: AdminClient,
   notificationId: string,
 ): Promise<void> {
   const now = new Date().toISOString();
@@ -625,7 +968,7 @@ async function markNotificationProcessed(
 }
 
 async function markNotificationFailed(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: AdminClient,
   notificationId: string,
   errorMessage: string,
 ): Promise<void> {
@@ -643,7 +986,400 @@ async function markNotificationFailed(
   }
 }
 
-export function mapGoogleNotificationType(notificationType: number): SubscriptionStatus {
+async function findAppleSubscription(
+  adminClient: AdminClient,
+  update: AppleSubscriptionUpdate,
+): Promise<UserSubscriptionRow | null> {
+  const identifiers = collectAppleLookupIdentifiers(update);
+
+  const purchaseTokenMatch = await findLatestAppleSubscriptionByColumn(
+    adminClient,
+    "purchase_token",
+    identifiers,
+  );
+  if (purchaseTokenMatch != null) {
+    return purchaseTokenMatch;
+  }
+
+  const orderIdMatch = await findLatestAppleSubscriptionByColumn(
+    adminClient,
+    "order_id",
+    identifiers,
+  );
+  if (orderIdMatch != null) {
+    return orderIdMatch;
+  }
+
+  const appAccountToken = normalizeUuid(update.appAccountToken);
+  if (appAccountToken == null) {
+    return null;
+  }
+
+  const { data, error } = await adminClient
+    .from("user_subscriptions")
+    .select(userSubscriptionSelectColumns)
+    .eq("platform", "apple_app_store")
+    .eq("user_id", appAccountToken)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error != null) {
+    console.error("subscription-webhook apple lookup by user_id failed", error);
+    throw new HttpError(500, "subscription_lookup_failed");
+  }
+
+  return data as UserSubscriptionRow | null;
+}
+
+function collectAppleLookupIdentifiers(
+  update: AppleSubscriptionUpdate,
+): string[] {
+  const identifiers: string[] = [];
+  const seen = new Set<string>();
+
+  for (
+    const value of [
+      update.purchaseToken,
+      update.orderId,
+      update.originalTransactionId,
+      update.transactionId,
+    ]
+  ) {
+    const normalized = normalizeNonEmptyString(value);
+    if (normalized == null || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    identifiers.push(normalized);
+  }
+
+  return identifiers;
+}
+
+async function findLatestAppleSubscriptionByColumn(
+  adminClient: AdminClient,
+  column: AppleLookupColumn,
+  identifiers: string[],
+): Promise<UserSubscriptionRow | null> {
+  if (identifiers.length === 0) {
+    return null;
+  }
+
+  const { data, error } = await adminClient
+    .from("user_subscriptions")
+    .select(userSubscriptionSelectColumns)
+    .eq("platform", "apple_app_store")
+    .in(column, identifiers)
+    .order("updated_at", { ascending: false });
+
+  if (error != null) {
+    console.error(
+      `subscription-webhook apple lookup by ${column} failed`,
+      error,
+    );
+    throw new HttpError(500, "subscription_lookup_failed");
+  }
+
+  return pickBestAppleSubscriptionMatch(
+    (data ?? []) as UserSubscriptionRow[],
+    column,
+    identifiers,
+  );
+}
+
+function pickBestAppleSubscriptionMatch(
+  rows: UserSubscriptionRow[],
+  column: AppleLookupColumn,
+  identifiers: string[],
+): UserSubscriptionRow | null {
+  const identifierRank = new Map(
+    identifiers.map((identifier, index) => [identifier, index] as const),
+  );
+
+  let bestRow: UserSubscriptionRow | null = null;
+  let bestRank = Number.POSITIVE_INFINITY;
+  let bestUpdatedAt = Number.NEGATIVE_INFINITY;
+
+  for (const row of rows) {
+    const lookupValue = column === "purchase_token"
+      ? row.purchase_token
+      : row.order_id;
+    if (lookupValue == null) {
+      continue;
+    }
+
+    const rank = identifierRank.get(lookupValue);
+    if (rank == null) {
+      continue;
+    }
+
+    const updatedAt = Date.parse(row.updated_at);
+    if (
+      bestRow == null ||
+      rank < bestRank ||
+      (rank === bestRank && updatedAt > bestUpdatedAt)
+    ) {
+      bestRow = row;
+      bestRank = rank;
+      bestUpdatedAt = updatedAt;
+    }
+  }
+
+  return bestRow;
+}
+
+function assertAppleNotificationMatchesEnv(
+  notification: AppleNotificationPayload,
+  transactionInfo: AppleTransactionInfo | null,
+  renewalInfo: AppleRenewalInfo | null,
+  env: ReturnType<typeof readEnv>,
+): void {
+  const bundleId = normalizeNonEmptyString(
+    notification.data?.bundleId ?? transactionInfo?.bundleId,
+  );
+  if (
+    env.appleAppStoreBundleId != null &&
+    bundleId != null &&
+    bundleId !== env.appleAppStoreBundleId
+  ) {
+    throw new HttpError(400, "unexpected_apple_bundle_id");
+  }
+
+  const appAppleId = notification.data?.appAppleId;
+  if (
+    env.appleAppStoreAppleId != null &&
+    appAppleId != null &&
+    String(appAppleId) !== env.appleAppStoreAppleId
+  ) {
+    throw new HttpError(400, "unexpected_apple_app_id");
+  }
+
+  const expectedEnvironment = normalizeAppleEnvironment(
+    env.appleAppStoreEnvironment,
+  );
+  if (expectedEnvironment == null) {
+    return;
+  }
+
+  const actualEnvironment = normalizeAppleEnvironment(
+    notification.data?.environment ??
+      transactionInfo?.environment ??
+      renewalInfo?.environment,
+  );
+  if (actualEnvironment != null && actualEnvironment !== expectedEnvironment) {
+    throw new HttpError(400, "unexpected_apple_environment");
+  }
+}
+
+export function buildAppleSubscriptionUpdate(
+  notification: AppleNotificationPayload,
+  transactionInfo: AppleTransactionInfo | null,
+  renewalInfo: AppleRenewalInfo | null,
+): AppleSubscriptionUpdate | null {
+  const notificationType = normalizeNotificationType(
+    notification.notificationType,
+  );
+  if (notificationType == null || notificationType === "TEST") {
+    return null;
+  }
+
+  const status = mapAppleNotificationType(
+    notificationType,
+    notification.subtype,
+  );
+  if (status == null) {
+    return null;
+  }
+
+  const productId = normalizeNonEmptyString(
+    transactionInfo?.productId ??
+      renewalInfo?.autoRenewProductId ??
+      renewalInfo?.productId,
+  );
+  const plan = derivePlanForProductId(productId);
+  if (plan == null) {
+    return null;
+  }
+
+  const originalTransactionId = normalizeNonEmptyString(
+    transactionInfo?.originalTransactionId ??
+      renewalInfo?.originalTransactionId,
+  );
+  const transactionId = normalizeNonEmptyString(transactionInfo?.transactionId);
+  const expiresAt = toIsoString(
+    transactionInfo?.expiresDate ??
+      renewalInfo?.gracePeriodExpiresDate ??
+      renewalInfo?.renewalDate,
+  );
+
+  return {
+    plan,
+    status,
+    entitlementTier: deriveEntitlementTierForPlan(plan, status, expiresAt),
+    productId,
+    purchaseToken: originalTransactionId,
+    orderId: transactionId,
+    expiresAt,
+    notificationType,
+    notificationSubtype: normalizeNotificationType(notification.subtype),
+    originalTransactionId,
+    transactionId,
+    appAccountToken: normalizeNonEmptyString(
+      transactionInfo?.appAccountToken ?? renewalInfo?.appAccountToken,
+    ),
+  };
+}
+
+export function mapAppleNotificationType(
+  notificationType: string,
+  subtype?: string | null,
+): SubscriptionStatus | null {
+  const normalizedType = normalizeNotificationType(notificationType);
+  const normalizedSubtype = normalizeNotificationType(subtype);
+
+  switch (normalizedType) {
+    case "SUBSCRIBED":
+    case "DID_RENEW":
+    case "DID_RECOVER":
+    case "OFFER_REDEEMED":
+    case "PRICE_INCREASE":
+    case "RENEWAL_EXTENDED":
+    case "RENEWAL_EXTENSION":
+    case "REFUND_REVERSED":
+    case "ONE_TIME_CHARGE":
+    case "DID_CHANGE_RENEWAL_PREF":
+      return "active";
+    case "DID_CHANGE_RENEWAL_STATUS":
+      return normalizedSubtype === "AUTO_RENEW_DISABLED"
+        ? "canceled"
+        : "active";
+    case "DID_FAIL_TO_RENEW":
+      if (normalizedSubtype === "GRACE_PERIOD") {
+        return "grace";
+      }
+      return "pending";
+    case "GRACE_PERIOD_EXPIRED":
+    case "EXPIRED":
+      return "expired";
+    case "REFUND":
+    case "REVOKE":
+      return "revoked";
+    default:
+      return null;
+  }
+}
+
+function derivePlanForProductId(
+  productId: string | null,
+): SubscriptionPlan | null {
+  if (productId == null) {
+    return null;
+  }
+  if (productId === "jive_paid_unlock") {
+    return "paid";
+  }
+  if (
+    productId === "jive_subscriber_monthly" ||
+    productId === "jive_subscriber_yearly"
+  ) {
+    return "subscriber";
+  }
+  return null;
+}
+
+function deriveEntitlementTierForPlan(
+  plan: SubscriptionPlan,
+  status: SubscriptionStatus,
+  expiresAt: string | null,
+): EntitlementTier {
+  if (plan === "subscriber") {
+    return deriveEntitlementTier("subscriber", status, expiresAt);
+  }
+
+  if (plan === "paid") {
+    return status === "expired" || status === "revoked" ? "free" : "paid";
+  }
+
+  return "free";
+}
+
+export function decodeJwsPayload<T>(signedPayload: string): T {
+  const parts = signedPayload.split(".");
+  if (parts.length !== 3) {
+    throw new HttpError(400, "invalid_signed_payload");
+  }
+
+  return parseJson<T>(decodeBase64(parts[1]));
+}
+
+function normalizeAppleEnvironment(
+  value: string | null | undefined,
+): string | null {
+  const normalized = normalizeNotificationType(value);
+  if (normalized === "PRODUCTION") {
+    return "production";
+  }
+  if (normalized === "SANDBOX" || normalized === "LOCAL_SANDBOX") {
+    return "sandbox";
+  }
+  return normalized?.toLowerCase() ?? null;
+}
+
+function toIsoString(value: number | string | null | undefined): string | null {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return new Date(value).toISOString();
+  }
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return new Date(numeric).toISOString();
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed.toISOString();
+}
+
+function normalizeNonEmptyString(
+  value: string | null | undefined,
+): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+function normalizeUuid(value: string | null | undefined): string | null {
+  const normalized = normalizeNonEmptyString(value);
+  if (normalized == null) {
+    return null;
+  }
+
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      .test(normalized)
+    ? normalized.toLowerCase()
+    : null;
+}
+
+function normalizeNotificationType(
+  value: string | null | undefined,
+): string | null {
+  const normalized = normalizeNonEmptyString(value);
+  return normalized?.toUpperCase() ?? null;
+}
+
+export function mapGoogleNotificationType(
+  notificationType: number,
+): SubscriptionStatus {
   switch (notificationType) {
     case 1:
     case 2:
@@ -768,7 +1504,10 @@ function extractSignature(headers: Headers): string | null {
   return raw.startsWith("sha256=") ? raw.slice("sha256=".length) : raw;
 }
 
-async function signHmacSha256(secret: string, payload: string): Promise<string> {
+async function signHmacSha256(
+  secret: string,
+  payload: string,
+): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     new TextEncoder().encode(secret),
@@ -846,7 +1585,9 @@ function base64UrlEncode(value: string): string {
 }
 
 function base64UrlEncodeBytes(bytes: Uint8Array): string {
-  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join("");
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join(
+    "",
+  );
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll(
     "=",
     "",
