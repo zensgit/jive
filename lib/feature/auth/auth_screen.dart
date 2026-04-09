@@ -176,7 +176,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final result = await auth.signInWithPhone(phone, code);
       if (!mounted) return;
 
-      final loggedIn = result is AuthLoggedIn || auth.isLoggedIn;
+      final loggedIn = result is AuthLoggedIn;
       setState(() {
         _loading = false;
         if (!loggedIn) {
