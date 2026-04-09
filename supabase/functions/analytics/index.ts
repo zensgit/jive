@@ -32,6 +32,19 @@ type RetentionMetric = {
   retained_d30: number;
 };
 
+type AnalyticsAccumulator = {
+  days: number;
+  today: string;
+  monthlySince: string;
+  actorsByDate: Map<string, Set<string>>;
+  eventCounts: Map<string, { total: number; actors: Set<string> }>;
+  activityByActor: Map<string, Set<string>>;
+  authStarted: Set<string>;
+  authCompleted: Set<string>;
+  purchaseStarted: Set<string>;
+  purchaseCompleted: Set<string>;
+};
+
 const DEFAULT_SUMMARY_DAYS = 30;
 const MIN_SUMMARY_DAYS = 7;
 const MAX_SUMMARY_DAYS = 90;
@@ -168,11 +181,10 @@ export async function handleSummaryRequest(
     const days = parseSummaryDays(url.searchParams.get("days"));
     const now = new Date();
     const { sinceDate, untilDate } = buildSummaryWindow(now, days);
-    const rows = await fetchAnalyticsRows(
+    const summary = await fetchAnalyticsSummary(
       adminClient,
-      { sinceDate, untilDate },
+      { sinceDate, untilDate, days, now },
     );
-    const summary = summarizeAnalyticsRows(rows, now, days);
     return json(summary, 200);
   } catch (error) {
     if (error instanceof AnalyticsHttpError) {
@@ -180,6 +192,65 @@ export async function handleSummaryRequest(
     }
     throw error;
   }
+}
+
+async function fetchAnalyticsSummary(
+  adminClient: any,
+  options: {
+    sinceDate: string;
+    untilDate: string;
+    days: number;
+    now: Date;
+    maxRows?: number;
+  },
+) {
+  const { sinceDate, untilDate, days, now, maxRows = MAX_SUMMARY_ROWS } =
+    options;
+  const pageSize = 1000;
+  let from = 0;
+
+  const { count, error: countError } = await adminClient
+    .from("analytics_events")
+    .select("id", { head: true, count: "exact" })
+    .gte("occurred_on", sinceDate)
+    .lte("occurred_on", untilDate);
+
+  if (countError != null) {
+    console.error("analytics summary count failed", countError);
+    throw new AnalyticsHttpError("analytics_summary_fetch_failed", 502);
+  }
+  if (typeof count === "number" && count > maxRows) {
+    throw new AnalyticsHttpError("analytics_summary_window_too_large", 422);
+  }
+
+  const accumulator = createAnalyticsAccumulator(now, days);
+
+  while (true) {
+    const { data, error } = await adminClient
+      .from("analytics_events")
+      .select("user_id,device_id,event_name,occurred_on")
+      .gte("occurred_on", sinceDate)
+      .lte("occurred_on", untilDate)
+      .order("occurred_on", { ascending: true })
+      .range(from, from + pageSize - 1);
+
+    if (error != null) {
+      console.error("analytics summary fetch failed", error);
+      throw new AnalyticsHttpError("analytics_summary_fetch_failed", 502);
+    }
+
+    const batch = (data ?? []) as AnalyticsRow[];
+    for (const row of batch) {
+      addAnalyticsRow(accumulator, row);
+    }
+
+    if (batch.length < pageSize) {
+      break;
+    }
+    from += pageSize;
+  }
+
+  return finalizeAnalyticsAccumulator(accumulator);
 }
 
 export async function fetchAnalyticsRows(
@@ -242,71 +313,98 @@ export function summarizeAnalyticsRows(
   now: Date = new Date(),
   days = 30,
 ) {
-  const today = toIsoDate(now);
-  const monthlySince = shiftIsoDate(today, -(days - 1));
-  const actorsByDate = new Map<string, Set<string>>();
-  const eventCounts = new Map<string, { total: number; actors: Set<string> }>();
-  const activityByActor = new Map<string, Set<string>>();
-  const authStarted = new Set<string>();
-  const authCompleted = new Set<string>();
-  const purchaseStarted = new Set<string>();
-  const purchaseCompleted = new Set<string>();
-
+  const accumulator = createAnalyticsAccumulator(now, days);
   for (const row of rows) {
-    if (row.occurred_on < monthlySince || row.occurred_on > today) continue;
-    const actor = actorKey(row);
-    if (actor == null) continue;
-
-    if (!actorsByDate.has(row.occurred_on)) {
-      actorsByDate.set(row.occurred_on, new Set<string>());
-    }
-    actorsByDate.get(row.occurred_on)!.add(actor);
-
-    if (!activityByActor.has(actor)) {
-      activityByActor.set(actor, new Set<string>());
-    }
-    activityByActor.get(actor)!.add(row.occurred_on);
-
-    const eventMetric = eventCounts.get(row.event_name) ?? {
-      total: 0,
-      actors: new Set<string>(),
-    };
-    eventMetric.total += 1;
-    eventMetric.actors.add(actor);
-    eventCounts.set(row.event_name, eventMetric);
-
-    switch (row.event_name) {
-      case "auth_screen_viewed":
-        authStarted.add(actor);
-        break;
-      case "auth_signed_in":
-        authCompleted.add(actor);
-        break;
-      case "subscription_purchase_started":
-        purchaseStarted.add(actor);
-        break;
-      case "subscription_purchase_completed":
-        purchaseCompleted.add(actor);
-        break;
-    }
+    addAnalyticsRow(accumulator, row);
   }
 
-  const dau = actorsByDate.get(today)?.size ?? 0;
+  return finalizeAnalyticsAccumulator(accumulator);
+}
+
+function createAnalyticsAccumulator(
+  now: Date,
+  days: number,
+): AnalyticsAccumulator {
+  const today = toIsoDate(now);
+  return {
+    days,
+    today,
+    monthlySince: shiftIsoDate(today, -(days - 1)),
+    actorsByDate: new Map<string, Set<string>>(),
+    eventCounts: new Map<string, { total: number; actors: Set<string> }>(),
+    activityByActor: new Map<string, Set<string>>(),
+    authStarted: new Set<string>(),
+    authCompleted: new Set<string>(),
+    purchaseStarted: new Set<string>(),
+    purchaseCompleted: new Set<string>(),
+  };
+}
+
+function addAnalyticsRow(
+  accumulator: AnalyticsAccumulator,
+  row: AnalyticsRow,
+) {
+  if (
+    row.occurred_on < accumulator.monthlySince ||
+    row.occurred_on > accumulator.today
+  ) {
+    return;
+  }
+
+  const actor = actorKey(row);
+  if (actor == null) return;
+
+  if (!accumulator.actorsByDate.has(row.occurred_on)) {
+    accumulator.actorsByDate.set(row.occurred_on, new Set<string>());
+  }
+  accumulator.actorsByDate.get(row.occurred_on)!.add(actor);
+
+  if (!accumulator.activityByActor.has(actor)) {
+    accumulator.activityByActor.set(actor, new Set<string>());
+  }
+  accumulator.activityByActor.get(actor)!.add(row.occurred_on);
+
+  const eventMetric = accumulator.eventCounts.get(row.event_name) ?? {
+    total: 0,
+    actors: new Set<string>(),
+  };
+  eventMetric.total += 1;
+  eventMetric.actors.add(actor);
+  accumulator.eventCounts.set(row.event_name, eventMetric);
+
+  switch (row.event_name) {
+    case "auth_screen_viewed":
+      accumulator.authStarted.add(actor);
+      break;
+    case "auth_signed_in":
+      accumulator.authCompleted.add(actor);
+      break;
+    case "subscription_purchase_started":
+      accumulator.purchaseStarted.add(actor);
+      break;
+    case "subscription_purchase_completed":
+      accumulator.purchaseCompleted.add(actor);
+      break;
+  }
+}
+
+function finalizeAnalyticsAccumulator(accumulator: AnalyticsAccumulator) {
+  const dau = accumulator.actorsByDate.get(accumulator.today)?.size ?? 0;
   const mauActors = new Set<string>();
-  for (const set of actorsByDate.values()) {
+  for (const set of accumulator.actorsByDate.values()) {
     for (const actor of set) {
       mauActors.add(actor);
     }
   }
 
   return {
-    window_days: days,
-    as_of: today,
+    window_days: accumulator.days,
+    as_of: accumulator.today,
     active_users: {
       dau,
       mau: mauActors.size,
     },
-    events: Array.from(eventCounts.entries())
+    events: Array.from(accumulator.eventCounts.entries())
       .map(([eventName, metric]) => ({
         event_name: eventName,
         total: metric.total,
@@ -314,10 +412,16 @@ export function summarizeAnalyticsRows(
       }))
       .sort((a, b) => b.total - a.total),
     conversions: {
-      auth_sign_in: conversionMetric(authStarted, authCompleted),
-      purchase: conversionMetric(purchaseStarted, purchaseCompleted),
+      auth_sign_in: conversionMetric(
+        accumulator.authStarted,
+        accumulator.authCompleted,
+      ),
+      purchase: conversionMetric(
+        accumulator.purchaseStarted,
+        accumulator.purchaseCompleted,
+      ),
     },
-    retention: buildRetention(activityByActor),
+    retention: buildRetention(accumulator.activityByActor),
   };
 }
 
