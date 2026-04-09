@@ -1,4 +1,8 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import {
+  createClient,
+  type SupabaseClient,
+  type User,
+} from "https://esm.sh/@supabase/supabase-js@2.49.8";
 
 type UserSubscriptionRow = {
   user_id: string;
@@ -98,7 +102,7 @@ export async function handleRequest(req: Request): Promise<Response> {
 
 async function handleGetRequest(
   req: Request,
-  adminClient: any,
+  adminClient: SupabaseClient,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const url = new URL(req.url);
@@ -118,7 +122,7 @@ async function handleGetRequest(
 
 async function handlePostRequest(
   req: Request,
-  adminClient: any,
+  adminClient: SupabaseClient,
   corsHeaders: Record<string, string>,
 ): Promise<Response> {
   const body = await parseAdminRequestBody(req);
@@ -136,7 +140,7 @@ async function handlePostRequest(
   }
 }
 
-async function buildSummary(adminClient: any) {
+async function buildSummary(adminClient: SupabaseClient) {
   const userStats = await summarizeAuthUsers(adminClient, 500);
   const subscriptions = await fetchSubscriptions(adminClient);
   const latestByUser = latestSubscriptionByUser(subscriptions);
@@ -183,7 +187,7 @@ async function buildSummary(adminClient: any) {
   };
 }
 
-async function listUsers(adminClient: any, url: URL) {
+async function listUsers(adminClient: SupabaseClient, url: URL) {
   const limit = clampNumber(url.searchParams.get("limit"), 20, 1, 100);
   const offset = clampNumber(url.searchParams.get("offset"), 0, 0, 10000);
   const query = normalizeQuery(url.searchParams.get("query"));
@@ -209,7 +213,7 @@ async function listUsers(adminClient: any, url: URL) {
   };
 }
 
-async function getUserDetail(adminClient: any, url: URL) {
+async function getUserDetail(adminClient: SupabaseClient, url: URL) {
   const userId = normalizeQuery(url.searchParams.get("user_id"));
   if (userId == null) {
     throw new HttpError(400, "user_id_required");
@@ -227,7 +231,10 @@ async function getUserDetail(adminClient: any, url: URL) {
   };
 }
 
-async function setTierOverride(adminClient: any, body: SetTierRequest) {
+async function setTierOverride(
+  adminClient: SupabaseClient,
+  body: SetTierRequest,
+) {
   const userId = normalizeQuery(body.user_id);
   if (userId == null) {
     throw new HttpError(400, "user_id_required");
@@ -280,7 +287,10 @@ async function setTierOverride(adminClient: any, body: SetTierRequest) {
   };
 }
 
-async function clearTierOverride(adminClient: any, body: ClearOverrideRequest) {
+async function clearTierOverride(
+  adminClient: SupabaseClient,
+  body: ClearOverrideRequest,
+) {
   const userId = normalizeQuery(body.user_id);
   if (userId == null) {
     throw new HttpError(400, "user_id_required");
@@ -303,7 +313,7 @@ async function clearTierOverride(adminClient: any, body: ClearOverrideRequest) {
   };
 }
 
-async function fetchSubscriptions(adminClient: any, userId?: string) {
+async function fetchSubscriptions(adminClient: SupabaseClient, userId?: string) {
   let query = adminClient
     .from("user_subscriptions")
     .select(
@@ -324,8 +334,8 @@ async function fetchSubscriptions(adminClient: any, userId?: string) {
   return ((data ?? []) as UserSubscriptionRow[]);
 }
 
-async function listAllAuthUsers(adminClient: any, pageSize: number) {
-  const users: any[] = [];
+async function listAllAuthUsers(adminClient: SupabaseClient, pageSize: number) {
+  const users: User[] = [];
   let page = 1;
 
   while (true) {
@@ -349,7 +359,7 @@ async function listAllAuthUsers(adminClient: any, pageSize: number) {
   return users;
 }
 
-async function summarizeAuthUsers(adminClient: any, pageSize: number) {
+async function summarizeAuthUsers(adminClient: SupabaseClient, pageSize: number) {
   let total = 0;
   let recentSignups7d = 0;
   let page = 1;
@@ -391,14 +401,14 @@ async function summarizeAuthUsers(adminClient: any, pageSize: number) {
 }
 
 async function collectFilteredAuthUsers(
-  adminClient: any,
+  adminClient: SupabaseClient,
   options: {
     limit: number;
     offset: number;
     query: string | null;
   },
 ) {
-  const keptUsers: any[] = [];
+  const keptUsers: User[] = [];
   const maxKept = options.limit + options.offset;
   let total = 0;
   let page = 1;
@@ -438,7 +448,7 @@ async function collectFilteredAuthUsers(
 }
 
 async function fetchSubscriptionsForUserIds(
-  adminClient: any,
+  adminClient: SupabaseClient,
   userIds: string[],
 ) {
   const { data, error } = await adminClient
@@ -470,7 +480,7 @@ export function latestSubscriptionByUser(
 }
 
 function summarizeAuthUser(
-  user: any,
+  user: User,
   latestByUser: Map<string, UserSubscriptionRow>,
 ): AdminUserSummary {
   return {
@@ -485,7 +495,7 @@ function summarizeAuthUser(
   };
 }
 
-function matchesUserQuery(user: any, query: string | null): boolean {
+function matchesUserQuery(user: User, query: string | null): boolean {
   if (query == null) return true;
   const fields = [
     user.id,
@@ -498,7 +508,7 @@ function matchesUserQuery(user: any, query: string | null): boolean {
   return fields.some((field) => field.includes(query));
 }
 
-function compareUsersByCreatedAtDesc(left: any, right: any): number {
+function compareUsersByCreatedAtDesc(left: User, right: User): number {
   const leftCreatedAt = typeof left?.created_at === "string"
     ? left.created_at
     : "";
