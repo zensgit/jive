@@ -1,4 +1,7 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
+import {
+  createClient,
+  type SupabaseClient,
+} from "https://esm.sh/@supabase/supabase-js@2.49.8";
 
 type SubscriptionStatus =
   | "active"
@@ -11,6 +14,10 @@ type SubscriptionStatus =
 type SubscriptionPlan = "free" | "paid" | "subscriber";
 
 type EntitlementTier = "free" | "paid" | "subscriber";
+
+type SubscriptionPlatform = "google_play" | "apple_app_store";
+
+type WebhookNotificationStatus = "processing" | "processed" | "failed";
 
 type PubSubPushPayload = {
   message: {
@@ -50,6 +57,7 @@ type UserSubscriptionRow = {
   expires_at: string | null;
   receipt_data: Record<string, unknown> | null;
   raw_response: Record<string, unknown> | null;
+  updated_at: string;
 };
 
 type GoogleSubscriptionLookup = {
@@ -129,6 +137,101 @@ type IdempotencyClaim =
 
 type WebhookEnv = ReturnType<typeof readEnv>;
 
+type SubscriptionWebhookDatabase = {
+  public: {
+    Tables: {
+      user_subscriptions: {
+        Row: UserSubscriptionRow & {
+          platform: SubscriptionPlatform;
+          entitlement_tier: EntitlementTier;
+          last_verified_at: string | null;
+          verification_source: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: never;
+          user_id: string;
+          plan: string;
+          status: SubscriptionStatus;
+          platform: SubscriptionPlatform;
+          product_id?: string | null;
+          purchase_token?: string | null;
+          order_id?: string | null;
+          entitlement_tier?: EntitlementTier;
+          expires_at?: string | null;
+          last_verified_at?: string | null;
+          verification_source?: string;
+          receipt_data?: Record<string, unknown>;
+          raw_response?: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          plan?: string;
+          status?: SubscriptionStatus;
+          platform?: SubscriptionPlatform;
+          product_id?: string | null;
+          purchase_token?: string | null;
+          order_id?: string | null;
+          entitlement_tier?: EntitlementTier;
+          expires_at?: string | null;
+          last_verified_at?: string | null;
+          verification_source?: string;
+          receipt_data?: Record<string, unknown>;
+          raw_response?: Record<string, unknown>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      subscription_webhook_notifications: {
+        Row: {
+          notification_id: string;
+          provider: SubscriptionPlatform;
+          source: string;
+          status: WebhookNotificationStatus;
+          payload: Record<string, unknown>;
+          last_error: string | null;
+          processed_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          notification_id: string;
+          provider: SubscriptionPlatform;
+          source: string;
+          status?: WebhookNotificationStatus;
+          payload?: Record<string, unknown>;
+          last_error?: string | null;
+          processed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          provider?: SubscriptionPlatform;
+          source?: string;
+          status?: WebhookNotificationStatus;
+          payload?: Record<string, unknown>;
+          last_error?: string | null;
+          processed_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+};
+
+type AdminClient = SupabaseClient<SubscriptionWebhookDatabase>;
+
+type AppleLookupColumn = "purchase_token" | "order_id";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -139,8 +242,11 @@ const corsHeaders = {
 const handledGoogleNotificationTypes = new Set([1, 2, 3, 4, 5, 6, 7, 12, 13]);
 const processingClaimTtlMs = 15 * 60 * 1000;
 
+const userSubscriptionSelectColumns =
+  "id, user_id, plan, status, product_id, purchase_token, order_id, expires_at, receipt_data, raw_response, updated_at";
+
 let cachedEnv: WebhookEnv | null = null;
-let cachedAdminClient: ReturnType<typeof createClient> | null = null;
+let cachedAdminClient: AdminClient | null = null;
 if (import.meta.main) {
   Deno.serve(handleRequest);
 }
@@ -178,7 +284,7 @@ export async function handleRequest(req: Request): Promise<Response> {
 async function handleGooglePlayRtdn(
   body: unknown,
   env: WebhookEnv,
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: AdminClient,
 ): Promise<Response> {
   const pushPayload = parsePubSubPushPayload(body);
   const notificationId = pushPayload.message.messageId;
@@ -356,7 +462,7 @@ async function handleAppleAppStoreServerNotificationV2(
   env: ReturnType<typeof readEnv>,
 ): Promise<Response> {
   // Follow-up: cryptographically verify the JWS with Apple's root certificates.
-  const adminClient = createClient(env.supabaseUrl, env.supabaseServiceRoleKey);
+  const adminClient = getAdminClient(env);
   const notification = decodeJwsPayload<AppleNotificationPayload>(
     body.signedPayload,
   );
@@ -474,11 +580,11 @@ async function handleAppleAppStoreServerNotificationV2(
       },
     );
 
-    const payload = {
+    const payload: SubscriptionWebhookDatabase["public"]["Tables"]["user_subscriptions"]["Insert"] = {
       user_id: targetUserId ?? existingSubscription!.user_id,
       plan: subscriptionUpdate.plan,
       status: subscriptionUpdate.status,
-      platform: "apple_app_store",
+      platform: "apple_app_store" as const,
       product_id: subscriptionUpdate.productId,
       purchase_token: subscriptionUpdate.purchaseToken,
       order_id: subscriptionUpdate.orderId,
@@ -551,8 +657,8 @@ function getEnv(): WebhookEnv {
   return cachedEnv;
 }
 
-function getAdminClient(env: WebhookEnv): ReturnType<typeof createClient> {
-  cachedAdminClient ??= createClient(
+function getAdminClient(env: WebhookEnv): AdminClient {
+  cachedAdminClient ??= createClient<SubscriptionWebhookDatabase>(
     env.supabaseUrl,
     env.supabaseServiceRoleKey,
   );
@@ -628,14 +734,12 @@ function decodeDeveloperNotification(data: string): DeveloperNotification {
 }
 
 async function findSubscriptionByPurchaseToken(
-  adminClient: any,
+  adminClient: AdminClient,
   purchaseToken: string,
 ): Promise<UserSubscriptionRow | null> {
   const { data, error } = await adminClient
     .from("user_subscriptions")
-    .select(
-      "id, user_id, plan, status, product_id, purchase_token, order_id, expires_at, receipt_data, raw_response",
-    )
+    .select(userSubscriptionSelectColumns)
     .eq("platform", "google_play")
     .eq("purchase_token", purchaseToken)
     .maybeSingle();
@@ -765,9 +869,9 @@ async function importPrivateKey(pem: string): Promise<CryptoKey> {
 }
 
 async function claimNotification(
-  adminClient: any,
+  adminClient: AdminClient,
   notificationId: string,
-  provider: "google_play" | "apple_app_store",
+  provider: SubscriptionPlatform,
   source: string,
   payload: Record<string, unknown>,
 ): Promise<IdempotencyClaim> {
@@ -843,7 +947,7 @@ async function claimNotification(
 }
 
 async function markNotificationProcessed(
-  adminClient: any,
+  adminClient: AdminClient,
   notificationId: string,
 ): Promise<void> {
   const now = new Date().toISOString();
@@ -864,7 +968,7 @@ async function markNotificationProcessed(
 }
 
 async function markNotificationFailed(
-  adminClient: any,
+  adminClient: AdminClient,
   notificationId: string,
   errorMessage: string,
 ): Promise<void> {
@@ -882,67 +986,28 @@ async function markNotificationFailed(
   }
 }
 
-export function mapGoogleNotificationType(notificationType: number): SubscriptionStatus {
 async function findAppleSubscription(
-  adminClient: any,
+  adminClient: AdminClient,
   update: AppleSubscriptionUpdate,
 ): Promise<UserSubscriptionRow | null> {
-  const identifiers = [
-    update.purchaseToken,
-    update.orderId,
-    update.originalTransactionId,
-    update.transactionId,
-  ]
-    .filter((value): value is string => value != null && value.length > 0);
+  const identifiers = collectAppleLookupIdentifiers(update);
 
-  for (const purchaseToken of identifiers) {
-    const { data, error } = await adminClient
-      .from("user_subscriptions")
-      .select(
-        "id, user_id, plan, status, product_id, purchase_token, order_id, expires_at, receipt_data, raw_response",
-      )
-      .eq("platform", "apple_app_store")
-      .eq("purchase_token", purchaseToken)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error != null) {
-      console.error(
-        "subscription-webhook apple lookup by purchase_token failed",
-        error,
-      );
-      throw new HttpError(500, "subscription_lookup_failed");
-    }
-
-    if (data != null) {
-      return data as UserSubscriptionRow;
-    }
+  const purchaseTokenMatch = await findLatestAppleSubscriptionByColumn(
+    adminClient,
+    "purchase_token",
+    identifiers,
+  );
+  if (purchaseTokenMatch != null) {
+    return purchaseTokenMatch;
   }
 
-  for (const orderId of identifiers) {
-    const { data, error } = await adminClient
-      .from("user_subscriptions")
-      .select(
-        "id, user_id, plan, status, product_id, purchase_token, order_id, expires_at, receipt_data, raw_response",
-      )
-      .eq("platform", "apple_app_store")
-      .eq("order_id", orderId)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error != null) {
-      console.error(
-        "subscription-webhook apple lookup by order_id failed",
-        error,
-      );
-      throw new HttpError(500, "subscription_lookup_failed");
-    }
-
-    if (data != null) {
-      return data as UserSubscriptionRow;
-    }
+  const orderIdMatch = await findLatestAppleSubscriptionByColumn(
+    adminClient,
+    "order_id",
+    identifiers,
+  );
+  if (orderIdMatch != null) {
+    return orderIdMatch;
   }
 
   const appAccountToken = normalizeUuid(update.appAccountToken);
@@ -952,9 +1017,7 @@ async function findAppleSubscription(
 
   const { data, error } = await adminClient
     .from("user_subscriptions")
-    .select(
-      "id, user_id, plan, status, product_id, purchase_token, order_id, expires_at, receipt_data, raw_response",
-    )
+    .select(userSubscriptionSelectColumns)
     .eq("platform", "apple_app_store")
     .eq("user_id", appAccountToken)
     .order("updated_at", { ascending: false })
@@ -967,6 +1030,103 @@ async function findAppleSubscription(
   }
 
   return data as UserSubscriptionRow | null;
+}
+
+function collectAppleLookupIdentifiers(
+  update: AppleSubscriptionUpdate,
+): string[] {
+  const identifiers: string[] = [];
+  const seen = new Set<string>();
+
+  for (
+    const value of [
+      update.purchaseToken,
+      update.orderId,
+      update.originalTransactionId,
+      update.transactionId,
+    ]
+  ) {
+    const normalized = normalizeNonEmptyString(value);
+    if (normalized == null || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    identifiers.push(normalized);
+  }
+
+  return identifiers;
+}
+
+async function findLatestAppleSubscriptionByColumn(
+  adminClient: AdminClient,
+  column: AppleLookupColumn,
+  identifiers: string[],
+): Promise<UserSubscriptionRow | null> {
+  if (identifiers.length === 0) {
+    return null;
+  }
+
+  const { data, error } = await adminClient
+    .from("user_subscriptions")
+    .select(userSubscriptionSelectColumns)
+    .eq("platform", "apple_app_store")
+    .in(column, identifiers)
+    .order("updated_at", { ascending: false });
+
+  if (error != null) {
+    console.error(
+      `subscription-webhook apple lookup by ${column} failed`,
+      error,
+    );
+    throw new HttpError(500, "subscription_lookup_failed");
+  }
+
+  return pickBestAppleSubscriptionMatch(
+    (data ?? []) as UserSubscriptionRow[],
+    column,
+    identifiers,
+  );
+}
+
+function pickBestAppleSubscriptionMatch(
+  rows: UserSubscriptionRow[],
+  column: AppleLookupColumn,
+  identifiers: string[],
+): UserSubscriptionRow | null {
+  const identifierRank = new Map(
+    identifiers.map((identifier, index) => [identifier, index] as const),
+  );
+
+  let bestRow: UserSubscriptionRow | null = null;
+  let bestRank = Number.POSITIVE_INFINITY;
+  let bestUpdatedAt = Number.NEGATIVE_INFINITY;
+
+  for (const row of rows) {
+    const lookupValue = column === "purchase_token"
+      ? row.purchase_token
+      : row.order_id;
+    if (lookupValue == null) {
+      continue;
+    }
+
+    const rank = identifierRank.get(lookupValue);
+    if (rank == null) {
+      continue;
+    }
+
+    const updatedAt = Date.parse(row.updated_at);
+    if (
+      bestRow == null ||
+      rank < bestRank ||
+      (rank === bestRank && updatedAt > bestUpdatedAt)
+    ) {
+      bestRow = row;
+      bestRank = rank;
+      bestUpdatedAt = updatedAt;
+    }
+  }
+
+  return bestRow;
 }
 
 function assertAppleNotificationMatchesEnv(
@@ -1027,7 +1187,6 @@ export function buildAppleSubscriptionUpdate(
   const status = mapAppleNotificationType(
     notificationType,
     notification.subtype,
-    renewalInfo,
   );
   if (status == null) {
     return null;
@@ -1075,7 +1234,6 @@ export function buildAppleSubscriptionUpdate(
 export function mapAppleNotificationType(
   notificationType: string,
   subtype?: string | null,
-  renewalInfo?: AppleRenewalInfo | null,
 ): SubscriptionStatus | null {
   const normalizedType = normalizeNotificationType(notificationType);
   const normalizedSubtype = normalizeNotificationType(subtype);
@@ -1100,9 +1258,7 @@ export function mapAppleNotificationType(
       if (normalizedSubtype === "GRACE_PERIOD") {
         return "grace";
       }
-      return renewalInfo?.isInBillingRetryPeriod == true
-        ? "pending"
-        : "pending";
+      return "pending";
     case "GRACE_PERIOD_EXPIRED":
     case "EXPIRED":
       return "expired";

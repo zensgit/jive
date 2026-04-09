@@ -68,11 +68,10 @@ Deno.test("mapAppleNotificationType covers the supported subscription lifecycle 
     "canceled",
   );
   assertEquals(
-    mapAppleNotificationType("DID_FAIL_TO_RENEW", "GRACE_PERIOD", {
-      isInBillingRetryPeriod: true,
-    }),
+    mapAppleNotificationType("DID_FAIL_TO_RENEW", "GRACE_PERIOD"),
     "grace",
   );
+  assertEquals(mapAppleNotificationType("DID_FAIL_TO_RENEW"), "pending");
   assertEquals(mapAppleNotificationType("EXPIRED"), "expired");
   assertEquals(mapAppleNotificationType("REVOKE"), "revoked");
   assertEquals(mapAppleNotificationType("CONSUMPTION_REQUEST"), null);
