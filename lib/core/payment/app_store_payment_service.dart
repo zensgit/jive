@@ -10,17 +10,56 @@ import 'payment_service.dart';
 import 'product_ids.dart';
 import 'subscription_truth_repository.dart';
 
+abstract class AppStorePurchaseClient {
+  Stream<List<PurchaseDetails>> get purchaseStream;
+  Future<bool> isAvailable();
+  Future<ProductDetailsResponse> queryProductDetails(Set<String> identifiers);
+  Future<bool> buyNonConsumable({required PurchaseParam purchaseParam});
+  Future<void> restorePurchases({String? applicationUserName});
+  Future<void> completePurchase(PurchaseDetails purchase);
+}
+
+class _InAppPurchaseClient implements AppStorePurchaseClient {
+  final InAppPurchase _iap;
+
+  _InAppPurchaseClient(this._iap);
+
+  @override
+  Stream<List<PurchaseDetails>> get purchaseStream => _iap.purchaseStream;
+
+  @override
+  Future<bool> isAvailable() => _iap.isAvailable();
+
+  @override
+  Future<ProductDetailsResponse> queryProductDetails(Set<String> identifiers) =>
+      _iap.queryProductDetails(identifiers);
+
+  @override
+  Future<bool> buyNonConsumable({required PurchaseParam purchaseParam}) =>
+      _iap.buyNonConsumable(purchaseParam: purchaseParam);
+
+  @override
+  Future<void> restorePurchases({String? applicationUserName}) =>
+      _iap.restorePurchases(applicationUserName: applicationUserName);
+
+  @override
+  Future<void> completePurchase(PurchaseDetails purchase) =>
+      _iap.completePurchase(purchase);
+}
+
 class AppStorePaymentService extends PaymentService {
   static const _prefKeyLastPurchase = 'last_purchase_timestamp';
+  static const _defaultRestoreTimeout = Duration(seconds: 5);
   static final RegExp _uuidPattern = RegExp(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
     caseSensitive: false,
   );
 
-  final InAppPurchase _iap;
+  final AppStorePurchaseClient _iap;
   final EntitlementService _entitlement;
   final SubscriptionTruthRepository? _truthRepository;
   final String? Function()? _applicationUserNameProvider;
+  final Duration _restoreTimeout;
 
   bool _isAvailable = false;
   bool _isReady = false;
@@ -28,16 +67,20 @@ class AppStorePaymentService extends PaymentService {
   Map<String, ProductDetails> _productDetailsById = {};
   StreamSubscription<List<PurchaseDetails>>? _subscription;
   Completer<PurchaseResult>? _pendingPurchase;
+  Completer<PurchaseResult>? _pendingRestore;
 
   AppStorePaymentService({
     required EntitlementService entitlement,
     SubscriptionTruthRepository? truthRepository,
     String? Function()? applicationUserNameProvider,
+    Duration restoreTimeout = _defaultRestoreTimeout,
+    AppStorePurchaseClient? iapClient,
     InAppPurchase? iap,
   }) : _entitlement = entitlement,
        _truthRepository = truthRepository,
        _applicationUserNameProvider = applicationUserNameProvider,
-       _iap = iap ?? InAppPurchase.instance;
+       _restoreTimeout = restoreTimeout,
+       _iap = iapClient ?? _InAppPurchaseClient(iap ?? InAppPurchase.instance);
 
   @override
   bool get isAvailable => _isAvailable;
@@ -98,7 +141,8 @@ class AppStorePaymentService extends PaymentService {
       return PurchaseResult.error('未找到商品: $productId');
     }
 
-    _pendingPurchase = Completer<PurchaseResult>();
+    final pending = Completer<PurchaseResult>();
+    _pendingPurchase = pending;
     final purchaseParam = PurchaseParam(
       productDetails: product,
       applicationUserName: appStoreAccountTokenForUser(
@@ -109,11 +153,16 @@ class AppStorePaymentService extends PaymentService {
     try {
       await _iap.buyNonConsumable(purchaseParam: purchaseParam);
     } catch (e) {
-      _pendingPurchase?.complete(PurchaseResult.error('购买发起失败: $e'));
-      _pendingPurchase = null;
+      if (!pending.isCompleted) {
+        pending.complete(PurchaseResult.error('购买发起失败: $e'));
+      }
     }
 
-    return _pendingPurchase?.future ?? const PurchaseResult.error('购买状态未知');
+    return pending.future.whenComplete(() {
+      if (identical(_pendingPurchase, pending)) {
+        _pendingPurchase = null;
+      }
+    });
   }
 
   @override
@@ -122,16 +171,29 @@ class AppStorePaymentService extends PaymentService {
       return const PurchaseResult.error('支付服务不可用');
     }
 
+    final pending = Completer<PurchaseResult>();
+    _pendingRestore = pending;
+
     try {
       await _iap.restorePurchases(
         applicationUserName: appStoreAccountTokenForUser(
           _applicationUserNameProvider?.call(),
         ),
       );
-      return const PurchaseResult(success: true);
     } catch (e) {
-      return PurchaseResult.error('恢复购买失败: $e');
+      if (!pending.isCompleted) {
+        pending.complete(PurchaseResult.error('恢复购买失败: $e'));
+      }
     }
+
+    return pending.future.timeout(
+      _restoreTimeout,
+      onTimeout: () => const PurchaseResult.error('没有可恢复的有效购买'),
+    ).whenComplete(() {
+      if (identical(_pendingRestore, pending)) {
+        _pendingRestore = null;
+      }
+    });
   }
 
   void _handlePurchaseUpdates(List<PurchaseDetails> purchases) {
@@ -139,8 +201,15 @@ class AppStorePaymentService extends PaymentService {
   }
 
   Future<void> _processPurchaseUpdates(List<PurchaseDetails> purchases) async {
+    PurchaseResult? restoreResult;
     for (final purchase in _sortPurchasesForEntitlement(purchases)) {
-      await _handlePurchase(purchase);
+      final result = await _handlePurchase(purchase);
+      if (_pendingRestore != null && result != null) {
+        restoreResult = _preferRestoreResult(restoreResult, result);
+      }
+    }
+    if (restoreResult != null) {
+      _resolvePendingRestore(restoreResult);
     }
   }
 
@@ -210,6 +279,29 @@ class AppStorePaymentService extends PaymentService {
     if (pending == null || pending.isCompleted) return;
     pending.complete(result);
     _pendingPurchase = null;
+  }
+
+  void _resolvePendingRestore(PurchaseResult result) {
+    final pending = _pendingRestore;
+    if (pending == null || pending.isCompleted) return;
+    pending.complete(result);
+    _pendingRestore = null;
+  }
+
+  PurchaseResult _preferRestoreResult(
+    PurchaseResult? existing,
+    PurchaseResult candidate,
+  ) {
+    if (existing == null) return candidate;
+    if (candidate.success && !existing.success) return candidate;
+    if (!candidate.success && existing.success) return existing;
+    if (!candidate.success && !existing.success) return existing;
+
+    final existingTier = existing.grantedTier ?? UserTier.free;
+    final candidateTier = candidate.grantedTier ?? UserTier.free;
+    return _tierRank(candidateTier) >= _tierRank(existingTier)
+        ? candidate
+        : existing;
   }
 
   Future<UserTier> _applyPurchaseEntitlement(
