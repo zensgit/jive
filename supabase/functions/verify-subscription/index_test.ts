@@ -99,4 +99,4 @@ Deno.test("buildAppleVerifiedSubscription maps one-time unlock as paid", () => {
   assertEquals(verified.entitlement_tier, "paid");
   assertEquals(verified.purchase_token, "orig-paid");
   assertEquals(verified.order_id, "txn-paid");
-}
+});

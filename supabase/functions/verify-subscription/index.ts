@@ -438,7 +438,7 @@ async function postAppleVerifyReceipt(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       "receipt-data": receiptData,
-      if (sharedSecret != null) password: sharedSecret,
+      ...(sharedSecret != null ? { password: sharedSecret } : {}),
       "exclude-old-transactions": false,
     }),
   });
