@@ -8,22 +8,23 @@ class SyncTombstoneStore {
   static const _prefKey = 'sync_tombstone_store_v1';
 
   static Future<void> upsert(SyncTombstoneEntry entry) async {
-    final all = await loadAll();
-    final next = <SyncTombstoneEntry>[];
-    var replaced = false;
+    await upsertAll([entry]);
+  }
 
-    for (final current in all) {
-      if (current.table == entry.table &&
-          current.entityKey == entry.entityKey) {
-        next.add(entry);
-        replaced = true;
-      } else {
-        next.add(current);
-      }
+  static Future<void> upsertAll(Iterable<SyncTombstoneEntry> entries) async {
+    final incoming = entries.toList(growable: false);
+    if (incoming.isEmpty) return;
+
+    final all = await loadAll();
+    final nextByKey = <String, SyncTombstoneEntry>{
+      for (final current in all) _entryStoreKey(current): current,
+    };
+
+    for (final entry in incoming) {
+      nextByKey[_entryStoreKey(entry)] = entry;
     }
 
-    if (!replaced) next.add(entry);
-    await _saveAll(next);
+    await _saveAll(nextByKey.values.toList(growable: false));
   }
 
   static Future<List<SyncTombstoneEntry>> loadAll() async {
@@ -84,5 +85,9 @@ class SyncTombstoneStore {
       entries.map((entry) => entry.toJson()).toList(growable: false),
     );
     await prefs.setString(_prefKey, encoded);
+  }
+
+  static String _entryStoreKey(SyncTombstoneEntry entry) {
+    return '${entry.table}::${entry.entityKey}';
   }
 }

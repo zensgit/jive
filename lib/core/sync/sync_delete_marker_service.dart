@@ -19,66 +19,37 @@ class SyncDeleteMarkerService {
   SyncDeleteMarkerService(this._isar);
 
   Future<void> markTransactionDeleted(JiveTransaction tx) async {
-    if (!await _shouldRecord('transactions', tx.updatedAt)) return;
-
-    final userId = _currentUserIdOrNull();
-    final bookKeyById = await _loadBookKeyById();
-    final accountSyncKeyById = await _loadAccountSyncKeyById(userId);
-    final deletedAt = DateTime.now();
-    final syncKey = _stableSyncKey(
-      explicit: tx.syncKey,
-      prefix: 'tx',
-      table: 'transactions',
-      userId: userId,
-      localId: tx.id,
-    );
-
-    await SyncTombstoneStore.upsert(
-      SyncTombstoneEntry(
-        table: 'transactions',
-        entityKey: _entityKey(syncKey, tx.id),
-        deletedAt: deletedAt,
-        payload: {
-          'local_id': tx.id,
-          'sync_key': syncKey,
-          'amount': tx.amount,
-          'source': tx.source,
-          'type': tx.type,
-          'timestamp': tx.timestamp.toIso8601String(),
-          'category_key': tx.categoryKey,
-          'sub_category_key': tx.subCategoryKey,
-          'category': tx.category,
-          'sub_category': tx.subCategory,
-          'note': tx.note,
-          'account_id': tx.accountId,
-          'account_sync_key': _accountSyncKeyFor(
-            tx.accountId,
-            accountSyncKeyById,
-          ),
-          'to_account_id': tx.toAccountId,
-          'to_account_sync_key': _accountSyncKeyFor(
-            tx.toAccountId,
-            accountSyncKeyById,
-          ),
-          'book_key': _bookKeyFor(tx.bookId, bookKeyById),
-          'raw_text': tx.rawText,
-          'deleted_at': deletedAt.toIso8601String(),
-          'updated_at': deletedAt.toIso8601String(),
-        },
-      ),
-    );
+    await markTransactionsDeleted([tx]);
   }
 
   Future<void> markTransactionsDeleted(
     Iterable<JiveTransaction> transactions,
   ) async {
-    for (final tx in transactions) {
-      await markTransactionDeleted(tx);
-    }
+    if (!await _hasSyncCursor('transactions')) return;
+
+    final items = transactions.toList(growable: false);
+    if (items.isEmpty) return;
+
+    final userId = _currentUserIdOrNull();
+    final bookKeyById = await _loadBookKeyById();
+    final accountSyncKeyById = await _loadAccountSyncKeyById(userId);
+    final deletedAt = DateTime.now();
+
+    await SyncTombstoneStore.upsertAll(
+      items.map(
+        (tx) => _buildTransactionTombstone(
+          tx,
+          userId: userId,
+          deletedAt: deletedAt,
+          bookKeyById: bookKeyById,
+          accountSyncKeyById: accountSyncKeyById,
+        ),
+      ),
+    );
   }
 
   Future<void> markBudgetDeleted(JiveBudget budget) async {
-    if (!await _shouldRecord('budgets', budget.updatedAt)) return;
+    if (!await _hasSyncCursor('budgets')) return;
 
     final userId = _currentUserIdOrNull();
     final bookKeyById = await _loadBookKeyById();
@@ -115,19 +86,66 @@ class SyncDeleteMarkerService {
     );
   }
 
-  Future<bool> _shouldRecord(String table, DateTime updatedAt) async {
+  SyncTombstoneEntry _buildTransactionTombstone(
+    JiveTransaction tx, {
+    required String? userId,
+    required DateTime deletedAt,
+    required Map<int, String> bookKeyById,
+    required Map<int, String?> accountSyncKeyById,
+  }) {
+    final syncKey = _stableSyncKey(
+      explicit: tx.syncKey,
+      prefix: 'tx',
+      table: 'transactions',
+      userId: userId,
+      localId: tx.id,
+    );
+
+    return SyncTombstoneEntry(
+      table: 'transactions',
+      entityKey: _entityKey(syncKey, tx.id),
+      deletedAt: deletedAt,
+      payload: {
+        'local_id': tx.id,
+        'sync_key': syncKey,
+        'amount': tx.amount,
+        'source': tx.source,
+        'type': tx.type,
+        'timestamp': tx.timestamp.toIso8601String(),
+        'category_key': tx.categoryKey,
+        'sub_category_key': tx.subCategoryKey,
+        'category': tx.category,
+        'sub_category': tx.subCategory,
+        'note': tx.note,
+        'account_id': tx.accountId,
+        'account_sync_key': _accountSyncKeyFor(tx.accountId, accountSyncKeyById),
+        'to_account_id': tx.toAccountId,
+        'to_account_sync_key': _accountSyncKeyFor(
+          tx.toAccountId,
+          accountSyncKeyById,
+        ),
+        'book_key': _bookKeyFor(tx.bookId, bookKeyById),
+        'raw_text': tx.rawText,
+        'deleted_at': deletedAt.toIso8601String(),
+        'updated_at': deletedAt.toIso8601String(),
+      },
+    );
+  }
+
+  Future<bool> _hasSyncCursor(String table) async {
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getString('$_cursorPrefix$table');
     if (stored == null || stored.isEmpty) return false;
 
-    final cursor = DateTime.tryParse(stored);
-    if (cursor == null) return false;
-    return !updatedAt.isAfter(cursor);
+    return DateTime.tryParse(stored) != null;
   }
 
   Future<Map<int, String>> _loadBookKeyById() async {
-    await BookService(_isar).initDefaultBook();
-    final books = await _isar.jiveBooks.where().findAll();
+    var books = await _isar.jiveBooks.where().findAll();
+    if (books.isEmpty) {
+      await BookService(_isar).initDefaultBook();
+      books = await _isar.jiveBooks.where().findAll();
+    }
     return {for (final book in books) book.id: book.key};
   }
 

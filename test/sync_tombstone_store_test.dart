@@ -79,4 +79,42 @@ void main() {
     final entries = await SyncTombstoneStore.listForTable('transactions');
     expect(entries.map((entry) => entry.entityKey), ['local:4']);
   });
+
+  test('upsertAll replaces duplicates and appends new entries', () async {
+    await SyncTombstoneStore.upsertAll([
+      SyncTombstoneEntry(
+        table: 'transactions',
+        entityKey: 'local:1',
+        deletedAt: DateTime(2026, 4, 5, 8, 0),
+        payload: {'local_id': 1},
+      ),
+      SyncTombstoneEntry(
+        table: 'transactions',
+        entityKey: 'local:2',
+        deletedAt: DateTime(2026, 4, 5, 8, 10),
+        payload: {'local_id': 2},
+      ),
+    ]);
+
+    await SyncTombstoneStore.upsertAll([
+      SyncTombstoneEntry(
+        table: 'transactions',
+        entityKey: 'local:1',
+        deletedAt: DateTime(2026, 4, 5, 9, 0),
+        payload: {'local_id': 1, 'deleted_at': '2026-04-05T09:00:00.000'},
+      ),
+      SyncTombstoneEntry(
+        table: 'budgets',
+        entityKey: 'local:3',
+        deletedAt: DateTime(2026, 4, 5, 9, 30),
+        payload: {'local_id': 3},
+      ),
+    ]);
+
+    final all = await SyncTombstoneStore.loadAll();
+    expect(all, hasLength(3));
+    final transactionMap = await SyncTombstoneStore.mapForTable('transactions');
+    expect(transactionMap['local:1']?.deletedAt, DateTime(2026, 4, 5, 9, 0));
+    expect(transactionMap.containsKey('local:2'), isTrue);
+  });
 }
