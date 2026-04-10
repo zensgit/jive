@@ -2,7 +2,7 @@
 
 > 日期: 2026-04-10
 > 集成分支: `codex/saas-beta-mainline`
-> 当前 head: `ac3ea8f`
+> 当前 head: `d0e8168`
 > 总收口 PR: `#144`
 
 ## 结论
@@ -11,7 +11,9 @@
 推荐原因：
 - 当前 clean SaaS 主链已经在同一条集成分支里跑通
 - `bash scripts/run_saas_wave0_smoke.sh` 已在这条集成分支上通过
+- 在 fresh `origin/main` worktree 本地 merge `origin/codex/saas-beta-mainline` 后，`bash scripts/run_saas_wave0_smoke.sh` 也已通过
 - 集成过程中暴露出的两个跨链路 blocker 已经被修掉
+- fresh-main merge 演练里额外暴露出的一个时间相关测试夹具问题也已修掉
 - 继续逐条合并虽然更细，但会重新引入 queue 管理成本和状态漂移风险
 
 推荐 merge 方式：
@@ -207,7 +209,9 @@
 - [ ] `#144` 保持以 `main` 为 base
 - [ ] `codex/saas-beta-mainline` 与远端一致
 - [ ] `bash scripts/run_saas_wave0_smoke.sh` 最近一次结果为通过
+- [ ] fresh `origin/main` merge 演练最近一次结果为通过
 - [ ] `saas/b2.5-apple-subscription-verify` 已包含 fake App Store client 测试修复
+- [ ] `saas/b2.5-apple-subscription-verify` 已包含 Apple active receipt fixture 的 future-proof 修复
 - [ ] `saas/b5.4-ops-overview` 已包含新的 admin parent 重放结果
 - [ ] reviewer 已知晓旧 PR 只作为审计参考，不再是推荐 merge 主路径
 
@@ -215,9 +219,15 @@
 1. 在 fresh `main` worktree 拉最新代码
 2. 运行：
    - `bash scripts/run_saas_wave0_smoke.sh`
-3. 在 staging apply migrations
-4. 核对订阅相关环境变量与 Edge Function 部署顺序
-5. 将旧 clean PR 标记为 superseded / merged via `#144`
+3. 在具备 Supabase CLI 与 staging 凭据的环境里 apply migrations
+4. 部署并核对：
+   - `subscription-webhook`
+   - `verify-subscription`
+   - `analytics`
+   - `send-notification`
+   - `admin`
+5. 核对订阅相关环境变量与 Edge Function 部署顺序
+6. 将旧 clean PR 标记为 superseded / merged via `#144`
 
 ## 明确 defer
 以下内容继续留在 Beta 之后，不建议在 `#144` 合并前扩 scope：

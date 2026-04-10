@@ -13,7 +13,7 @@
 
 当前已经有一条集成分支把 clean SaaS 主链完整收口：
 - 分支: `codex/saas-beta-mainline`
-- 当前 head: `0793a2c`
+- 当前 head: `d0e8168`
 
 已集成的 clean PR 能力：
 - 基础与文案: `#139`、`#142`
@@ -27,13 +27,41 @@
 - `4ec2f49` `test(saas): fix integrated smoke blockers`
   - `test/subscription_lifecycle_gate_test.dart` 为 `AuthService.sendPasswordResetEmail` 补 no-op fake
   - `test/app_store_payment_service_test.dart` 为 `syncTrustedReceipt` 用例注入 `_FakeAppStorePurchaseClient`
+- `d0e8168` `test(saas): future-proof apple verify subscription fixture`
+  - `supabase/functions/verify-subscription/index_test.ts` 将会随日期老化的 Apple active receipt 时间戳改成长期稳定值
+  - 同步将修复推回 `saas/b2.5-apple-subscription-verify`
 - `#138` 源分支也已补回对应测试修复，当前远端 head 为 `8378e16`
 - `#130` rebase 到新的 admin parent 后，当前远端 head 为 `e76de2e`
 
 当前最重要的验证结果：
 - `bash scripts/run_saas_wave0_smoke.sh`
   - 在 `codex/saas-beta-mainline` 上已通过
+- 在 fresh `origin/main` worktree 上本地 merge `origin/codex/saas-beta-mainline` 后也已通过
+- fresh merge 演练分支:
+  - 分支: `codex/saas-main-verify`
+  - merge 后 head: `7aeffe9`
 - 这意味着 sync、billing webhook、billing truth、auth、ops analytics、ops notification、ops admin 这 7 组最小回归都已在同一条集成线上同时通过
+
+### staging 执行状态
+当前仓库已经具备 staging apply 所需的 migration 文件顺序：
+- `004_add_book_key.sql`
+- `006_add_sync_tombstones.sql`
+- `007_create_user_subscriptions.sql`
+- `008_add_sync_keys_for_core_sync.sql`
+- `009_webhook_idempotency.sql`
+- `010_create_analytics_events.sql`
+- `011_create_notification_queue.sql`
+- `012_allow_admin_subscription_override.sql`
+
+但这台机器上当前还不能直接执行 staging apply / functions deploy，阻塞点是：
+- `supabase` CLI 未安装
+- 仓库里没有 linked staging project ref
+- 当前环境里也没有可直接用于 staging deploy 的 service-role / access token 配置
+
+所以当前可以确认的是：
+- migration 编号和顺序已经齐
+- 代码级与 smoke 级验证已经在集成线与 fresh-main merge 线上通过
+- staging apply 仍需在有 Supabase CLI 和 staging 凭据的环境中执行
 
 因此，这份文档下面保留的 PR 队列和 restack 步骤，应该视为 GitHub PR 收口路径；代码层面已经存在一条可工作的集成主线。
 

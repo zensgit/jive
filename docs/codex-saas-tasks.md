@@ -46,7 +46,7 @@
 
 当前 clean SaaS 主链已经完整集成到一条独立分支：
 - 分支: `codex/saas-beta-mainline`
-- head: `0793a2c`
+- head: `d0e8168`
 
 已集成范围：
 - 基础与文案: `#139`、`#142`
@@ -58,8 +58,9 @@
 
 已完成的额外收口：
 - `#130` 已重放到新的 admin parent 上，远端 head 为 `e76de2e`
-- `#138` 已补 App Store fake client 测试注入，远端 head 为 `8378e16`
+- `#138` 已补 App Store fake client 测试注入与 Apple active receipt fixture future-proof 修复，远端 head 为 `f80ecab`
 - 集成线额外提交 `4ec2f49`，修掉只会在多链路合并后暴露的 smoke blockers
+- 集成线额外提交 `d0e8168`，修掉 fresh-main merge 演练里暴露的时间相关测试夹具过期问题
 
 当前最快的 Beta 收口路径已经变化：
 1. 继续保留现有 PR 作为 review/审计入口
@@ -68,6 +69,7 @@
 
 当前已通过的统一验收：
 - `bash scripts/run_saas_wave0_smoke.sh` 在 `codex/saas-beta-mainline` 上通过
+- fresh `origin/main` worktree 本地 merge `origin/codex/saas-beta-mainline` 后，`bash scripts/run_saas_wave0_smoke.sh` 也通过
 
 因此，剩余工作不再是继续扩功能，而是二选一：
 - 继续按现有 PR 队列在 GitHub UI 逐条合并
