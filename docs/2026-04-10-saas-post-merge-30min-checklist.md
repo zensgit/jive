@@ -2,7 +2,7 @@
 
 > 日期: 2026-04-10
 > 主线 PR: [#144](https://github.com/zensgit/jive/pull/144)
-> 当前 head: `62ad7fc`
+> 当前 head: `f753c50`
 > 目标: `#144` 合入 `main` 后 30 分钟内完成最小主线验收与 staging 落地
 
 ## 使用方式
@@ -77,51 +77,40 @@ cd /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
 - [ ] link staging：
 
 ```bash
-npx -y supabase@latest link \
+scripts/run_saas_staging_rollout.sh dry-run \
   --project-ref "$STAGING_PROJECT_REF" \
-  --password "$STAGING_DB_PASSWORD"
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN"
 ```
 
-- [ ] 先 dry-run：
-
-```bash
-npx -y supabase@latest db push --include-all --dry-run
-```
+- [ ] 确认 dry-run 输出包含这组迁移：
+- [ ] `004_add_book_key.sql`
+- [ ] `006_add_sync_tombstones.sql`
+- [ ] `007_create_user_subscriptions.sql`
+- [ ] `008_add_sync_keys_for_core_sync.sql`
+- [ ] `009_webhook_idempotency.sql`
+- [ ] `010_create_analytics_events.sql`
+- [ ] `011_create_notification_queue.sql`
+- [ ] `012_allow_admin_subscription_override.sql`
 
 - [ ] 再正式 apply：
 
 ```bash
-npx -y supabase@latest db push --include-all
+scripts/run_saas_staging_rollout.sh apply \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN"
 ```
-
-- [ ] 确认这组迁移已经应用：
-  - `004_add_book_key.sql`
-  - `006_add_sync_tombstones.sql`
-  - `007_create_user_subscriptions.sql`
-  - `008_add_sync_keys_for_core_sync.sql`
-  - `009_webhook_idempotency.sql`
-  - `010_create_analytics_events.sql`
-  - `011_create_notification_queue.sql`
-  - `012_allow_admin_subscription_override.sql`
 
 ## T+20 分钟：staging secrets 与 functions deploy
 
-- [ ] 推送 secrets：
+- [ ] 推送 secrets 并部署 Functions：
 
 ```bash
-npx -y supabase@latest secrets set \
-  --env-file /tmp/jive-saas-staging.env \
-  --project-ref "$STAGING_PROJECT_REF"
-```
-
-- [ ] 依次部署：
-
-```bash
-npx -y supabase@latest functions deploy subscription-webhook --project-ref "$STAGING_PROJECT_REF" --use-api
-npx -y supabase@latest functions deploy verify-subscription --project-ref "$STAGING_PROJECT_REF" --use-api
-npx -y supabase@latest functions deploy analytics --project-ref "$STAGING_PROJECT_REF" --use-api
-npx -y supabase@latest functions deploy send-notification --project-ref "$STAGING_PROJECT_REF" --use-api
-npx -y supabase@latest functions deploy admin --project-ref "$STAGING_PROJECT_REF" --use-api
+scripts/run_saas_staging_rollout.sh deploy \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --env-file /tmp/jive-saas-staging.env
 ```
 
 - [ ] 确认 5 个 Functions 在 Dashboard 中可见并是最新版本

@@ -1,7 +1,7 @@
 # Jive SaaS Staging Apply / Deploy Runbook
 
 > 日期: 2026-04-10
-> 主线基线: `codex/saas-beta-mainline@62ad7fc`
+> 主线基线: `codex/saas-beta-mainline@f753c50`
 > 目标: 在 staging 环境完成 SaaS Beta 的数据库迁移、Edge Function secrets 注入、Functions deploy 与最小验收
 
 ## 适用前提
@@ -32,6 +32,12 @@ npx -y supabase@latest help link
 npx -y supabase@latest help db push
 npx -y supabase@latest help secrets set
 npx -y supabase@latest help functions deploy
+```
+
+当前仓库还提供了一个更短的执行脚本草案：
+
+```bash
+scripts/run_saas_staging_rollout.sh help
 ```
 
 说明：
@@ -98,6 +104,20 @@ Ops / Admin：
 - [supabase/migrations](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/supabase/migrations)
 
 ## 推荐执行顺序
+
+### 一键脚本入口
+
+如果你已经有 staging 凭据，推荐优先使用：
+
+```bash
+scripts/run_saas_staging_rollout.sh all \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --env-file /tmp/jive-saas-staging.env
+```
+
+如果你想分步执行，则继续按下面的手工步骤。
 
 ### Step 1. 进入主线工作树
 
@@ -269,5 +289,5 @@ npx -y supabase@latest functions deploy admin \
 当前最快的 SaaS 化路径已经不是继续写代码，而是：
 
 1. 合并 [#144](https://github.com/zensgit/jive/pull/144)
-2. 用这份 runbook 在 staging 做一次完整 apply / deploy
+2. 用 `scripts/run_saas_staging_rollout.sh` 或这份 runbook 在 staging 做一次完整 apply / deploy
 3. 以 staging 结果作为 Beta 主线的最终环境验收

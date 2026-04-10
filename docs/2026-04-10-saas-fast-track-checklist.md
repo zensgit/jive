@@ -2,7 +2,7 @@
 
 > 日期: 2026-04-10
 > 推荐主线: [#144](https://github.com/zensgit/jive/pull/144)
-> 当前 head: `62ad7fc`
+> 当前 head: `f753c50`
 
 ## 目标
 
@@ -55,25 +55,29 @@ cd /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
 7. link + dry-run + apply migrations：
 
 ```bash
-npx -y supabase@latest link --project-ref "$STAGING_PROJECT_REF" --password "$STAGING_DB_PASSWORD"
-npx -y supabase@latest db push --include-all --dry-run
-npx -y supabase@latest db push --include-all
+scripts/run_saas_staging_rollout.sh apply \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN"
 ```
 
 8. 注入 secrets：
 
 ```bash
-npx -y supabase@latest secrets set --env-file /tmp/jive-saas-staging.env --project-ref "$STAGING_PROJECT_REF"
+scripts/run_saas_staging_rollout.sh deploy \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --env-file /tmp/jive-saas-staging.env
 ```
 
-9. 部署 5 个 Edge Functions：
+9. 如果想一条命令执行完 link + apply + deploy：
 
 ```bash
-npx -y supabase@latest functions deploy subscription-webhook --project-ref "$STAGING_PROJECT_REF" --use-api
-npx -y supabase@latest functions deploy verify-subscription --project-ref "$STAGING_PROJECT_REF" --use-api
-npx -y supabase@latest functions deploy analytics --project-ref "$STAGING_PROJECT_REF" --use-api
-npx -y supabase@latest functions deploy send-notification --project-ref "$STAGING_PROJECT_REF" --use-api
-npx -y supabase@latest functions deploy admin --project-ref "$STAGING_PROJECT_REF" --use-api
+scripts/run_saas_staging_rollout.sh all \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --env-file /tmp/jive-saas-staging.env
 ```
 
 10. 做最小验收：
@@ -94,5 +98,6 @@ npx -y supabase@latest functions deploy admin --project-ref "$STAGING_PROJECT_RE
 - [2026-04-10-saas-post-merge-30min-checklist.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-post-merge-30min-checklist.md)
 - [2026-04-10-saas-staging-apply-runbook.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-staging-apply-runbook.md)
 - [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/jive-saas-staging.env.example)
+- [run_saas_staging_rollout.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/scripts/run_saas_staging_rollout.sh)
 - [2026-04-10-saas-beta-mainline-merge-strategy.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-beta-mainline-merge-strategy.md)
 - [2026-04-09-saas-beta-verification-closure.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-09-saas-beta-verification-closure.md)
