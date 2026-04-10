@@ -1,7 +1,7 @@
 # Jive SaaS Staging Apply / Deploy Runbook
 
 > 日期: 2026-04-10
-> 主线基线: `codex/saas-beta-mainline@ede0ab0`
+> 主线基线: `codex/saas-beta-mainline@83ecd5d`
 > 目标: 在 staging 环境完成 SaaS Beta 的数据库迁移、Edge Function secrets 注入、Functions deploy 与最小验收
 
 ## 适用前提
