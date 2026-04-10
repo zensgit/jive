@@ -54,7 +54,7 @@
 - `012_allow_admin_subscription_override.sql`
 
 但这台机器上当前还不能直接执行 staging apply / functions deploy，阻塞点是：
-- `supabase` CLI 未安装
+- 本机 PATH 里没有预装 `supabase`，虽然可用 `npx supabase@latest` 临时拉起 CLI
 - 仓库里没有 linked staging project ref
 - 当前环境里也没有可直接用于 staging deploy 的 service-role / access token 配置
 
