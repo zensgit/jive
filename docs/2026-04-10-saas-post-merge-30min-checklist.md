@@ -135,6 +135,13 @@ API / 配置层：
 - [ ] send-notification 可部署
 - [ ] admin 可部署
 
+## T+35 分钟：PR 收尾
+
+- [ ] 用 [2026-04-10-saas-pr-cleanup-map.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-pr-cleanup-map.md) 确认每个旧 PR 的收尾类别
+- [ ] 用 [print_saas_pr_cleanup_comments.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/scripts/print_saas_pr_cleanup_comments.sh) 生成评论模板
+- [ ] 在旧 clean PR 上标注 `merged via #144`
+- [ ] 在旧污染 / 已替代 PR 上标注 `superseded by #144`
+
 ## 完成标准
 
 满足以下 3 条即可视为 SaaS Beta 已完成主线收口：

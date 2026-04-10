@@ -96,8 +96,10 @@ scripts/run_saas_staging_rollout.sh all \
 ## 参考文档
 
 - [2026-04-10-saas-post-merge-30min-checklist.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-post-merge-30min-checklist.md)
+- [2026-04-10-saas-pr-cleanup-map.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-pr-cleanup-map.md)
 - [2026-04-10-saas-staging-apply-runbook.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-staging-apply-runbook.md)
 - [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/jive-saas-staging.env.example)
+- [print_saas_pr_cleanup_comments.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/scripts/print_saas_pr_cleanup_comments.sh)
 - [run_saas_staging_rollout.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/scripts/run_saas_staging_rollout.sh)
 - [2026-04-10-saas-beta-mainline-merge-strategy.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-beta-mainline-merge-strategy.md)
 - [2026-04-09-saas-beta-verification-closure.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-09-saas-beta-verification-closure.md)
