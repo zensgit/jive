@@ -17,10 +17,13 @@ import 'subscription_truth_repository.dart';
 class SubscriptionStatusService {
   static const _prefKeyLastPurchase = 'last_purchase_timestamp';
   static const _gracePeriod = Duration(days: 7);
+  static const _resumeRecheckInterval = Duration(minutes: 5);
 
   final PaymentService _paymentService;
   final EntitlementService _entitlementService;
   final SubscriptionTruthRepository? _truthRepository;
+  Future<void>? _inFlightCheck;
+  DateTime? _lastCheckedAt;
 
   SubscriptionStatusService({
     required PaymentService paymentService,
@@ -36,7 +39,29 @@ class SubscriptionStatusService {
   ///  1. If payment service unavailable → offline grace logic
   ///  2. Restore purchases (triggers purchase stream → tier update)
   ///  3. If restore finds nothing and user is subscriber → downgrade to free
-  Future<void> checkAndSync() async {
+  Future<void> checkAndSync({bool force = true}) {
+    if (!force &&
+        _lastCheckedAt != null &&
+        DateTime.now().difference(_lastCheckedAt!) < _resumeRecheckInterval) {
+      return Future.value();
+    }
+
+    final inFlight = _inFlightCheck;
+    if (inFlight != null) return inFlight;
+
+    final future = _runCheckAndSync().whenComplete(() {
+      _lastCheckedAt = DateTime.now();
+      _inFlightCheck = null;
+    });
+    _inFlightCheck = future;
+    return future;
+  }
+
+  Future<void> checkAndSyncIfStale() {
+    return checkAndSync(force: false);
+  }
+
+  Future<void> _runCheckAndSync() async {
     final currentTier = _entitlementService.tier;
 
     final truthResult =
@@ -83,13 +108,14 @@ class SubscriptionStatusService {
     final result = await _paymentService.restorePurchases();
 
     // restorePurchases triggers the purchase stream in PlayStorePaymentService,
-    // which calls EntitlementService.setTier on success.  If the restore did
-    // not succeed (no active purchases) and user was subscriber, downgrade.
+    // which updates the entitlement on success. If restore did not surface an
+    // active entitlement and user was subscriber, clear the trusted cache and
+    // downgrade locally.
     if (!result.success && currentTier == UserTier.subscriber) {
       debugPrint(
         'SubscriptionStatusService: no active subscription — downgrading',
       );
-      await _entitlementService.setTier(UserTier.free);
+      await _entitlementService.clearTrustedSnapshot(downgradeSubscriber: true);
     }
   }
 

@@ -10,12 +10,12 @@ import 'core/auth/supabase_auth_service.dart';
 import 'core/entitlement/entitlement_service.dart';
 import 'core/sync/sync_config.dart';
 import 'core/payment/payment_service.dart';
+import 'core/payment/payment_service_factory.dart';
 import 'core/payment/subscription_status_service.dart';
 import 'core/payment/supabase_subscription_truth_repository.dart';
 import 'core/service/database_service.dart';
 import 'core/sync/sync_engine.dart';
 import 'core/sync/sync_key_migration.dart';
-import 'core/payment/play_store_payment_service.dart';
 import 'core/service/category_icon_style.dart';
 import 'core/utils/logger_util.dart';
 import 'core/service/locale_service.dart';
@@ -44,9 +44,10 @@ void main() async {
       : null;
 
   // Payment service
-  final paymentService = PlayStorePaymentService(
-    entitlement: entitlementService,
+  final paymentService = createPlatformPaymentService(
+    entitlementService: entitlementService,
     truthRepository: subscriptionTruthRepository,
+    applicationUserNameProvider: () => authService.currentUser?.uid,
   );
   await paymentService.init();
 

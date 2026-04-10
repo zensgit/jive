@@ -97,13 +97,18 @@ const JiveAccountSchema = CollectionSchema(
       name: r'subType',
       type: IsarType.string,
     ),
-    r'type': PropertySchema(
+    r'syncKey': PropertySchema(
       id: 16,
+      name: r'syncKey',
+      type: IsarType.string,
+    ),
+    r'type': PropertySchema(
+      id: 17,
       name: r'type',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 17,
+      id: 18,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -122,6 +127,19 @@ const JiveAccountSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'key',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'syncKey': IndexSchema(
+      id: -4971009725215132130,
+      name: r'syncKey',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'syncKey',
           type: IndexType.hash,
           caseSensitive: true,
         )
@@ -177,6 +195,7 @@ int _jiveAccountEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  bytesCount += 3 + object.syncKey.length * 3;
   bytesCount += 3 + object.type.length * 3;
   return bytesCount;
 }
@@ -203,8 +222,9 @@ void _jiveAccountSerialize(
   writer.writeLong(offsets[13], object.order);
   writer.writeLong(offsets[14], object.repaymentDay);
   writer.writeString(offsets[15], object.subType);
-  writer.writeString(offsets[16], object.type);
-  writer.writeDateTime(offsets[17], object.updatedAt);
+  writer.writeString(offsets[16], object.syncKey);
+  writer.writeString(offsets[17], object.type);
+  writer.writeDateTime(offsets[18], object.updatedAt);
 }
 
 JiveAccount _jiveAccountDeserialize(
@@ -231,8 +251,9 @@ JiveAccount _jiveAccountDeserialize(
   object.order = reader.readLong(offsets[13]);
   object.repaymentDay = reader.readLongOrNull(offsets[14]);
   object.subType = reader.readStringOrNull(offsets[15]);
-  object.type = reader.readString(offsets[16]);
-  object.updatedAt = reader.readDateTime(offsets[17]);
+  object.syncKey = reader.readString(offsets[16]);
+  object.type = reader.readString(offsets[17]);
+  object.updatedAt = reader.readDateTime(offsets[18]);
   return object;
 }
 
@@ -278,6 +299,8 @@ P _jiveAccountDeserializeProp<P>(
     case 16:
       return (reader.readString(offset)) as P;
     case 17:
+      return (reader.readString(offset)) as P;
+    case 18:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -475,6 +498,51 @@ extension JiveAccountQueryWhere
               indexName: r'key',
               lower: [],
               upper: [key],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhereClause> syncKeyEqualTo(
+      String syncKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'syncKey',
+        value: [syncKey],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterWhereClause> syncKeyNotEqualTo(
+      String syncKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [],
+              upper: [syncKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [syncKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [syncKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'syncKey',
+              lower: [],
+              upper: [syncKey],
               includeUpper: false,
             ));
       }
@@ -2091,6 +2159,140 @@ extension JiveAccountQueryFilter
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> syncKeyEqualTo(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      syncKeyGreaterThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> syncKeyLessThan(
+    String value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> syncKeyBetween(
+    String lower,
+    String upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'syncKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      syncKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> syncKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> syncKeyContains(
+      String value,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'syncKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> syncKeyMatches(
+      String pattern,
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'syncKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      syncKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'syncKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition>
+      syncKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'syncKey',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterFilterCondition> typeEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -2483,6 +2685,18 @@ extension JiveAccountQuerySortBy
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortBySyncKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortBySyncKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> sortByType() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'type', Sort.asc);
@@ -2718,6 +2932,18 @@ extension JiveAccountQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenBySyncKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenBySyncKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'syncKey', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QAfterSortBy> thenByType() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'type', Sort.asc);
@@ -2849,6 +3075,13 @@ extension JiveAccountQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctBySyncKey(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'syncKey', caseSensitive: caseSensitive);
+    });
+  }
+
   QueryBuilder<JiveAccount, JiveAccount, QDistinct> distinctByType(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -2964,6 +3197,12 @@ extension JiveAccountQueryProperty
   QueryBuilder<JiveAccount, String?, QQueryOperations> subTypeProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'subType');
+    });
+  }
+
+  QueryBuilder<JiveAccount, String, QQueryOperations> syncKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'syncKey');
     });
   }
 

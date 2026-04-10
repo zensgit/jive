@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'subscription_lifecycle_gate.dart';
 import '../core/auth/auth_service.dart';
 import '../core/l10n/app_localizations.dart';
 import '../core/service/category_icon_style.dart';
@@ -40,7 +41,9 @@ class JiveApp extends StatelessWidget {
                 GlobalCupertinoLocalizations.delegate,
               ],
               supportedLocales: localeService.getSupportedLocales(),
-              home: const LockGate(child: _AppEntry()),
+              home: const SubscriptionLifecycleGate(
+                child: LockGate(child: _AppEntry()),
+              ),
             );
           },
         );
@@ -90,14 +93,18 @@ class _AppEntryState extends State<_AppEntry> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_onboardingComplete == false) {
-      return OnboardingScreen(onComplete: () {
-        if (mounted) setState(() => _onboardingComplete = true);
-      });
+      return OnboardingScreen(
+        onComplete: () {
+          if (mounted) setState(() => _onboardingComplete = true);
+        },
+      );
     }
     if (_guidedSetupComplete == false) {
-      return GuidedSetupScreen(onComplete: () {
-        if (mounted) setState(() => _guidedSetupComplete = true);
-      });
+      return GuidedSetupScreen(
+        onComplete: () {
+          if (mounted) setState(() => _guidedSetupComplete = true);
+        },
+      );
     }
 
     // If Supabase is configured, show auth gate

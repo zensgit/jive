@@ -10,6 +10,73 @@
 
 ---
 
+## 2026-04-09 执行更新
+
+当前不再从旧污染分支继续派生新工作，统一以 clean PR 队列作为 SaaS 主线。
+
+### 当前 parent PR 主链
+这些 PR 当前都以 `main` 为 base，是 SaaS Beta 的正式收口入口：
+- `#139` B4.1 同步安全/文案纠偏
+- `#142` Wave 0 smoke lane
+- `#122` Google subscription webhook
+- `#124` entitlement lifecycle
+- `#127` analytics pipeline
+- `#128` notification queue backend
+- `#129` admin API
+- `#134` phone + Apple auth entrypoints
+- `#136` B1.1 book/workspace boundaries
+
+### 当前 child PR 链
+这些 PR 只在父 PR merged 后推进，不再新开 replacement：
+- `#122 -> #131`
+- `#124 -> #133 -> #138`
+- `#129 -> #130`
+- `#134 -> #135`
+- `#136 -> #140 -> #141`
+
+### 当前明确 defer
+- Apple JWS / 证书链更强校验
+- RevenueCat 评估
+- admin dashboard UI
+- analytics/report UI
+- notification outbound delivery / provider 集成
+- 任何 E2EE / 密钥管理实现
+
+## 2026-04-10 集成更新
+
+当前 clean SaaS 主链已经完整集成到一条独立分支：
+- 分支: `codex/saas-beta-mainline`
+- head: `d0e8168`
+
+已集成范围：
+- 基础与文案: `#139`、`#142`
+- Sync: `#136`、`#140`、`#141`
+- Billing webhook: `#122`、`#131`
+- Billing truth: `#124`、`#133`、`#138`
+- Auth: `#134`、`#135`
+- Ops: `#127`、`#128`、`#129`、`#130`
+
+已完成的额外收口：
+- `#130` 已重放到新的 admin parent 上，远端 head 为 `e76de2e`
+- `#138` 已补 App Store fake client 测试注入与 Apple active receipt fixture future-proof 修复，远端 head 为 `f80ecab`
+- 集成线额外提交 `4ec2f49`，修掉只会在多链路合并后暴露的 smoke blockers
+- 集成线额外提交 `d0e8168`，修掉 fresh-main merge 演练里暴露的时间相关测试夹具过期问题
+
+当前最快的 Beta 收口路径已经变化：
+1. 继续保留现有 PR 作为 review/审计入口
+2. 以 `codex/saas-beta-mainline` 作为代码集成主线
+3. 用 `bash scripts/run_saas_wave0_smoke.sh` 作为统一最小验收入口
+
+当前已通过的统一验收：
+- `bash scripts/run_saas_wave0_smoke.sh` 在 `codex/saas-beta-mainline` 上通过
+- fresh `origin/main` worktree 本地 merge `origin/codex/saas-beta-mainline` 后，`bash scripts/run_saas_wave0_smoke.sh` 也通过
+
+因此，剩余工作不再是继续扩功能，而是二选一：
+- 继续按现有 PR 队列在 GitHub UI 逐条合并
+- 或以 `codex/saas-beta-mainline` 为新的快速收口入口，统一 review 后并入 `main`
+
+---
+
 ## 当前代码现实
 
 ### 已有 Alpha 基础
@@ -260,31 +327,34 @@ create table public.user_subscriptions (
 
 ## Git 工作流规范
 
-### 分支命名
-每个 task 在独立分支上开发，命名规范：
+### 当前执行入口
+旧的 `saas/b1.1-sync-schema-book-key`、`saas/b1.2-remove-local-id-dependency`、`saas/b1.3-delete-tombstone-strategy` 等分支名只保留历史参考意义，不再作为执行入口。
+
+当前统一规则：
+- 以 clean PR 队列作为 SaaS 主线
+- parent PR 直接基于 `main`
+- child PR 只在父 PR merged 后 rebase 到 `main`
+- 队列缩到 3 个以内前，不再开新的功能型 SaaS 分支
+
+当前活跃执行分支示例：
 ```
-saas/b0.2-stable-cloud-ids
-saas/b1.1-sync-schema-book-key
-saas/b1.2-remove-local-id-dependency
-saas/b1.3-delete-tombstone-strategy
-saas/b2.1-server-subscription-truth
+saas/b4.1-sync-copy-audit-restacked
+saas/wave0-smoke-lane
 saas/b2.2-subscription-webhook
 saas/b2.3-client-entitlement-wiring
-saas/b3.1-email-login
-saas/b3.2-phone-oauth
-saas/b4.1-sync-security-audit
-saas/b4.2-security-copy-fix
 saas/b5.1-analytics
 saas/b5.2-notifications
 saas/b5.3-admin-api
+saas/b3.2-phone-and-apple-auth-restacked
+saas/b1.1-book-key-boundaries-restacked
 ```
 
 ### 工作流程
-1. **从 main 创建分支**: `git checkout -b saas/b0.2-stable-cloud-ids main`
-2. **在分支上开发**: 小 commit，每个 commit 有清晰消息
-3. **完成后创建 PR**: `gh pr create --base main --title "B0.2: 定义稳定云端标识"`
-4. **不要直接合并到 main** — 等待审查后再合并
-5. **如果依赖前序 task**: 从前序 task 的分支创建，合并后 rebase 到 main
+1. **parent PR 一律从 `main` 创建**
+2. **child PR 只在明确依赖 parent 时才允许 stacked**
+3. **parent merged 后，child 统一 `rebase origin/main` 并 force-push**
+4. **不要继续从旧污染 worktree 派生新功能**
+5. **只有 review/blocker 修复和必要 restack 才允许新增提交**
 
 ### 冲突预防
 - Codex 主要修改: `supabase/`, `lib/core/sync/`, `lib/core/entitlement/`, `lib/core/auth/`
@@ -321,14 +391,24 @@ git worktree add ../jive-saas-b1.1 -b saas/b1.1-sync-schema-book-key main
 ---
 
 ## 当前推荐顺序
-1. ~~B0.1~~ ✅ 已完成 (saas-beta-boundaries.md)
-2. B0.2
-3. B1.1
-4. B1.2
-5. B1.3
-6. B2.1
-7. B2.2
-8. B2.3
-9. B3.1
-10. B4.1
-11. 其余任务按资源推进
+1. `#139`
+2. `#142`
+3. `#122`
+4. `#124`
+5. `#127`
+6. `#128`
+7. `#129`
+8. `#134`
+9. `#136`
+10. `#131`
+11. `#133`
+12. `#138`
+13. `#130`
+14. `#135`
+15. `#140`
+16. `#141`
+
+### 备注
+- `#139` 和 `#142` 是当前最小阻塞项，必须先进入 `main`
+- parent PR 合并后，再继续各自 child restack
+- 队列压缩完成前，不再开新的功能型 SaaS 分支
