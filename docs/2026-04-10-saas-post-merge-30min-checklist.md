@@ -2,7 +2,7 @@
 
 > 日期: 2026-04-10
 > 主线 PR: [#144](https://github.com/zensgit/jive/pull/144)
-> 当前 head: `f753c50`
+> 当前 head: `a4bedeb`
 > 目标: `#144` 合入 `main` 后 30 分钟内完成最小主线验收与 staging 落地
 
 ## 使用方式
@@ -46,6 +46,16 @@ bash scripts/run_saas_wave0_smoke.sh
 
 ```bash
 cp docs/jive-saas-staging.env.example /tmp/jive-saas-staging.env
+```
+
+- [ ] 先跑预检查：
+
+```bash
+scripts/run_saas_staging_rollout.sh preflight \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --env-file /tmp/jive-saas-staging.env
 ```
 
 运行时 secrets 至少要包含：

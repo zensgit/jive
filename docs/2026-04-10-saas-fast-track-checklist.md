@@ -2,7 +2,7 @@
 
 > 日期: 2026-04-10
 > 推荐主线: [#144](https://github.com/zensgit/jive/pull/144)
-> 当前 head: `f753c50`
+> 当前 head: `a4bedeb`
 
 ## 目标
 
@@ -55,6 +55,12 @@ cd /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
 7. link + dry-run + apply migrations：
 
 ```bash
+scripts/run_saas_staging_rollout.sh preflight \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --env-file /tmp/jive-saas-staging.env
+
 scripts/run_saas_staging_rollout.sh apply \
   --project-ref "$STAGING_PROJECT_REF" \
   --db-password "$STAGING_DB_PASSWORD" \
@@ -98,6 +104,7 @@ scripts/run_saas_staging_rollout.sh all \
 - [2026-04-10-saas-post-merge-30min-checklist.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-post-merge-30min-checklist.md)
 - [2026-04-10-saas-pr-cleanup-map.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-pr-cleanup-map.md)
 - [2026-04-10-saas-staging-apply-runbook.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-staging-apply-runbook.md)
+- [2026-04-10-saas-staging-troubleshooting.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-staging-troubleshooting.md)
 - [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/jive-saas-staging.env.example)
 - [print_saas_pr_cleanup_comments.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/scripts/print_saas_pr_cleanup_comments.sh)
 - [run_saas_staging_rollout.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/scripts/run_saas_staging_rollout.sh)

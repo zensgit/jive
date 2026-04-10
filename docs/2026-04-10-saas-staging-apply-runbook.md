@@ -1,7 +1,7 @@
 # Jive SaaS Staging Apply / Deploy Runbook
 
 > 日期: 2026-04-10
-> 主线基线: `codex/saas-beta-mainline@f753c50`
+> 主线基线: `codex/saas-beta-mainline@a4bedeb`
 > 目标: 在 staging 环境完成 SaaS Beta 的数据库迁移、Edge Function secrets 注入、Functions deploy 与最小验收
 
 ## 适用前提
@@ -38,6 +38,12 @@ npx -y supabase@latest help functions deploy
 
 ```bash
 scripts/run_saas_staging_rollout.sh help
+```
+
+在真正 apply/deploy 前，建议先跑：
+
+```bash
+scripts/run_saas_staging_rollout.sh preflight --env-file /tmp/jive-saas-staging.env
 ```
 
 说明：
@@ -180,6 +186,7 @@ $EDITOR /tmp/jive-saas-staging.env
 说明：
 - [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/jive-saas-staging.env.example) 已包含当前 5 个 Edge Functions 需要的全部变量
 - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` 需要保持为单行，并将换行写成 `\\n`
+- 如果想先检查变量和 secrets 是否齐，再执行 apply/deploy，先跑 `preflight`
 
 ### Step 7. 推送 secrets
 
@@ -250,6 +257,9 @@ npx -y supabase@latest functions deploy admin \
   - [2026-04-10-saas-beta-mainline-merge-strategy.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-beta-mainline-merge-strategy.md)
 
 ## 常见阻塞与处理
+
+更完整的值班手册见：
+- [2026-04-10-saas-staging-troubleshooting.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-staging-troubleshooting.md)
 
 ### 1. `Cannot connect to the Docker daemon`
 原因：
