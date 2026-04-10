@@ -47,7 +47,7 @@ Deno.test("buildAppleVerifiedSubscription maps an active subscriber receipt", ()
       product_id: "jive_subscriber_yearly",
       original_transaction_id: "orig-sub",
       transaction_id: "txn-sub",
-      expires_date_ms: "1775800000000",
+      expires_date_ms: "1893456000000",
     },
   );
 
