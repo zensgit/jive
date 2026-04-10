@@ -8,6 +8,137 @@ import 'package:jive/core/entitlement/entitlement_service.dart';
 import 'package:jive/core/entitlement/user_tier.dart';
 import 'package:jive/core/payment/app_store_payment_service.dart';
 import 'package:jive/core/payment/product_ids.dart';
+import 'package:jive/core/payment/subscription_truth_model.dart';
+import 'package:jive/core/payment/subscription_truth_repository.dart';
+
+class _FakeSubscriptionTruthRepository implements SubscriptionTruthRepository {
+  _FakeSubscriptionTruthRepository({
+    SubscriptionTruthFetchResult? fetchResult,
+    SubscriptionTruthFetchResult? googleVerifyResult,
+    SubscriptionTruthFetchResult? appleVerifyResult,
+  }) : fetchResult =
+           fetchResult ?? const SubscriptionTruthFetchResult.unavailable(),
+       googleVerifyResult =
+           googleVerifyResult ??
+           const SubscriptionTruthFetchResult.unavailable(),
+       appleVerifyResult =
+           appleVerifyResult ??
+           const SubscriptionTruthFetchResult.unavailable();
+
+  SubscriptionTruthFetchResult fetchResult;
+  SubscriptionTruthFetchResult googleVerifyResult;
+  SubscriptionTruthFetchResult appleVerifyResult;
+  int fetchCallCount = 0;
+  int appleVerifyCallCount = 0;
+
+  @override
+  Future<SubscriptionTruthFetchResult> fetchCurrentSubscription() async {
+    fetchCallCount += 1;
+    return fetchResult;
+  }
+
+  @override
+  Future<SubscriptionTruthFetchResult> verifyGooglePlayPurchase({
+    required String productId,
+    required String purchaseToken,
+    String? orderId,
+    String? transactionDateMs,
+  }) async {
+    return googleVerifyResult;
+  }
+
+  @override
+  Future<SubscriptionTruthFetchResult> verifyAppleAppStorePurchase({
+    required String productId,
+    required String receiptData,
+    String? orderId,
+  }) async {
+    appleVerifyCallCount += 1;
+    return appleVerifyResult;
+  }
+}
+
+class _FakeAppStorePurchaseClient implements AppStorePurchaseClient {
+  final StreamController<List<PurchaseDetails>> _purchaseController =
+      StreamController<List<PurchaseDetails>>.broadcast();
+
+  Object? buyNonConsumableError;
+  Future<void> Function(String? applicationUserName)? onRestorePurchases;
+  final List<PurchaseDetails> completedPurchases = [];
+
+  @override
+  Stream<List<PurchaseDetails>> get purchaseStream => _purchaseController.stream;
+
+  @override
+  Future<bool> isAvailable() async => true;
+
+  @override
+  Future<ProductDetailsResponse> queryProductDetails(
+    Set<String> identifiers,
+  ) async {
+    return ProductDetailsResponse(
+      productDetails: identifiers
+          .map(
+            (id) => ProductDetails(
+              id: id,
+              title: id,
+              description: '$id description',
+              price: '¥1.00',
+              rawPrice: 1,
+              currencyCode: 'CNY',
+            ),
+          )
+          .toList(),
+      notFoundIDs: const [],
+    );
+  }
+
+  @override
+  Future<bool> buyNonConsumable({required PurchaseParam purchaseParam}) async {
+    if (buyNonConsumableError != null) {
+      throw buyNonConsumableError!;
+    }
+    return true;
+  }
+
+  @override
+  Future<void> restorePurchases({String? applicationUserName}) async {
+    await onRestorePurchases?.call(applicationUserName);
+  }
+
+  @override
+  Future<void> completePurchase(PurchaseDetails purchase) async {
+    completedPurchases.add(purchase);
+  }
+
+  void emitPurchases(List<PurchaseDetails> purchases) {
+    _purchaseController.add(purchases);
+  }
+
+  Future<void> dispose() async {
+    await _purchaseController.close();
+  }
+}
+
+PurchaseDetails _purchaseDetails({
+  required String productId,
+  required PurchaseStatus status,
+  bool pendingCompletePurchase = false,
+}) {
+  final purchase = PurchaseDetails(
+    productID: productId,
+    purchaseID: 'purchase-$productId',
+    verificationData: PurchaseVerificationData(
+      localVerificationData: 'local',
+      serverVerificationData: 'server',
+      source: 'app_store',
+    ),
+    transactionDate: DateTime.now().millisecondsSinceEpoch.toString(),
+    status: status,
+  );
+  purchase.pendingCompletePurchase = pendingCompletePurchase;
+  return purchase;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -98,86 +229,66 @@ void main() {
     service.dispose();
     await client.dispose();
   });
-}
 
-class _FakeAppStorePurchaseClient implements AppStorePurchaseClient {
-  final StreamController<List<PurchaseDetails>> _purchaseController =
-      StreamController<List<PurchaseDetails>>.broadcast();
-
-  Object? buyNonConsumableError;
-  Future<void> Function(String? applicationUserName)? onRestorePurchases;
-  final List<PurchaseDetails> completedPurchases = [];
-
-  @override
-  Stream<List<PurchaseDetails>> get purchaseStream => _purchaseController.stream;
-
-  @override
-  Future<bool> isAvailable() async => true;
-
-  @override
-  Future<ProductDetailsResponse> queryProductDetails(
-    Set<String> identifiers,
-  ) async {
-    return ProductDetailsResponse(
-      productDetails: identifiers
-          .map(
-            (id) => ProductDetails(
-              id: id,
-              title: id,
-              description: '$id description',
-              price: '¥1.00',
-              rawPrice: 1,
-              currencyCode: 'CNY',
-            ),
-          )
-          .toList(),
-      notFoundIDs: const [],
+  test('syncTrustedReceipt uses Apple verification before fallback fetch', () async {
+    final entitlement = EntitlementService();
+    await entitlement.init();
+    final truthRepository = _FakeSubscriptionTruthRepository(
+      appleVerifyResult: SubscriptionTruthFetchResult.authoritative(
+        snapshot: TrustedSubscriptionSnapshot(
+          plan: SubscriptionPlan.subscriber,
+          status: SubscriptionStatusKind.active,
+          platform: 'apple_app_store',
+          productId: 'jive_subscriber_yearly',
+          orderId: 'txn_apple_1',
+        ),
+      ),
     );
-  }
+    final service = AppStorePaymentService(
+      entitlement: entitlement,
+      truthRepository: truthRepository,
+      iapClient: _FakeAppStorePurchaseClient(),
+    );
 
-  @override
-  Future<bool> buyNonConsumable({required PurchaseParam purchaseParam}) async {
-    if (buyNonConsumableError != null) {
-      throw buyNonConsumableError!;
-    }
-    return true;
-  }
+    final tier = await service.syncTrustedReceipt(
+      productId: 'jive_subscriber_yearly',
+      receiptData: 'base64-receipt',
+      orderId: 'txn_apple_1',
+    );
 
-  @override
-  Future<void> restorePurchases({String? applicationUserName}) async {
-    await onRestorePurchases?.call(applicationUserName);
-  }
+    expect(tier, UserTier.subscriber);
+    expect(entitlement.tier, UserTier.subscriber);
+    expect(truthRepository.appleVerifyCallCount, 1);
+    expect(truthRepository.fetchCallCount, 0);
+  });
 
-  @override
-  Future<void> completePurchase(PurchaseDetails purchase) async {
-    completedPurchases.add(purchase);
-  }
+  test('syncTrustedReceipt falls back to trusted snapshot fetch', () async {
+    final entitlement = EntitlementService();
+    await entitlement.init();
+    final truthRepository = _FakeSubscriptionTruthRepository(
+      fetchResult: SubscriptionTruthFetchResult.authoritative(
+        snapshot: TrustedSubscriptionSnapshot(
+          plan: SubscriptionPlan.paid,
+          status: SubscriptionStatusKind.active,
+          platform: 'apple_app_store',
+          productId: 'jive_paid_unlock',
+        ),
+      ),
+    );
+    final service = AppStorePaymentService(
+      entitlement: entitlement,
+      truthRepository: truthRepository,
+      iapClient: _FakeAppStorePurchaseClient(),
+    );
 
-  void emitPurchases(List<PurchaseDetails> purchases) {
-    _purchaseController.add(purchases);
-  }
+    final tier = await service.syncTrustedReceipt(
+      productId: 'jive_paid_unlock',
+      receiptData: '',
+    );
 
-  Future<void> dispose() async {
-    await _purchaseController.close();
-  }
-}
-
-PurchaseDetails _purchaseDetails({
-  required String productId,
-  required PurchaseStatus status,
-  bool pendingCompletePurchase = false,
-}) {
-  final purchase = PurchaseDetails(
-    productID: productId,
-    purchaseID: 'purchase-$productId',
-    verificationData: PurchaseVerificationData(
-      localVerificationData: 'local',
-      serverVerificationData: 'server',
-      source: 'app_store',
-    ),
-    transactionDate: DateTime.now().millisecondsSinceEpoch.toString(),
-    status: status,
-  );
-  purchase.pendingCompletePurchase = pendingCompletePurchase;
-  return purchase;
+    expect(tier, UserTier.paid);
+    expect(entitlement.tier, UserTier.paid);
+    expect(truthRepository.appleVerifyCallCount, 0);
+    expect(truthRepository.fetchCallCount, 1);
+  });
 }

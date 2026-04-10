@@ -8,6 +8,7 @@ import '../entitlement/entitlement_service.dart';
 import '../entitlement/user_tier.dart';
 import 'payment_service.dart';
 import 'product_ids.dart';
+import 'subscription_truth_model.dart';
 import 'subscription_truth_repository.dart';
 
 abstract class AppStorePurchaseClient {
@@ -320,24 +321,64 @@ class AppStorePaymentService extends PaymentService {
   }
 
   Future<UserTier?> _syncTrustedPurchase(PurchaseDetails purchase) async {
+    return syncTrustedReceipt(
+      productId: purchase.productID,
+      receiptData: purchase.verificationData.serverVerificationData,
+      orderId: purchase.purchaseID,
+    );
+  }
+
+  @visibleForTesting
+  Future<UserTier?> syncTrustedReceipt({
+    required String productId,
+    String? receiptData,
+    String? orderId,
+  }) async {
     if (_truthRepository == null) return null;
 
-    final result = await _truthRepository.fetchCurrentSubscription();
+    final normalizedReceipt = receiptData?.trim();
+    if (normalizedReceipt != null && normalizedReceipt.isNotEmpty) {
+      final verifyResult = await _truthRepository.verifyAppleAppStorePurchase(
+        productId: productId,
+        receiptData: normalizedReceipt,
+        orderId: orderId,
+      );
+      final verifiedTier = await _applyTrustedResult(
+        verifyResult,
+        productId: productId,
+        logPrefix: 'verified',
+      );
+      if (verifiedTier != null) {
+        return verifiedTier;
+      }
+    }
+
+    final fetchResult = await _truthRepository.fetchCurrentSubscription();
+    return _applyTrustedResult(
+      fetchResult,
+      productId: productId,
+      logPrefix: 'fetched',
+    );
+  }
+
+  Future<UserTier?> _applyTrustedResult(
+    SubscriptionTruthFetchResult result, {
+    required String productId,
+    required String logPrefix,
+  }) async {
     if (result.isAuthoritative && result.snapshot != null) {
       final snapshot = result.snapshot!;
-      if (
-        snapshot.platform == 'apple_app_store' &&
-        (snapshot.productId == null || snapshot.productId == purchase.productID)
-      ) {
+      if (snapshot.platform == 'apple_app_store' &&
+          (snapshot.productId == null || snapshot.productId == productId)) {
         await _entitlement.applyTrustedSnapshot(snapshot);
         debugPrint(
-          'AppStorePaymentService: trusted subscription synced for ${purchase.productID}',
+          'AppStorePaymentService: $logPrefix trusted subscription synced for $productId',
         );
         return snapshot.tier;
       }
     } else if (result.errorMessage != null) {
       debugPrint(
-        'AppStorePaymentService: trusted sync skipped: ${result.errorMessage}',
+        'AppStorePaymentService: $logPrefix trusted sync skipped: ${result.errorMessage}',
       );
     }
 
