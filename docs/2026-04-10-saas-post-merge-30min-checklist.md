@@ -2,8 +2,8 @@
 
 > 日期: 2026-04-10
 > 主线 PR: [#144](https://github.com/zensgit/jive/pull/144)
-> 当前 head: `a4bedeb`
-> 目标: `#144` 合入 `main` 后 30 分钟内完成最小主线验收与 staging 落地
+> 当前主线: `main@6ea8b06`
+> 目标: `main` 已含 SaaS Beta 后 30 分钟内完成最小主线验收与 staging 落地
 
 ## 使用方式
 
@@ -13,11 +13,11 @@
 - [2026-04-10-saas-fast-track-checklist.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-fast-track-checklist.md)
 - [2026-04-10-saas-staging-apply-runbook.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-staging-apply-runbook.md)
 
-## T+0 分钟：完成主线 merge
+## T+0 分钟：确认主线状态
 
-- [ ] 在 GitHub 将 [#144](https://github.com/zensgit/jive/pull/144) 从 `draft` 改成 `ready`
-- [ ] 选择 `Create a merge commit`
-- [ ] 确认 `main` 已包含 `#144`
+- [ ] 确认 `origin/main` 已包含 `6ea8b06`
+- [ ] 确认当前 SaaS Beta 主线已在 `main`
+- [ ] 确认旧 PR 收尾评论已补上或待统一补上
 
 ## T+5 分钟：fresh main 验证
 

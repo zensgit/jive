@@ -9,6 +9,21 @@
 
 这份文档不再把旧污染分支当执行入口，而是只围绕当前 clean PR 队列推进。
 
+## 2026-04-10 主线合并更新
+
+当前 SaaS Beta 已经进入主线后阶段：
+- `origin/main` 已包含 SaaS Beta 主线 merge commit：`6ea8b06`
+- fresh `main` worktree 上已再次运行 `bash scripts/run_saas_wave0_smoke.sh`，结果通过
+- `/tmp/jive-saas-staging.env` 模板已从仓库模板复制完成
+- `scripts/run_saas_staging_rollout.sh preflight --env-file /tmp/jive-saas-staging.env` 已执行，当前缺少 19 项 staging 前置条件
+- clean PR 与 superseded PR 的 GitHub 收尾评论已补齐，旧 PR 队列现在只保留为审计材料
+
+当前真正阻塞只剩 staging 凭据与 secrets：
+- `STAGING_PROJECT_REF`
+- `STAGING_DB_PASSWORD`
+- `SUPABASE_ACCESS_TOKEN`
+- `/tmp/jive-saas-staging.env` 中 16 个运行时 secrets 仍为空
+
 ## 2026-04-10 集成更新
 
 当前已经有一条集成分支把 clean SaaS 主链完整收口：
@@ -72,7 +87,9 @@
 - child PR 只在父 PR merged 后 restack
 - `Wave 0 smoke lane` 作为统一最小回归入口
 
-## 当前 clean PR 队列
+## 历史 clean PR 队列
+
+下面的 PR 队列保留为收口历史与审计上下文，不再作为主线执行入口。
 
 ### 第一批 parent PR
 这些 PR 当前都处于：

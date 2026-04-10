@@ -42,7 +42,27 @@
 - notification outbound delivery / provider 集成
 - 任何 E2EE / 密钥管理实现
 
-## 2026-04-10 集成更新
+## 2026-04-10 主线后更新
+
+当前 SaaS Beta 已正式进入主线后阶段：
+- `origin/main` 已包含 SaaS Beta 主线 merge commit：`6ea8b06`
+- fresh `main` worktree 上 `bash scripts/run_saas_wave0_smoke.sh` 已再次通过
+- `/tmp/jive-saas-staging.env` 已按模板创建
+- `scripts/run_saas_staging_rollout.sh preflight --env-file /tmp/jive-saas-staging.env` 已执行，当前缺少 19 项 staging 前置条件
+- clean PR 与 superseded PR 的 GitHub 收尾评论已补齐，旧 PR 现在只保留为审计材料
+
+从现在开始，这份任务清单的主目标不再是“选择哪条 PR 路径合并”，而是：
+1. 准备 staging 凭据与运行时 secrets
+2. 执行 staging rollout
+3. 完成最小 Beta 验收
+
+当前实际阻塞：
+- `STAGING_PROJECT_REF`
+- `STAGING_DB_PASSWORD`
+- `SUPABASE_ACCESS_TOKEN`
+- `/tmp/jive-saas-staging.env` 中 16 个运行时 secrets 仍为空
+
+### 历史集成状态
 
 当前 clean SaaS 主链已经完整集成到一条独立分支：
 - 分支: `codex/saas-beta-mainline`
