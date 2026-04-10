@@ -1,7 +1,7 @@
 # Jive SaaS Staging Apply / Deploy Runbook
 
 > 日期: 2026-04-10
-> 主线基线: `codex/saas-beta-mainline@83ecd5d`
+> 主线基线: `codex/saas-beta-mainline@62ad7fc`
 > 目标: 在 staging 环境完成 SaaS Beta 的数据库迁移、Edge Function secrets 注入、Functions deploy 与最小验收
 
 ## 适用前提
@@ -145,28 +145,21 @@ npx -y supabase@latest db push \
 
 ### Step 6. 准备 secrets 文件
 
-建议本地单独准备一个不入库的文件，例如：
+建议直接复制模板文件再填值：
 
 ```bash
-cat > /tmp/jive-saas-staging.env <<'EOF'
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-GOOGLE_SERVICE_ACCOUNT_EMAIL=
-GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY=
-GOOGLE_PLAY_PACKAGE_NAME=
-APPLE_APP_STORE_BUNDLE_ID=
-APPLE_APP_STORE_SHARED_SECRET=
-APPLE_APP_STORE_APPLE_ID=
-APPLE_APP_STORE_ENVIRONMENT=
-PUBSUB_BEARER_TOKEN=
-WEBHOOK_HMAC_SECRET=
-ADMIN_API_TOKEN=
-ADMIN_API_ALLOWED_ORIGINS=
-ANALYTICS_ADMIN_TOKEN=
-NOTIFICATION_ADMIN_TOKEN=
-EOF
+cp docs/jive-saas-staging.env.example /tmp/jive-saas-staging.env
 ```
+
+然后编辑：
+
+```bash
+$EDITOR /tmp/jive-saas-staging.env
+```
+
+说明：
+- [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/jive-saas-staging.env.example) 已包含当前 5 个 Edge Functions 需要的全部变量
+- `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` 需要保持为单行，并将换行写成 `\\n`
 
 ### Step 7. 推送 secrets
 

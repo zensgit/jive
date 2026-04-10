@@ -2,7 +2,7 @@
 
 > 日期: 2026-04-10
 > 推荐主线: [#144](https://github.com/zensgit/jive/pull/144)
-> 当前 head: `83ecd5d`
+> 当前 head: `62ad7fc`
 
 ## 目标
 
@@ -23,7 +23,7 @@ bash scripts/run_saas_wave0_smoke.sh
 - `STAGING_PROJECT_REF`
 - `STAGING_DB_PASSWORD`
 
-5. 准备 staging secrets：
+5. 从模板准备 staging secrets：
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -40,6 +40,11 @@ bash scripts/run_saas_wave0_smoke.sh
 - `ADMIN_API_ALLOWED_ORIGINS`
 - `ANALYTICS_ADMIN_TOKEN`
 - `NOTIFICATION_ADMIN_TOKEN`
+
+```bash
+cp docs/jive-saas-staging.env.example /tmp/jive-saas-staging.env
+$EDITOR /tmp/jive-saas-staging.env
+```
 
 6. 在主线工作树执行：
 
@@ -88,5 +93,6 @@ npx -y supabase@latest functions deploy admin --project-ref "$STAGING_PROJECT_RE
 
 - [2026-04-10-saas-post-merge-30min-checklist.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-post-merge-30min-checklist.md)
 - [2026-04-10-saas-staging-apply-runbook.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-staging-apply-runbook.md)
+- [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/jive-saas-staging.env.example)
 - [2026-04-10-saas-beta-mainline-merge-strategy.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-beta-mainline-merge-strategy.md)
 - [2026-04-09-saas-beta-verification-closure.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-09-saas-beta-verification-closure.md)
