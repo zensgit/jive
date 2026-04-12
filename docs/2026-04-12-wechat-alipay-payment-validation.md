@@ -8,6 +8,9 @@
 ### 已完成
 - Flutter analyze 已通过：
   - `flutter analyze lib/core/payment/payment_service.dart lib/core/payment/payment_provider_resolver.dart lib/core/payment/payment_service_factory.dart lib/core/payment/domestic_payment_order_client.dart lib/core/payment/domestic_payment_service_base.dart lib/core/payment/wechat_pay_payment_service.dart lib/core/payment/alipay_payment_service.dart lib/feature/subscription/subscription_screen.dart test/payment_service_test.dart test/payment_provider_resolver_test.dart test/payment_service_factory_test.dart test/domestic_payment_service_test.dart`
+- 平台对齐 analyze / test 已通过：
+  - `flutter analyze lib/main.dart lib/core/payment/payment_runtime_config.dart lib/core/payment/payment_service_factory.dart test/payment_runtime_config_test.dart`
+  - `flutter test test/payment_runtime_config_test.dart test/payment_service_factory_test.dart test/payment_provider_resolver_test.dart test/payment_service_test.dart test/domestic_payment_service_test.dart`
 - Flutter tests 已通过：
   - `flutter test test/payment_service_test.dart test/payment_provider_resolver_test.dart test/payment_service_factory_test.dart test/domestic_payment_service_test.dart`
 - Deno checks 已通过：
@@ -33,6 +36,15 @@
 - 尚未在 staging 实际 apply：
   - [013_create_domestic_payment_orders.sql](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/migrations/013_create_domestic_payment_orders.sql)
 - 尚未接入真实商户配置，因此当前验证仍停留在 mock 建单 / mock webhook 层
+
+### 自托管启动参数
+当前建议的首轮自托管参数：
+- `--dart-define=PAYMENT_CHANNEL=self_hosted_web`
+- `--dart-define=ENABLE_WECHAT_PAY=true`
+- `--dart-define=ENABLE_ALIPAY=true`
+
+Android 直装包可切到：
+- `--dart-define=PAYMENT_CHANNEL=direct_android`
 
 ---
 

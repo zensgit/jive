@@ -17,6 +17,7 @@ PaymentService createPlatformPaymentService({
   TargetPlatform? platformOverride,
   bool isWeb = kIsWeb,
   PaymentChannel paymentChannel = PaymentChannel.auto,
+  bool enableStoreBilling = true,
   bool enableWechatPay = false,
   bool enableAlipay = false,
   PaymentService Function()? appStoreBuilder,
@@ -30,7 +31,7 @@ PaymentService createPlatformPaymentService({
     platform: platform,
     isWeb: isWeb,
     channel: paymentChannel,
-    enableStoreBilling: true,
+    enableStoreBilling: enableStoreBilling,
     enableWechatPay: enableWechatPay,
     enableAlipay: enableAlipay,
   );
@@ -67,6 +68,38 @@ PaymentService createPlatformPaymentService({
     }
   }
 
+  switch (paymentChannel) {
+    case PaymentChannel.appStore:
+      if (enableStoreBilling) {
+        return appStoreBuilder?.call() ??
+            AppStorePaymentService(
+              entitlement: entitlementService,
+              truthRepository: truthRepository,
+              applicationUserNameProvider: applicationUserNameProvider,
+            );
+      }
+      return _UnavailablePaymentService();
+    case PaymentChannel.googlePlay:
+      if (enableStoreBilling) {
+        return playStoreBuilder?.call() ??
+            PlayStorePaymentService(
+              entitlement: entitlementService,
+              truthRepository: truthRepository,
+            );
+      }
+      return _UnavailablePaymentService();
+    case PaymentChannel.selfHostedWeb:
+    case PaymentChannel.directAndroid:
+    case PaymentChannel.desktopWeb:
+      return _UnavailablePaymentService();
+    case PaymentChannel.auto:
+      break;
+  }
+
+  if (!enableStoreBilling) {
+    return _UnavailablePaymentService();
+  }
+
   if (usesAppStorePaymentService(platform: platform, isWeb: isWeb)) {
     return appStoreBuilder?.call() ??
         AppStorePaymentService(
@@ -89,4 +122,30 @@ bool usesAppStorePaymentService({
 }) {
   if (isWeb) return false;
   return platform == TargetPlatform.iOS || platform == TargetPlatform.macOS;
+}
+
+class _UnavailablePaymentService extends PaymentService {
+  _UnavailablePaymentService();
+
+  final String _message = '当前分发渠道未配置可用支付方式';
+
+  @override
+  bool get isAvailable => false;
+
+  @override
+  bool get isReady => true;
+
+  @override
+  List<StoreProduct> get products => const [];
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  Future<PurchaseResult> purchase(String productId) async =>
+      PurchaseResult.error(_message);
+
+  @override
+  Future<PurchaseResult> restorePurchases() async =>
+      PurchaseResult.error(_message);
 }

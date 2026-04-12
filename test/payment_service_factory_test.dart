@@ -109,6 +109,25 @@ void main() {
         expect(identical(service, fakeService), isTrue);
       },
     );
+
+    test(
+      'returns unavailable service for desktop channel without providers',
+      () {
+        final entitlement = EntitlementService();
+
+        final service = createPlatformPaymentService(
+          entitlementService: entitlement,
+          platformOverride: TargetPlatform.macOS,
+          isWeb: false,
+          paymentChannel: PaymentChannel.desktopWeb,
+          enableStoreBilling: false,
+          enableWechatPay: false,
+          enableAlipay: false,
+        );
+
+        expect(service.isAvailable, isFalse);
+      },
+    );
   });
 
   group('AppStorePaymentService.appStoreAccountTokenForUser', () {

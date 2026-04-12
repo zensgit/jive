@@ -11,6 +11,7 @@ import 'core/entitlement/entitlement_service.dart';
 import 'core/sync/sync_config.dart';
 import 'core/payment/payment_service.dart';
 import 'core/payment/payment_service_factory.dart';
+import 'core/payment/payment_runtime_config.dart';
 import 'core/payment/subscription_status_service.dart';
 import 'core/payment/supabase_subscription_truth_repository.dart';
 import 'core/service/database_service.dart';
@@ -42,12 +43,23 @@ void main() async {
   final subscriptionTruthRepository = SyncConfig.isConfigured
       ? SupabaseSubscriptionTruthRepository()
       : null;
+  final paymentRuntimeConfig = PaymentRuntimeConfig.current();
+  JiveLogger.i(
+    'Payment runtime config: channel=${paymentRuntimeConfig.channel.name}, '
+    'store=${paymentRuntimeConfig.enableStoreBilling}, '
+    'wechat=${paymentRuntimeConfig.enableWechatPay}, '
+    'alipay=${paymentRuntimeConfig.enableAlipay}',
+  );
 
   // Payment service
   final paymentService = createPlatformPaymentService(
     entitlementService: entitlementService,
     truthRepository: subscriptionTruthRepository,
     applicationUserNameProvider: () => authService.currentUser?.uid,
+    paymentChannel: paymentRuntimeConfig.channel,
+    enableStoreBilling: paymentRuntimeConfig.enableStoreBilling,
+    enableWechatPay: paymentRuntimeConfig.enableWechatPay,
+    enableAlipay: paymentRuntimeConfig.enableAlipay,
   );
   await paymentService.init();
 

@@ -55,6 +55,17 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
 
 这意味着现在已经可以先在你自己的服务器上跑“mock 建单 -> pending -> fake webhook -> entitlement 刷新”的闭环，不需要先注册 Google / Apple 开发者账号。
 
+### 结论 5：Claude 的“全平台默认 Drift + Web 启用”变更，会把支付默认渠道问题提前暴露出来
+在 [feat/sharing-system-integration](/Users/chauhua/Documents/GitHub/Jive/app) 当前最新主线里，Claude 新推进了两次关键平台变更：
+- `427f42d` `feat: full Drift migration — Web platform support enabled`
+- `695af5b` `feat: default all platforms to Drift (SQLite)`
+
+这两个提交的实际含义是：
+- Web 现在不再是“以后再说”的平台，而是已进入真实运行面
+- macOS / Windows / Linux 也不应继续被默认视作商店内购环境
+
+因此，国内支付首版必须把“支付运行时渠道选择”显式化，而不能继续让启动链路永远默认掉回商店支付。
+
 ---
 
 ## 当前代码现实
@@ -63,6 +74,7 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
 - 支付路由扩展：
   - [payment_provider_resolver.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_provider_resolver.dart)
   - [payment_service_factory.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service_factory.dart)
+  - [payment_runtime_config.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_runtime_config.dart)
 - 国内支付客户端骨架：
   - [domestic_payment_order_client.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/domestic_payment_order_client.dart)
   - [domestic_payment_service_base.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/domestic_payment_service_base.dart)
@@ -85,6 +97,15 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
   - `user_subscriptions`
 - 客户端订阅页当前已经能识别 `pending` 并提示用户完成支付后刷新权益
 - `run_saas_wave0_smoke.sh` 与 `run_saas_staging_rollout.sh` 已纳入国内支付函数与 secrets
+- 启动链路会按运行平台推导默认支付渠道：
+  - Web -> `selfHostedWeb`
+  - macOS / Windows / Linux -> `desktopWeb`
+  - Android / iOS -> `auto`
+- 支持通过 `dart-define` 覆盖：
+  - `PAYMENT_CHANNEL`
+  - `ENABLE_STORE_BILLING`
+  - `ENABLE_WECHAT_PAY`
+  - `ENABLE_ALIPAY`
 
 ### 已具备的基础
 - 统一支付接口：[payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service.dart)
@@ -218,6 +239,12 @@ SubscriptionScreen
 
 #### PaymentServiceFactory
 保留现有 [payment_service_factory.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service_factory.dart#L9)，但升级为“按渠道路由”，而不是只做 OS 判断。
+
+#### PaymentRuntimeConfig
+新增 [payment_runtime_config.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_runtime_config.dart)，职责是：
+- 把平台默认值和 `dart-define` 覆盖统一收口
+- 避免 Web / 桌面仍错误回退到商店支付
+- 为后续 staging、自托管和渠道构建提供稳定入口
 
 建议新增：
 - `PaymentProvider` 枚举：
