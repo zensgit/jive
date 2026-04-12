@@ -55,13 +55,27 @@ void main() {
     test('success constructor', () {
       const result = PurchaseResult.success(UserTier.paid);
       expect(result.success, isTrue);
+      expect(result.status, PurchaseResultStatus.success);
       expect(result.grantedTier, equals(UserTier.paid));
       expect(result.errorMessage, isNull);
+    });
+
+    test('pending constructor', () {
+      const result = PurchaseResult.pending(
+        orderId: 'order_123',
+        redirectUrl: 'https://pay.example.com/order_123',
+      );
+      expect(result.success, isFalse);
+      expect(result.isPending, isTrue);
+      expect(result.status, PurchaseResultStatus.pending);
+      expect(result.orderId, 'order_123');
+      expect(result.redirectUrl, 'https://pay.example.com/order_123');
     });
 
     test('error constructor', () {
       const result = PurchaseResult.error('Something failed');
       expect(result.success, isFalse);
+      expect(result.status, PurchaseResultStatus.error);
       expect(result.grantedTier, isNull);
       expect(result.errorMessage, equals('Something failed'));
     });

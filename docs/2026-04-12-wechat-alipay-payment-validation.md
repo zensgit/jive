@@ -3,6 +3,30 @@
 ## 目标
 验证国内支付接入不会破坏当前 SaaS Beta 主线，并且在“还没有 Google / Apple 开发者账号”的情况下，仍然可以先完成自托管闭环验证。
 
+## 2026-04-12 当前执行结果
+
+### 已完成
+- Flutter analyze 已通过：
+  - `flutter analyze lib/core/payment/payment_service.dart lib/core/payment/payment_provider_resolver.dart lib/core/payment/payment_service_factory.dart lib/core/payment/domestic_payment_order_client.dart lib/core/payment/domestic_payment_service_base.dart lib/core/payment/wechat_pay_payment_service.dart lib/core/payment/alipay_payment_service.dart lib/feature/subscription/subscription_screen.dart test/payment_service_test.dart test/payment_provider_resolver_test.dart test/payment_service_factory_test.dart test/domestic_payment_service_test.dart`
+- Flutter tests 已通过：
+  - `flutter test test/payment_service_test.dart test/payment_provider_resolver_test.dart test/payment_service_factory_test.dart test/domestic_payment_service_test.dart`
+- `git diff --check` 已通过
+- 已新增 mock 国内支付核心测试：
+  - [payment_provider_resolver_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/payment_provider_resolver_test.dart)
+  - [payment_service_factory_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/payment_service_factory_test.dart)
+  - [payment_service_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/payment_service_test.dart)
+  - [domestic_payment_service_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/domestic_payment_service_test.dart)
+
+### 当前未完成
+- 本机未发现可用 `deno`，因此这轮还没有执行：
+  - `deno check supabase/functions/create-payment-order/index.ts`
+  - `deno check supabase/functions/domestic-payment-webhook/index.ts`
+  - `deno test supabase/functions/create-payment-order/index_test.ts`
+  - `deno test supabase/functions/domestic-payment-webhook/index_test.ts`
+- 尚未在 staging 实际 apply：
+  - [013_create_domestic_payment_orders.sql](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/migrations/013_create_domestic_payment_orders.sql)
+- 尚未接入真实商户配置，因此当前验证仍停留在 mock 建单 / mock webhook 层
+
 ---
 
 ## 验证范围
@@ -168,6 +192,12 @@
 - 整条链路不依赖 Apple / Google
 - UI、订单、权益都能闭环
 
+当前代码已经满足这条验收的实现前提：
+- 客户端可返回 `pending`
+- 服务端可创建 mock order
+- webhook 可回写 `user_subscriptions`
+- 权益真相仍统一收口到现有订阅链路
+
 ## 2. 有真实商户资料阶段
 步骤：
 1. 创建真实订单
@@ -258,4 +288,3 @@
 5. 最后接真实商户资料
 
 这样最快，也最不容易把支付做成一锅粥。
-

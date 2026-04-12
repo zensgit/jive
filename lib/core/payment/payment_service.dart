@@ -1,29 +1,64 @@
 import 'package:flutter/foundation.dart';
 
 import '../entitlement/user_tier.dart';
+import 'payment_provider_resolver.dart';
 import 'product_ids.dart';
+
+enum PurchaseResultStatus { success, pending, error }
 
 /// Result of a purchase attempt.
 class PurchaseResult {
   final bool success;
+  final PurchaseResultStatus status;
   final String? errorMessage;
   final UserTier? grantedTier;
+  final PaymentProvider? provider;
+  final String? orderId;
+  final String? redirectUrl;
+  final String? qrCodeUrl;
 
   const PurchaseResult({
     required this.success,
+    PurchaseResultStatus? status,
     this.errorMessage,
     this.grantedTier,
-  });
+    this.provider,
+    this.orderId,
+    this.redirectUrl,
+    this.qrCodeUrl,
+  }) : status =
+           status ??
+           (success
+               ? PurchaseResultStatus.success
+               : PurchaseResultStatus.error);
 
-  const PurchaseResult.success(UserTier tier)
-      : success = true,
-        errorMessage = null,
-        grantedTier = tier;
+  const PurchaseResult.success(UserTier tier, {this.provider, this.orderId})
+    : success = true,
+      status = PurchaseResultStatus.success,
+      errorMessage = null,
+      grantedTier = tier,
+      redirectUrl = null,
+      qrCodeUrl = null;
 
-  const PurchaseResult.error(String message)
-      : success = false,
-        errorMessage = message,
-        grantedTier = null;
+  const PurchaseResult.pending({
+    this.errorMessage,
+    this.provider,
+    this.orderId,
+    this.redirectUrl,
+    this.qrCodeUrl,
+  }) : success = false,
+       status = PurchaseResultStatus.pending,
+       grantedTier = null;
+
+  const PurchaseResult.error(String message, {this.provider, this.orderId})
+    : success = false,
+      status = PurchaseResultStatus.error,
+      errorMessage = message,
+      grantedTier = null,
+      redirectUrl = null,
+      qrCodeUrl = null;
+
+  bool get isPending => status == PurchaseResultStatus.pending;
 }
 
 /// Product info returned from the store.

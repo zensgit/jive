@@ -46,9 +46,44 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
 
 客户端本地“支付成功”不能直接发放权益。
 
+### 结论 4：首版已经可以先落“自建单 + mock webhook + pending 权益刷新”骨架
+本轮已经把首版最关键的扩展点落到代码里：
+- 新增支付 provider / channel 路由，允许在 `directAndroid`、`selfHostedWeb`、`desktopWeb` 渠道启用微信支付 / 支付宝
+- 新增国内支付建单客户端与 `WechatPayPaymentService` / `AlipayPaymentService`
+- 新增服务端 `create-payment-order` 与 `domestic-payment-webhook` 合同
+- 新增 `payment_orders / payment_events` migration，并把 `user_subscriptions.platform` 扩展到 `wechat_pay / alipay`
+
+这意味着现在已经可以先在你自己的服务器上跑“mock 建单 -> pending -> fake webhook -> entitlement 刷新”的闭环，不需要先注册 Google / Apple 开发者账号。
+
 ---
 
 ## 当前代码现实
+
+### 2026-04-12 已落地实现
+- 支付路由扩展：
+  - [payment_provider_resolver.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_provider_resolver.dart)
+  - [payment_service_factory.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service_factory.dart)
+- 国内支付客户端骨架：
+  - [domestic_payment_order_client.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/domestic_payment_order_client.dart)
+  - [domestic_payment_service_base.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/domestic_payment_service_base.dart)
+  - [wechat_pay_payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/wechat_pay_payment_service.dart)
+  - [alipay_payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/alipay_payment_service.dart)
+- 购买结果语义扩展：
+  - [payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service.dart)
+  - [subscription_screen.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/feature/subscription/subscription_screen.dart)
+- 服务端订单 / webhook 骨架：
+  - [013_create_domestic_payment_orders.sql](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/migrations/013_create_domestic_payment_orders.sql)
+  - [create-payment-order/index.ts](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/functions/create-payment-order/index.ts)
+  - [domestic-payment-webhook/index.ts](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/functions/domestic-payment-webhook/index.ts)
+
+### 当前首版语义
+- 微信支付 / 支付宝当前返回 `pending`，而不是客户端立即发放权益
+- 当前建单函数先返回 mock `redirect_url / qr_code_url`
+- webhook 成功后，服务端回写：
+  - `payment_orders`
+  - `payment_events`
+  - `user_subscriptions`
+- 客户端订阅页当前已经能识别 `pending` 并提示用户完成支付后刷新权益
 
 ### 已具备的基础
 - 统一支付接口：[payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service.dart)
@@ -69,6 +104,8 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
 3. 订阅商品模型 [product_ids.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/product_ids.dart) 仍然是 IAP 风格，缺少“渠道可售 offer”层。
 4. 当前订阅 UI 默认只有直接购买与恢复购买，缺少“选择支付方式”“支付中轮询”“网页/二维码跳转”状态。
 5. 设计文档中的商业档位是 `Free / Pro / Family`，但代码档位与计划命名仍偏 `free / paid / subscriber`，需要逐步统一。
+6. 当前服务端仍是 mock provider 合同，尚未接入真实微信支付 / 支付宝商户签名、下单与回调验签。
+7. staging rollout 脚本尚未把 `create-payment-order` 与 `domestic-payment-webhook` 纳入默认发布清单。
 
 ### 仓库内现有“微信 / 支付宝”能力，不等于商户支付
 仓库里已经有不少微信 / 支付宝相关代码，但主要是这些方向：
@@ -559,4 +596,3 @@ Beta 兼容期可以保持旧值，但新增映射层：
 这样做的好处是：
 - 不会先把 UI 做花，再发现服务端合同不够
 - 也不会先接 SDK，再发现权益真相落不下来
-
