@@ -46,6 +46,12 @@ scripts/run_saas_staging_rollout.sh help
 scripts/run_saas_staging_rollout.sh preflight --env-file /tmp/jive-saas-staging.env
 ```
 
+如果你还没注册 Google Play / App Store，也可以先走 Core SaaS 路线：
+
+```bash
+scripts/run_saas_staging_rollout.sh preflight --core-only --env-file /tmp/jive-saas-staging.env
+```
+
 说明：
 - 这台机器没有预装 `supabase` 到 PATH
 - 但可以用 `npx -y supabase@latest ...` 执行
@@ -93,6 +99,29 @@ Ops / Admin：
 - `ANALYTICS_ADMIN_TOKEN`
 - `NOTIFICATION_ADMIN_TOKEN`
 
+### 2.1 Core SaaS 最小 secrets
+
+如果当前只想先验证服务器上的登录、同步和运营后台，而不接商店订阅，可先只准备：
+
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ADMIN_API_TOKEN`
+- `ADMIN_API_ALLOWED_ORIGINS`
+- `ANALYTICS_ADMIN_TOKEN`
+- `NOTIFICATION_ADMIN_TOKEN`
+
+这条路径会：
+- 仍然 apply 全部数据库迁移
+- 只推送 Core SaaS 所需 secrets
+- 只部署 `analytics`、`send-notification`、`admin`
+- 跳过 `subscription-webhook` 与 `verify-subscription`
+
+因此它适合：
+- 先试邮箱登录 / 同步 / 家庭协作 / 后台合同
+- 暂时还没有 Google / Apple 商店账号
+- 暂时接受应用以内购与 webhook 不可用
+
 ## 迁移顺序
 
 本轮 staging apply 关注以下迁移：
@@ -117,6 +146,17 @@ Ops / Admin：
 
 ```bash
 scripts/run_saas_staging_rollout.sh all \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --env-file /tmp/jive-saas-staging.env
+```
+
+如果你当前只做 Core SaaS，推荐改用：
+
+```bash
+scripts/run_saas_staging_rollout.sh all \
+  --core-only \
   --project-ref "$STAGING_PROJECT_REF" \
   --db-password "$STAGING_DB_PASSWORD" \
   --access-token "$SUPABASE_ACCESS_TOKEN" \
@@ -197,9 +237,11 @@ npx -y supabase@latest secrets set \
   --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
 ```
 
-### Step 8. 部署 5 个 Edge Functions
+### Step 8. 部署 Edge Functions
 
 由于这台机器 Docker 不可用，建议统一走 `--use-api`。
+
+完整 SaaS 路线部署 5 个函数；Core SaaS 路线只部署 3 个函数。
 
 ```bash
 npx -y supabase@latest functions deploy subscription-webhook \
@@ -227,6 +269,11 @@ npx -y supabase@latest functions deploy admin \
   --use-api \
   --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
 ```
+
+如果你使用脚本，不需要手动区分，`--core-only` 会自动只部署：
+- `analytics`
+- `send-notification`
+- `admin`
 
 ## 最小验收清单
 

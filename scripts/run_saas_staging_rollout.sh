@@ -12,6 +12,7 @@ DB_PASSWORD="${STAGING_DB_PASSWORD:-}"
 ACCESS_TOKEN="${SUPABASE_ACCESS_TOKEN:-}"
 ENV_FILE="${STAGING_ENV_FILE:-/tmp/jive-saas-staging.env}"
 SKIP_LINK=0
+CORE_ONLY=0
 FAILURES=0
 
 SUPABASE_RUNNER=()
@@ -22,7 +23,7 @@ else
   SUPABASE_RUNNER=(npx -y supabase@latest)
 fi
 
-FUNCTIONS=(
+FULL_FUNCTIONS=(
   subscription-webhook
   verify-subscription
   analytics
@@ -30,7 +31,13 @@ FUNCTIONS=(
   admin
 )
 
-REQUIRED_ENV_FILE_KEYS=(
+CORE_FUNCTIONS=(
+  analytics
+  send-notification
+  admin
+)
+
+FULL_REQUIRED_ENV_FILE_KEYS=(
   SUPABASE_URL
   SUPABASE_ANON_KEY
   SUPABASE_SERVICE_ROLE_KEY
@@ -49,6 +56,16 @@ REQUIRED_ENV_FILE_KEYS=(
   NOTIFICATION_ADMIN_TOKEN
 )
 
+CORE_REQUIRED_ENV_FILE_KEYS=(
+  SUPABASE_URL
+  SUPABASE_ANON_KEY
+  SUPABASE_SERVICE_ROLE_KEY
+  ADMIN_API_TOKEN
+  ADMIN_API_ALLOWED_ORIGINS
+  ANALYTICS_ADMIN_TOKEN
+  NOTIFICATION_ADMIN_TOKEN
+)
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -58,7 +75,7 @@ Modes:
   preflight Check local prerequisites, env vars, and secrets file completeness
   dry-run   Link staging project and preview pending migrations
   apply     Link staging project and apply pending migrations
-  deploy    Push secrets and deploy the 5 SaaS Edge Functions
+  deploy    Push secrets and deploy SaaS Edge Functions
   all       Link, dry-run, apply, push secrets, and deploy functions
   help      Show this help
 
@@ -67,6 +84,7 @@ Options:
   --db-password <value>   Remote database password. Falls back to STAGING_DB_PASSWORD.
   --access-token <value>  Supabase access token. Falls back to SUPABASE_ACCESS_TOKEN.
   --env-file <path>       Secrets env file. Falls back to STAGING_ENV_FILE or /tmp/jive-saas-staging.env.
+  --core-only             Skip billing secrets and deploy only core SaaS functions.
   --skip-link             Skip the explicit supabase link step.
   --help                  Show this help.
 
@@ -75,6 +93,7 @@ Examples:
   scripts/run_saas_staging_rollout.sh dry-run --project-ref "$STAGING_PROJECT_REF" --db-password "$STAGING_DB_PASSWORD"
   scripts/run_saas_staging_rollout.sh apply --skip-link
   scripts/run_saas_staging_rollout.sh deploy --env-file /tmp/jive-saas-staging.env
+  scripts/run_saas_staging_rollout.sh all --core-only
   scripts/run_saas_staging_rollout.sh all
 EOF
 }
@@ -117,6 +136,10 @@ parse_args() {
         ENV_FILE="${2:-}"
         shift 2
         ;;
+      --core-only)
+        CORE_ONLY=1
+        shift
+        ;;
       --skip-link)
         SKIP_LINK=1
         shift
@@ -130,6 +153,30 @@ parse_args() {
         ;;
     esac
   done
+}
+
+selected_env_keys() {
+  if [[ "$CORE_ONLY" -eq 1 ]]; then
+    printf '%s\n' "${CORE_REQUIRED_ENV_FILE_KEYS[@]}"
+  else
+    printf '%s\n' "${FULL_REQUIRED_ENV_FILE_KEYS[@]}"
+  fi
+}
+
+selected_functions() {
+  if [[ "$CORE_ONLY" -eq 1 ]]; then
+    printf '%s\n' "${CORE_FUNCTIONS[@]}"
+  else
+    printf '%s\n' "${FULL_FUNCTIONS[@]}"
+  fi
+}
+
+rollout_scope_label() {
+  if [[ "$CORE_ONLY" -eq 1 ]]; then
+    printf '%s' 'core-only'
+  else
+    printf '%s' 'full'
+  fi
 }
 
 supabase() {
@@ -162,6 +209,7 @@ check_present() {
 preflight() {
   log "app dir: $APP_DIR"
   log "supabase runner: ${SUPABASE_RUNNER[*]}"
+  log "rollout scope: $(rollout_scope_label)"
   if ! supabase --version >/dev/null 2>&1; then
     die "unable to run Supabase CLI via: ${SUPABASE_RUNNER[*]}"
   fi
@@ -181,7 +229,8 @@ preflight() {
   if [[ -f "$ENV_FILE" ]]; then
     log "env file: $ENV_FILE"
     local key value
-    for key in "${REQUIRED_ENV_FILE_KEYS[@]}"; do
+    while IFS= read -r key; do
+      [[ -n "$key" ]] || continue
       value="$(value_from_env_file "$key" "$ENV_FILE")"
       if [[ -n "$value" ]]; then
         log "env:$key: ok"
@@ -189,7 +238,7 @@ preflight() {
         warn "env:$key: missing or empty"
         FAILURES=$((FAILURES + 1))
       fi
-    done
+    done < <(selected_env_keys)
   else
     warn "env file not found: $ENV_FILE"
     FAILURES=$((FAILURES + 1))
@@ -241,17 +290,40 @@ db_push_apply() {
       --workdir "$APP_DIR"
 }
 
+build_env_subset_file() {
+  local output_file
+  output_file="$(mktemp "${TMPDIR:-/tmp}/jive-saas-secrets.XXXXXX")"
+
+  local key value
+  while IFS= read -r key; do
+    [[ -n "$key" ]] || continue
+    value="$(value_from_env_file "$key" "$ENV_FILE")"
+    if [[ -n "$value" ]]; then
+      printf '%s=%s\n' "$key" "$value" >> "$output_file"
+    fi
+  done < <(selected_env_keys)
+
+  printf '%s\n' "$output_file"
+}
+
 push_secrets() {
   require_value "STAGING_PROJECT_REF" "$PROJECT_REF"
   require_value "SUPABASE_ACCESS_TOKEN" "$ACCESS_TOKEN"
   [[ -f "$ENV_FILE" ]] || die "env file not found: $ENV_FILE"
 
-  log "pushing staging secrets from $ENV_FILE"
+  local subset_env_file
+  subset_env_file="$(build_env_subset_file)"
+  local status=0
+
+  log "pushing $(rollout_scope_label) secrets from $ENV_FILE"
   SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" \
     supabase secrets set \
-      --env-file "$ENV_FILE" \
+      --env-file "$subset_env_file" \
       --project-ref "$PROJECT_REF" \
-      --workdir "$APP_DIR"
+      --workdir "$APP_DIR" || status=$?
+
+  rm -f "$subset_env_file"
+  return "$status"
 }
 
 deploy_functions() {
@@ -259,14 +331,15 @@ deploy_functions() {
   require_value "SUPABASE_ACCESS_TOKEN" "$ACCESS_TOKEN"
 
   local function_name
-  for function_name in "${FUNCTIONS[@]}"; do
+  while IFS= read -r function_name; do
+    [[ -n "$function_name" ]] || continue
     log "deploying function $function_name"
     SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" \
       supabase functions deploy "$function_name" \
         --project-ref "$PROJECT_REF" \
         --use-api \
         --workdir "$APP_DIR"
-  done
+  done < <(selected_functions)
 }
 
 main() {
