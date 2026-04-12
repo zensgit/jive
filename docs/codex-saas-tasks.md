@@ -100,9 +100,31 @@
 - 先修边界，再修可信度，最后再补运营能力
 - 每个任务做成小 PR，不跨阶段扩 scope
 - 不顺手做 Web 端
-- 不顺手做国内支付/广告平台扩展
 - 不新增 SaaS 之外的产品功能
 - 每个阶段都要有文档、迁移说明和最小必要测试
+
+## 2026-04-12 增补：国内支付接入主线
+
+SaaS Beta 主线已经进入“上线后补可用支付渠道”的阶段，微信支付 / 支付宝接入改为单独主线推进。
+
+本轮决策：
+- 支持微信支付 / 支付宝
+- 优先渠道：`自托管 Web + Android 直装 / 国内渠道包`
+- `Google Play / App Store` 继续保持各自商店支付主链
+- `user_subscriptions` 继续作为唯一权益真相
+- 不把国内支付塞进现有 `verify-subscription` 商店验签链路
+
+执行文档：
+- [2026-04-12-wechat-alipay-payment-design.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/docs/2026-04-12-wechat-alipay-payment-design.md)
+- [2026-04-12-wechat-alipay-payment-validation.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/docs/2026-04-12-wechat-alipay-payment-validation.md)
+
+新增任务边界：
+- 允许新增 `payment_orders`
+- 允许新增国内支付 webhook / 建单函数
+- 允许新增 `WechatPayPaymentService` / `AlipayPaymentService`
+- 允许改造订阅页支付方式选择
+- 不切 RevenueCat
+- 不把国内支付作为 App Store / Google Play 默认替代
 
 ---
 
