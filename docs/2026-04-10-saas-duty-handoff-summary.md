@@ -16,7 +16,7 @@
 - staging rollout 脚本、secrets 模板、排障文档、旧 PR 收尾模板都已准备好
 
 当前真正阻塞只剩：
-- staging 的 project ref / DB password / access token / secrets 还没提供
+- staging 的 DB password / access token / runtime secrets 还没提供完整
 
 ## 当前主线
 
@@ -98,10 +98,25 @@ scripts/run_saas_staging_rollout.sh all \
 ## 当前真实阻塞
 
 ### 1. staging 环境阻塞
-- `STAGING_PROJECT_REF` 未提供
+- staging project ref 已固定为 `evnluvzvbqmsmypbchym`
 - `STAGING_DB_PASSWORD` 未提供
 - `SUPABASE_ACCESS_TOKEN` 未提供
-- `/tmp/jive-saas-staging.env` 已创建模板，但真实值未提供
+- `/tmp/jive-saas-staging.env` 已创建并填入基础 Supabase / package / bundle 信息，但还缺 10 个运行时变量：
+  - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+  - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
+  - `APPLE_APP_STORE_SHARED_SECRET`
+  - `APPLE_APP_STORE_APPLE_ID`
+  - `PUBSUB_BEARER_TOKEN`
+  - `WEBHOOK_HMAC_SECRET`
+  - `ADMIN_API_TOKEN`
+  - `ADMIN_API_ALLOWED_ORIGINS`
+  - `ANALYTICS_ADMIN_TOKEN`
+  - `NOTIFICATION_ADMIN_TOKEN`
+
+### 1.1 2026-04-12 复验状态
+- fresh detached `main@6ea8b06` 上再次运行 `bash scripts/run_saas_wave0_smoke.sh`，结果通过
+- `scripts/run_saas_staging_rollout.sh preflight --project-ref evnluvzvbqmsmypbchym --env-file /tmp/jive-saas-staging.env` 返回 12 个阻塞项
+- 远端 staging 的关键表与 5 个 Edge Functions 当前仍返回 `404`
 
 ### 2. 明确不在 Beta 当前收口范围内
 - Apple JWS / 证书链更强校验

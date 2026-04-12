@@ -9,20 +9,26 @@
 
 这份文档不再把旧污染分支当执行入口，而是只围绕当前 clean PR 队列推进。
 
-## 2026-04-10 主线合并更新
+## 2026-04-12 主线后验证刷新
 
 当前 SaaS Beta 已经进入主线后阶段：
 - `origin/main` 已包含 SaaS Beta 主线 merge commit：`6ea8b06`
-- fresh `main` worktree 上已再次运行 `bash scripts/run_saas_wave0_smoke.sh`，结果通过
+- fresh detached worktree `worktrees/codex-saas-main-fresh-20260412` 上已再次运行 `bash scripts/run_saas_wave0_smoke.sh`，结果通过
 - `/tmp/jive-saas-staging.env` 模板已从仓库模板复制完成
-- `scripts/run_saas_staging_rollout.sh preflight --env-file /tmp/jive-saas-staging.env` 已执行，当前缺少 19 项 staging 前置条件
+- `scripts/run_saas_staging_rollout.sh preflight --project-ref evnluvzvbqmsmypbchym --env-file /tmp/jive-saas-staging.env` 已执行，当前缺少 12 项 staging 前置条件
 - clean PR 与 superseded PR 的 GitHub 收尾评论已补齐，旧 PR 队列现在只保留为审计材料
 
 当前真正阻塞只剩 staging 凭据与 secrets：
-- `STAGING_PROJECT_REF`
 - `STAGING_DB_PASSWORD`
 - `SUPABASE_ACCESS_TOKEN`
-- `/tmp/jive-saas-staging.env` 中 16 个运行时 secrets 仍为空
+- `/tmp/jive-saas-staging.env` 中 10 个运行时 secrets 仍为空
+
+当前进一步确认的 staging 现实：
+- staging project ref 当前固定为 `evnluvzvbqmsmypbchym`
+- 远端 `user_subscriptions`、`sync_tombstones`、`analytics_events`、`notification_queue` 仍返回 `404`
+- 远端 `subscription-webhook`、`verify-subscription`、`analytics`、`send-notification`、`admin` 仍返回 `404`
+
+这说明当前阻塞不再是代码集成，而是 staging 还没有完成 migration apply 与 functions deploy。
 
 ## 2026-04-10 集成更新
 

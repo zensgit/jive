@@ -30,6 +30,7 @@ bash scripts/run_saas_wave0_smoke.sh
 ```
 
 - [ ] 结果必须为通过
+- [x] 2026-04-12 已在 `worktrees/codex-saas-main-fresh-20260412` 上对 `main@6ea8b06` 复跑通过
 
 失败即回退到：
 - [ ] 先不要继续 staging deploy
@@ -163,7 +164,7 @@ API / 配置层：
 ## 当前真正阻塞
 
 如果今天还不能完成，不是代码阻塞，而是这几项环境阻塞：
-- GitHub UI 的 merge 还没执行
-- staging project ref 还没提供
 - staging DB password 还没提供
-- staging access token / runtime secrets 还没提供
+- staging access token 还没提供
+- `/tmp/jive-saas-staging.env` 还缺 10 个 runtime secrets
+- 远端 staging 还没 apply migrations，也还没 deploy 5 个 Functions
