@@ -10,6 +10,18 @@
   - `flutter analyze lib/core/payment/payment_service.dart lib/core/payment/payment_provider_resolver.dart lib/core/payment/payment_service_factory.dart lib/core/payment/domestic_payment_order_client.dart lib/core/payment/domestic_payment_service_base.dart lib/core/payment/wechat_pay_payment_service.dart lib/core/payment/alipay_payment_service.dart lib/feature/subscription/subscription_screen.dart test/payment_service_test.dart test/payment_provider_resolver_test.dart test/payment_service_factory_test.dart test/domestic_payment_service_test.dart`
 - Flutter tests 已通过：
   - `flutter test test/payment_service_test.dart test/payment_provider_resolver_test.dart test/payment_service_factory_test.dart test/domestic_payment_service_test.dart`
+- Deno checks 已通过：
+  - `npx -y deno-bin@2.2.7 check supabase/functions/create-payment-order/index.ts supabase/functions/create-payment-order/index_test.ts`
+  - `npx -y deno-bin@2.2.7 check supabase/functions/domestic-payment-webhook/index.ts supabase/functions/domestic-payment-webhook/index_test.ts`
+- Deno tests 已通过：
+  - `npx -y deno-bin@2.2.7 test --allow-env supabase/functions/create-payment-order/index_test.ts`
+  - `npx -y deno-bin@2.2.7 test --allow-env supabase/functions/domestic-payment-webhook/index_test.ts`
+- Wave 0 smoke 已通过：
+  - `bash scripts/run_saas_wave0_smoke.sh`
+- staging rollout / env 模板已接入：
+  - [run_saas_wave0_smoke.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/scripts/run_saas_wave0_smoke.sh)
+  - [run_saas_staging_rollout.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/scripts/run_saas_staging_rollout.sh)
+  - [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/docs/jive-saas-staging.env.example)
 - `git diff --check` 已通过
 - 已新增 mock 国内支付核心测试：
   - [payment_provider_resolver_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/payment_provider_resolver_test.dart)
@@ -18,11 +30,6 @@
   - [domestic_payment_service_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/domestic_payment_service_test.dart)
 
 ### 当前未完成
-- 本机未发现可用 `deno`，因此这轮还没有执行：
-  - `deno check supabase/functions/create-payment-order/index.ts`
-  - `deno check supabase/functions/domestic-payment-webhook/index.ts`
-  - `deno test supabase/functions/create-payment-order/index_test.ts`
-  - `deno test supabase/functions/domestic-payment-webhook/index_test.ts`
 - 尚未在 staging 实际 apply：
   - [013_create_domestic_payment_orders.sql](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/migrations/013_create_domestic_payment_orders.sql)
 - 尚未接入真实商户配置，因此当前验证仍停留在 mock 建单 / mock webhook 层

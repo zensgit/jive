@@ -84,6 +84,7 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
   - `payment_events`
   - `user_subscriptions`
 - 客户端订阅页当前已经能识别 `pending` 并提示用户完成支付后刷新权益
+- `run_saas_wave0_smoke.sh` 与 `run_saas_staging_rollout.sh` 已纳入国内支付函数与 secrets
 
 ### 已具备的基础
 - 统一支付接口：[payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service.dart)
@@ -105,7 +106,6 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
 4. 当前订阅 UI 默认只有直接购买与恢复购买，缺少“选择支付方式”“支付中轮询”“网页/二维码跳转”状态。
 5. 设计文档中的商业档位是 `Free / Pro / Family`，但代码档位与计划命名仍偏 `free / paid / subscriber`，需要逐步统一。
 6. 当前服务端仍是 mock provider 合同，尚未接入真实微信支付 / 支付宝商户签名、下单与回调验签。
-7. staging rollout 脚本尚未把 `create-payment-order` 与 `domestic-payment-webhook` 纳入默认发布清单。
 
 ### 仓库内现有“微信 / 支付宝”能力，不等于商户支付
 仓库里已经有不少微信 / 支付宝相关代码，但主要是这些方向：

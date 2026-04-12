@@ -245,7 +245,7 @@ export function amountCentsForPlan(
 export function resolveMockBaseUrl(requestUrl: string): string {
   const configured = Deno.env.get("DOMESTIC_PAYMENT_MOCK_BASE_URL");
   if (configured != null && configured.trim().length > 0) {
-    return configured.trim().replaceAll(RegExp(r"/+$"), "");
+    return configured.trim().replace(/\/+$/, "");
   }
 
   const url = new URL(requestUrl);

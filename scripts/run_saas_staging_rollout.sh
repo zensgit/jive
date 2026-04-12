@@ -32,6 +32,8 @@ fi
 FULL_FUNCTIONS=(
   subscription-webhook
   verify-subscription
+  create-payment-order
+  domestic-payment-webhook
   analytics
   send-notification
   admin
@@ -45,6 +47,7 @@ CORE_FUNCTIONS=(
 
 NO_VERIFY_JWT_FUNCTIONS=(
   subscription-webhook
+  domestic-payment-webhook
   analytics
   send-notification
   admin
@@ -73,6 +76,7 @@ FULL_REQUIRED_ENV_FILE_KEYS=(
   APPLE_APP_STORE_ENVIRONMENT
   PUBSUB_BEARER_TOKEN
   WEBHOOK_HMAC_SECRET
+  DOMESTIC_PAYMENT_WEBHOOK_TOKEN
   ADMIN_API_TOKEN
   ADMIN_API_ALLOWED_ORIGINS
   ANALYTICS_ADMIN_TOKEN
