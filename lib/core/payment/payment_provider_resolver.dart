@@ -72,7 +72,10 @@ List<PaymentProvider> resolveAvailablePaymentProviders({
             ? const [PaymentProvider.googlePlay]
             : const [];
       }
-      return const [];
+      return _domesticProviders(
+        enableWechatPay: enableWechatPay,
+        enableAlipay: enableAlipay,
+      );
   }
 }
 

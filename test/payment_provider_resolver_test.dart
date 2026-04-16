@@ -25,6 +25,18 @@ void main() {
       );
     });
 
+    test('returns domestic providers for desktop auto channel when enabled', () {
+      expect(
+        resolveAvailablePaymentProviders(
+          platform: TargetPlatform.windows,
+          isWeb: false,
+          enableWechatPay: true,
+          enableAlipay: true,
+        ),
+        equals(const [PaymentProvider.wechatPay, PaymentProvider.alipay]),
+      );
+    });
+
     test('returns domestic providers for self-hosted web when enabled', () {
       expect(
         resolveAvailablePaymentProviders(

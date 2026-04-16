@@ -16,10 +16,10 @@
 
 ### 结论 1：技术上可行，而且主线已经具备统一支付入口
 当前 clean `main` 已经不是“单一 Google Play 实现”，而是统一支付入口：
-- 启动链路使用 [main.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/main.dart#L46) 中的 `createPlatformPaymentService(...)`
-- 平台支付路由已集中在 [payment_service_factory.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service_factory.dart#L9)
-- 客户端升级入口已统一通过 [subscription_screen.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/feature/subscription/subscription_screen.dart#L12) 调用 `PaymentService.purchase(productId)`
-- 服务端订阅真相已经固定读取 [user_subscriptions](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/migrations/007_create_user_subscriptions.sql#L4) 并通过 [supabase_subscription_truth_repository.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/supabase_subscription_truth_repository.dart#L17) 回流客户端
+- 启动链路使用 [main.dart](../lib/main.dart#L46) 中的 `createPlatformPaymentService(...)`
+- 平台支付路由已集中在 [payment_service_factory.dart](../lib/core/payment/payment_service_factory.dart#L9)
+- 客户端升级入口已统一通过 [subscription_screen.dart](../lib/feature/subscription/subscription_screen.dart#L12) 调用 `PaymentService.purchase(productId)`
+- 服务端订阅真相已经固定读取 [user_subscriptions](../supabase/migrations/007_create_user_subscriptions.sql#L4) 并通过 [supabase_subscription_truth_repository.dart](../lib/core/payment/supabase_subscription_truth_repository.dart#L17) 回流客户端
 
 因此，这次不是“从零加支付系统”，而是在现有统一支付骨架上增加新的 provider 与服务端订单链路。
 
@@ -56,7 +56,7 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
 这意味着现在已经可以先在你自己的服务器上跑“mock 建单 -> pending -> fake webhook -> entitlement 刷新”的闭环，不需要先注册 Google / Apple 开发者账号。
 
 ### 结论 5：Claude 的“全平台默认 Drift + Web 启用”变更，会把支付默认渠道问题提前暴露出来
-在 [feat/sharing-system-integration](/Users/chauhua/Documents/GitHub/Jive/app) 当前最新主线里，Claude 新推进了两次关键平台变更：
+在 [feat/sharing-system-integration](../) 当前最新主线里，Claude 新推进了两次关键平台变更：
 - `427f42d` `feat: full Drift migration — Web platform support enabled`
 - `695af5b` `feat: default all platforms to Drift (SQLite)`
 
@@ -72,21 +72,21 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
 
 ### 2026-04-12 已落地实现
 - 支付路由扩展：
-  - [payment_provider_resolver.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_provider_resolver.dart)
-  - [payment_service_factory.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service_factory.dart)
-  - [payment_runtime_config.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_runtime_config.dart)
+  - [payment_provider_resolver.dart](../lib/core/payment/payment_provider_resolver.dart)
+  - [payment_service_factory.dart](../lib/core/payment/payment_service_factory.dart)
+  - [payment_runtime_config.dart](../lib/core/payment/payment_runtime_config.dart)
 - 国内支付客户端骨架：
-  - [domestic_payment_order_client.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/domestic_payment_order_client.dart)
-  - [domestic_payment_service_base.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/domestic_payment_service_base.dart)
-  - [wechat_pay_payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/wechat_pay_payment_service.dart)
-  - [alipay_payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/alipay_payment_service.dart)
+  - [domestic_payment_order_client.dart](../lib/core/payment/domestic_payment_order_client.dart)
+  - [domestic_payment_service_base.dart](../lib/core/payment/domestic_payment_service_base.dart)
+  - [wechat_pay_payment_service.dart](../lib/core/payment/wechat_pay_payment_service.dart)
+  - [alipay_payment_service.dart](../lib/core/payment/alipay_payment_service.dart)
 - 购买结果语义扩展：
-  - [payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service.dart)
-  - [subscription_screen.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/feature/subscription/subscription_screen.dart)
+  - [payment_service.dart](../lib/core/payment/payment_service.dart)
+  - [subscription_screen.dart](../lib/feature/subscription/subscription_screen.dart)
 - 服务端订单 / webhook 骨架：
-  - [013_create_domestic_payment_orders.sql](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/migrations/013_create_domestic_payment_orders.sql)
-  - [create-payment-order/index.ts](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/functions/create-payment-order/index.ts)
-  - [domestic-payment-webhook/index.ts](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/functions/domestic-payment-webhook/index.ts)
+  - [013_create_domestic_payment_orders.sql](../supabase/migrations/013_create_domestic_payment_orders.sql)
+  - [create-payment-order/index.ts](../supabase/functions/create-payment-order/index.ts)
+  - [domestic-payment-webhook/index.ts](../supabase/functions/domestic-payment-webhook/index.ts)
 
 ### 当前首版语义
 - 微信支付 / 支付宝当前返回 `pending`，而不是客户端立即发放权益
@@ -108,31 +108,31 @@ Jive 当前售卖的是数字功能解锁与 SaaS 订阅，不是线下实物。
   - `ENABLE_ALIPAY`
 
 ### 已具备的基础
-- 统一支付接口：[payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service.dart)
-- 平台路由工厂：[payment_service_factory.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service_factory.dart)
-- Google Play 实现：[play_store_payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/play_store_payment_service.dart)
-- App Store 实现：[app_store_payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/app_store_payment_service.dart)
-- 订阅真相仓库：[supabase_subscription_truth_repository.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/supabase_subscription_truth_repository.dart)
+- 统一支付接口：[payment_service.dart](../lib/core/payment/payment_service.dart)
+- 平台路由工厂：[payment_service_factory.dart](../lib/core/payment/payment_service_factory.dart)
+- Google Play 实现：[play_store_payment_service.dart](../lib/core/payment/play_store_payment_service.dart)
+- App Store 实现：[app_store_payment_service.dart](../lib/core/payment/app_store_payment_service.dart)
+- 订阅真相仓库：[supabase_subscription_truth_repository.dart](../lib/core/payment/supabase_subscription_truth_repository.dart)
 - 服务端验签入口：
-  - [verify-subscription/index.ts](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/functions/verify-subscription/index.ts)
-  - [subscription-webhook/index.ts](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/functions/subscription-webhook/index.ts)
-- 订阅 UI：[subscription_screen.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/feature/subscription/subscription_screen.dart)
+  - [verify-subscription/index.ts](../supabase/functions/verify-subscription/index.ts)
+  - [subscription-webhook/index.ts](../supabase/functions/subscription-webhook/index.ts)
+- 订阅 UI：[subscription_screen.dart](../lib/feature/subscription/subscription_screen.dart)
 
 ### 当前不足
 1. `PaymentService.purchase(productId)` 语义偏向“商店内同步购买”，不够表达“先建单，再等待异步回调”的国内支付流程。
 2. `user_subscriptions.platform` 目前只允许：
    - `google_play`
    - `apple_app_store`
-3. 订阅商品模型 [product_ids.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/product_ids.dart) 仍然是 IAP 风格，缺少“渠道可售 offer”层。
+3. 订阅商品模型 [product_ids.dart](../lib/core/payment/product_ids.dart) 仍然是 IAP 风格，缺少“渠道可售 offer”层。
 4. 当前订阅 UI 默认只有直接购买与恢复购买，缺少“选择支付方式”“支付中轮询”“网页/二维码跳转”状态。
 5. 设计文档中的商业档位是 `Free / Pro / Family`，但代码档位与计划命名仍偏 `free / paid / subscriber`，需要逐步统一。
 6. 当前服务端仍是 mock provider 合同，尚未接入真实微信支付 / 支付宝商户签名、下单与回调验签。
 
 ### 仓库内现有“微信 / 支付宝”能力，不等于商户支付
 仓库里已经有不少微信 / 支付宝相关代码，但主要是这些方向：
-- 账户类型预置：[account_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/service/account_service.dart)
-- 导入与 OCR：[import_service.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/service/import_service.dart)
-- 自动识别与通知解析：[payment_notification_parser.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/service/payment_notification_parser.dart)
+- 账户类型预置：[account_service.dart](../lib/core/service/account_service.dart)
+- 导入与 OCR：[import_service.dart](../lib/core/service/import_service.dart)
+- 自动识别与通知解析：[payment_notification_parser.dart](../lib/core/service/payment_notification_parser.dart)
 
 这些能力可以帮助我们做“账单导入”和“支付来源识别”，但不能直接替代 SaaS 商户支付接入。
 
@@ -238,10 +238,10 @@ SubscriptionScreen
   - reasonIfDisabled
 
 #### PaymentServiceFactory
-保留现有 [payment_service_factory.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service_factory.dart#L9)，但升级为“按渠道路由”，而不是只做 OS 判断。
+保留现有 [payment_service_factory.dart](../lib/core/payment/payment_service_factory.dart#L9)，但升级为“按渠道路由”，而不是只做 OS 判断。
 
 #### PaymentRuntimeConfig
-新增 [payment_runtime_config.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_runtime_config.dart)，职责是：
+新增 [payment_runtime_config.dart](../lib/core/payment/payment_runtime_config.dart)，职责是：
 - 把平台默认值和 `dart-define` 覆盖统一收口
 - 避免 Web / 桌面仍错误回退到商店支付
 - 为后续 staging、自托管和渠道构建提供稳定入口
@@ -349,7 +349,7 @@ create table public.payment_orders (
 - processed_at
 
 #### 扩展 `user_subscriptions`
-建议把 [007_create_user_subscriptions.sql](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/migrations/007_create_user_subscriptions.sql#L11) 中 `platform` 扩展为：
+建议把 [007_create_user_subscriptions.sql](../supabase/migrations/007_create_user_subscriptions.sql#L11) 中 `platform` 扩展为：
 - `google_play`
 - `apple_app_store`
 - `wechat_pay`
@@ -399,7 +399,7 @@ create table public.payment_orders (
 ## 订阅与商品模型设计
 
 ### 当前问题
-现在 [product_ids.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/product_ids.dart) 直接把“产品 ID”和“权益档位”绑死在商店商品上：
+现在 [product_ids.dart](../lib/core/payment/product_ids.dart) 直接把“产品 ID”和“权益档位”绑死在商店商品上：
 - `jive_paid_unlock`
 - `jive_subscriber_monthly`
 - `jive_subscriber_yearly`
@@ -449,7 +449,7 @@ Beta 兼容期可以保持旧值，但新增映射层：
 ## 订阅 UI 设计
 
 ### 当前 UI 基线
-[subscription_screen.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/feature/subscription/subscription_screen.dart#L21) 已经是统一升级入口。
+[subscription_screen.dart](../lib/feature/subscription/subscription_screen.dart#L21) 已经是统一升级入口。
 
 ### 建议改造
 首版不重做整页，只做 3 个低风险补强：
@@ -565,7 +565,7 @@ Beta 兼容期可以保持旧值，但新增映射层：
 否则会把“商店收据验证”和“订单回调处理”混成一团。
 
 ### 3. 不要把支付方式判断写死在 OS 上
-现在 [payment_service_factory.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/core/payment/payment_service_factory.dart#L18) 主要按平台选商店实现，接下来要升级到“平台 + 渠道 + flag”联合判断。
+现在 [payment_service_factory.dart](../lib/core/payment/payment_service_factory.dart#L18) 主要按平台选商店实现，接下来要升级到“平台 + 渠道 + flag”联合判断。
 
 ### 4. 微信登录与微信支付是两件不同的事
 即使后续要开放微信登录，也不应阻塞微信支付接入。

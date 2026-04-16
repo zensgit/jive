@@ -22,19 +22,19 @@
 - Wave 0 smoke 已通过：
   - `bash scripts/run_saas_wave0_smoke.sh`
 - staging rollout / env 模板已接入：
-  - [run_saas_wave0_smoke.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/scripts/run_saas_wave0_smoke.sh)
-  - [run_saas_staging_rollout.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/scripts/run_saas_staging_rollout.sh)
-  - [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/docs/jive-saas-staging.env.example)
+  - [run_saas_wave0_smoke.sh](../scripts/run_saas_wave0_smoke.sh)
+  - [run_saas_staging_rollout.sh](../scripts/run_saas_staging_rollout.sh)
+  - [jive-saas-staging.env.example](../docs/jive-saas-staging.env.example)
 - `git diff --check` 已通过
 - 已新增 mock 国内支付核心测试：
-  - [payment_provider_resolver_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/payment_provider_resolver_test.dart)
-  - [payment_service_factory_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/payment_service_factory_test.dart)
-  - [payment_service_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/payment_service_test.dart)
-  - [domestic_payment_service_test.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/test/domestic_payment_service_test.dart)
+  - [payment_provider_resolver_test.dart](../test/payment_provider_resolver_test.dart)
+  - [payment_service_factory_test.dart](../test/payment_service_factory_test.dart)
+  - [payment_service_test.dart](../test/payment_service_test.dart)
+  - [domestic_payment_service_test.dart](../test/domestic_payment_service_test.dart)
 
 ### 当前未完成
 - 尚未在 staging 实际 apply：
-  - [013_create_domestic_payment_orders.sql](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/supabase/migrations/013_create_domestic_payment_orders.sql)
+  - [013_create_domestic_payment_orders.sql](../supabase/migrations/013_create_domestic_payment_orders.sql)
 - 尚未接入真实商户配置，因此当前验证仍停留在 mock 建单 / mock webhook 层
 
 ### 自托管启动参数
@@ -241,11 +241,11 @@ Android 直装包可切到：
 - 旧的 Google / Apple 记录不受影响
 
 ### 2. 启动链路回归
-- [main.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/main.dart#L46) 中支付服务初始化正常
+- [main.dart](../lib/main.dart#L46) 中支付服务初始化正常
 - `SubscriptionStatusService.checkAndSync()` 不因新 provider 崩溃
 
 ### 3. 订阅页回归
-- [subscription_screen.dart](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-wechat-alipay-payment-design/lib/feature/subscription/subscription_screen.dart#L21) 仍可打开
+- [subscription_screen.dart](../lib/feature/subscription/subscription_screen.dart#L21) 仍可打开
 - 商店渠道仍可购买 / 恢复
 
 ### 4. SaaS 主线回归
