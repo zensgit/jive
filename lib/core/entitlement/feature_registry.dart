@@ -25,8 +25,8 @@ class FeatureRegistry {
     FeatureId.billSplit: UserTier.paid,
     FeatureId.debtManagement: UserTier.paid,
     FeatureId.merchantMemory: UserTier.paid,
-    FeatureId.cloudSync: UserTier.paid,
-    FeatureId.multiDevice: UserTier.paid,
+    FeatureId.cloudSync: UserTier.subscriber,
+    FeatureId.multiDevice: UserTier.subscriber,
 
     // Subscriber tier
     FeatureId.investmentTracking: UserTier.subscriber,

@@ -194,9 +194,9 @@ void showUpgradePrompt(BuildContext context, FeatureId feature) {
 String _upgradeDescription(UserTier tier) {
   switch (tier) {
     case UserTier.paid:
-      return '升级到专业版即可解锁多币种、登录后云同步、多设备使用等高级功能，且无广告打扰。';
+      return '升级到专业版即可解锁多币种、预算管理、周期记账等高级功能，且无广告打扰。';
     case UserTier.subscriber:
-      return '订阅后可享受投资追踪、高级分析、语音记账等全部功能。';
+      return '订阅后可解锁云同步、多设备使用、投资追踪、高级分析、语音记账等完整功能。';
     case UserTier.free:
       return '';
   }
