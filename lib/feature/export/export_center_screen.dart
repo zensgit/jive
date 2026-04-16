@@ -121,9 +121,7 @@ class _ExportCenterScreenState extends State<ExportCenterScreen> {
   }
 
   Future<void> _pickRestoreFile() async {
-    final picked = await FilePicker.platform.pickFiles(
-      type: FileType.any,
-    );
+    final picked = await FilePicker.platform.pickFiles(type: FileType.any);
     if (picked == null || picked.files.isEmpty) return;
     final file = picked.files.first;
     setState(() {
@@ -155,8 +153,10 @@ class _ExportCenterScreenState extends State<ExportCenterScreen> {
     try {
       final isar = await DatabaseService.getInstance();
       final service = EncryptedBackupService(isar);
-      final result =
-          await service.restoreEncryptedBackup(_restoreFilePath!, password);
+      final result = await service.restoreEncryptedBackup(
+        _restoreFilePath!,
+        password,
+      );
 
       if (!mounted) return;
 
@@ -337,7 +337,7 @@ class _ExportCenterScreenState extends State<ExportCenterScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              '将所有数据加密压缩为备份文件，可安全保存到云盘或其他设备。',
+              '将所有数据加密压缩为备份文件，可保存到云盘或其他设备；实际安全性取决于备份密码强度和目标存储环境。',
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: JiveTheme.secondaryTextColor(context),
                 height: 1.45,
@@ -446,9 +446,7 @@ class _ExportCenterScreenState extends State<ExportCenterScreen> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.blue,
                 minimumSize: const Size.fromHeight(48),
-                side: BorderSide(
-                  color: Colors.blue.withValues(alpha: 0.3),
-                ),
+                side: BorderSide(color: Colors.blue.withValues(alpha: 0.3)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -468,8 +466,7 @@ class _ExportCenterScreenState extends State<ExportCenterScreen> {
                         : Icons.visibility,
                   ),
                   onPressed: () => setState(
-                    () =>
-                        _restorePasswordVisible = !_restorePasswordVisible,
+                    () => _restorePasswordVisible = !_restorePasswordVisible,
                   ),
                 ),
               ),
@@ -526,8 +523,7 @@ class _ExportCenterScreenState extends State<ExportCenterScreen> {
       border: border,
       enabledBorder: border,
       focusedBorder: border.copyWith(
-        borderSide:
-            const BorderSide(color: JiveTheme.primaryGreen, width: 1.4),
+        borderSide: const BorderSide(color: JiveTheme.primaryGreen, width: 1.4),
       ),
       filled: true,
       fillColor: JiveTheme.cardColor(context),

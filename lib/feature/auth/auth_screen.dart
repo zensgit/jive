@@ -11,7 +11,7 @@ enum _AuthMode { email, phone }
 
 /// Login / register screen.
 ///
-/// Supports email sign-in/register, phone OTP, third-party OAuth, and guest skip.
+/// Supports email sign-in/register, optional phone OTP, optional third-party OAuth, and guest skip.
 class AuthScreen extends StatefulWidget {
   final VoidCallback onSkip;
 
@@ -470,7 +470,7 @@ class _AuthScreenState extends State<AuthScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                '使用邮箱、手机号或第三方登录后可同步云端数据；游客模式仅保留本机数据。',
+                '邮箱登录可用于云端同步；手机号和第三方登录仅在对应能力已配置时可用。游客模式仅保留本机数据。',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 13,
