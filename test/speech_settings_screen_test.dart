@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jive/core/entitlement/entitlement_service.dart';
+import 'package:jive/core/entitlement/user_tier.dart';
 import 'package:jive/feature/settings/speech_settings_screen.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 String _todayKey() {
@@ -72,5 +75,24 @@ void main() {
       200,
     );
     expect(find.textContaining('今日线上识别'), findsOneWidget);
+  });
+
+  testWidgets('Free tier sees locked voice settings state', (tester) async {
+    SharedPreferences.setMockInitialValues(_seedValues());
+    final entitlement = EntitlementService();
+    await entitlement.init();
+    await entitlement.setTier(UserTier.free);
+
+    await tester.pumpWidget(
+      ChangeNotifierProvider<EntitlementService>.value(
+        value: entitlement,
+        child: const MaterialApp(home: SpeechSettingsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('语音记账需要订阅版'), findsOneWidget);
+    expect(find.text('查看订阅方案'), findsOneWidget);
+    expect(find.text('启用语音记账'), findsNothing);
   });
 }

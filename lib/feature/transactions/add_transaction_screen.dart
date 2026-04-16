@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/design_system/date_quick_selector.dart';
 import '../../core/design_system/theme.dart';
@@ -16,6 +17,9 @@ import '../../core/database/currency_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/project_model.dart';
+import '../../core/entitlement/entitlement_service.dart';
+import '../../core/entitlement/feature_gate.dart';
+import '../../core/entitlement/feature_id.dart';
 import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/category_icon_style.dart';
@@ -105,6 +109,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   SpeechEngine? _speechHoldEngine;
   SpeechService? _speechHoldService;
 
+  bool _hasVoiceBookkeepingAccess() {
+    final entitlement = Provider.of<EntitlementService?>(context, listen: false);
+    return entitlement?.canAccess(FeatureId.voiceBookkeeping) ?? true;
+  }
+
+  void _showVoiceUpgradePrompt() {
+    if (!mounted) return;
+    showUpgradePrompt(context, FeatureId.voiceBookkeeping);
+  }
+
   bool _continuousMode = false;
   String _amountStr = "0";
   String _toAmountStr = ""; // 跨币种转账的转入金额
@@ -148,7 +162,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final Map<String, String> _searchKeyCache = {};
   final TextEditingController _inlineSearchController = TextEditingController();
   final FocusNode _inlineSearchFocus = FocusNode();
-  final DateFormat _dateTimeFormat = DateFormat('MM-dd HH:mm');
   String _searchQuery = "";
   final Map<String, List<String>> _searchTokenCache = {};
   final Map<String, List<String>> _systemTokenCache = {};
@@ -185,6 +198,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (widget.startWithSpeech) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
+          if (!_hasVoiceBookkeepingAccess()) {
+            _showVoiceUpgradePrompt();
+            return;
+          }
           final initialText = widget.initialSpeechText;
           if (initialText != null && initialText.trim().isNotEmpty) {
             _handleInitialSpeechText(initialText);
@@ -196,6 +213,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     } else if (widget.initialSpeechText != null && widget.initialSpeechText!.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
+          if (!_hasVoiceBookkeepingAccess()) {
+            _showVoiceUpgradePrompt();
+            return;
+          }
           _handleInitialSpeechText(widget.initialSpeechText!);
         }
       });
