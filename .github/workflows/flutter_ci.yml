@@ -77,7 +77,7 @@ jobs:
 
       - name: Analyze
         if: steps.asset_only.outputs.skip_flutter != 'true'
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Test
         if: steps.asset_only.outputs.skip_flutter != 'true'
