@@ -36,8 +36,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect category icon asset-only PR
+        id: asset_only
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          changed_files="$(git -c core.quotepath=false diff --name-only HEAD^1 HEAD^2)"
+          non_asset_files="$(printf '%s\n' "$changed_files" | grep -Ev '^(assets/category_icons/|\.github/workflows/flutter_ci\.yml$)' || true)"
+          printf '%s\n' "$changed_files"
+
+          if [ -n "$changed_files" ] && [ -z "$non_asset_files" ]; then
+            echo "skip_flutter=true" >> "$GITHUB_OUTPUT"
+          else
+            printf 'Non-asset files:\n%s\n' "$non_asset_files"
+            echo "skip_flutter=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip Flutter checks for category icon asset-only PR
+        if: steps.asset_only.outputs.skip_flutter == 'true'
+        run: echo "Only category icon assets changed; skipping Flutter analyze/test."
 
       - name: Setup Flutter
+        if: steps.asset_only.outputs.skip_flutter != 'true'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.35.5
@@ -45,15 +68,19 @@ jobs:
           cache: true
 
       - name: Flutter Version
+        if: steps.asset_only.outputs.skip_flutter != 'true'
         run: flutter --version
 
       - name: Install Dependencies
+        if: steps.asset_only.outputs.skip_flutter != 'true'
         run: flutter pub get
 
       - name: Analyze
+        if: steps.asset_only.outputs.skip_flutter != 'true'
         run: flutter analyze
 
       - name: Test
+        if: steps.asset_only.outputs.skip_flutter != 'true'
         run: flutter test
 
   saas_wave0_smoke:
