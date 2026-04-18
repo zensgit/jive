@@ -201,10 +201,26 @@ npx -y supabase@latest secrets set \
 
 由于这台机器 Docker 不可用，建议统一走 `--use-api`。
 
+推荐优先使用脚本部署，因为它会自动区分鉴权模式：
+
+- `verify-subscription` 保持 Supabase JWT verification，用于真实用户会话。
+- `subscription-webhook` / `analytics` / `send-notification` / `admin` 使用函数内自定义 token 鉴权，因此部署时需要 `--no-verify-jwt`，否则 Supabase 网关会先拦截自定义 token。
+
+```bash
+scripts/run_saas_staging_rollout.sh deploy \
+  --profile core \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --env-file /tmp/jive-saas-staging.env
+```
+
+如果手工执行，命令如下：
+
 ```bash
 npx -y supabase@latest functions deploy subscription-webhook \
   --project-ref "$STAGING_PROJECT_REF" \
   --use-api \
+  --no-verify-jwt \
   --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
 
 npx -y supabase@latest functions deploy verify-subscription \
@@ -215,16 +231,19 @@ npx -y supabase@latest functions deploy verify-subscription \
 npx -y supabase@latest functions deploy analytics \
   --project-ref "$STAGING_PROJECT_REF" \
   --use-api \
+  --no-verify-jwt \
   --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
 
 npx -y supabase@latest functions deploy send-notification \
   --project-ref "$STAGING_PROJECT_REF" \
   --use-api \
+  --no-verify-jwt \
   --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
 
 npx -y supabase@latest functions deploy admin \
   --project-ref "$STAGING_PROJECT_REF" \
   --use-api \
+  --no-verify-jwt \
   --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
 ```
 

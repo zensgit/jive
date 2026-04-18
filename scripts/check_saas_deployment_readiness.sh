@@ -18,6 +18,9 @@ REQUIRED_REPO_FILES=(
   docs/2026-04-10-saas-fast-track-checklist.md
   docs/2026-04-10-saas-staging-apply-runbook.md
   docs/2026-04-10-saas-staging-troubleshooting.md
+  scripts/build_saas_staging_apk.sh
+  scripts/init_saas_staging_env.sh
+  scripts/run_saas_staging_function_smoke.sh
   scripts/run_saas_staging_rollout.sh
   scripts/run_saas_wave0_smoke.sh
 )

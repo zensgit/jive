@@ -72,7 +72,14 @@ The script only reports whether secret values are present. It never prints the v
 7. Run `bash scripts/run_saas_staging_rollout.sh preflight --profile core --env-file /tmp/jive-saas-staging.env`.
 8. Run `bash scripts/run_saas_staging_rollout.sh apply --profile core --env-file /tmp/jive-saas-staging.env`.
 9. Run `bash scripts/run_saas_staging_rollout.sh deploy --profile core --env-file /tmp/jive-saas-staging.env`.
-10. Build a test app with staging Supabase config passed by `--dart-define`:
+10. Run deployed Functions smoke:
+
+```bash
+bash scripts/run_saas_staging_function_smoke.sh \
+  --env-file /tmp/jive-saas-staging.env
+```
+
+11. Build a test app with staging Supabase config passed by `--dart-define`:
 
 ```bash
 bash scripts/build_saas_staging_apk.sh \
@@ -89,6 +96,7 @@ The first deployment test should verify only the SaaS-critical path:
 
 - Supabase migrations apply cleanly.
 - `subscription-webhook`, `verify-subscription`, `analytics`, `send-notification`, and `admin` deploy successfully.
+- Custom-token Functions are deployed with in-function auth (`--no-verify-jwt`), while `verify-subscription` keeps Supabase JWT verification.
 - A user can sign in against staging auth.
 - Subscriber-only sync remains locked for a free user.
 - A trusted subscription state can unlock subscriber gates.
@@ -127,5 +135,6 @@ If Google Play / Apple production purchase verification is included, add another
 - `docs/jive-saas-staging.env.example`
 - `scripts/build_saas_staging_apk.sh`
 - `scripts/init_saas_staging_env.sh`
+- `scripts/run_saas_staging_function_smoke.sh`
 - `scripts/run_saas_staging_rollout.sh`
 - `scripts/run_saas_wave0_smoke.sh`

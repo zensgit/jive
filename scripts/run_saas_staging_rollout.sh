@@ -23,13 +23,18 @@ else
   SUPABASE_RUNNER=(npx -y supabase@latest)
 fi
 
-FUNCTIONS=(
-  subscription-webhook
+JWT_FUNCTIONS=(
   verify-subscription
+)
+
+CUSTOM_AUTH_FUNCTIONS=(
+  subscription-webhook
   analytics
   send-notification
   admin
 )
+
+FUNCTIONS=("${JWT_FUNCTIONS[@]}" "${CUSTOM_AUTH_FUNCTIONS[@]}")
 
 CORE_ENV_FILE_KEYS=(
   SUPABASE_URL
@@ -288,12 +293,22 @@ deploy_functions() {
   require_value "SUPABASE_ACCESS_TOKEN" "$ACCESS_TOKEN"
 
   local function_name
-  for function_name in "${FUNCTIONS[@]}"; do
-    log "deploying function $function_name"
+  for function_name in "${JWT_FUNCTIONS[@]}"; do
+    log "deploying function $function_name with Supabase JWT verification"
     SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" \
       supabase functions deploy "$function_name" \
         --project-ref "$PROJECT_REF" \
         --use-api \
+        --workdir "$APP_DIR"
+  done
+
+  for function_name in "${CUSTOM_AUTH_FUNCTIONS[@]}"; do
+    log "deploying function $function_name with in-function token verification"
+    SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" \
+      supabase functions deploy "$function_name" \
+        --project-ref "$PROJECT_REF" \
+        --use-api \
+        --no-verify-jwt \
         --workdir "$APP_DIR"
   done
 }
