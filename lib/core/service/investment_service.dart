@@ -310,9 +310,6 @@ class InvestmentService {
       await _isar.jiveInvestmentTransactions.put(tx);
       await _syncHoldingWithinTxn(securityId, accountId);
     });
-
-    // 更新最新价格
-    await updatePrice(securityId, price);
   }
 
   Future<void> _syncHoldingWithinTxn(int securityId, int? accountId) async {
