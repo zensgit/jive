@@ -89,6 +89,23 @@ The same lane can also run from GitHub Actions through the manual `SaaS Core Sta
 
 By default, the workflow does not apply migrations or deploy Functions. Enable `apply_migrations`, `deploy_functions`, and `run_function_smoke` only when the staging secrets are ready.
 
+Before running the workflow, check repository secret coverage without exposing values:
+
+```bash
+bash scripts/check_saas_github_secrets.sh \
+  --profile core \
+  --repo zensgit/jive
+```
+
+To print a safe setup template for missing GitHub Actions secrets:
+
+```bash
+bash scripts/check_saas_github_secrets.sh \
+  --profile core \
+  --repo zensgit/jive \
+  --print-template
+```
+
 For manual execution, use the steps below.
 
 1. Rotate exposed Supabase credentials in the Supabase dashboard.
@@ -162,6 +179,7 @@ If Google Play / Apple production purchase verification is included, add another
 - `docs/2026-04-10-saas-staging-troubleshooting.md`
 - `docs/jive-saas-staging.env.example`
 - `scripts/build_saas_staging_apk.sh`
+- `scripts/check_saas_github_secrets.sh`
 - `scripts/init_saas_staging_env.sh`
 - `scripts/run_saas_core_staging_lane.sh`
 - `scripts/run_saas_staging_function_smoke.sh`
