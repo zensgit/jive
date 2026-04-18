@@ -72,7 +72,16 @@ The script only reports whether secret values are present. It never prints the v
 7. Run `bash scripts/run_saas_staging_rollout.sh preflight --profile core --env-file /tmp/jive-saas-staging.env`.
 8. Run `bash scripts/run_saas_staging_rollout.sh apply --profile core --env-file /tmp/jive-saas-staging.env`.
 9. Run `bash scripts/run_saas_staging_rollout.sh deploy --profile core --env-file /tmp/jive-saas-staging.env`.
-10. Build a test app with staging Supabase config passed by `--dart-define`.
+10. Build a test app with staging Supabase config passed by `--dart-define`:
+
+```bash
+bash scripts/build_saas_staging_apk.sh \
+  --env-file /tmp/jive-saas-staging.env \
+  --flavor dev \
+  --mode debug
+```
+
+The build helper only passes `SUPABASE_URL` and `SUPABASE_ANON_KEY` to Flutter. `SUPABASE_SERVICE_ROLE_KEY` stays server-side and is never passed into the app build.
 
 ## Minimum Smoke Scope
 
@@ -116,6 +125,7 @@ If Google Play / Apple production purchase verification is included, add another
 - `docs/2026-04-10-saas-staging-apply-runbook.md`
 - `docs/2026-04-10-saas-staging-troubleshooting.md`
 - `docs/jive-saas-staging.env.example`
+- `scripts/build_saas_staging_apk.sh`
 - `scripts/init_saas_staging_env.sh`
 - `scripts/run_saas_staging_rollout.sh`
 - `scripts/run_saas_wave0_smoke.sh`
