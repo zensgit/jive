@@ -72,6 +72,23 @@ bash scripts/run_saas_core_staging_lane.sh \
 
 That lane initializes the env file, runs strict readiness, runs local Wave0 smoke, previews and applies migrations, deploys Edge Functions, runs deployed Function smoke, and builds the dev debug APK.
 
+The same lane can also run from GitHub Actions through the manual `SaaS Core Staging` workflow. Add these repository secrets before using it:
+
+- `STAGING_SUPABASE_ACCESS_TOKEN`
+- `STAGING_PROJECT_REF`
+- `STAGING_DB_PASSWORD`
+- `STAGING_SUPABASE_URL`
+- `STAGING_SUPABASE_ANON_KEY`
+- `STAGING_SUPABASE_SERVICE_ROLE_KEY`
+- `STAGING_PUBSUB_BEARER_TOKEN`
+- `STAGING_WEBHOOK_HMAC_SECRET`
+- `STAGING_ADMIN_API_TOKEN`
+- `STAGING_ADMIN_API_ALLOWED_ORIGINS`
+- `STAGING_ANALYTICS_ADMIN_TOKEN`
+- `STAGING_NOTIFICATION_ADMIN_TOKEN`
+
+By default, the workflow does not apply migrations or deploy Functions. Enable `apply_migrations`, `deploy_functions`, and `run_function_smoke` only when the staging secrets are ready.
+
 For manual execution, use the steps below.
 
 1. Rotate exposed Supabase credentials in the Supabase dashboard.
