@@ -148,7 +148,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final Map<String, String> _searchKeyCache = {};
   final TextEditingController _inlineSearchController = TextEditingController();
   final FocusNode _inlineSearchFocus = FocusNode();
-  final DateFormat _dateTimeFormat = DateFormat('MM-dd HH:mm');
   String _searchQuery = "";
   final Map<String, List<String>> _searchTokenCache = {};
   final Map<String, List<String>> _systemTokenCache = {};
