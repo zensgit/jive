@@ -106,6 +106,18 @@ bash scripts/check_saas_github_secrets.sh \
   --print-template
 ```
 
+If the local env file and shell deployment variables are already prepared, upload the repository secrets in one safe pass:
+
+```bash
+bash scripts/push_saas_github_secrets.sh \
+  --profile core \
+  --repo zensgit/jive \
+  --env-file /tmp/jive-saas-staging.env \
+  --apply
+```
+
+Without `--apply`, the upload helper performs a dry run and reports only whether each value is present.
+
 For manual execution, use the steps below.
 
 1. Rotate exposed Supabase credentials in the Supabase dashboard.
@@ -181,6 +193,7 @@ If Google Play / Apple production purchase verification is included, add another
 - `scripts/build_saas_staging_apk.sh`
 - `scripts/check_saas_github_secrets.sh`
 - `scripts/init_saas_staging_env.sh`
+- `scripts/push_saas_github_secrets.sh`
 - `scripts/run_saas_core_staging_lane.sh`
 - `scripts/run_saas_staging_function_smoke.sh`
 - `scripts/run_saas_staging_rollout.sh`

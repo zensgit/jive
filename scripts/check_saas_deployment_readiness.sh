@@ -21,6 +21,7 @@ REQUIRED_REPO_FILES=(
   scripts/build_saas_staging_apk.sh
   scripts/check_saas_github_secrets.sh
   scripts/init_saas_staging_env.sh
+  scripts/push_saas_github_secrets.sh
   scripts/run_saas_core_staging_lane.sh
   scripts/run_saas_staging_function_smoke.sh
   scripts/run_saas_staging_rollout.sh

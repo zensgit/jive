@@ -63,14 +63,24 @@ bash scripts/check_saas_github_secrets.sh \
   --repo zensgit/jive
 ```
 
-8. 一条命令跑完 core staging lane：
+8. 如果本地 env 和 shell 变量已经准备好，可一条命令上传 GitHub Actions secrets：
+
+```bash
+bash scripts/push_saas_github_secrets.sh \
+  --profile core \
+  --repo zensgit/jive \
+  --env-file /tmp/jive-saas-staging.env \
+  --apply
+```
+
+9. 一条命令跑完 core staging lane：
 
 ```bash
 bash scripts/run_saas_core_staging_lane.sh \
   --env-file /tmp/jive-saas-staging.env
 ```
 
-9. 如果先只想做安全预演，不 apply / deploy：
+10. 如果先只想做安全预演，不 apply / deploy：
 
 ```bash
 bash scripts/run_saas_core_staging_lane.sh \
@@ -81,7 +91,7 @@ bash scripts/run_saas_core_staging_lane.sh \
   --skip-apk
 ```
 
-10. 做最小验收：
+11. 做最小验收：
 - `user_subscriptions` / `sync_tombstones` / analytics / notification 相关表存在
 - 5 个 Functions 都已部署成功
 - `ADMIN_API_ALLOWED_ORIGINS` 不为空
@@ -104,4 +114,5 @@ bash scripts/run_saas_core_staging_lane.sh \
 - [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/app/docs/jive-saas-staging.env.example)
 - [run_saas_core_staging_lane.sh](/Users/chauhua/Documents/GitHub/Jive/app/scripts/run_saas_core_staging_lane.sh)
 - [check_saas_github_secrets.sh](/Users/chauhua/Documents/GitHub/Jive/app/scripts/check_saas_github_secrets.sh)
+- [push_saas_github_secrets.sh](/Users/chauhua/Documents/GitHub/Jive/app/scripts/push_saas_github_secrets.sh)
 - [run_saas_staging_rollout.sh](/Users/chauhua/Documents/GitHub/Jive/app/scripts/run_saas_staging_rollout.sh)
