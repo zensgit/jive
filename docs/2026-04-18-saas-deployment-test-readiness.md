@@ -63,6 +63,17 @@ The script only reports whether secret values are present. It never prints the v
 
 ## Fast Path To Deployment Test
 
+Once `SUPABASE_ACCESS_TOKEN`, `STAGING_PROJECT_REF`, and `STAGING_DB_PASSWORD` are exported, the fastest path is:
+
+```bash
+bash scripts/run_saas_core_staging_lane.sh \
+  --env-file /tmp/jive-saas-staging.env
+```
+
+That lane initializes the env file, runs strict readiness, runs local Wave0 smoke, previews and applies migrations, deploys Edge Functions, runs deployed Function smoke, and builds the dev debug APK.
+
+For manual execution, use the steps below.
+
 1. Rotate exposed Supabase credentials in the Supabase dashboard.
 2. Create or select the staging Supabase project.
 3. Run `bash scripts/init_saas_staging_env.sh --env-file /tmp/jive-saas-staging.env`.
@@ -135,6 +146,7 @@ If Google Play / Apple production purchase verification is included, add another
 - `docs/jive-saas-staging.env.example`
 - `scripts/build_saas_staging_apk.sh`
 - `scripts/init_saas_staging_env.sh`
+- `scripts/run_saas_core_staging_lane.sh`
 - `scripts/run_saas_staging_function_smoke.sh`
 - `scripts/run_saas_staging_rollout.sh`
 - `scripts/run_saas_wave0_smoke.sh`
