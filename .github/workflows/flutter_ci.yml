@@ -45,12 +45,13 @@ jobs:
         shell: bash
         run: |
           changed_files="$(git diff --name-only HEAD^1 HEAD^2)"
+          non_asset_files="$(printf '%s\n' "$changed_files" | grep -Ev '^(assets/category_icons/|\.github/workflows/flutter_ci\.yml$)' || true)"
           printf '%s\n' "$changed_files"
 
-          if [ -n "$changed_files" ] &&
-             ! printf '%s\n' "$changed_files" | grep -Ev '^(assets/category_icons/|\.github/workflows/flutter_ci\.yml$)' >/dev/null; then
+          if [ -n "$changed_files" ] && [ -z "$non_asset_files" ]; then
             echo "skip_flutter=true" >> "$GITHUB_OUTPUT"
           else
+            printf 'Non-asset files:\n%s\n' "$non_asset_files"
             echo "skip_flutter=false" >> "$GITHUB_OUTPUT"
           fi
 
