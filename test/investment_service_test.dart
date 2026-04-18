@@ -199,6 +199,45 @@ void main() {
     expect(holdings[1].costBasis, closeTo(20, 1e-9));
   });
 
+  test('recordTransaction clears holding while preserving transaction history', () async {
+    final security = await investmentService.addSecurity(
+      ticker: 'BABA',
+      name: 'Alibaba',
+      type: SecurityType.stock,
+      currency: 'USD',
+      latestPrice: 80,
+    );
+
+    await investmentService.recordTransaction(
+      securityId: security.id,
+      action: 'buy',
+      quantity: 3,
+      price: 80,
+      accountId: 9,
+    );
+    await investmentService.recordTransaction(
+      securityId: security.id,
+      action: 'sell',
+      quantity: 3,
+      price: 82,
+      accountId: 9,
+    );
+
+    final holding = await investmentService.getHolding(
+      securityId: security.id,
+      accountId: 9,
+    );
+    final transactions = await isar.jiveInvestmentTransactions
+        .filter()
+        .securityIdEqualTo(security.id)
+        .accountIdEqualTo(9)
+        .findAll();
+
+    expect(holding, isNull);
+    expect(transactions, hasLength(2));
+    expect(transactions.map((tx) => tx.action), ['buy', 'sell']);
+  });
+
   test('portfolio summary throws when exchange rate is missing', () async {
     final security = await investmentService.addSecurity(
       ticker: 'MSFT',
