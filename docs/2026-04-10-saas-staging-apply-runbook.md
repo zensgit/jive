@@ -1,16 +1,19 @@
 # Jive SaaS Staging Apply / Deploy Runbook
 
 > 日期: 2026-04-10
-> 主线基线: `codex/saas-beta-mainline@a4bedeb`
+> 更新: 2026-04-18
+> 主线基线: `main`
+> 部署测试入口: [#159](https://github.com/zensgit/jive/pull/159)
 > 目标: 在 staging 环境完成 SaaS Beta 的数据库迁移、Edge Function secrets 注入、Functions deploy 与最小验收
 
 ## 适用前提
 
-这份 runbook 假设你已经决定以 [#144](https://github.com/zensgit/jive/pull/144) 作为唯一主线收口入口。
+这份 runbook 假设 SaaS Beta 已经在 `main`，并且 [#159](https://github.com/zensgit/jive/pull/159) 的部署 readiness 脚本已合并。
 
 当前代码侧已满足：
-- `bash scripts/run_saas_wave0_smoke.sh` 在集成分支通过
-- fresh `origin/main` 本地 merge `origin/codex/saas-beta-mainline` 后，`bash scripts/run_saas_wave0_smoke.sh` 也通过
+- `bash scripts/run_saas_wave0_smoke.sh` 可作为本地 SaaS Wave0 smoke
+- `bash scripts/check_saas_deployment_readiness.sh --profile core` 可作为静态 readiness gate
+- `bash scripts/run_saas_core_staging_lane.sh --env-file /tmp/jive-saas-staging.env` 可作为 core staging 一键 lane
 
 当前环境侧仍需要你补齐：
 - staging Supabase project ref
@@ -34,16 +37,21 @@ npx -y supabase@latest help secrets set
 npx -y supabase@latest help functions deploy
 ```
 
-当前仓库还提供了一个更短的执行脚本草案：
+当前仓库提供了两个执行入口：
 
 ```bash
-scripts/run_saas_staging_rollout.sh help
+bash scripts/run_saas_core_staging_lane.sh --help
+bash scripts/run_saas_staging_rollout.sh help
 ```
 
 在真正 apply/deploy 前，建议先跑：
 
 ```bash
-scripts/run_saas_staging_rollout.sh preflight --env-file /tmp/jive-saas-staging.env
+bash scripts/check_saas_deployment_readiness.sh \
+  --profile core \
+  --strict \
+  --online \
+  --env-file /tmp/jive-saas-staging.env
 ```
 
 说明：
@@ -58,10 +66,7 @@ scripts/run_saas_staging_rollout.sh preflight --env-file /tmp/jive-saas-staging.
 - `STAGING_PROJECT_REF`
 - `STAGING_DB_PASSWORD`
 
-备注：
-- 旧文档 [saas-ops-checklist.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/saas-ops-checklist.md) 里记录过一个项目 ref：`evnluvzvbqmsmypbchym`
-- 如果那仍然是你的 staging 项目，可以直接复用
-- 如果已经换过项目，以 Dashboard 当前值为准
+备注：如果已经换过 staging 项目，以 Supabase Dashboard 当前值为准。
 
 ### 2. Functions 运行时 secrets
 
@@ -107,19 +112,16 @@ Ops / Admin：
 8. `012_allow_admin_subscription_override.sql`
 
 当前仓库里这些文件都已经存在于：
-- [supabase/migrations](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/supabase/migrations)
+- [supabase/migrations](/Users/chauhua/Documents/GitHub/Jive/app/supabase/migrations)
 
 ## 推荐执行顺序
 
 ### 一键脚本入口
 
-如果你已经有 staging 凭据，推荐优先使用：
+如果你已经有 staging 凭据，推荐优先使用 core 一键 lane：
 
 ```bash
-scripts/run_saas_staging_rollout.sh all \
-  --project-ref "$STAGING_PROJECT_REF" \
-  --db-password "$STAGING_DB_PASSWORD" \
-  --access-token "$SUPABASE_ACCESS_TOKEN" \
+bash scripts/run_saas_core_staging_lane.sh \
   --env-file /tmp/jive-saas-staging.env
 ```
 
@@ -128,7 +130,7 @@ scripts/run_saas_staging_rollout.sh all \
 ### Step 1. 进入主线工作树
 
 ```bash
-cd /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+cd /Users/chauhua/Documents/GitHub/Jive/app
 ```
 
 ### Step 2. 配置 staging 变量
@@ -145,7 +147,7 @@ export STAGING_DB_PASSWORD='你的_db_password'
 npx -y supabase@latest link \
   --project-ref "$STAGING_PROJECT_REF" \
   --password "$STAGING_DB_PASSWORD" \
-  --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+  --workdir /Users/chauhua/Documents/GitHub/Jive/app
 ```
 
 ### Step 4. 先 dry-run 看远端将应用哪些迁移
@@ -154,7 +156,7 @@ npx -y supabase@latest link \
 npx -y supabase@latest db push \
   --include-all \
   --dry-run \
-  --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+  --workdir /Users/chauhua/Documents/GitHub/Jive/app
 ```
 
 预期：
@@ -166,7 +168,7 @@ npx -y supabase@latest db push \
 ```bash
 npx -y supabase@latest db push \
   --include-all \
-  --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+  --workdir /Users/chauhua/Documents/GitHub/Jive/app
 ```
 
 ### Step 6. 准备 secrets 文件
@@ -184,7 +186,7 @@ $EDITOR /tmp/jive-saas-staging.env
 ```
 
 说明：
-- [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/jive-saas-staging.env.example) 已包含当前 5 个 Edge Functions 需要的全部变量
+- [jive-saas-staging.env.example](/Users/chauhua/Documents/GitHub/Jive/app/docs/jive-saas-staging.env.example) 已包含当前 5 个 Edge Functions 需要的全部变量
 - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` 需要保持为单行，并将换行写成 `\\n`
 - 如果想先检查变量和 secrets 是否齐，再执行 apply/deploy，先跑 `preflight`
 
@@ -194,7 +196,7 @@ $EDITOR /tmp/jive-saas-staging.env
 npx -y supabase@latest secrets set \
   --env-file /tmp/jive-saas-staging.env \
   --project-ref "$STAGING_PROJECT_REF" \
-  --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+  --workdir /Users/chauhua/Documents/GitHub/Jive/app
 ```
 
 ### Step 8. 部署 5 个 Edge Functions
@@ -207,7 +209,7 @@ npx -y supabase@latest secrets set \
 - `subscription-webhook` / `analytics` / `send-notification` / `admin` 使用函数内自定义 token 鉴权，因此部署时需要 `--no-verify-jwt`，否则 Supabase 网关会先拦截自定义 token。
 
 ```bash
-scripts/run_saas_staging_rollout.sh deploy \
+bash scripts/run_saas_staging_rollout.sh deploy \
   --profile core \
   --project-ref "$STAGING_PROJECT_REF" \
   --access-token "$SUPABASE_ACCESS_TOKEN" \
@@ -221,30 +223,30 @@ npx -y supabase@latest functions deploy subscription-webhook \
   --project-ref "$STAGING_PROJECT_REF" \
   --use-api \
   --no-verify-jwt \
-  --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+  --workdir /Users/chauhua/Documents/GitHub/Jive/app
 
 npx -y supabase@latest functions deploy verify-subscription \
   --project-ref "$STAGING_PROJECT_REF" \
   --use-api \
-  --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+  --workdir /Users/chauhua/Documents/GitHub/Jive/app
 
 npx -y supabase@latest functions deploy analytics \
   --project-ref "$STAGING_PROJECT_REF" \
   --use-api \
   --no-verify-jwt \
-  --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+  --workdir /Users/chauhua/Documents/GitHub/Jive/app
 
 npx -y supabase@latest functions deploy send-notification \
   --project-ref "$STAGING_PROJECT_REF" \
   --use-api \
   --no-verify-jwt \
-  --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+  --workdir /Users/chauhua/Documents/GitHub/Jive/app
 
 npx -y supabase@latest functions deploy admin \
   --project-ref "$STAGING_PROJECT_REF" \
   --use-api \
   --no-verify-jwt \
-  --workdir /Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next
+  --workdir /Users/chauhua/Documents/GitHub/Jive/app
 ```
 
 ## 最小验收清单
@@ -270,15 +272,16 @@ npx -y supabase@latest functions deploy admin \
 - staging 的 `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SERVICE_ROLE_KEY` 与目标项目匹配
 
 ### D. 代码基线
-- 以 [#144](https://github.com/zensgit/jive/pull/144) 为准
-- 这条主线的最新证据链可参考：
-  - [2026-04-09-saas-beta-verification-closure.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-09-saas-beta-verification-closure.md)
-  - [2026-04-10-saas-beta-mainline-merge-strategy.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-beta-mainline-merge-strategy.md)
+- 以 `main` 为准
+- 部署 readiness 证据链参考：
+  - [2026-04-18-saas-deployment-test-readiness.md](/Users/chauhua/Documents/GitHub/Jive/app/docs/2026-04-18-saas-deployment-test-readiness.md)
+  - [2026-04-09-saas-beta-verification-closure.md](/Users/chauhua/Documents/GitHub/Jive/app/docs/2026-04-09-saas-beta-verification-closure.md)
+  - [2026-04-10-saas-beta-mainline-merge-strategy.md](/Users/chauhua/Documents/GitHub/Jive/app/docs/2026-04-10-saas-beta-mainline-merge-strategy.md)
 
 ## 常见阻塞与处理
 
 更完整的值班手册见：
-- [2026-04-10-saas-staging-troubleshooting.md](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/docs/2026-04-10-saas-staging-troubleshooting.md)
+- [2026-04-10-saas-staging-troubleshooting.md](/Users/chauhua/Documents/GitHub/Jive/app/docs/2026-04-10-saas-staging-troubleshooting.md)
 
 ### 1. `Cannot connect to the Docker daemon`
 原因：
@@ -317,6 +320,6 @@ npx -y supabase@latest functions deploy admin \
 
 当前最快的 SaaS 化路径已经不是继续写代码，而是：
 
-1. 合并 [#144](https://github.com/zensgit/jive/pull/144)
-2. 用 `scripts/run_saas_staging_rollout.sh` 或这份 runbook 在 staging 做一次完整 apply / deploy
+1. 合并 [#159](https://github.com/zensgit/jive/pull/159)
+2. 用 `scripts/run_saas_core_staging_lane.sh` 在 staging 做一次完整 core apply / deploy / smoke / APK build
 3. 以 staging 结果作为 Beta 主线的最终环境验收
