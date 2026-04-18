@@ -199,44 +199,92 @@ void main() {
     expect(holdings[1].costBasis, closeTo(20, 1e-9));
   });
 
-  test('recordTransaction does not overwrite latest market price or history', () async {
-    final security = await investmentService.addSecurity(
-      ticker: 'SHOP',
-      name: 'Shopify',
-      type: SecurityType.stock,
-      currency: 'USD',
-      latestPrice: 150,
-    );
+  test(
+    'recordTransaction clears holding while preserving transaction history',
+    () async {
+      final security = await investmentService.addSecurity(
+        ticker: 'BABA',
+        name: 'Alibaba',
+        type: SecurityType.stock,
+        currency: 'USD',
+        latestPrice: 80,
+      );
 
-    final today = DateTime(
-      DateTime.now().year,
-      DateTime.now().month,
-      DateTime.now().day,
-    );
-    await isar.writeTxn(() async {
-      final history = JivePriceHistory()
-        ..securityId = security.id
-        ..date = today
-        ..closePrice = 150;
-      await isar.jivePriceHistorys.put(history);
-    });
+      await investmentService.recordTransaction(
+        securityId: security.id,
+        action: 'buy',
+        quantity: 3,
+        price: 80,
+        accountId: 9,
+      );
+      await investmentService.recordTransaction(
+        securityId: security.id,
+        action: 'sell',
+        quantity: 3,
+        price: 82,
+        accountId: 9,
+      );
 
-    await investmentService.recordTransaction(
-      securityId: security.id,
-      action: 'buy',
-      quantity: 2,
-      price: 100,
-      accountId: 3,
-    );
+      final holding = await investmentService.getHolding(
+        securityId: security.id,
+        accountId: 9,
+      );
+      final transactions = await isar.jiveInvestmentTransactions
+          .filter()
+          .securityIdEqualTo(security.id)
+          .accountIdEqualTo(9)
+          .findAll();
 
-    final storedSecurity = await isar.jiveSecuritys.get(security.id);
-    expect(storedSecurity, isNotNull);
-    expect(storedSecurity!.latestPrice, 150);
+      expect(holding, isNull);
+      expect(transactions, hasLength(2));
+      expect(transactions.map((tx) => tx.action), ['buy', 'sell']);
+    },
+  );
 
-    final histories = await investmentService.getPriceHistory(security.id, days: 7);
-    expect(histories, hasLength(1));
-    expect(histories.single.closePrice, 150);
-  });
+  test(
+    'recordTransaction does not overwrite latest market price or history',
+    () async {
+      final security = await investmentService.addSecurity(
+        ticker: 'SHOP',
+        name: 'Shopify',
+        type: SecurityType.stock,
+        currency: 'USD',
+        latestPrice: 150,
+      );
+
+      final today = DateTime(
+        DateTime.now().year,
+        DateTime.now().month,
+        DateTime.now().day,
+      );
+      await isar.writeTxn(() async {
+        final history = JivePriceHistory()
+          ..securityId = security.id
+          ..date = today
+          ..closePrice = 150;
+        await isar.jivePriceHistorys.put(history);
+      });
+
+      await investmentService.recordTransaction(
+        securityId: security.id,
+        action: 'buy',
+        quantity: 2,
+        price: 100,
+        accountId: 3,
+      );
+
+      final storedSecurity = await isar.jiveSecuritys.get(security.id);
+      expect(storedSecurity, isNotNull);
+      expect(storedSecurity!.latestPrice, 150);
+
+      final histories = await investmentService.getPriceHistory(
+        security.id,
+        days: 7,
+      );
+      expect(histories, hasLength(1));
+      expect(histories.single.closePrice, 150);
+    },
+  );
 
   test('portfolio summary throws when exchange rate is missing', () async {
     final security = await investmentService.addSecurity(
