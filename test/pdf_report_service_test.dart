@@ -13,10 +13,10 @@ void main() {
     test('generateAnnualReport static method has correct return type', () {
       // Verify the static method signature returns Future<Uint8List>.
       // We cannot call it without Isar, but we can confirm the type.
-      expect(
-        PdfReportService.generateAnnualReport is Function,
-        isTrue,
-      );
+      final Future<Uint8List> Function(int) generator =
+          PdfReportService.generateAnnualReport;
+
+      expect(generator, same(PdfReportService.generateAnnualReport));
     });
   });
 }
