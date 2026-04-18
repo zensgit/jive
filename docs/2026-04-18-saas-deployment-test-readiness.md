@@ -16,6 +16,15 @@ This document does not replace the detailed runbooks. It adds a fast readiness g
 
 ## New Readiness Gate
 
+Initialize a local core env draft first:
+
+```bash
+bash scripts/init_saas_staging_env.sh \
+  --env-file /tmp/jive-saas-staging.env
+```
+
+If `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are exported in the shell, the script will copy them into the local env file. Otherwise it leaves those fields empty and generates only local webhook/admin/analytics/notification tokens.
+
 Run the static preflight first:
 
 ```bash
@@ -56,8 +65,8 @@ The script only reports whether secret values are present. It never prints the v
 
 1. Rotate exposed Supabase credentials in the Supabase dashboard.
 2. Create or select the staging Supabase project.
-3. Copy `docs/jive-saas-staging.env.example` to `/tmp/jive-saas-staging.env`.
-4. Fill the env file locally. Do not commit the filled file.
+3. Run `bash scripts/init_saas_staging_env.sh --env-file /tmp/jive-saas-staging.env`.
+4. Fill any remaining Supabase fields locally. Do not commit the filled file.
 5. Export `SUPABASE_ACCESS_TOKEN`, `STAGING_PROJECT_REF`, and `STAGING_DB_PASSWORD`.
 6. Run `bash scripts/check_saas_deployment_readiness.sh --profile core --strict --online --env-file /tmp/jive-saas-staging.env`.
 7. Run `bash scripts/run_saas_staging_rollout.sh preflight --profile core --env-file /tmp/jive-saas-staging.env`.
@@ -107,5 +116,6 @@ If Google Play / Apple production purchase verification is included, add another
 - `docs/2026-04-10-saas-staging-apply-runbook.md`
 - `docs/2026-04-10-saas-staging-troubleshooting.md`
 - `docs/jive-saas-staging.env.example`
+- `scripts/init_saas_staging_env.sh`
 - `scripts/run_saas_staging_rollout.sh`
 - `scripts/run_saas_wave0_smoke.sh`
