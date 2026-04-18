@@ -44,7 +44,7 @@ jobs:
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
-          changed_files="$(git diff --name-only HEAD^1 HEAD^2)"
+          changed_files="$(git -c core.quotepath=false diff --name-only HEAD^1 HEAD^2)"
           non_asset_files="$(printf '%s\n' "$changed_files" | grep -Ev '^(assets/category_icons/|\.github/workflows/flutter_ci\.yml$)' || true)"
           printf '%s\n' "$changed_files"
 
