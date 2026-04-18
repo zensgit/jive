@@ -20,6 +20,8 @@ class InvestmentScreen extends StatefulWidget {
   final List<JiveCurrency>? debugCurrencies;
   final List<JiveAccount>? debugAccounts;
   final String? debugBaseCurrency;
+  final String? debugLoadErrorMessage;
+  final StockQuoteService? debugQuoteService;
 
   const InvestmentScreen({
     super.key,
@@ -29,6 +31,8 @@ class InvestmentScreen extends StatefulWidget {
     this.debugCurrencies,
     this.debugAccounts,
     this.debugBaseCurrency,
+    this.debugLoadErrorMessage,
+    this.debugQuoteService,
   });
 
   @override
@@ -51,6 +55,7 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
   Map<int, JiveAccount> _accountById = {};
   String _baseCurrency = 'CNY';
   bool _interactiveEnabled = false;
+  String? _loadErrorMessage;
 
   @override
   void initState() {
@@ -69,25 +74,30 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
           widget.debugBaseCurrency ??
           widget.debugPortfolio?.baseCurrency ??
           'CNY';
+      _loadErrorMessage = widget.debugLoadErrorMessage;
       _isLoading = false;
       return;
     }
 
-    _isar = widget.debugIsar ?? await DatabaseService.getInstance();
-    _service = InvestmentService(_isar);
-    _currencyService = CurrencyService(_isar);
-    _quoteService = StockQuoteService(_isar, _service);
-    _interactiveEnabled = true;
-    await _currencyService.initCurrencies();
-    await _load();
+    try {
+      _isar = widget.debugIsar ?? await DatabaseService.getInstance();
+      _service = InvestmentService(_isar);
+      _currencyService = CurrencyService(_isar);
+      _quoteService = widget.debugQuoteService ?? StockQuoteService(_isar, _service);
+      _interactiveEnabled = true;
+      await _currencyService.initCurrencies();
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadErrorMessage = _errorMessageFor(error);
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _load() async {
     final baseCurrency = await _currencyService.getBaseCurrency();
-    final portfolio = await _service.getPortfolioSummary(
-      currencyService: _currencyService,
-      baseCurrency: baseCurrency,
-    );
     final securities = await _service.getSecurities();
     final currencies = await _currencyService.getAllCurrencies();
     final accounts =
@@ -95,6 +105,16 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
             .where((account) => account.type == AccountService.typeAsset)
             .toList()
           ..sort((a, b) => a.order.compareTo(b.order));
+    PortfolioSummary? portfolio;
+    String? loadErrorMessage;
+    try {
+      portfolio = await _service.getPortfolioSummary(
+        currencyService: _currencyService,
+        baseCurrency: baseCurrency,
+      );
+    } catch (error) {
+      loadErrorMessage = _errorMessageFor(error);
+    }
     if (!mounted) return;
     setState(() {
       _portfolio = portfolio;
@@ -103,6 +123,7 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
       _accounts = accounts;
       _accountById = {for (final account in accounts) account.id: account};
       _baseCurrency = baseCurrency;
+      _loadErrorMessage = loadErrorMessage;
       _isLoading = false;
     });
   }
@@ -130,9 +151,36 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
 
   Future<void> _refreshSingleQuote(String ticker) async {
     if (_quoteService == null) return;
-    final quote = await _quoteService!.fetchQuote(ticker);
-    if (quote != null && mounted) {
-      setState(() => _quotes[ticker.toUpperCase().trim()] = quote);
+    final normalizedTicker = ticker.toUpperCase().trim();
+    try {
+      final quote = await _quoteService!.fetchQuote(normalizedTicker);
+      if (quote == null) {
+        if (mounted) {
+          _showMessage('未能获取 $normalizedTicker 行情');
+        }
+        return;
+      }
+      final security = _securities.cast<JiveSecurity?>().firstWhere(
+        (candidate) => candidate?.ticker.toUpperCase().trim() == normalizedTicker,
+        orElse: () => null,
+      );
+      if (security == null) {
+        if (mounted) {
+          _showMessage('证券不存在，可能已被删除');
+        }
+        return;
+      }
+      await _service.updatePrice(security.id, quote.price);
+      if (!mounted) return;
+      setState(() => _quotes[normalizedTicker] = quote);
+      await _load();
+      if (mounted) {
+        _showMessage('已刷新 $normalizedTicker 行情');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('刷新行情失败，请稍后重试');
+      }
     }
   }
 
@@ -475,9 +523,11 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
     final holdingSecurityIds = holdings
         .map((valuation) => valuation.security.id)
         .toSet();
-    final unheldSecurities = _securities
-        .where((security) => !holdingSecurityIds.contains(security.id))
-        .toList();
+    final unheldSecurities = _portfolio == null
+        ? List<JiveSecurity>.from(_securities)
+        : _securities
+            .where((security) => !holdingSecurityIds.contains(security.id))
+            .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -514,8 +564,12 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (_loadErrorMessage != null) ...[
+                    _buildErrorCard(_loadErrorMessage!),
+                    const SizedBox(height: 16),
+                  ],
                   if (_portfolio != null) _buildSummaryCard(),
-                  const SizedBox(height: 16),
+                  if (_portfolio != null) const SizedBox(height: 16),
                   if (_portfolio != null && holdings.isNotEmpty)
                     PortfolioChartWidget(portfolio: _portfolio!),
                   if (_portfolio != null && holdings.isNotEmpty)
@@ -657,6 +711,59 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
               color: Colors.white.withValues(alpha: 0.7),
               fontSize: 12,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorCard(String message) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: Colors.amber.shade800,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  '组合汇总暂不可用',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            style: TextStyle(
+              color: Colors.amber.shade900,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '你仍然可以继续更新价格、删除证券或补充汇率后重试。',
+            style: TextStyle(
+              color: Colors.amber.shade900,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _interactiveEnabled ? _load : null,
+            icon: const Icon(Icons.refresh),
+            label: const Text('重新加载'),
           ),
         ],
       ),
@@ -906,6 +1013,7 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
     return widget.debugPortfolio != null ||
         widget.debugSecurities != null ||
         widget.debugCurrencies != null ||
-        widget.debugAccounts != null;
+        widget.debugAccounts != null ||
+        widget.debugLoadErrorMessage != null;
   }
 }
