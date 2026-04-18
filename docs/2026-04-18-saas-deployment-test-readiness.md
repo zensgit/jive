@@ -19,13 +19,14 @@ This document does not replace the detailed runbooks. It adds a fast readiness g
 Run the static preflight first:
 
 ```bash
-bash scripts/check_saas_deployment_readiness.sh
+bash scripts/check_saas_deployment_readiness.sh --profile core
 ```
 
 When the staging env file has been filled locally, run strict mode:
 
 ```bash
 bash scripts/check_saas_deployment_readiness.sh \
+  --profile core \
   --strict \
   --env-file /tmp/jive-saas-staging.env
 ```
@@ -34,6 +35,7 @@ When network access is available, add online checks:
 
 ```bash
 bash scripts/check_saas_deployment_readiness.sh \
+  --profile core \
   --online \
   --env-file /tmp/jive-saas-staging.env
 ```
@@ -42,6 +44,7 @@ Before applying migrations, run the smoke lane:
 
 ```bash
 bash scripts/check_saas_deployment_readiness.sh \
+  --profile core \
   --online \
   --run-smoke \
   --env-file /tmp/jive-saas-staging.env
@@ -56,10 +59,10 @@ The script only reports whether secret values are present. It never prints the v
 3. Copy `docs/jive-saas-staging.env.example` to `/tmp/jive-saas-staging.env`.
 4. Fill the env file locally. Do not commit the filled file.
 5. Export `SUPABASE_ACCESS_TOKEN`, `STAGING_PROJECT_REF`, and `STAGING_DB_PASSWORD`.
-6. Run `bash scripts/check_saas_deployment_readiness.sh --strict --online --env-file /tmp/jive-saas-staging.env`.
-7. Run `bash scripts/run_saas_staging_rollout.sh preflight --env-file /tmp/jive-saas-staging.env`.
-8. Run `bash scripts/run_saas_staging_rollout.sh apply --env-file /tmp/jive-saas-staging.env`.
-9. Run `bash scripts/run_saas_staging_rollout.sh deploy --env-file /tmp/jive-saas-staging.env`.
+6. Run `bash scripts/check_saas_deployment_readiness.sh --profile core --strict --online --env-file /tmp/jive-saas-staging.env`.
+7. Run `bash scripts/run_saas_staging_rollout.sh preflight --profile core --env-file /tmp/jive-saas-staging.env`.
+8. Run `bash scripts/run_saas_staging_rollout.sh apply --profile core --env-file /tmp/jive-saas-staging.env`.
+9. Run `bash scripts/run_saas_staging_rollout.sh deploy --profile core --env-file /tmp/jive-saas-staging.env`.
 10. Build a test app with staging Supabase config passed by `--dart-define`.
 
 ## Minimum Smoke Scope
@@ -84,6 +87,8 @@ These should not block the first staging deployment test:
 - outbound notification provider delivery;
 - domestic payment and domestic ad SDK integrations;
 - Web app deployment.
+
+Use `--profile full` only when Google Play and Apple provider credentials are ready. The `core` profile still deploys the same SaaS Functions, but it does not require store-provider credentials during the first Supabase/Auth/Sync smoke.
 
 ## Time Estimate
 

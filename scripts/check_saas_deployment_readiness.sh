@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 ENV_FILE="${STAGING_ENV_FILE:-/tmp/jive-saas-staging.env}"
+PROFILE="${JIVE_SAAS_STAGING_PROFILE:-core}"
 STRICT=0
 ONLINE=0
 RUN_SMOKE=0
@@ -46,10 +47,19 @@ REQUIRED_ENV_VARS=(
   STAGING_DB_PASSWORD
 )
 
-REQUIRED_ENV_FILE_KEYS=(
+CORE_ENV_FILE_KEYS=(
   SUPABASE_URL
   SUPABASE_ANON_KEY
   SUPABASE_SERVICE_ROLE_KEY
+  PUBSUB_BEARER_TOKEN
+  WEBHOOK_HMAC_SECRET
+  ADMIN_API_TOKEN
+  ADMIN_API_ALLOWED_ORIGINS
+  ANALYTICS_ADMIN_TOKEN
+  NOTIFICATION_ADMIN_TOKEN
+)
+
+BILLING_PROVIDER_ENV_FILE_KEYS=(
   GOOGLE_SERVICE_ACCOUNT_EMAIL
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
   GOOGLE_PLAY_PACKAGE_NAME
@@ -57,12 +67,6 @@ REQUIRED_ENV_FILE_KEYS=(
   APPLE_APP_STORE_SHARED_SECRET
   APPLE_APP_STORE_APPLE_ID
   APPLE_APP_STORE_ENVIRONMENT
-  PUBSUB_BEARER_TOKEN
-  WEBHOOK_HMAC_SECRET
-  ADMIN_API_TOKEN
-  ADMIN_API_ALLOWED_ORIGINS
-  ANALYTICS_ADMIN_TOKEN
-  NOTIFICATION_ADMIN_TOKEN
 )
 
 usage() {
@@ -72,6 +76,7 @@ Usage:
 
 Options:
   --env-file <path>  Secrets env file to check. Defaults to STAGING_ENV_FILE or /tmp/jive-saas-staging.env.
+  --profile <name>   core or full. Defaults to JIVE_SAAS_STAGING_PROFILE or core.
   --strict           Treat missing environment values and env-file keys as failures instead of warnings.
   --online           Also check GitHub main CI and Supabase CLI availability through npx.
   --run-smoke        Run scripts/run_saas_wave0_smoke.sh after static readiness checks.
@@ -80,6 +85,8 @@ Options:
 
 Examples:
   scripts/check_saas_deployment_readiness.sh
+  scripts/check_saas_deployment_readiness.sh --profile core
+  scripts/check_saas_deployment_readiness.sh --profile full
   scripts/check_saas_deployment_readiness.sh --strict --env-file /tmp/jive-saas-staging.env
   scripts/check_saas_deployment_readiness.sh --online
   scripts/check_saas_deployment_readiness.sh --online --run-smoke
@@ -122,6 +129,10 @@ parse_args() {
         ENV_FILE="${2:-}"
         shift 2
         ;;
+      --profile)
+        PROFILE="${2:-}"
+        shift 2
+        ;;
       --strict)
         STRICT=1
         shift
@@ -149,6 +160,16 @@ parse_args() {
         ;;
     esac
   done
+
+  case "$PROFILE" in
+    core|full)
+      ;;
+    *)
+      fail "unknown profile: $PROFILE"
+      usage
+      exit 2
+      ;;
+  esac
 }
 
 command_exists() {
@@ -244,6 +265,11 @@ check_local_tools() {
 
 check_environment_values() {
   local key value
+  local required_keys=("${CORE_ENV_FILE_KEYS[@]}")
+
+  if [[ "$PROFILE" == "full" ]]; then
+    required_keys+=("${BILLING_PROVIDER_ENV_FILE_KEYS[@]}")
+  fi
 
   for key in "${REQUIRED_ENV_VARS[@]}"; do
     value="${!key:-}"
@@ -260,7 +286,12 @@ check_environment_values() {
   fi
 
   pass "env file exists: $ENV_FILE"
-  for key in "${REQUIRED_ENV_FILE_KEYS[@]}"; do
+  log "env profile: $PROFILE"
+  if [[ "$PROFILE" == "core" ]]; then
+    log "core profile skips Google/Apple provider credential requirements for first staging smoke"
+  fi
+
+  for key in "${required_keys[@]}"; do
     value="$(value_from_env_file "$key" "$ENV_FILE")"
     if [[ -n "$value" ]]; then
       pass "env-file:$key present"
@@ -370,7 +401,7 @@ main() {
   run_wave0_smoke
   print_next_steps
 
-  log "summary: failures=$FAILURES warnings=$WARNINGS strict=$STRICT online=$ONLINE run_smoke=$RUN_SMOKE"
+  log "summary: failures=$FAILURES warnings=$WARNINGS profile=$PROFILE strict=$STRICT online=$ONLINE run_smoke=$RUN_SMOKE"
   if [[ "$FAILURES" -gt 0 ]]; then
     exit 1
   fi
