@@ -311,8 +311,6 @@ class InvestmentService {
 
     // 更新持仓
     await _syncHolding(securityId, accountId);
-    // 更新最新价格
-    await updatePrice(securityId, price);
   }
 
   /// 根据交易记录重算持仓
