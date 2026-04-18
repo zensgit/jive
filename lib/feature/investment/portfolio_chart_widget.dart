@@ -16,7 +16,7 @@ class PortfolioChartWidget extends StatelessWidget {
     final byType = <String, double>{};
     for (final h in portfolio.holdings) {
       final type = h.security.type;
-      byType[type] = (byType[type] ?? 0) + h.marketValue;
+      byType[type] = (byType[type] ?? 0) + h.marketValueInBase;
     }
 
     if (byType.isEmpty || byType.values.every((v) => v <= 0)) {

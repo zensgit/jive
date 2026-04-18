@@ -276,24 +276,6 @@ class InvestmentService {
       throw const InvestmentValidationException('fee_invalid', '手续费不能为负数');
     }
 
-    final security = await _isar.jiveSecuritys.get(securityId);
-    if (security == null) {
-      throw StateError('security_missing');
-    }
-
-    if (normalizedAction == 'sell') {
-      final availableQuantity = await getHoldingQuantity(
-        securityId: securityId,
-        accountId: accountId,
-      );
-      if (quantity > availableQuantity + 1e-9) {
-        throw InvestmentValidationException(
-          'insufficient_holding',
-          '卖出数量超过当前持仓（可卖 ${availableQuantity.toStringAsFixed(4)}）',
-        );
-      }
-    }
-
     final tx = JiveInvestmentTransaction()
       ..securityId = securityId
       ..action = normalizedAction
@@ -306,17 +288,31 @@ class InvestmentService {
       ..createdAt = DateTime.now();
 
     await _isar.writeTxn(() async {
-      await _isar.jiveInvestmentTransactions.put(tx);
-    });
+      final security = await _isar.jiveSecuritys.get(securityId);
+      if (security == null) {
+        throw StateError('security_missing');
+      }
+      if (normalizedAction == 'sell') {
+        final holding = await _isar.jiveHoldings
+            .filter()
+            .securityIdEqualTo(securityId)
+            .accountIdEqualTo(accountId)
+            .findFirst();
+        final availableQuantity = holding?.quantity ?? 0;
+        if (quantity > availableQuantity + 1e-9) {
+          throw InvestmentValidationException(
+            'insufficient_holding',
+            '卖出数量超过当前持仓（可卖 ${availableQuantity.toStringAsFixed(4)}）',
+          );
+        }
+      }
 
-    // 更新持仓
-    await _syncHolding(securityId, accountId);
-    // 更新最新价格
-    await updatePrice(securityId, price);
+      await _isar.jiveInvestmentTransactions.put(tx);
+      await _syncHoldingWithinTxn(securityId, accountId);
+    });
   }
 
-  /// 根据交易记录重算持仓
-  Future<void> _syncHolding(int securityId, int? accountId) async {
+  Future<void> _syncHoldingWithinTxn(int securityId, int? accountId) async {
     final txs = await _isar.jiveInvestmentTransactions
         .filter()
         .securityIdEqualTo(securityId)
@@ -351,9 +347,7 @@ class InvestmentService {
     if (totalQty <= 0) {
       // 清仓：删除持仓
       if (holding != null) {
-        await _isar.writeTxn(() async {
-          await _isar.jiveHoldings.delete(holding.id);
-        });
+        await _isar.jiveHoldings.delete(holding.id);
       }
       return;
     }
@@ -361,17 +355,20 @@ class InvestmentService {
     final avgCost = totalQty > 0 ? totalCost / totalQty : 0.0;
 
     if (holding == null) {
-      await addHolding(
-        securityId: securityId,
-        quantity: totalQty,
-        costBasis: avgCost,
-        accountId: accountId,
-      );
+      final now = DateTime.now();
+      holding = JiveHolding()
+        ..securityId = securityId
+        ..quantity = totalQty
+        ..costBasis = avgCost
+        ..accountId = accountId
+        ..createdAt = now
+        ..updatedAt = now;
     } else {
       holding.quantity = totalQty;
       holding.costBasis = avgCost;
-      await updateHolding(holding);
+      holding.updatedAt = DateTime.now();
     }
+    await _isar.jiveHoldings.put(holding);
   }
 
   // ── Valuation ──

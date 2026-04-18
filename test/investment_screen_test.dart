@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'test_helpers.dart';
 import 'package:jive/core/database/investment_model.dart';
 import 'package:jive/core/service/investment_service.dart';
 import 'package:jive/feature/investment/investment_screen.dart';
+import 'test_helpers.dart';
 
 void main() {
-  setUpAll(() async => setupGoogleFontsForTests());
+  setUpAll(setupGoogleFontsForTests);
 
   testWidgets(
     'screen shows unheld securities alongside holdings and displays correct currency symbols',
@@ -74,4 +73,31 @@ void main() {
       expect(find.text('¥725.00'), findsOneWidget);
     },
   );
+
+  testWidgets('screen shows recoverable error state when portfolio summary is unavailable', (
+    tester,
+  ) async {
+    final security = JiveSecurity()
+      ..id = 1
+      ..ticker = 'AAPL'
+      ..name = 'Apple'
+      ..type = SecurityType.stock
+      ..currency = 'USD'
+      ..latestPrice = 100;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: InvestmentScreen(
+          debugBaseCurrency: 'XAU',
+          debugSecurities: [security],
+          debugLoadErrorMessage: '无法从 USD 转换为 XAU：未找到汇率',
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('组合汇总暂不可用'), findsOneWidget);
+    expect(find.textContaining('未找到汇率'), findsOneWidget);
+    expect(find.text('已添加的证券'), findsOneWidget);
+    expect(find.text('Apple (AAPL)'), findsOneWidget);
+  });
 }
