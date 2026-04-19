@@ -644,8 +644,7 @@ function readEnv() {
     ),
     googleServiceAccountPrivateKey: normalizeNonEmptyString(
       Deno.env.get("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"),
-    )?.replace(/\n/g, "
-"),
+    )?.replace(/\\n/g, "\n"),
     googlePlayPackageName: normalizeNonEmptyString(
       Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME"),
     ),
