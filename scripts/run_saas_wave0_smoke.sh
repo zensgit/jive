@@ -73,6 +73,25 @@ else
   DENO_RUNNER=(npx -y deno-bin@2.2.7)
 fi
 
+run_deno() {
+  local max_attempts="${DENO_RETRY_ATTEMPTS:-3}"
+  local attempt=1
+
+  while true; do
+    if "${DENO_RUNNER[@]}" "$@"; then
+      return 0
+    fi
+
+    if (( attempt >= max_attempts )); then
+      return 1
+    fi
+
+    log "deno command failed; retrying ($attempt/$max_attempts): $*"
+    sleep $(( attempt * 5 ))
+    attempt=$(( attempt + 1 ))
+  done
+}
+
 need_flutter=0
 if have_all test/sync_book_scope_test.dart test/sync_delete_marker_service_test.dart test/sync_tombstone_store_test.dart; then
   need_flutter=1
@@ -101,10 +120,10 @@ fi
 
 if have_all supabase/functions/subscription-webhook/index.ts supabase/functions/subscription-webhook/index_test.ts; then
   log "billing webhook smoke"
-  "${DENO_RUNNER[@]}" check \
+  run_deno check \
     supabase/functions/subscription-webhook/index.ts \
     supabase/functions/subscription-webhook/index_test.ts
-  "${DENO_RUNNER[@]}" test supabase/functions/subscription-webhook/index_test.ts
+  run_deno test supabase/functions/subscription-webhook/index_test.ts
 else
   log "billing webhook smoke skipped (subscription-webhook files not present)"
 fi
@@ -136,10 +155,10 @@ fi
 
 if have_all supabase/functions/verify-subscription/index.ts supabase/functions/verify-subscription/index_test.ts; then
   log "billing verify-subscription smoke"
-  "${DENO_RUNNER[@]}" check \
+  run_deno check \
     supabase/functions/verify-subscription/index.ts \
     supabase/functions/verify-subscription/index_test.ts
-  "${DENO_RUNNER[@]}" test supabase/functions/verify-subscription/index_test.ts
+  run_deno test supabase/functions/verify-subscription/index_test.ts
 else
   log "billing verify-subscription smoke skipped (verify-subscription files not present)"
 fi
@@ -170,30 +189,30 @@ fi
 
 if have_all supabase/functions/analytics/index.ts supabase/functions/analytics/index_test.ts; then
   log "ops analytics smoke"
-  "${DENO_RUNNER[@]}" check \
+  run_deno check \
     supabase/functions/analytics/index.ts \
     supabase/functions/analytics/index_test.ts
-  "${DENO_RUNNER[@]}" test supabase/functions/analytics/index_test.ts
+  run_deno test supabase/functions/analytics/index_test.ts
 else
   log "ops analytics smoke skipped (analytics files not present)"
 fi
 
 if have_all supabase/functions/send-notification/index.ts supabase/functions/send-notification/index_test.ts; then
   log "ops notification smoke"
-  "${DENO_RUNNER[@]}" check \
+  run_deno check \
     supabase/functions/send-notification/index.ts \
     supabase/functions/send-notification/index_test.ts
-  "${DENO_RUNNER[@]}" test supabase/functions/send-notification/index_test.ts
+  run_deno test supabase/functions/send-notification/index_test.ts
 else
   log "ops notification smoke skipped (send-notification files not present)"
 fi
 
 if have_all supabase/functions/admin/index.ts supabase/functions/admin/index_test.ts; then
   log "ops admin smoke"
-  "${DENO_RUNNER[@]}" check \
+  run_deno check \
     supabase/functions/admin/index.ts \
     supabase/functions/admin/index_test.ts
-  "${DENO_RUNNER[@]}" test supabase/functions/admin/index_test.ts
+  run_deno test supabase/functions/admin/index_test.ts
 else
   log "ops admin smoke skipped (admin files not present)"
 fi
