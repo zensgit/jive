@@ -59,20 +59,31 @@ jobs:
         run: |
           set -euo pipefail
           missing=()
-          for key in             STAGING_SUPABASE_ACCESS_TOKEN             STAGING_PROJECT_REF             STAGING_DB_PASSWORD             STAGING_SUPABASE_URL             STAGING_SUPABASE_ANON_KEY             STAGING_SUPABASE_SERVICE_ROLE_KEY             STAGING_PUBSUB_BEARER_TOKEN             STAGING_WEBHOOK_HMAC_SECRET             STAGING_ADMIN_API_TOKEN             STAGING_ADMIN_API_ALLOWED_ORIGINS             STAGING_ANALYTICS_ADMIN_TOKEN             STAGING_NOTIFICATION_ADMIN_TOKEN; do
+          required_secrets=(
+            STAGING_SUPABASE_ACCESS_TOKEN
+            STAGING_PROJECT_REF
+            STAGING_DB_PASSWORD
+            STAGING_SUPABASE_URL
+            STAGING_SUPABASE_ANON_KEY
+            STAGING_SUPABASE_SERVICE_ROLE_KEY
+            STAGING_PUBSUB_BEARER_TOKEN
+            STAGING_WEBHOOK_HMAC_SECRET
+            STAGING_ADMIN_API_TOKEN
+            STAGING_ADMIN_API_ALLOWED_ORIGINS
+            STAGING_ANALYTICS_ADMIN_TOKEN
+            STAGING_NOTIFICATION_ADMIN_TOKEN
+          )
+
+          for key in "${required_secrets[@]}"; do
             if [[ -z "${!key:-}" ]]; then
               missing+=("$key")
             fi
           done
 
           if (( ${#missing[@]} > 0 )); then
-            printf 'Missing required GitHub Actions Secrets for SaaS core staging:
-' >&2
-            printf ' - %s
-' "${missing[@]}" >&2
-            printf '
-Fill /tmp/jive-saas-staging.env locally, then upload with scripts/push_saas_github_secrets.sh --profile core --repo zensgit/jive --env-file /tmp/jive-saas-staging.env --apply.
-' >&2
+            printf 'Missing required GitHub Actions Secrets for SaaS core staging:\n' >&2
+            printf ' - %s\n' "${missing[@]}" >&2
+            printf '\nFill /tmp/jive-saas-staging.env locally, then upload with scripts/push_saas_github_secrets.sh --profile core --repo zensgit/jive --env-file /tmp/jive-saas-staging.env --apply.\n' >&2
             exit 1
           fi
 
