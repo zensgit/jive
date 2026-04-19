@@ -88,7 +88,7 @@ class TransactionCalculatorKey extends StatelessWidget {
     if (isPlus || isMinus) {
       final displayLabel =
           isPlus ? (plusLabel ?? '+') : (minusLabel ?? '-');
-      final altLabel = isPlus ? '×' : '÷';
+      final altLabel = isPlus ? '长按×' : '长按÷';
       final isShowingAlt =
           isPlus ? displayLabel == '×' : displayLabel == '÷';
 
@@ -111,7 +111,7 @@ class TransactionCalculatorKey extends StatelessWidget {
               // 小字提示另一个运算符
               Text(
                 isShowingAlt
-                    ? (isPlus ? '+' : '-')
+                    ? (isPlus ? '长按+' : '长按-')
                     : altLabel,
                 style: TextStyle(
                   fontSize: 9,

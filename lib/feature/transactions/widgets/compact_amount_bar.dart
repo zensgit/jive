@@ -58,13 +58,17 @@ class CompactAmountBar extends StatelessWidget {
     final isDark = JiveTheme.isDark(context);
     final symbol = CurrencyDefaults.getSymbol(currency);
     final now = DateTime.now();
-    final isToday = selectedTime.year == now.year &&
+    final isToday =
+        selectedTime.year == now.year &&
         selectedTime.month == now.month &&
         selectedTime.day == now.day;
     final timeText = isToday
         ? DateFormat('HH:mm').format(selectedTime)
         : DateFormat('MM-dd HH:mm').format(selectedTime);
     final hasNote = note != null && note!.isNotEmpty;
+    final amountText = expressionResult == null
+        ? '$symbol $amountStr'
+        : '$symbol $amountStr = ${expressionResult!.toStringAsFixed(2)}';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -80,7 +84,7 @@ class CompactAmountBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Row 1: account pill (left) + amount+currency (right-aligned)
+          // Row 1: account pill (left) + amount/currency (right-aligned)
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -89,7 +93,10 @@ class CompactAmountBar extends StatelessWidget {
                   onTap: onTapAccount,
                   borderRadius: BorderRadius.circular(6),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 4,
+                      vertical: 2,
+                    ),
                     child: Text(
                       accountName!,
                       style: TextStyle(
@@ -100,66 +107,58 @@ class CompactAmountBar extends StatelessWidget {
                     ),
                   ),
                 ),
-              const Spacer(),
-              // Amount (large, colored) + expression preview
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Text(
-                        '$symbol $amountStr',
+              const SizedBox(width: 8),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        amountText,
+                        textAlign: TextAlign.right,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.rubik(
                           color: _amountColor(),
-                          fontSize: expressionResult != null ? 18 : 28,
+                          fontSize: expressionResult != null ? 24 : 28,
                           fontWeight: FontWeight.w600,
                           height: 1.0,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      InkWell(
-                        onTap: onTapCurrency,
-                        borderRadius: BorderRadius.circular(6),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                currency,
-                                style: GoogleFonts.rubik(
-                                  color: _amountColor().withValues(alpha: 0.7),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: onTapCurrency,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 2,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              currency,
+                              style: GoogleFonts.rubik(
+                                color: _amountColor().withValues(alpha: 0.7),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
                               ),
-                              if (onTapCurrency != null)
-                                Icon(
-                                  Icons.unfold_more,
-                                  size: 12,
-                                  color: _amountColor().withValues(alpha: 0.6),
-                                ),
-                            ],
-                          ),
+                            ),
+                            if (onTapCurrency != null)
+                              Icon(
+                                Icons.unfold_more,
+                                size: 12,
+                                color: _amountColor().withValues(alpha: 0.6),
+                              ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                  if (expressionResult != null)
-                    Text(
-                      '= $symbol ${expressionResult!.toStringAsFixed(2)}',
-                      style: GoogleFonts.rubik(
-                        color: _amountColor(),
-                        fontSize: 28,
-                        fontWeight: FontWeight.w600,
-                        height: 1.2,
-                      ),
                     ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
