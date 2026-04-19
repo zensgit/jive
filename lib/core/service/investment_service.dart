@@ -328,12 +328,22 @@ class InvestmentService {
         totalCost += tx.quantity * tx.price + tx.fee;
         totalQty += tx.quantity;
       } else {
-        // sell: reduce quantity, adjust cost proportionally
-        if (totalQty > 0) {
-          final avgCost = totalCost / totalQty;
-          totalQty -= tx.quantity;
-          totalCost = totalQty > 0 ? totalQty * avgCost : 0;
+        if (tx.quantity > totalQty + 1e-9) {
+          throw InvestmentValidationException(
+            'insufficient_holding_history',
+            '交易历史中的卖出数量超过当时持仓，无法重算持仓',
+          );
         }
+        if (tx.quantity >= totalQty - 1e-9) {
+          totalQty = 0;
+          totalCost = 0;
+          continue;
+        }
+
+        // sell: reduce quantity, adjust cost proportionally.
+        final avgCost = totalCost / totalQty;
+        totalQty -= tx.quantity;
+        totalCost = totalQty * avgCost;
       }
     }
 
