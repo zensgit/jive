@@ -19,8 +19,8 @@ class CompactAmountBar extends StatelessWidget {
   final String currency;
   final TransactionType txType;
   final DateTime selectedTime;
-  final String? note;
-  final VoidCallback onTapNote;
+  final TextEditingController noteController;
+  final FocusNode noteFocusNode;
   final VoidCallback onTapTime;
   final VoidCallback? onTapCurrency;
   final double? expressionResult;
@@ -33,8 +33,8 @@ class CompactAmountBar extends StatelessWidget {
     required this.currency,
     required this.txType,
     required this.selectedTime,
-    required this.note,
-    required this.onTapNote,
+    required this.noteController,
+    required this.noteFocusNode,
     required this.onTapTime,
     this.onTapCurrency,
     this.expressionResult,
@@ -65,7 +65,6 @@ class CompactAmountBar extends StatelessWidget {
     final timeText = isToday
         ? DateFormat('HH:mm').format(selectedTime)
         : DateFormat('MM-dd HH:mm').format(selectedTime);
-    final hasNote = note != null && note!.isNotEmpty;
     final hasExpression = expressionResult != null;
     final resultText = hasExpression
         ? '$symbol ${expressionResult!.toStringAsFixed(2)}'
@@ -228,24 +227,30 @@ class CompactAmountBar extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Expanded(
-                child: InkWell(
-                  onTap: onTapNote,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
+                child: TextField(
+                  controller: noteController,
+                  focusNode: noteFocusNode,
+                  maxLines: 1,
+                  textInputAction: TextInputAction.done,
+                  keyboardAppearance: isDark
+                      ? Brightness.dark
+                      : Brightness.light,
+                  onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: JiveTheme.textColor(context),
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: '点击填写备注',
+                    hintStyle: TextStyle(
+                      fontSize: 12,
+                      color: JiveTheme.secondaryTextColor(context),
+                    ),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
                       horizontal: 6,
                       vertical: 4,
-                    ),
-                    child: Text(
-                      hasNote ? note! : '点击填写备注',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: hasNote
-                            ? JiveTheme.textColor(context)
-                            : JiveTheme.secondaryTextColor(context),
-                      ),
                     ),
                   ),
                 ),

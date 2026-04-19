@@ -135,6 +135,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   TransactionType _txType = TransactionType.expense;
   DateTime _selectedTime = DateTime.now();
   final TextEditingController _noteController = TextEditingController();
+  final FocusNode _noteFocusNode = FocusNode();
   final Map<TransactionType, Map<String, int>> _noteTagUsage = {};
   // ── Merchant memory ──
   MerchantSuggestion? _merchantSuggestion;
@@ -228,6 +229,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     _inlineSearchController.dispose();
     _inlineSearchFocus.dispose();
     _noteController.dispose();
+    _noteFocusNode.dispose();
     _toAmountController.dispose();
     super.dispose();
   }
@@ -1955,8 +1957,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     currency: _selectedAccount?.currency ?? _baseCurrency,
                     txType: _txType,
                     selectedTime: _selectedTime,
-                    note: _noteController.text,
-                    onTapNote: _showNoteInput,
+                    noteController: _noteController,
+                    noteFocusNode: _noteFocusNode,
                     onTapTime: _showTimePicker,
                     onTapCurrency: _showCurrencyPicker,
                     expressionResult: _expressionPreview(),
@@ -3012,69 +3014,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       setState(() {
         _excludeFromTotals = notTotals;
         _excludeFromBudget = isTransfer ? false : notBudget;
-      });
-    }
-  }
-
-  Future<void> _showNoteInput() async {
-    final controller = TextEditingController(text: _noteController.text);
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: JiveTheme.cardColor(context),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '备注',
-              style: TextStyle(
-                fontSize: 14,
-                color: JiveTheme.secondaryTextColor(ctx),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: '添加备注...',
-                border: OutlineInputBorder(),
-              ),
-              onSubmitted: (v) => Navigator.pop(ctx, v),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(ctx, controller.text),
-                  child: const Text('确定'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-    if (result != null && mounted) {
-      setState(() {
-        _noteController.text = result;
-        _onNoteChanged(result);
       });
     }
   }
