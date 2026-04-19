@@ -50,6 +50,7 @@ import '../accounts/accounts_screen.dart';
 import '../stats/stats_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
+import 'transaction_amount_expression.dart';
 import 'widgets/account_selector_section.dart';
 import 'widgets/compact_amount_bar.dart';
 import 'widgets/quick_field_pills_bar.dart';
@@ -1185,19 +1186,28 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         );
       return;
     }
+    if (key == 'OK') {
+      if (_hasExpression(_amountStr)) {
+        final evaluated = _evaluateExpression(_amountStr);
+        if (evaluated != _amountStr) {
+          setState(() {
+            _amountStr = evaluated;
+            if (!_isEditingToAmount && _crossCurrencyRate != null) {
+              _calculateToAmount();
+            }
+          });
+        }
+      } else {
+        unawaited(_saveTransaction());
+      }
+      return;
+    }
     setState(() {
       if (key == 'DEL') {
         if (_amountStr.length > 1) {
           _amountStr = _amountStr.substring(0, _amountStr.length - 1);
         } else {
           _amountStr = "0";
-        }
-      } else if (key == 'OK') {
-        // 如果包含表达式，先计算再保存
-        if (_hasExpression(_amountStr)) {
-          _amountStr = _evaluateExpression(_amountStr);
-        } else {
-          _saveTransaction();
         }
       } else if (key == '+' || key == '-') {
         // 运算符键：根据切换状态决定实际插入的运算符
@@ -1233,73 +1243,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   /// 是否包含运算表达式
-  bool _hasExpression(String s) =>
-      s.contains('+') || s.contains('×') || s.contains('÷') || s.indexOf('-', 1) > 0;
+  bool _hasExpression(String s) => TransactionAmountExpression.hasExpression(s);
 
   /// 计算四则运算表达式（先乘除后加减），返回格式化结果
-  String _evaluateExpression(String expr) {
-    // 分词
-    final tokens = <String>[];
-    var buf = StringBuffer();
-    for (int i = 0; i < expr.length; i++) {
-      final c = expr[i];
-      if ('+-×÷'.contains(c) && i > 0 && buf.isNotEmpty) {
-        tokens.add(buf.toString());
-        tokens.add(c);
-        buf = StringBuffer();
-      } else {
-        buf.write(c);
-      }
-    }
-    if (buf.isNotEmpty) tokens.add(buf.toString());
-
-    // 转为数字和运算符列表
-    final nums = <double>[];
-    final ops = <String>[];
-    for (final t in tokens) {
-      if (t == '+' || t == '-' || t == '×' || t == '÷') {
-        ops.add(t);
-      } else {
-        nums.add(double.tryParse(t) ?? 0);
-      }
-    }
-
-    // 第一遍：处理乘除
-    int i = 0;
-    while (i < ops.length) {
-      if (ops[i] == '×' || ops[i] == '÷') {
-        if (ops[i] == '×') {
-          nums[i] = nums[i] * nums[i + 1];
-        } else {
-          nums[i] = nums[i + 1] != 0 ? nums[i] / nums[i + 1] : 0;
-        }
-        nums.removeAt(i + 1);
-        ops.removeAt(i);
-      } else {
-        i++;
-      }
-    }
-
-    // 第二遍：处理加减
-    double result = nums.isNotEmpty ? nums[0] : 0;
-    for (i = 0; i < ops.length; i++) {
-      if (ops[i] == '+') {
-        result += nums[i + 1];
-      } else {
-        result -= nums[i + 1];
-      }
-    }
-
-    if (result < 0) result = 0;
-    return _formatAmountInput(result);
-  }
+  String _evaluateExpression(String expr) =>
+      TransactionAmountExpression.evaluate(expr, _formatAmountInput);
 
   /// 获取表达式的预览结果（供显示用）
-  double? _expressionPreview() {
-    if (!_hasExpression(_amountStr)) return null;
-    final result = _evaluateExpression(_amountStr);
-    return double.tryParse(result);
-  }
+  double? _expressionPreview() =>
+      TransactionAmountExpression.preview(_amountStr);
 
   Future<void> _pickTransactionDate() async {
     final now = DateTime.now();
@@ -1949,8 +1901,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       ),
                       itemCount: _keys.length,
                       itemBuilder: (context, index) {
+                        final keyValue = _keys[index];
                         return TransactionCalculatorKey(
-                          keyValue: _keys[index],
+                          keyValue: keyValue,
                           txType: _txType,
                           onKeyPress: _onKeyPress,
                           speechActive: _speechHoldActive || _speechHoldPending,
@@ -1961,9 +1914,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                           minusLabel: _minusShowsDivide ? '÷' : '-',
                           onOperatorToggle: () {
                             setState(() {
-                              if (_keys[index] == '+') {
+                              if (keyValue == '+') {
                                 _plusShowsMultiply = !_plusShowsMultiply;
-                              } else if (_keys[index] == '-') {
+                              } else if (keyValue == '-') {
                                 _minusShowsDivide = !_minusShowsDivide;
                               }
                             });

@@ -93,6 +93,7 @@ class TransactionCalculatorKey extends StatelessWidget {
           isPlus ? displayLabel == '×' : displayLabel == '÷';
 
       return GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () => onKeyPress(keyValue),
         onLongPress: onOperatorToggle,
         child: Center(
