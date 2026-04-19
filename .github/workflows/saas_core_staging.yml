@@ -179,6 +179,7 @@ jobs:
 
       - name: Run core staging lane
         env:
+          GH_TOKEN: ${{ github.token }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
           STAGING_PROJECT_REF: ${{ secrets.STAGING_PROJECT_REF }}
           STAGING_DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
