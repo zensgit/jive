@@ -67,17 +67,25 @@ void main() {
       );
     });
 
-    test('cloudSync and multiDevice are paid tier', () {
+    test('cloudSync and multiDevice are subscriber tier', () {
       expect(
         FeatureRegistry.canAccess(FeatureId.cloudSync, UserTier.free),
         isFalse,
       );
       expect(
         FeatureRegistry.canAccess(FeatureId.cloudSync, UserTier.paid),
+        isFalse,
+      );
+      expect(
+        FeatureRegistry.canAccess(FeatureId.cloudSync, UserTier.subscriber),
         isTrue,
       );
       expect(
         FeatureRegistry.canAccess(FeatureId.multiDevice, UserTier.paid),
+        isFalse,
+      );
+      expect(
+        FeatureRegistry.canAccess(FeatureId.multiDevice, UserTier.subscriber),
         isTrue,
       );
     });
@@ -120,9 +128,16 @@ void main() {
         UserTier.paid,
       );
       expect(paidUnlocks, contains(FeatureId.multiCurrency));
-      expect(paidUnlocks, contains(FeatureId.cloudSync));
+      expect(paidUnlocks, isNot(contains(FeatureId.cloudSync)));
       expect(paidUnlocks, isNot(contains(FeatureId.manualTransaction)));
       expect(paidUnlocks, isNot(contains(FeatureId.autoBookkeeping)));
+
+      final subscriberUnlocks = FeatureRegistry.unlockableFeatures(
+        UserTier.paid,
+        UserTier.subscriber,
+      );
+      expect(subscriberUnlocks, contains(FeatureId.cloudSync));
+      expect(subscriberUnlocks, contains(FeatureId.multiDevice));
     });
   });
 
