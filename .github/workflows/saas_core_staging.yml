@@ -186,6 +186,12 @@ jobs:
           SUPABASE_FUNCTIONS_URL: ${{ secrets.STAGING_SUPABASE_FUNCTIONS_URL }}
         run: |
           set -euo pipefail
+          if [[ "${{ inputs.run_function_smoke }}" == "true" && "${{ inputs.deploy_functions }}" != "true" ]]; then
+            printf 'run_function_smoke=true requires deploy_functions=true in the same run.
+' >&2
+            exit 1
+          fi
+
           args=(--env-file "$STAGING_ENV_FILE")
 
           if [[ "${{ inputs.run_local_smoke }}" != "true" ]]; then
