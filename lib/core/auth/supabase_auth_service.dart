@@ -197,23 +197,29 @@ class SupabaseAuthService extends AuthService {
       if (kDebugMode) {
         debugPrint('SupabaseAuth: SMS request failed (${e.statusCode})');
       }
+      throw EmailAuthFlowException(_mapSmsOtpError(e));
     }
   }
 
   @override
   Future<app.AuthState> signInWithPhone(String phone, String code) async {
     try {
-      await _client.auth.verifyOTP(
+      final response = await _client.auth.verifyOTP(
         phone: phone,
         token: code,
         type: OtpType.sms,
       );
+      final session = response.session;
+      if (session == null) {
+        throw const EmailAuthFlowException('验证码验证失败，请稍后重试');
+      }
+      _syncState(session);
       return _state;
     } on AuthException catch (e) {
       if (kDebugMode) {
         debugPrint('SupabaseAuth: phone sign-in failed (${e.statusCode})');
       }
-      return _state;
+      throw EmailAuthFlowException(_mapPhoneOtpError(e));
     }
   }
 
@@ -353,5 +359,38 @@ class SupabaseAuthService extends AuthService {
     }
 
     return '发送重置邮件失败：${error.message}';
+  }
+
+  String _mapSmsOtpError(AuthException error) {
+    final message = error.message.toLowerCase();
+
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('connection')) {
+      return '网络异常，请稍后重试';
+    }
+    if (message.contains('rate limit') || message.contains('too many')) {
+      return '请求过于频繁，请稍后再试';
+    }
+
+    return '验证码发送失败，请稍后重试';
+  }
+
+  String _mapPhoneOtpError(AuthException error) {
+    final code = error.code?.toLowerCase();
+    final message = error.message.toLowerCase();
+
+    if (code == 'otp_expired' ||
+        message.contains('expired') ||
+        message.contains('invalid otp')) {
+      return '验证码已过期或无效，请重新获取';
+    }
+    if (message.contains('network') ||
+        message.contains('socket') ||
+        message.contains('connection')) {
+      return '网络异常，请稍后重试';
+    }
+
+    return '验证码验证失败，请稍后重试';
   }
 }

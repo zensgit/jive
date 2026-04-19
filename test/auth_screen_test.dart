@@ -19,6 +19,7 @@ class FakeAuthService extends AuthService {
   bool phoneSignInSucceeds = false;
   Exception? signInWithEmailException;
   Exception? registerWithEmailException;
+  Exception? requestSmsCodeException;
 
   @override
   AuthState get state => _state;
@@ -41,6 +42,9 @@ class FakeAuthService extends AuthService {
 
   @override
   Future<void> requestSmsCode(String phone) async {
+    if (requestSmsCodeException != null) {
+      throw requestSmsCodeException!;
+    }
     smsRequestCount += 1;
     lastSmsPhone = phone;
   }
@@ -118,6 +122,24 @@ void main() {
     expect(auth.lastPhoneSignInPhone, '13800138000');
     expect(auth.lastPhoneSignInCode, '123456');
     expect(auth.isLoggedIn, isTrue);
+  });
+
+  testWidgets('phone auth shows an error when SMS request fails', (
+    tester,
+  ) async {
+    final auth = FakeAuthService()
+      ..requestSmsCodeException = const EmailAuthFlowException('验证码发送失败，请稍后重试');
+
+    await tester.pumpWidget(buildScreen(auth));
+    await tester.tap(find.text('手机号登录'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).first, '13800138000');
+    await tester.tap(find.text('发送验证码'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('验证码发送失败，请稍后重试'), findsOneWidget);
+    expect(find.text('验证码已发送，请查收短信'), findsNothing);
   });
 
   testWidgets('email auth can request password reset', (tester) async {
