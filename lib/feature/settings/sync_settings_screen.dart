@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/auth/auth_service.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/entitlement/entitlement_service.dart';
 import '../../core/entitlement/feature_gate.dart';
 import '../../core/entitlement/feature_id.dart';
+import '../../core/sync/sync_config.dart';
 import '../../core/sync/sync_engine.dart';
 import '../../core/sync/sync_state.dart';
 import 'sync_conflict_screen.dart';
@@ -31,7 +33,10 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final entitlement = context.watch<EntitlementService>();
+    final authService = context.watch<AuthService>();
     final isSubscriber = entitlement.tier.hasCloud;
+    final hasSignedInUser = authService.isLoggedIn;
+    final hasSyncConfig = SyncConfig.isConfigured;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
@@ -51,14 +56,32 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
             const SizedBox(height: 12),
           ],
           if (isSubscriber) ...[
-            _buildStatusCard(context),
+            if (!hasSignedInUser || !hasSyncConfig) ...[
+              _buildPrerequisiteCard(
+                hasSignedInUser: hasSignedInUser,
+                hasSyncConfig: hasSyncConfig,
+              ),
+              const SizedBox(height: 12),
+            ],
+            _buildStatusCard(
+              context,
+              hasSignedInUser: hasSignedInUser,
+              hasSyncConfig: hasSyncConfig,
+            ),
             const SizedBox(height: 12),
             _buildConflictCard(context),
             const SizedBox(height: 12),
-            _buildControlsCard(context),
+            _buildControlsCard(
+              context,
+              hasSignedInUser: hasSignedInUser,
+              hasSyncConfig: hasSyncConfig,
+            ),
             const SizedBox(height: 12),
           ],
-          _buildInfoCard(),
+          _buildInfoCard(
+            hasSignedInUser: hasSignedInUser,
+            hasSyncConfig: hasSyncConfig,
+          ),
         ],
       ),
     );
@@ -120,9 +143,80 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     );
   }
 
-  Widget _buildStatusCard(BuildContext context) {
+  Widget _buildPrerequisiteCard({
+    required bool hasSignedInUser,
+    required bool hasSyncConfig,
+  }) {
+    String title;
+    String message;
+
+    if (!hasSyncConfig) {
+      title = '当前构建未配置云同步';
+      message = '需要在构建时注入同步服务配置后，才能启用云同步。';
+    } else if (!hasSignedInUser) {
+      title = '请先登录';
+      message = '当前处于本地模式。登录后才能把数据同步到云端并在多设备间使用。';
+    } else {
+      title = '云同步暂不可用';
+      message = '请检查登录状态与同步配置后重试。';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 20,
+            color: Colors.amber.shade800,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.amber.shade900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.amber.shade900,
+                    height: 1.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusCard(
+    BuildContext context, {
+    required bool hasSignedInUser,
+    required bool hasSyncConfig,
+  }) {
     final syncEngine = context.watch<SyncEngine>();
     final state = syncEngine.state;
+    final detail = _statusDetail(
+      state,
+      hasSignedInUser: hasSignedInUser,
+      hasSyncConfig: hasSyncConfig,
+    );
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -145,12 +239,27 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _statusLabel(state.status),
+                      _statusLabel(
+                        state.status,
+                        hasSignedInUser: hasSignedInUser,
+                        hasSyncConfig: hasSyncConfig,
+                      ),
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+                    if (detail != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        detail,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                     if (state.lastSyncAt != null) ...[
                       const SizedBox(height: 4),
                       Text(
@@ -189,9 +298,14 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     );
   }
 
-  Widget _buildControlsCard(BuildContext context) {
+  Widget _buildControlsCard(
+    BuildContext context, {
+    required bool hasSignedInUser,
+    required bool hasSyncConfig,
+  }) {
     final syncEngine = context.watch<SyncEngine>();
     final state = syncEngine.state;
+    final canInteract = hasSignedInUser && hasSyncConfig;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -208,17 +322,26 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('启用云同步'),
-            subtitle: const Text('登录并联网后与服务器同步交易数据'),
+            subtitle: Text(
+              _controlsSubtitle(
+                hasSignedInUser: hasSignedInUser,
+                hasSyncConfig: hasSyncConfig,
+              ),
+            ),
             value: state.isEnabled,
             activeTrackColor: JiveTheme.primaryGreen,
-            onChanged: (enabled) => syncEngine.setEnabled(enabled),
+            onChanged: canInteract
+                ? (enabled) => syncEngine.setEnabled(enabled)
+                : null,
           ),
           const Divider(height: 1),
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: state.isSyncing ? null : () => syncEngine.sync(),
+              onPressed: !canInteract || state.isSyncing
+                  ? null
+                  : () => syncEngine.sync(),
               icon: state.isSyncing
                   ? const SizedBox(
                       width: 16,
@@ -291,7 +414,16 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     );
   }
 
-  Widget _buildInfoCard() {
+  Widget _buildInfoCard({
+    required bool hasSignedInUser,
+    required bool hasSyncConfig,
+  }) {
+    final extraNote = !hasSyncConfig
+        ? ' 当前构建尚未注入同步服务配置。'
+        : !hasSignedInUser
+        ? ' 当前处于本地模式，请先登录后再启用同步。'
+        : '';
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -306,7 +438,8 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
           Expanded(
             child: Text(
               '云同步通过 HTTPS 加密传输，并存储在 Supabase。'
-              '当前版本不提供端到端加密密钥管理；同步功能需要订阅版，登录并联网后可在多设备间同步交易数据。',
+              '当前版本不提供端到端加密密钥管理；同步功能需要订阅版，登录并联网后可在多设备间同步交易数据。'
+              '$extraNote',
               style: TextStyle(
                 fontSize: 13,
                 color: Colors.blue.shade700,
@@ -339,7 +472,14 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
     }
   }
 
-  String _statusLabel(SyncStatus status) {
+  String _statusLabel(
+    SyncStatus status, {
+    required bool hasSignedInUser,
+    required bool hasSyncConfig,
+  }) {
+    if (!hasSyncConfig) return '当前构建未配置同步服务';
+    if (!hasSignedInUser) return '请先登录后再同步';
+
     switch (status) {
       case SyncStatus.disabled:
         return '同步已关闭';
@@ -350,6 +490,35 @@ class _SyncSettingsScreenState extends State<SyncSettingsScreen> {
       case SyncStatus.error:
         return '同步出错';
     }
+  }
+
+  String? _statusDetail(
+    SyncState state, {
+    required bool hasSignedInUser,
+    required bool hasSyncConfig,
+  }) {
+    if (!hasSyncConfig) {
+      return '需要在构建时注入同步服务配置。';
+    }
+    if (!hasSignedInUser) {
+      return '登录后才能将本地数据同步到云端。';
+    }
+    if (state.status == SyncStatus.disabled) {
+      return '自动同步当前已关闭，可在下方重新启用。';
+    }
+    if (state.status == SyncStatus.idle && state.lastSyncAt == null) {
+      return '已满足同步条件，可手动发起首次同步。';
+    }
+    return null;
+  }
+
+  String _controlsSubtitle({
+    required bool hasSignedInUser,
+    required bool hasSyncConfig,
+  }) {
+    if (!hasSyncConfig) return '当前构建未配置同步服务';
+    if (!hasSignedInUser) return '请先登录后再启用自动同步';
+    return '登录并联网后与服务器同步交易数据';
   }
 
   String _formatTime(DateTime time) {

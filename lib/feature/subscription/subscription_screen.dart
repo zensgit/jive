@@ -59,7 +59,6 @@ class SubscriptionScreen extends StatelessWidget {
               '包含免费版全部功能',
               '无广告',
               '多币种与汇率',
-              '登录后可在多设备间同步数据',
               '预算管理（不限数量）',
               '周期记账',
               '项目追踪',
@@ -68,6 +67,8 @@ class SubscriptionScreen extends StatelessWidget {
               '商户记忆',
             ],
             lockedFeatures: const [
+              '云同步',
+              '多设备使用',
               '投资追踪',
               '高级分析',
               '语音记账',
@@ -80,6 +81,7 @@ class SubscriptionScreen extends StatelessWidget {
             price: '¥8/月 或 ¥68/年',
             features: const [
               '包含专业版全部功能',
+              '云同步与多设备使用',
               '投资组合追踪',
               '高级分析与报告',
               '储蓄目标',
