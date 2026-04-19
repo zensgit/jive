@@ -153,6 +153,22 @@ find_artifact() {
   find "$APP_DIR/build/app/outputs/flutter-apk" -name "*.apk" | sort | tail -n 1
 }
 
+file_size_bytes() {
+  local file="$1"
+
+  if stat -c%s "$file" >/dev/null 2>&1; then
+    stat -c%s "$file"
+    return 0
+  fi
+
+  if stat -f%z "$file" >/dev/null 2>&1; then
+    stat -f%z "$file"
+    return 0
+  fi
+
+  wc -c < "$file" | tr -d '[:space:]'
+}
+
 write_report() {
   local artifact_path="$1"
   local artifact_bytes="$2"
@@ -281,7 +297,7 @@ main() {
 
   write_report \
     "$target_path" \
-    "$(stat -f%z "$target_path")" \
+    "$(file_size_bytes "$target_path")" \
     "$sha256" \
     "$(cd "$APP_DIR" && git rev-parse --abbrev-ref HEAD)" \
     "$(cd "$APP_DIR" && git rev-parse HEAD)"
