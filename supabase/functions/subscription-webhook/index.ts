@@ -639,16 +639,30 @@ function readEnv() {
   return {
     supabaseUrl,
     supabaseServiceRoleKey,
-    googleServiceAccountEmail: Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
-    googleServiceAccountPrivateKey: Deno.env.get(
-      "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY",
+    googleServiceAccountEmail: normalizeNonEmptyString(
+      Deno.env.get("GOOGLE_SERVICE_ACCOUNT_EMAIL"),
+    ),
+    googleServiceAccountPrivateKey: normalizeNonEmptyString(
+      Deno.env.get("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY"),
     )?.replace(/\\n/g, "\n"),
-    googlePlayPackageName: Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME"),
-    webhookBearerToken: Deno.env.get("PUBSUB_BEARER_TOKEN"),
-    webhookHmacSecret: Deno.env.get("WEBHOOK_HMAC_SECRET"),
-    appleAppStoreBundleId: Deno.env.get("APPLE_APP_STORE_BUNDLE_ID"),
-    appleAppStoreAppleId: Deno.env.get("APPLE_APP_STORE_APPLE_ID"),
-    appleAppStoreEnvironment: Deno.env.get("APPLE_APP_STORE_ENVIRONMENT"),
+    googlePlayPackageName: normalizeNonEmptyString(
+      Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME"),
+    ),
+    webhookBearerToken: normalizeNonEmptyString(
+      Deno.env.get("PUBSUB_BEARER_TOKEN"),
+    ),
+    webhookHmacSecret: normalizeNonEmptyString(
+      Deno.env.get("WEBHOOK_HMAC_SECRET"),
+    ),
+    appleAppStoreBundleId: normalizeNonEmptyString(
+      Deno.env.get("APPLE_APP_STORE_BUNDLE_ID"),
+    ),
+    appleAppStoreAppleId: normalizeNonEmptyString(
+      Deno.env.get("APPLE_APP_STORE_APPLE_ID"),
+    ),
+    appleAppStoreEnvironment: normalizeNonEmptyString(
+      Deno.env.get("APPLE_APP_STORE_ENVIRONMENT"),
+    ),
   };
 }
 
