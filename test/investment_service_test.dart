@@ -200,6 +200,64 @@ void main() {
   });
 
   test(
+    'syncHolding rejects existing oversell history instead of silently clearing',
+    () async {
+      final security = await investmentService.addSecurity(
+        ticker: 'AMD',
+        name: 'AMD',
+        type: SecurityType.stock,
+        currency: 'USD',
+        latestPrice: 100,
+      );
+
+      await isar.writeTxn(() async {
+        final buy = JiveInvestmentTransaction()
+          ..securityId = security.id
+          ..action = 'buy'
+          ..quantity = 1
+          ..price = 100
+          ..fee = 0
+          ..accountId = 4
+          ..transactionDate = DateTime(2026, 1, 1)
+          ..createdAt = DateTime(2026, 1, 1);
+        final sell = JiveInvestmentTransaction()
+          ..securityId = security.id
+          ..action = 'sell'
+          ..quantity = 2
+          ..price = 110
+          ..fee = 0
+          ..accountId = 4
+          ..transactionDate = DateTime(2026, 1, 2)
+          ..createdAt = DateTime(2026, 1, 2);
+        await isar.jiveInvestmentTransactions.putAll([buy, sell]);
+      });
+
+      await expectLater(
+        investmentService.recordTransaction(
+          securityId: security.id,
+          action: 'buy',
+          quantity: 1,
+          price: 120,
+          accountId: 4,
+        ),
+        throwsA(
+          isA<InvestmentValidationException>().having(
+            (error) => error.code,
+            'code',
+            'insufficient_holding_history',
+          ),
+        ),
+      );
+
+      final holding = await investmentService.getHolding(
+        securityId: security.id,
+        accountId: 4,
+      );
+      expect(holding, isNull);
+    },
+  );
+
+  test(
     'recordTransaction clears holding while preserving transaction history',
     () async {
       final security = await investmentService.addSecurity(
