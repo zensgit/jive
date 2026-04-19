@@ -20,15 +20,6 @@ alter table public.shared_ledgers enable row level security;
 create policy "ledger_owner_all" on public.shared_ledgers
   for all using (auth.uid() = owner_user_id);
 
--- Members can read ledgers they belong to
-create policy "ledger_member_select" on public.shared_ledgers
-  for select using (
-    exists (
-      select 1 from public.shared_ledger_members m
-      where m.ledger_key = key and m.user_id = auth.uid()
-    )
-  );
-
 -- Anyone can look up by invite code (for joining)
 create policy "ledger_invite_lookup" on public.shared_ledgers
   for select using (invite_code is not null);
@@ -79,3 +70,13 @@ create policy "member_self_delete" on public.shared_ledger_members
 
 create index if not exists idx_shared_members_ledger on public.shared_ledger_members(ledger_key);
 create index if not exists idx_shared_members_user on public.shared_ledger_members(user_id);
+
+-- Members can read ledgers they belong to
+create policy "ledger_member_select" on public.shared_ledgers
+  for select using (
+    exists (
+      select 1 from public.shared_ledger_members m
+      where m.ledger_key = key and m.user_id = auth.uid()
+    )
+  );
+
