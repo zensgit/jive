@@ -73,6 +73,25 @@ else
   DENO_RUNNER=(npx -y deno-bin@2.2.7)
 fi
 
+run_deno() {
+  local max_attempts="${DENO_RETRY_ATTEMPTS:-3}"
+  local attempt=1
+
+  while true; do
+    if "${DENO_RUNNER[@]}" "$@"; then
+      return 0
+    fi
+
+    if (( attempt >= max_attempts )); then
+      return 1
+    fi
+
+    log "deno command failed; retrying ($attempt/$max_attempts): $*"
+    sleep $(( attempt * 5 ))
+    attempt=$(( attempt + 1 ))
+  done
+}
+
 need_flutter=0
 if have_all test/sync_book_scope_test.dart test/sync_delete_marker_service_test.dart test/sync_tombstone_store_test.dart; then
   need_flutter=1
