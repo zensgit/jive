@@ -11,6 +11,7 @@ PROJECT_REF="${STAGING_PROJECT_REF:-}"
 DB_PASSWORD="${STAGING_DB_PASSWORD:-}"
 ACCESS_TOKEN="${SUPABASE_ACCESS_TOKEN:-}"
 ENV_FILE="${STAGING_ENV_FILE:-/tmp/jive-saas-staging.env}"
+PROFILE="${JIVE_SAAS_STAGING_PROFILE:-full}"
 SKIP_LINK=0
 FAILURES=0
 
@@ -22,18 +23,32 @@ else
   SUPABASE_RUNNER=(npx -y supabase@latest)
 fi
 
-FUNCTIONS=(
-  subscription-webhook
+JWT_FUNCTIONS=(
   verify-subscription
+)
+
+CUSTOM_AUTH_FUNCTIONS=(
+  subscription-webhook
   analytics
   send-notification
   admin
 )
 
-REQUIRED_ENV_FILE_KEYS=(
+FUNCTIONS=("${JWT_FUNCTIONS[@]}" "${CUSTOM_AUTH_FUNCTIONS[@]}")
+
+CORE_ENV_FILE_KEYS=(
   SUPABASE_URL
   SUPABASE_ANON_KEY
   SUPABASE_SERVICE_ROLE_KEY
+  PUBSUB_BEARER_TOKEN
+  WEBHOOK_HMAC_SECRET
+  ADMIN_API_TOKEN
+  ADMIN_API_ALLOWED_ORIGINS
+  ANALYTICS_ADMIN_TOKEN
+  NOTIFICATION_ADMIN_TOKEN
+)
+
+BILLING_PROVIDER_ENV_FILE_KEYS=(
   GOOGLE_SERVICE_ACCOUNT_EMAIL
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
   GOOGLE_PLAY_PACKAGE_NAME
@@ -41,12 +56,6 @@ REQUIRED_ENV_FILE_KEYS=(
   APPLE_APP_STORE_SHARED_SECRET
   APPLE_APP_STORE_APPLE_ID
   APPLE_APP_STORE_ENVIRONMENT
-  PUBSUB_BEARER_TOKEN
-  WEBHOOK_HMAC_SECRET
-  ADMIN_API_TOKEN
-  ADMIN_API_ALLOWED_ORIGINS
-  ANALYTICS_ADMIN_TOKEN
-  NOTIFICATION_ADMIN_TOKEN
 )
 
 usage() {
@@ -67,11 +76,14 @@ Options:
   --db-password <value>   Remote database password. Falls back to STAGING_DB_PASSWORD.
   --access-token <value>  Supabase access token. Falls back to SUPABASE_ACCESS_TOKEN.
   --env-file <path>       Secrets env file. Falls back to STAGING_ENV_FILE or /tmp/jive-saas-staging.env.
+  --profile <name>        full or core. Falls back to JIVE_SAAS_STAGING_PROFILE or full.
+                          core deploys the same functions but does not require Google/Apple provider credentials.
   --skip-link             Skip the explicit supabase link step.
   --help                  Show this help.
 
 Examples:
   scripts/run_saas_staging_rollout.sh preflight --env-file /tmp/jive-saas-staging.env
+  scripts/run_saas_staging_rollout.sh preflight --profile core --env-file /tmp/jive-saas-staging.env
   scripts/run_saas_staging_rollout.sh dry-run --project-ref "$STAGING_PROJECT_REF" --db-password "$STAGING_DB_PASSWORD"
   scripts/run_saas_staging_rollout.sh apply --skip-link
   scripts/run_saas_staging_rollout.sh deploy --env-file /tmp/jive-saas-staging.env
@@ -117,6 +129,10 @@ parse_args() {
         ENV_FILE="${2:-}"
         shift 2
         ;;
+      --profile)
+        PROFILE="${2:-}"
+        shift 2
+        ;;
       --skip-link)
         SKIP_LINK=1
         shift
@@ -130,6 +146,14 @@ parse_args() {
         ;;
     esac
   done
+
+  case "$PROFILE" in
+    full|core)
+      ;;
+    *)
+      die "unknown profile: $PROFILE"
+      ;;
+  esac
 }
 
 supabase() {
@@ -160,7 +184,14 @@ check_present() {
 }
 
 preflight() {
+  local required_keys=("${CORE_ENV_FILE_KEYS[@]}")
+
+  if [[ "$PROFILE" == "full" ]]; then
+    required_keys+=("${BILLING_PROVIDER_ENV_FILE_KEYS[@]}")
+  fi
+
   log "app dir: $APP_DIR"
+  log "profile: $PROFILE"
   log "supabase runner: ${SUPABASE_RUNNER[*]}"
   if ! supabase --version >/dev/null 2>&1; then
     die "unable to run Supabase CLI via: ${SUPABASE_RUNNER[*]}"
@@ -181,7 +212,10 @@ preflight() {
   if [[ -f "$ENV_FILE" ]]; then
     log "env file: $ENV_FILE"
     local key value
-    for key in "${REQUIRED_ENV_FILE_KEYS[@]}"; do
+    if [[ "$PROFILE" == "core" ]]; then
+      log "core profile skips Google/Apple provider credential requirements for first staging smoke"
+    fi
+    for key in "${required_keys[@]}"; do
       value="$(value_from_env_file "$key" "$ENV_FILE")"
       if [[ -n "$value" ]]; then
         log "env:$key: ok"
@@ -259,12 +293,22 @@ deploy_functions() {
   require_value "SUPABASE_ACCESS_TOKEN" "$ACCESS_TOKEN"
 
   local function_name
-  for function_name in "${FUNCTIONS[@]}"; do
-    log "deploying function $function_name"
+  for function_name in "${JWT_FUNCTIONS[@]}"; do
+    log "deploying function $function_name with Supabase JWT verification"
     SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" \
       supabase functions deploy "$function_name" \
         --project-ref "$PROJECT_REF" \
         --use-api \
+        --workdir "$APP_DIR"
+  done
+
+  for function_name in "${CUSTOM_AUTH_FUNCTIONS[@]}"; do
+    log "deploying function $function_name with in-function token verification"
+    SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" \
+      supabase functions deploy "$function_name" \
+        --project-ref "$PROJECT_REF" \
+        --use-api \
+        --no-verify-jwt \
         --workdir "$APP_DIR"
   done
 }
