@@ -18,6 +18,16 @@ class JiveBook {
   late bool isDefault; // 是否默认账本
   late bool isArchived; // 是否归档
 
+  /// 关联的共享账本 key（null = 非共享）
+  @Index()
+  String? sharedLedgerKey;
+
+  /// 是否共享账本
+  bool isShared = false;
+
+  /// 成员数（冗余缓存，方便显示）
+  int memberCount = 0;
+
   late DateTime createdAt;
   late DateTime updatedAt;
 }

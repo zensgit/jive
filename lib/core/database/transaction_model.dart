@@ -35,6 +35,7 @@ class JiveTransaction {
   int? projectId; // 关联项目 ID
   List<String> tagKeys = []; // 标签 Key 列表 (UUID)
   bool excludeFromBudget = false; // 不计入预算（预算/预算统计中忽略）
+  bool excludeFromTotals = false; // 不计入收支（收入/支出汇总中忽略，账单标记）
   List<String> smartTagKeys = []; // 智能规则自动添加的标签 Key
   List<String> smartTagOptOutKeys = []; // 对应标签不再自动打标
   bool smartTagOptOutAll = false; // 本笔交易停用全部智能标签
@@ -49,4 +50,22 @@ class JiveTransaction {
   @Index()
   int? bookId; // 多账本支持 - null 表示默认账本
   List<String> attachmentPaths = []; // 附件文件路径
+  int? quickActionId; // 来源快速动作 ID
+  double? discountAmount; // 优惠/券金额（从 amount 里折算出的让利）
+  double? feeAmount; // 一般手续费（银行手续费等，与 exchangeFee 跨币种手续费区分）
+  @Index()
+  String? splitGroupKey; // 组合记账组标识：同一次手工记账拆成多账户的 N 笔共享同一 key
+
+  /// 报销状态: null=非报销, 'pending'=待报销, 'partial'=部分报销, 'complete'=已报销
+  @Index()
+  String? reimbursementStatus;
+}
+
+extension JiveTransactionAmountX on JiveTransaction {
+  /// 实际发生金额：`amount - discount + fee`。
+  /// 优惠扣减，手续费上浮；非负。用于所有汇总/统计/预算判断。
+  double get netAmount {
+    final net = amount - (discountAmount ?? 0) + (feeAmount ?? 0);
+    return net < 0 ? 0 : net;
+  }
 }

@@ -47,23 +47,38 @@ const JiveBookSchema = CollectionSchema(
       name: r'isDefault',
       type: IsarType.bool,
     ),
-    r'key': PropertySchema(
+    r'isShared': PropertySchema(
       id: 6,
+      name: r'isShared',
+      type: IsarType.bool,
+    ),
+    r'key': PropertySchema(
+      id: 7,
       name: r'key',
       type: IsarType.string,
     ),
+    r'memberCount': PropertySchema(
+      id: 8,
+      name: r'memberCount',
+      type: IsarType.long,
+    ),
     r'name': PropertySchema(
-      id: 7,
+      id: 9,
       name: r'name',
       type: IsarType.string,
     ),
     r'order': PropertySchema(
-      id: 8,
+      id: 10,
       name: r'order',
       type: IsarType.long,
     ),
+    r'sharedLedgerKey': PropertySchema(
+      id: 11,
+      name: r'sharedLedgerKey',
+      type: IsarType.string,
+    ),
     r'updatedAt': PropertySchema(
-      id: 9,
+      id: 12,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -82,6 +97,19 @@ const JiveBookSchema = CollectionSchema(
       properties: [
         IndexPropertySchema(
           name: r'key',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'sharedLedgerKey': IndexSchema(
+      id: -4790200017879612347,
+      name: r'sharedLedgerKey',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'sharedLedgerKey',
           type: IndexType.hash,
           caseSensitive: true,
         )
@@ -117,6 +145,12 @@ int _jiveBookEstimateSize(
   }
   bytesCount += 3 + object.key.length * 3;
   bytesCount += 3 + object.name.length * 3;
+  {
+    final value = object.sharedLedgerKey;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   return bytesCount;
 }
 
@@ -132,10 +166,13 @@ void _jiveBookSerialize(
   writer.writeString(offsets[3], object.iconName);
   writer.writeBool(offsets[4], object.isArchived);
   writer.writeBool(offsets[5], object.isDefault);
-  writer.writeString(offsets[6], object.key);
-  writer.writeString(offsets[7], object.name);
-  writer.writeLong(offsets[8], object.order);
-  writer.writeDateTime(offsets[9], object.updatedAt);
+  writer.writeBool(offsets[6], object.isShared);
+  writer.writeString(offsets[7], object.key);
+  writer.writeLong(offsets[8], object.memberCount);
+  writer.writeString(offsets[9], object.name);
+  writer.writeLong(offsets[10], object.order);
+  writer.writeString(offsets[11], object.sharedLedgerKey);
+  writer.writeDateTime(offsets[12], object.updatedAt);
 }
 
 JiveBook _jiveBookDeserialize(
@@ -152,10 +189,13 @@ JiveBook _jiveBookDeserialize(
   object.id = id;
   object.isArchived = reader.readBool(offsets[4]);
   object.isDefault = reader.readBool(offsets[5]);
-  object.key = reader.readString(offsets[6]);
-  object.name = reader.readString(offsets[7]);
-  object.order = reader.readLong(offsets[8]);
-  object.updatedAt = reader.readDateTime(offsets[9]);
+  object.isShared = reader.readBool(offsets[6]);
+  object.key = reader.readString(offsets[7]);
+  object.memberCount = reader.readLong(offsets[8]);
+  object.name = reader.readString(offsets[9]);
+  object.order = reader.readLong(offsets[10]);
+  object.sharedLedgerKey = reader.readStringOrNull(offsets[11]);
+  object.updatedAt = reader.readDateTime(offsets[12]);
   return object;
 }
 
@@ -179,12 +219,18 @@ P _jiveBookDeserializeProp<P>(
     case 5:
       return (reader.readBool(offset)) as P;
     case 6:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 7:
       return (reader.readString(offset)) as P;
     case 8:
       return (reader.readLong(offset)) as P;
     case 9:
+      return (reader.readString(offset)) as P;
+    case 10:
+      return (reader.readLong(offset)) as P;
+    case 11:
+      return (reader.readStringOrNull(offset)) as P;
+    case 12:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -369,6 +415,72 @@ extension JiveBookQueryWhere on QueryBuilder<JiveBook, JiveBook, QWhereClause> {
               indexName: r'key',
               lower: [],
               upper: [key],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterWhereClause> sharedLedgerKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedLedgerKey',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterWhereClause>
+      sharedLedgerKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'sharedLedgerKey',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterWhereClause> sharedLedgerKeyEqualTo(
+      String? sharedLedgerKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'sharedLedgerKey',
+        value: [sharedLedgerKey],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterWhereClause> sharedLedgerKeyNotEqualTo(
+      String? sharedLedgerKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedLedgerKey',
+              lower: [],
+              upper: [sharedLedgerKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedLedgerKey',
+              lower: [sharedLedgerKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedLedgerKey',
+              lower: [sharedLedgerKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'sharedLedgerKey',
+              lower: [],
+              upper: [sharedLedgerKey],
               includeUpper: false,
             ));
       }
@@ -925,6 +1037,16 @@ extension JiveBookQueryFilter
     });
   }
 
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition> isSharedEqualTo(
+      bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isShared',
+        value: value,
+      ));
+    });
+  }
+
   QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition> keyEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -1051,6 +1173,60 @@ extension JiveBookQueryFilter
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'key',
         value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition> memberCountEqualTo(
+      int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'memberCount',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      memberCountGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'memberCount',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition> memberCountLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'memberCount',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition> memberCountBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'memberCount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
       ));
     });
   }
@@ -1238,6 +1414,160 @@ extension JiveBookQueryFilter
     });
   }
 
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'sharedLedgerKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'sharedLedgerKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sharedLedgerKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'sharedLedgerKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'sharedLedgerKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'sharedLedgerKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'sharedLedgerKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'sharedLedgerKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'sharedLedgerKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'sharedLedgerKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'sharedLedgerKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition>
+      sharedLedgerKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'sharedLedgerKey',
+        value: '',
+      ));
+    });
+  }
+
   QueryBuilder<JiveBook, JiveBook, QAfterFilterCondition> updatedAtEqualTo(
       DateTime value) {
     return QueryBuilder.apply(this, (query) {
@@ -1371,6 +1701,18 @@ extension JiveBookQuerySortBy on QueryBuilder<JiveBook, JiveBook, QSortBy> {
     });
   }
 
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> sortByIsShared() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isShared', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> sortByIsSharedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isShared', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveBook, JiveBook, QAfterSortBy> sortByKey() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'key', Sort.asc);
@@ -1380,6 +1722,18 @@ extension JiveBookQuerySortBy on QueryBuilder<JiveBook, JiveBook, QSortBy> {
   QueryBuilder<JiveBook, JiveBook, QAfterSortBy> sortByKeyDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'key', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> sortByMemberCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'memberCount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> sortByMemberCountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'memberCount', Sort.desc);
     });
   }
 
@@ -1404,6 +1758,18 @@ extension JiveBookQuerySortBy on QueryBuilder<JiveBook, JiveBook, QSortBy> {
   QueryBuilder<JiveBook, JiveBook, QAfterSortBy> sortByOrderDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'order', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> sortBySharedLedgerKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedLedgerKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> sortBySharedLedgerKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedLedgerKey', Sort.desc);
     });
   }
 
@@ -1506,6 +1872,18 @@ extension JiveBookQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> thenByIsShared() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isShared', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> thenByIsSharedDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isShared', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveBook, JiveBook, QAfterSortBy> thenByKey() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'key', Sort.asc);
@@ -1515,6 +1893,18 @@ extension JiveBookQuerySortThenBy
   QueryBuilder<JiveBook, JiveBook, QAfterSortBy> thenByKeyDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'key', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> thenByMemberCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'memberCount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> thenByMemberCountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'memberCount', Sort.desc);
     });
   }
 
@@ -1539,6 +1929,18 @@ extension JiveBookQuerySortThenBy
   QueryBuilder<JiveBook, JiveBook, QAfterSortBy> thenByOrderDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'order', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> thenBySharedLedgerKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedLedgerKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QAfterSortBy> thenBySharedLedgerKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'sharedLedgerKey', Sort.desc);
     });
   }
 
@@ -1596,10 +1998,22 @@ extension JiveBookQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveBook, JiveBook, QDistinct> distinctByIsShared() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isShared');
+    });
+  }
+
   QueryBuilder<JiveBook, JiveBook, QDistinct> distinctByKey(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'key', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QDistinct> distinctByMemberCount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'memberCount');
     });
   }
 
@@ -1613,6 +2027,14 @@ extension JiveBookQueryWhereDistinct
   QueryBuilder<JiveBook, JiveBook, QDistinct> distinctByOrder() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'order');
+    });
+  }
+
+  QueryBuilder<JiveBook, JiveBook, QDistinct> distinctBySharedLedgerKey(
+      {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'sharedLedgerKey',
+          caseSensitive: caseSensitive);
     });
   }
 
@@ -1667,9 +2089,21 @@ extension JiveBookQueryProperty
     });
   }
 
+  QueryBuilder<JiveBook, bool, QQueryOperations> isSharedProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isShared');
+    });
+  }
+
   QueryBuilder<JiveBook, String, QQueryOperations> keyProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'key');
+    });
+  }
+
+  QueryBuilder<JiveBook, int, QQueryOperations> memberCountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'memberCount');
     });
   }
 
@@ -1682,6 +2116,12 @@ extension JiveBookQueryProperty
   QueryBuilder<JiveBook, int, QQueryOperations> orderProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'order');
+    });
+  }
+
+  QueryBuilder<JiveBook, String?, QQueryOperations> sharedLedgerKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'sharedLedgerKey');
     });
   }
 
