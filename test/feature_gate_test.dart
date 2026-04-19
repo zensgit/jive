@@ -112,6 +112,28 @@ void main() {
       expect(find.text('稍后再说'), findsOneWidget);
     });
 
+    testWidgets('cloud sync upgrade prompt points to subscriber tier', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      final service = EntitlementService();
+      await service.init();
+
+      await tester.pumpWidget(_buildApp(
+        service: service,
+        child: FeatureGate(
+          feature: FeatureId.cloudSync,
+          child: const SizedBox(width: 200, height: 100),
+        ),
+      ));
+
+      await tester.tap(find.text('升级解锁'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('此功能需要订阅版'), findsOneWidget);
+      expect(find.textContaining('云同步'), findsWidgets);
+    });
+
     testWidgets('reacts to tier change', (tester) async {
       SharedPreferences.setMockInitialValues({});
       final service = EntitlementService();
