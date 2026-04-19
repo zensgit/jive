@@ -212,7 +212,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           }
         }
       });
-    } else if (widget.initialSpeechText != null && widget.initialSpeechText!.trim().isNotEmpty) {
+    } else if (widget.initialSpeechText != null &&
+        widget.initialSpeechText!.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _handleInitialSpeechText(widget.initialSpeechText!);
@@ -360,11 +361,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         .sortByOrder()
         .findAll();
 
-    // 优先显示用户分类；若有用户分类则过滤掉系统分类
-    final userParents = parents.where((c) => !c.isSystem).toList();
-    if (userParents.isNotEmpty) {
-      parents = userParents;
-    }
+    parents.sort(_compareCategoryForDisplay);
 
     // FALLBACK (only for expense)
     if (parents.isEmpty && !showIncome) {
@@ -493,10 +490,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _incrementAccountUsage(int accountId) async {
     _accountUsageCount[accountId] = (_accountUsageCount[accountId] ?? 0) + 1;
     final prefs = await SharedPreferences.getInstance();
-    final encoded = _accountUsageCount.map(
-      (k, v) => MapEntry(k.toString(), v),
+    final encoded = _accountUsageCount.map((k, v) => MapEntry(k.toString(), v));
+    await prefs.setString(
+      'account_usage_count_v1',
+      const JsonCodec().encode(encoded),
     );
-    await prefs.setString('account_usage_count_v1', const JsonCodec().encode(encoded));
   }
 
   Future<void> _loadTags() async {
@@ -525,19 +523,23 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Future<void> _loadSplitSiblings() async {
     if (_editingSplitGroupKey == null) return;
-    final rows = await _transactionRepo.getBySplitGroupKey(_editingSplitGroupKey!);
+    final rows = await _transactionRepo.getBySplitGroupKey(
+      _editingSplitGroupKey!,
+    );
     if (rows.length <= 1 || !mounted) return;
     final accountById = {for (final a in _accounts) a.id: a};
     final splits = <TxSplitEntry>[];
     for (final row in rows) {
       final account = row.accountId != null ? accountById[row.accountId] : null;
       if (account == null) continue;
-      splits.add(TxSplitEntry(
-        account: account,
-        amount: row.amount,
-        discount: row.discountAmount,
-        fee: row.feeAmount,
-      ));
+      splits.add(
+        TxSplitEntry(
+          account: account,
+          amount: row.amount,
+          discount: row.discountAmount,
+          fee: row.feeAmount,
+        ),
+      );
     }
     if (splits.length <= 1) return;
     setState(() {
@@ -561,7 +563,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       if (widget.bookId != null) {
         _currentBook = books.firstWhere(
           (b) => b.id == widget.bookId,
-          orElse: () => defaultBook ?? (books.isNotEmpty ? books.first : _fallbackBook()),
+          orElse: () =>
+              defaultBook ?? (books.isNotEmpty ? books.first : _fallbackBook()),
         );
       } else {
         _currentBook = defaultBook ?? (books.isNotEmpty ? books.first : null);
@@ -605,7 +608,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               final isSelected = book.id == _currentBook?.id;
               return ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: JiveTheme.primaryGreen.withValues(alpha: 0.15),
+                  backgroundColor: JiveTheme.primaryGreen.withValues(
+                    alpha: 0.15,
+                  ),
                   child: Icon(
                     Icons.book_outlined,
                     size: 20,
@@ -614,11 +619,16 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 ),
                 title: Row(
                   children: [
-                    Flexible(child: Text(book.name, overflow: TextOverflow.ellipsis)),
+                    Flexible(
+                      child: Text(book.name, overflow: TextOverflow.ellipsis),
+                    ),
                     if (book.isShared) ...[
                       const SizedBox(width: 6),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: JiveTheme.primaryGreen.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
@@ -736,6 +746,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   bool get _showCategories => _txType != TransactionType.transfer;
 
+  int _compareCategoryForDisplay(JiveCategory a, JiveCategory b) {
+    final sourceCompare = (a.isSystem ? 1 : 0).compareTo(b.isSystem ? 1 : 0);
+    if (sourceCompare != 0) return sourceCompare;
+    final orderCompare = a.order.compareTo(b.order);
+    if (orderCompare != 0) return orderCompare;
+    return a.name.compareTo(b.name);
+  }
+
   Future<void> _switchType(TransactionType type) async {
     if (_txType == type) return;
     setState(() {
@@ -773,9 +791,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         .sortByOrder()
         .findAll();
 
-    // 优先显示用户子分类
-    final userSubs = subs.where((c) => !c.isSystem).toList();
-    if (userSubs.isNotEmpty) subs = userSubs;
+    subs.sort(_compareCategoryForDisplay);
 
     // FALLBACK
     if (_isFallbackMode && subs.isEmpty) {
@@ -891,10 +907,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           (c) => c.parentKey == null && !c.isHidden && c.isIncome == showIncome,
         )
         .toList();
-    // 优先显示用户分类
-    final userP = parents.where((c) => !c.isSystem).toList();
-    if (userP.isNotEmpty) parents = userP;
-    parents.sort((a, b) => a.order.compareTo(b.order));
+    parents.sort(_compareCategoryForDisplay);
     final parentByKey = {for (final p in parents) p.key: p};
     final items = <CategorySearchResult>[];
     for (final parent in parents) {
@@ -906,7 +919,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         )
         .toList();
     // 过滤掉不属于已选父分类的子分类
-    children = children.where((c) => parentByKey.containsKey(c.parentKey)).toList();
+    children =
+        children.where((c) => parentByKey.containsKey(c.parentKey)).toList()
+          ..sort(_compareCategoryForDisplay);
     for (final child in children) {
       final parent = parentByKey[child.parentKey];
       if (parent == null) continue;
@@ -1242,6 +1257,30 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     });
   }
 
+  void _toggleOperatorKey(String keyValue) {
+    setState(() {
+      if (keyValue == '+') {
+        _plusShowsMultiply = !_plusShowsMultiply;
+        final replacement = _plusShowsMultiply ? '×' : '+';
+        if (_amountStr.endsWith('+') || _amountStr.endsWith('×')) {
+          _amountStr =
+              '${_amountStr.substring(0, _amountStr.length - 1)}$replacement';
+        }
+      } else if (keyValue == '-') {
+        _minusShowsDivide = !_minusShowsDivide;
+        final replacement = _minusShowsDivide ? '÷' : '-';
+        if (_amountStr.endsWith('-') || _amountStr.endsWith('÷')) {
+          _amountStr =
+              '${_amountStr.substring(0, _amountStr.length - 1)}$replacement';
+        }
+      }
+
+      if (!_isEditingToAmount && _crossCurrencyRate != null) {
+        _calculateToAmount();
+      }
+    });
+  }
+
   /// 是否包含运算表达式
   bool _hasExpression(String s) => TransactionAmountExpression.hasExpression(s);
 
@@ -1443,11 +1482,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     TransactionService.touchSyncMetadata(tx);
     if (_isSplitMode) {
       // 组合模式：tx 变成模板，从 _splits 里实际生成 N 行。
-      final groupKey = _editingSplitGroupKey ??
+      final groupKey =
+          _editingSplitGroupKey ??
           'split_${DateTime.now().millisecondsSinceEpoch}_${tx.syncKey}';
       // 如果是编辑既有 split group，先删除整组
       if (_editingSplitGroupKey != null) {
-        final old = await _transactionRepo.getBySplitGroupKey(_editingSplitGroupKey!);
+        final old = await _transactionRepo.getBySplitGroupKey(
+          _editingSplitGroupKey!,
+        );
         if (old.isNotEmpty) {
           await _transactionRepo.deleteAll(old.map((r) => r.id).toList());
         }
@@ -1517,7 +1559,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           _selectedTime = keepDate;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('已保存，继续记账'), duration: Duration(seconds: 1)),
+          const SnackBar(
+            content: Text('已保存，继续记账'),
+            duration: Duration(seconds: 1),
+          ),
         );
       } else {
         Navigator.pop(context, true);
@@ -1610,7 +1655,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return proceed;
   }
 
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1645,10 +1689,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final selectedProjectObj = _selectedProjectId != null
         ? _projects.where((p) => p.id == _selectedProjectId).firstOrNull
         : null;
-    final isCreditAccount = _selectedAccount != null &&
+    final isCreditAccount =
+        _selectedAccount != null &&
         AccountService.isCreditAccount(_selectedAccount!);
-    final isCrossCurrency = _txType == TransactionType.transfer &&
-        _selectedAccount != null && _selectedToAccount != null &&
+    final isCrossCurrency =
+        _txType == TransactionType.transfer &&
+        _selectedAccount != null &&
+        _selectedToAccount != null &&
         _selectedAccount!.currency != _selectedToAccount!.currency;
 
     return PopScope(
@@ -1710,22 +1757,33 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                               },
                             ),
                           ),
-                          Divider(height: 1, color: JiveTheme.dividerColor(context)),
+                          Divider(
+                            height: 1,
+                            color: JiveTheme.dividerColor(context),
+                          ),
                         ] else if (_showCategories) ...[
                           // 父分类 Tab
                           SizedBox(
                             height: parentTabHeight,
                             child: ListView.builder(
                               scrollDirection: Axis.horizontal,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
                               itemCount: _parentCategories.length,
                               itemBuilder: (context, index) {
                                 final cat = _parentCategories[index];
-                                final isSelected = cat.key == _selectedParent?.key;
-                                final customColor = CategoryService.parseColorHex(cat.colorHex);
-                                final activeColor = customColor ?? JiveTheme.primaryGreen;
-                                final inactiveColor = JiveTheme.secondaryTextColor(context);
-                                final iconColor = isSelected ? activeColor : inactiveColor;
+                                final isSelected =
+                                    cat.key == _selectedParent?.key;
+                                final customColor =
+                                    CategoryService.parseColorHex(cat.colorHex);
+                                final activeColor =
+                                    customColor ?? JiveTheme.primaryGreen;
+                                final inactiveColor =
+                                    JiveTheme.secondaryTextColor(context);
+                                final iconColor = isSelected
+                                    ? activeColor
+                                    : inactiveColor;
                                 return GestureDetector(
                                   onTap: () {
                                     setState(() {
@@ -1736,12 +1794,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                   },
                                   onLongPress: () => _showParentActions(cat),
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
                                     alignment: Alignment.center,
                                     decoration: isSelected
                                         ? BoxDecoration(
                                             border: Border(
-                                              bottom: BorderSide(color: activeColor, width: 2),
+                                              bottom: BorderSide(
+                                                color: activeColor,
+                                                width: 2,
+                                              ),
                                             ),
                                           )
                                         : null,
@@ -1761,7 +1824,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                           style: TextStyle(
                                             fontSize: isLandscape ? 11 : 12,
                                             color: iconColor,
-                                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                            fontWeight: isSelected
+                                                ? FontWeight.bold
+                                                : FontWeight.normal,
                                           ),
                                         ),
                                       ],
@@ -1771,12 +1836,18 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                               },
                             ),
                           ),
-                          Divider(height: 1, color: JiveTheme.dividerColor(context)),
+                          Divider(
+                            height: 1,
+                            color: JiveTheme.dividerColor(context),
+                          ),
                         ],
                         // 子分类网格
                         Expanded(
                           child: _showCategories
-                              ? _buildCategoryBody(subGridAspectRatio, subGridMainAxisSpacing)
+                              ? _buildCategoryBody(
+                                  subGridAspectRatio,
+                                  subGridMainAxisSpacing,
+                                )
                               : const TransferModeHint(),
                         ),
                       ],
@@ -1788,7 +1859,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 if (isCrossCurrency)
                   Container(
                     color: JiveTheme.cardColor(context),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     child: AccountSelectorSection(
                       txType: _txType,
                       selectedAccount: _selectedAccount,
@@ -1797,7 +1871,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       toAmountController: _toAmountController,
                       crossCurrencyRate: _crossCurrencyRate,
                       crossCurrencyRateSource: _crossCurrencyRateSource,
-                      onPickAccount: (pickTo) => _showAccountPicker(pickTo: pickTo),
+                      onPickAccount: (pickTo) =>
+                          _showAccountPicker(pickTo: pickTo),
                       onToAmountChanged: (value) {
                         setState(() {
                           _toAmountStr = value;
@@ -1817,10 +1892,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 if (isCreditAccount)
                   Container(
                     color: JiveTheme.cardColor(context),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     child: CreditAccountSummary(
                       account: _selectedAccount!,
-                      balance: _accountBalances[_selectedAccount!.id] ??
+                      balance:
+                          _accountBalances[_selectedAccount!.id] ??
                           _selectedAccount!.openingBalance,
                       isLandscape: true,
                     ),
@@ -1860,8 +1939,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       setState(() => _excludeFromBudget = v),
                   bookName: _currentBook != null
                       ? (_currentBook!.isDefault && _currentBook!.name == '默认账本'
-                          ? '账本'
-                          : _currentBook!.name)
+                            ? '账本'
+                            : _currentBook!.name)
                       : null,
                   bookEmoji: _currentBook?.iconName == 'book' ? '📖' : null,
                   onTapBook: _currentBook != null ? _showBookPicker : null,
@@ -1912,15 +1991,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                           onOkLongPressCancel: _cancelSpeechHold,
                           plusLabel: _plusShowsMultiply ? '×' : '+',
                           minusLabel: _minusShowsDivide ? '÷' : '-',
-                          onOperatorToggle: () {
-                            setState(() {
-                              if (keyValue == '+') {
-                                _plusShowsMultiply = !_plusShowsMultiply;
-                              } else if (keyValue == '-') {
-                                _minusShowsDivide = !_minusShowsDivide;
-                              }
-                            });
-                          },
+                          onOperatorToggle: () => _toggleOperatorKey(keyValue),
                         );
                       },
                     ),
@@ -1954,7 +2025,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       return;
     }
     _merchantDebounce = Timer(const Duration(milliseconds: 300), () async {
-      final suggestion = await MerchantMemoryService(_isar).getSuggestion(text.trim());
+      final suggestion = await MerchantMemoryService(
+        _isar,
+      ).getSuggestion(text.trim());
       if (!mounted) return;
       setState(() => _merchantSuggestion = suggestion);
     });
@@ -1976,16 +2049,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     setState(() => _merchantSuggestion = null);
   }
 
-
   // ══════════════════════════════════════════════════
   // ── Voice Recognition Methods ──
   // ══════════════════════════════════════════════════
 
   void _showHoldToTalkHint() {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("按住麦克风说话，松开结束")),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text("按住麦克风说话，松开结束")));
   }
 
   Future<void> _handleInitialSpeechText(String text) async {
@@ -2006,17 +2078,17 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       JiveLogger.i("Speech hold skipped: disabled");
       _speechHoldPending = false;
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("语音记账已关闭")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("语音记账已关闭")));
       return;
     }
     final quota = await VoiceQuotaStore.load();
     final preferOnline = settings.onlineEnhance && !quota.isOnlineExceeded;
     if (settings.onlineEnhance && quota.isOnlineExceeded && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("今日线上语音配额已用完，已切换为本地识别")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("今日线上语音配额已用完，已切换为本地识别")));
     }
 
     final speechService = SpeechServiceFactory.create();
@@ -2097,7 +2169,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     SpeechRecognitionResult finalResult;
     try {
-      finalResult = await speechService.stopListening().timeout(const Duration(seconds: 8));
+      finalResult = await speechService.stopListening().timeout(
+        const Duration(seconds: 8),
+      );
     } on TimeoutException {
       await speechService.cancel();
       finalResult = const SpeechRecognitionResult(errorCode: 'TIMEOUT');
@@ -2105,7 +2179,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       finalResult = const SpeechRecognitionResult(errorCode: 'UNKNOWN');
     }
 
-    await _handleSpeechResult(finalResult, usedFallback: usedFallback, engine: engine);
+    await _handleSpeechResult(
+      finalResult,
+      usedFallback: usedFallback,
+      engine: engine,
+    );
   }
 
   Future<void> _cancelSpeechHold() async {
@@ -2125,9 +2203,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       await speechService.cancel();
     }
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("已取消语音识别")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("已取消语音识别")));
     }
   }
 
@@ -2161,14 +2239,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (errorCode != null && recognized == null) {
       final message = _speechErrorMessage(errorCode);
       if (message != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
     } else if (recognized == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("未识别到语音，可手动输入")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("未识别到语音，可手动输入")));
     }
 
     if (_speechUiActive) {
@@ -2192,13 +2270,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   void _showQuotaWarning(VoiceQuota quota) {
     if (!mounted) return;
     if (quota.warningLevel == VoiceQuotaWarningLevel.high) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("线上语音配额即将用完，建议使用本地识别")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("线上语音配额即将用完，建议使用本地识别")));
     } else if (quota.warningLevel == VoiceQuotaWarningLevel.exceeded) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("今日线上语音配额已用完，已建议改用本地识别")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("今日线上语音配额已用完，已建议改用本地识别")));
     }
   }
 
@@ -2232,10 +2310,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             decoration: const InputDecoration(hintText: "例如：今天午餐花了 23 元 微信"),
           ),
           actions: [
-            TextButton(
-              onPressed: () => closeDialog(),
-              child: const Text("取消"),
-            ),
+            TextButton(onPressed: () => closeDialog(), child: const Text("取消")),
             TextButton(
               onPressed: () => closeDialog(currentText),
               child: const Text("继续"),
@@ -2315,7 +2390,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOut,
               child: SingleChildScrollView(
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2361,7 +2437,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     SpeechPreviewRow(label: "金额", value: amountLabel),
                     SpeechPreviewRow(label: "类型", value: typeLabel),
                     if (preview?.type == 'transfer')
-                      SpeechPreviewRow(label: "账户", value: "$accountLabel → $toAccountLabel")
+                      SpeechPreviewRow(
+                        label: "账户",
+                        value: "$accountLabel → $toAccountLabel",
+                      )
                     else
                       SpeechPreviewRow(label: "账户", value: accountLabel),
                     SpeechPreviewRow(label: "时间", value: timeLabel),
@@ -2391,7 +2470,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     return result;
   }
-
 
   Future<void> _applySpeechIntent(SpeechIntent intent) async {
     final nextType = _speechTypeFromIntent(intent.type);
@@ -2429,7 +2507,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         if (to != null && to.id != _selectedAccount?.id) {
           _selectedToAccount = to;
         }
-        if (_selectedAccount != null && _selectedToAccount?.id == _selectedAccount?.id) {
+        if (_selectedAccount != null &&
+            _selectedToAccount?.id == _selectedAccount?.id) {
           _selectedToAccount = _speechPickAlternateAccount(_selectedAccount);
         }
       }
@@ -2439,7 +2518,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _speechApplyCategorySuggestion(SpeechIntent intent) async {
     if (_txType == TransactionType.transfer) return;
     final text = intent.cleanedText ?? intent.rawText;
-    final match = (await AutoRuleEngine.instance()).match(text: text, source: 'Voice');
+    final match = (await AutoRuleEngine.instance()).match(
+      text: text,
+      source: 'Voice',
+    );
     if (match.parent == null) return;
     final parent = _parentCategories.firstWhere(
       (cat) => cat.name == match.parent,
@@ -2500,9 +2582,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     for (final account in _accounts) {
       if (excludeId != null && account.id == excludeId) continue;
       for (final alias in _speechAccountAliases(account)) {
-        final normalizedAlias = alias.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+        final normalizedAlias = alias.toLowerCase().replaceAll(
+          RegExp(r'\s+'),
+          '',
+        );
         if (normalizedAlias.isEmpty) continue;
-        if (normalizedHint.contains(normalizedAlias) || normalizedAlias.contains(normalizedHint)) {
+        if (normalizedHint.contains(normalizedAlias) ||
+            normalizedAlias.contains(normalizedHint)) {
           if (normalizedAlias.length > bestLen) {
             best = account;
             bestLen = normalizedAlias.length;
@@ -2552,9 +2638,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (!mounted) return;
     final message = _speechErrorMessage(code);
     if (message == null) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   String? _speechErrorMessage(String? code) {
@@ -2602,11 +2688,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   // ══════════════════════════════════════════════════
   // ── End Voice Recognition Methods ──
   // ══════════════════════════════════════════════════
-
-
-
-
-
 
   Future<void> _showPhotoPicker() async {
     final action = await showModalBottomSheet<String>(
@@ -2713,9 +2794,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     } catch (e) {
       JiveLogger.e('photo picker failed', e);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('无法获取图片')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('无法获取图片')));
       }
       return;
     }
@@ -2726,25 +2807,24 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Future<void> _openSplitSheet() async {
     if (_accounts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先添加账户')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先添加账户')));
       return;
     }
     // Seed splits from current single-account state if empty.
     final seed = _splits.isNotEmpty
         ? _splits
-        : (_selectedAccount != null &&
-                (double.tryParse(_amountStr) ?? 0) > 0
-            ? [
-                TxSplitEntry(
-                  account: _selectedAccount!,
-                  amount: double.tryParse(_amountStr) ?? 0,
-                  discount: _discountAmount,
-                  fee: _feeAmount,
-                ),
-              ]
-            : <TxSplitEntry>[]);
+        : (_selectedAccount != null && (double.tryParse(_amountStr) ?? 0) > 0
+              ? [
+                  TxSplitEntry(
+                    account: _selectedAccount!,
+                    amount: double.tryParse(_amountStr) ?? 0,
+                    discount: _discountAmount,
+                    fee: _feeAmount,
+                  ),
+                ]
+              : <TxSplitEntry>[]);
     final result = await showTransactionSplitSheet(
       context,
       accounts: _accounts,
@@ -2809,9 +2889,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              isFee
-                  ? '银行/平台收取的额外费用，会叠加到实际支出。'
-                  : '店铺优惠/券金额，会从账单总额里扣减。',
+              isFee ? '银行/平台收取的额外费用，会叠加到实际支出。' : '店铺优惠/券金额，会从账单总额里扣减。',
               style: TextStyle(
                 fontSize: 12,
                 color: JiveTheme.secondaryTextColor(ctx),
@@ -2821,7 +2899,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
             TextField(
               controller: controller,
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: InputDecoration(
                 hintText: '0.00',
                 prefixText: isFee ? '+ ' : '- ',
@@ -2869,8 +2949,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   void _toggleReimbursementFlag() {
     setState(() {
-      _reimbursementStatus =
-          _reimbursementStatus == null ? 'pending' : null;
+      _reimbursementStatus = _reimbursementStatus == null ? 'pending' : null;
     });
   }
 
@@ -2948,13 +3027,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ),
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(
-          left: 20, right: 20, top: 20,
+          left: 20,
+          right: 20,
+          top: 20,
           bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('备注', style: TextStyle(fontSize: 14, color: JiveTheme.secondaryTextColor(ctx))),
+            Text(
+              '备注',
+              style: TextStyle(
+                fontSize: 14,
+                color: JiveTheme.secondaryTextColor(ctx),
+              ),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
@@ -3027,7 +3114,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       _selectedTagKeys = picked;
     });
   }
-
 
   Future<void> _showProjectPicker() async {
     if (_projects.isEmpty) {
@@ -3117,8 +3203,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     });
   }
 
-
-
   Future<void> _showCurrencyPicker() async {
     final currentCurrency = _selectedAccount?.currency ?? _baseCurrency;
     final selected = await CurrencyPicker.showPicker(
@@ -3130,8 +3214,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (selected == null || selected == currentCurrency || !mounted) return;
 
     // 查找该币种的账户
-    final matchingAccounts =
-        _accounts.where((a) => a.currency == selected).toList();
+    final matchingAccounts = _accounts
+        .where((a) => a.currency == selected)
+        .toList();
     if (matchingAccounts.isNotEmpty) {
       setState(() {
         _selectedAccount = matchingAccounts.first;
@@ -3245,7 +3330,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
   }
 
-
   Widget _buildCategoryBody(
     double subGridAspectRatio,
     double subGridMainAxisSpacing,
@@ -3274,8 +3358,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       },
     );
   }
-
-
 
   List<SystemSuggestion> _systemSuggestionsForQuery(String query) {
     final normalized = _normalizeSearch(query);
@@ -3403,11 +3485,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         .sortByOrder()
         .findAll();
 
-    // 优先显示用户分类
-    final userParents = parents.where((c) => !c.isSystem).toList();
-    if (userParents.isNotEmpty) {
-      parents = userParents;
-    }
+    parents.sort(_compareCategoryForDisplay);
 
     if (parents.isEmpty && !showIncome) {
       final service = CategoryService(_isar);
@@ -3572,7 +3650,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ..addAll(loaded);
     });
   }
-
 }
 
 /// Redesigned account picker sheet: flat list, search, 2-column grid, + icon at top-right
@@ -3600,9 +3677,9 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
   List<JiveAccount> get _filtered {
     if (_query.isEmpty) return widget.accounts;
     final lower = _query.toLowerCase();
-    return widget.accounts.where((a) =>
-      a.name.toLowerCase().contains(lower),
-    ).toList();
+    return widget.accounts
+        .where((a) => a.name.toLowerCase().contains(lower))
+        .toList();
   }
 
   @override
@@ -3683,38 +3760,52 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                   ? Center(
                       child: Text(
                         '未找到匹配的账户',
-                        style: TextStyle(color: JiveTheme.secondaryTextColor(context)),
+                        style: TextStyle(
+                          color: JiveTheme.secondaryTextColor(context),
+                        ),
                       ),
                     )
                   : GridView.builder(
                       controller: scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 2.8,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
                       ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 2.8,
+                            crossAxisSpacing: 8,
+                            mainAxisSpacing: 8,
+                          ),
                       itemCount: accounts.length,
                       itemBuilder: (context, index) {
                         final account = accounts[index];
-                        final color = AccountService.parseColorHex(account.colorHex) ??
+                        final color =
+                            AccountService.parseColorHex(account.colorHex) ??
                             JiveTheme.primaryGreen;
                         final isSelected = account.id == widget.currentId;
                         return InkWell(
                           onTap: () => Navigator.pop(context, account),
                           borderRadius: BorderRadius.circular(12),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? color.withValues(alpha: isDark ? 0.25 : 0.1)
-                                  : (isDark ? Colors.white10 : Colors.grey.shade50),
+                                  : (isDark
+                                        ? Colors.white10
+                                        : Colors.grey.shade50),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
                                 color: isSelected
                                     ? color.withValues(alpha: 0.5)
-                                    : (isDark ? Colors.white24 : Colors.grey.shade200),
+                                    : (isDark
+                                          ? Colors.white24
+                                          : Colors.grey.shade200),
                                 width: isSelected ? 1.5 : 0.5,
                               ),
                             ),
@@ -3722,7 +3813,9 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                               children: [
                                 CircleAvatar(
                                   radius: 14,
-                                  backgroundColor: color.withValues(alpha: 0.15),
+                                  backgroundColor: color.withValues(
+                                    alpha: 0.15,
+                                  ),
                                   child: AccountService.buildIcon(
                                     account.iconName,
                                     size: 14,
@@ -3737,7 +3830,9 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 13,
-                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
                                       color: JiveTheme.textColor(context),
                                     ),
                                   ),

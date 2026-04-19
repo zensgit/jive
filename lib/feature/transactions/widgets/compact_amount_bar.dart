@@ -66,9 +66,10 @@ class CompactAmountBar extends StatelessWidget {
         ? DateFormat('HH:mm').format(selectedTime)
         : DateFormat('MM-dd HH:mm').format(selectedTime);
     final hasNote = note != null && note!.isNotEmpty;
-    final amountText = expressionResult == null
-        ? '$symbol $amountStr'
-        : '$symbol $amountStr = ${expressionResult!.toStringAsFixed(2)}';
+    final hasExpression = expressionResult != null;
+    final resultText = hasExpression
+        ? '$symbol ${expressionResult!.toStringAsFixed(2)}'
+        : '$symbol $amountStr';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -109,53 +110,85 @@ class CompactAmountBar extends StatelessWidget {
                 ),
               const SizedBox(width: 8),
               Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Flexible(
-                      child: Text(
-                        amountText,
-                        textAlign: TextAlign.right,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.rubik(
-                          color: _amountColor(),
-                          fontSize: expressionResult != null ? 24 : 28,
-                          fontWeight: FontWeight.w600,
-                          height: 1.0,
-                        ),
-                      ),
+                    SizedBox(
+                      height: 18,
+                      width: double.infinity,
+                      child: hasExpression
+                          ? SingleChildScrollView(
+                              reverse: true,
+                              scrollDirection: Axis.horizontal,
+                              physics: const NeverScrollableScrollPhysics(),
+                              child: Text(
+                                '$symbol $amountStr',
+                                maxLines: 1,
+                                style: GoogleFonts.rubik(
+                                  color: _amountColor().withValues(alpha: 0.65),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.0,
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
                     ),
-                    const SizedBox(width: 4),
-                    InkWell(
-                      onTap: onTapCurrency,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 2,
-                          vertical: 2,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              currency,
-                              style: GoogleFonts.rubik(
-                                color: _amountColor().withValues(alpha: 0.7),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                              ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            resultText,
+                            textAlign: TextAlign.right,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.rubik(
+                              color: _amountColor(),
+                              fontSize: 28,
+                              fontWeight: FontWeight.w600,
+                              height: 1.0,
                             ),
-                            if (onTapCurrency != null)
-                              Icon(
-                                Icons.unfold_more,
-                                size: 12,
-                                color: _amountColor().withValues(alpha: 0.6),
-                              ),
-                          ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: onTapCurrency,
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 2,
+                              vertical: 2,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  currency,
+                                  style: GoogleFonts.rubik(
+                                    color: _amountColor().withValues(
+                                      alpha: 0.7,
+                                    ),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                if (onTapCurrency != null)
+                                  Icon(
+                                    Icons.unfold_more,
+                                    size: 12,
+                                    color: _amountColor().withValues(
+                                      alpha: 0.6,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
