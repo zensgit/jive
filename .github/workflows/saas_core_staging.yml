@@ -187,8 +187,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ inputs.run_function_smoke }}" == "true" && "${{ inputs.deploy_functions }}" != "true" ]]; then
-            printf 'run_function_smoke=true requires deploy_functions=true in the same run.
-' >&2
+            printf '%s\n' 'run_function_smoke=true requires deploy_functions=true in the same run.' >&2
             exit 1
           fi
 
