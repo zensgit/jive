@@ -146,8 +146,7 @@ find_artifact() {
 
   expected="$APP_DIR/build/app/outputs/flutter-apk/app-${flavor_segment}-${build_type_segment}.apk"
   if [[ -f "$expected" ]]; then
-    printf %s
- "$expected"
+    printf '%s\n' "$expected"
     return 0
   fi
 
@@ -298,7 +297,7 @@ main() {
 
   write_report \
     "$target_path" \
-    "20 20 12 61 79 80 81 33 98 100 204 250 395 398 399 400 701 702file_size_bytes "")" \
+    "$(file_size_bytes "$target_path")" \
     "$sha256" \
     "$(cd "$APP_DIR" && git rev-parse --abbrev-ref HEAD)" \
     "$(cd "$APP_DIR" && git rev-parse HEAD)"
