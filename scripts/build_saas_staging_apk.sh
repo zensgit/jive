@@ -146,27 +146,28 @@ find_artifact() {
 
   expected="$APP_DIR/build/app/outputs/flutter-apk/app-${flavor_segment}-${build_type_segment}.apk"
   if [[ -f "$expected" ]]; then
-    printf '%s\n' "$expected"
+    printf %s
+ "$expected"
     return 0
   fi
 
-  find "/build/app/outputs/flutter-apk" -name "*.apk" | sort | tail -n 1
+  find "$APP_DIR/build/app/outputs/flutter-apk" -name "*.apk" | sort | tail -n 1
 }
 
 file_size_bytes() {
-  local file=""
+  local file="$1"
 
-  if stat -c%s "" >/dev/null 2>&1; then
-    stat -c%s ""
+  if stat -c%s "$file" >/dev/null 2>&1; then
+    stat -c%s "$file"
     return 0
   fi
 
-  if stat -f%z "" >/dev/null 2>&1; then
-    stat -f%z ""
+  if stat -f%z "$file" >/dev/null 2>&1; then
+    stat -f%z "$file"
     return 0
   fi
 
-  wc -c < "" | tr -d '[:space:]'
+  wc -c < "$file" | tr -d '[:space:]'
 }
 
 write_report() {
