@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+
 import '../../core/database/template_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/entitlement/feature_gate.dart';
+import '../../core/entitlement/feature_id.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/template_service.dart';
 import '../import/screenshot_import_screen.dart';
@@ -127,6 +130,7 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
       _EntryCardData(
         emoji: '\u{1F3A4}',
         label: '语音记账',
+        feature: FeatureId.voiceBookkeeping,
         onTap: () => _navigate(
           AddTransactionScreen(
             initialType: TransactionType.expense,
@@ -179,7 +183,7 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
   }
 
   Widget _buildEntryCard(_EntryCardData data) {
-    return GestureDetector(
+    final card = GestureDetector(
       onTap: data.onTap,
       child: Container(
         decoration: BoxDecoration(
@@ -207,6 +211,9 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
         ),
       ),
     );
+
+    if (data.feature == null) return card;
+    return FeatureGate(feature: data.feature!, child: card);
   }
 
   Widget _buildTemplateSection() {
@@ -257,11 +264,13 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
 class _EntryCardData {
   final String emoji;
   final String label;
+  final FeatureId? feature;
   final VoidCallback onTap;
 
   const _EntryCardData({
     required this.emoji,
     required this.label,
     required this.onTap,
+    this.feature,
   });
 }

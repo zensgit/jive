@@ -299,16 +299,11 @@ class SettingsScreen extends StatelessWidget {
               children: [
                 const Text("语音与智能", style: TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 10),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
+                GatedListTile(
+                  feature: FeatureId.voiceBookkeeping,
                   leading: const Icon(Icons.mic_none_rounded),
                   title: const Text("语音设置"),
                   subtitle: const Text("语音记账开关、语言与线上增强状态"),
-                  trailing: Icon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: Colors.grey.shade500,
-                  ),
                   onTap: () async {
                     await Navigator.push(
                       context,

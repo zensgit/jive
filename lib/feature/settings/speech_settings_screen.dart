@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/design_system/theme.dart';
+import '../../core/entitlement/entitlement_service.dart';
+import '../../core/entitlement/feature_gate.dart';
+import '../../core/entitlement/feature_id.dart';
 import '../../core/service/speech_service.dart';
 import '../../core/service/speech_settings.dart';
 import '../../core/service/voice_quota_service.dart';
@@ -81,9 +85,79 @@ class _SpeechSettingsScreenState extends State<SpeechSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final entitlement = Provider.of<EntitlementService?>(context);
+    final hasVoiceAccess =
+        entitlement?.canAccess(FeatureId.voiceBookkeeping) ?? true;
     final settings = _settings;
     final quota = _quota;
     final onlineUsage = quota?.usageRatio ?? 0;
+
+    if (!hasVoiceAccess) {
+      return Scaffold(
+        backgroundColor: Colors.grey.shade100,
+        appBar: AppBar(
+          title: const Text("语音设置", style: TextStyle(fontWeight: FontWeight.w600)),
+          backgroundColor: Colors.grey.shade100,
+          elevation: 0,
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      Icons.lock_outline,
+                      color: JiveTheme.primaryGreen,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "语音记账需要订阅版",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "当前账户暂未解锁语音记账。升级后可使用语音录入、线上增强识别与相关设置。",
+                    style: TextStyle(
+                      color: Colors.grey.shade700,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () =>
+                          showUpgradePrompt(context, FeatureId.voiceBookkeeping),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: JiveTheme.primaryGreen,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text("查看订阅方案"),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
