@@ -71,7 +71,13 @@ class _GuidedSetupScreenState extends State<GuidedSetupScreen> {
         .sortByOrder()
         .findAll();
     if (mounted) {
-      setState(() => _parentCategories = cats);
+      setState(() {
+        _parentCategories = cats;
+        if (_selectedCategoryKey == null && cats.isNotEmpty) {
+          _selectedCategoryKey = cats.first.key;
+          _selectedCategoryName = cats.first.name;
+        }
+      });
     }
   }
 
@@ -118,14 +124,29 @@ class _GuidedSetupScreenState extends State<GuidedSetupScreen> {
   Future<void> _completeStep1() async {
     final amountText = _amountController.text.trim();
     final amount = double.tryParse(amountText);
-    if (amount == null || amount <= 0 || _selectedCategoryKey == null) return;
+    if (amount == null || amount <= 0) {
+      await OnboardingProgressService.markStepComplete(0);
+      await _nextStep();
+      return;
+    }
+
+    final fallbackCategory = _parentCategories.isNotEmpty
+        ? _parentCategories.first
+        : null;
+    final categoryKey = _selectedCategoryKey ?? fallbackCategory?.key;
+    final categoryName = _selectedCategoryName ?? fallbackCategory?.name;
+    if (categoryKey == null) {
+      await OnboardingProgressService.markStepComplete(0);
+      await _nextStep();
+      return;
+    }
 
     final tx = JiveTransaction()
       ..amount = amount
       ..source = 'manual'
       ..timestamp = DateTime.now()
-      ..categoryKey = _selectedCategoryKey
-      ..category = _selectedCategoryName
+      ..categoryKey = categoryKey
+      ..category = categoryName
       ..type = 'expense'
       ..updatedAt = DateTime.now();
 
@@ -162,9 +183,10 @@ class _GuidedSetupScreenState extends State<GuidedSetupScreen> {
       amount: amount,
       currency: currency,
       startDate: DateTime(now.year, now.month),
-      endDate: DateTime(now.year, now.month + 1).subtract(
-        const Duration(days: 1),
-      ),
+      endDate: DateTime(
+        now.year,
+        now.month + 1,
+      ).subtract(const Duration(days: 1)),
       period: 'monthly',
     );
 
@@ -288,10 +310,7 @@ class _GuidedSetupScreenState extends State<GuidedSetupScreen> {
 
   Widget _buildCategoryGrid({required bool selectable}) {
     if (_parentCategories.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('暂无分类'),
-      );
+      return const Padding(padding: EdgeInsets.all(16), child: Text('暂无分类'));
     }
 
     return Wrap(
@@ -302,9 +321,9 @@ class _GuidedSetupScreenState extends State<GuidedSetupScreen> {
         return GestureDetector(
           onTap: selectable
               ? () => setState(() {
-                    _selectedCategoryKey = cat.key;
-                    _selectedCategoryName = cat.name;
-                  })
+                  _selectedCategoryKey = cat.key;
+                  _selectedCategoryName = cat.name;
+                })
               : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -312,9 +331,7 @@ class _GuidedSetupScreenState extends State<GuidedSetupScreen> {
             decoration: BoxDecoration(
               color: isSelected ? _kGreen : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(20),
-              border: isSelected
-                  ? Border.all(color: _kGreen, width: 2)
-                  : null,
+              border: isSelected ? Border.all(color: _kGreen, width: 2) : null,
             ),
             child: Text(
               cat.name,
@@ -344,10 +361,7 @@ class _GuidedSetupScreenState extends State<GuidedSetupScreen> {
 
   Widget _buildToggleCategoryList() {
     if (_parentCategories.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Text('暂无分类'),
-      );
+      return const Padding(padding: EdgeInsets.all(16), child: Text('暂无分类'));
     }
 
     return ListView.separated(
@@ -487,10 +501,7 @@ class _StepShell extends StatelessWidget {
           const SizedBox(height: 24),
           Text(
             title,
-            style: GoogleFonts.lato(
-              fontSize: 26,
-              fontWeight: FontWeight.bold,
-            ),
+            style: GoogleFonts.lato(fontSize: 26, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
           Text(
@@ -499,9 +510,7 @@ class _StepShell extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 32),
-          Expanded(
-            child: SingleChildScrollView(child: child),
-          ),
+          Expanded(child: SingleChildScrollView(child: child)),
           _buildBottomButtons(context),
           const SizedBox(height: 16),
         ],
@@ -532,10 +541,7 @@ class _StepShell extends StatelessWidget {
           ),
           child: Text(
             nextLabel,
-            style: GoogleFonts.lato(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
+            style: GoogleFonts.lato(fontWeight: FontWeight.bold, fontSize: 16),
           ),
         ),
       ],

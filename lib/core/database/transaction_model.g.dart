@@ -47,113 +47,143 @@ const JiveTransactionSchema = CollectionSchema(
       name: r'categoryKey',
       type: IsarType.string,
     ),
-    r'exchangeFee': PropertySchema(
+    r'discountAmount': PropertySchema(
       id: 6,
+      name: r'discountAmount',
+      type: IsarType.double,
+    ),
+    r'exchangeFee': PropertySchema(
+      id: 7,
       name: r'exchangeFee',
       type: IsarType.double,
     ),
     r'exchangeFeeType': PropertySchema(
-      id: 7,
+      id: 8,
       name: r'exchangeFeeType',
       type: IsarType.string,
     ),
     r'exchangeRate': PropertySchema(
-      id: 8,
+      id: 9,
       name: r'exchangeRate',
       type: IsarType.double,
     ),
     r'excludeFromBudget': PropertySchema(
-      id: 9,
+      id: 10,
       name: r'excludeFromBudget',
       type: IsarType.bool,
     ),
+    r'excludeFromTotals': PropertySchema(
+      id: 11,
+      name: r'excludeFromTotals',
+      type: IsarType.bool,
+    ),
+    r'feeAmount': PropertySchema(
+      id: 12,
+      name: r'feeAmount',
+      type: IsarType.double,
+    ),
     r'note': PropertySchema(
-      id: 10,
+      id: 13,
       name: r'note',
       type: IsarType.string,
     ),
     r'projectId': PropertySchema(
-      id: 11,
+      id: 14,
       name: r'projectId',
       type: IsarType.long,
     ),
+    r'quickActionId': PropertySchema(
+      id: 15,
+      name: r'quickActionId',
+      type: IsarType.long,
+    ),
     r'rawText': PropertySchema(
-      id: 12,
+      id: 16,
       name: r'rawText',
       type: IsarType.string,
     ),
     r'recurringKey': PropertySchema(
-      id: 13,
+      id: 17,
       name: r'recurringKey',
       type: IsarType.string,
     ),
     r'recurringRuleId': PropertySchema(
-      id: 14,
+      id: 18,
       name: r'recurringRuleId',
       type: IsarType.long,
     ),
+    r'reimbursementStatus': PropertySchema(
+      id: 19,
+      name: r'reimbursementStatus',
+      type: IsarType.string,
+    ),
     r'smartTagKeys': PropertySchema(
-      id: 15,
+      id: 20,
       name: r'smartTagKeys',
       type: IsarType.stringList,
     ),
     r'smartTagOptOutAll': PropertySchema(
-      id: 16,
+      id: 21,
       name: r'smartTagOptOutAll',
       type: IsarType.bool,
     ),
     r'smartTagOptOutKeys': PropertySchema(
-      id: 17,
+      id: 22,
       name: r'smartTagOptOutKeys',
       type: IsarType.stringList,
     ),
     r'source': PropertySchema(
-      id: 18,
+      id: 23,
       name: r'source',
       type: IsarType.string,
     ),
+    r'splitGroupKey': PropertySchema(
+      id: 24,
+      name: r'splitGroupKey',
+      type: IsarType.string,
+    ),
     r'subCategory': PropertySchema(
-      id: 19,
+      id: 25,
       name: r'subCategory',
       type: IsarType.string,
     ),
     r'subCategoryKey': PropertySchema(
-      id: 20,
+      id: 26,
       name: r'subCategoryKey',
       type: IsarType.string,
     ),
     r'syncKey': PropertySchema(
-      id: 21,
+      id: 27,
       name: r'syncKey',
       type: IsarType.string,
     ),
     r'tagKeys': PropertySchema(
-      id: 22,
+      id: 28,
       name: r'tagKeys',
       type: IsarType.stringList,
     ),
     r'timestamp': PropertySchema(
-      id: 23,
+      id: 29,
       name: r'timestamp',
       type: IsarType.dateTime,
     ),
     r'toAccountId': PropertySchema(
-      id: 24,
+      id: 30,
       name: r'toAccountId',
       type: IsarType.long,
     ),
     r'toAmount': PropertySchema(
-      id: 25,
+      id: 31,
       name: r'toAmount',
       type: IsarType.double,
     ),
     r'type': PropertySchema(
-      id: 26,
+      id: 32,
       name: r'type',
       type: IsarType.string,
     ),
     r'updatedAt': PropertySchema(
-      id: 27,
+      id: 33,
       name: r'updatedAt',
       type: IsarType.dateTime,
     )
@@ -306,6 +336,32 @@ const JiveTransactionSchema = CollectionSchema(
           caseSensitive: false,
         )
       ],
+    ),
+    r'splitGroupKey': IndexSchema(
+      id: -7312275317193385969,
+      name: r'splitGroupKey',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'splitGroupKey',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
+    ),
+    r'reimbursementStatus': IndexSchema(
+      id: -4170176119660037046,
+      name: r'reimbursementStatus',
+      unique: false,
+      replace: false,
+      properties: [
+        IndexPropertySchema(
+          name: r'reimbursementStatus',
+          type: IndexType.hash,
+          caseSensitive: true,
+        )
+      ],
     )
   },
   links: {},
@@ -365,6 +421,12 @@ int _jiveTransactionEstimateSize(
       bytesCount += 3 + value.length * 3;
     }
   }
+  {
+    final value = object.reimbursementStatus;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   bytesCount += 3 + object.smartTagKeys.length * 3;
   {
     for (var i = 0; i < object.smartTagKeys.length; i++) {
@@ -380,6 +442,12 @@ int _jiveTransactionEstimateSize(
     }
   }
   bytesCount += 3 + object.source.length * 3;
+  {
+    final value = object.splitGroupKey;
+    if (value != null) {
+      bytesCount += 3 + value.length * 3;
+    }
+  }
   {
     final value = object.subCategory;
     if (value != null) {
@@ -421,28 +489,34 @@ void _jiveTransactionSerialize(
   writer.writeLong(offsets[3], object.bookId);
   writer.writeString(offsets[4], object.category);
   writer.writeString(offsets[5], object.categoryKey);
-  writer.writeDouble(offsets[6], object.exchangeFee);
-  writer.writeString(offsets[7], object.exchangeFeeType);
-  writer.writeDouble(offsets[8], object.exchangeRate);
-  writer.writeBool(offsets[9], object.excludeFromBudget);
-  writer.writeString(offsets[10], object.note);
-  writer.writeLong(offsets[11], object.projectId);
-  writer.writeString(offsets[12], object.rawText);
-  writer.writeString(offsets[13], object.recurringKey);
-  writer.writeLong(offsets[14], object.recurringRuleId);
-  writer.writeStringList(offsets[15], object.smartTagKeys);
-  writer.writeBool(offsets[16], object.smartTagOptOutAll);
-  writer.writeStringList(offsets[17], object.smartTagOptOutKeys);
-  writer.writeString(offsets[18], object.source);
-  writer.writeString(offsets[19], object.subCategory);
-  writer.writeString(offsets[20], object.subCategoryKey);
-  writer.writeString(offsets[21], object.syncKey);
-  writer.writeStringList(offsets[22], object.tagKeys);
-  writer.writeDateTime(offsets[23], object.timestamp);
-  writer.writeLong(offsets[24], object.toAccountId);
-  writer.writeDouble(offsets[25], object.toAmount);
-  writer.writeString(offsets[26], object.type);
-  writer.writeDateTime(offsets[27], object.updatedAt);
+  writer.writeDouble(offsets[6], object.discountAmount);
+  writer.writeDouble(offsets[7], object.exchangeFee);
+  writer.writeString(offsets[8], object.exchangeFeeType);
+  writer.writeDouble(offsets[9], object.exchangeRate);
+  writer.writeBool(offsets[10], object.excludeFromBudget);
+  writer.writeBool(offsets[11], object.excludeFromTotals);
+  writer.writeDouble(offsets[12], object.feeAmount);
+  writer.writeString(offsets[13], object.note);
+  writer.writeLong(offsets[14], object.projectId);
+  writer.writeLong(offsets[15], object.quickActionId);
+  writer.writeString(offsets[16], object.rawText);
+  writer.writeString(offsets[17], object.recurringKey);
+  writer.writeLong(offsets[18], object.recurringRuleId);
+  writer.writeString(offsets[19], object.reimbursementStatus);
+  writer.writeStringList(offsets[20], object.smartTagKeys);
+  writer.writeBool(offsets[21], object.smartTagOptOutAll);
+  writer.writeStringList(offsets[22], object.smartTagOptOutKeys);
+  writer.writeString(offsets[23], object.source);
+  writer.writeString(offsets[24], object.splitGroupKey);
+  writer.writeString(offsets[25], object.subCategory);
+  writer.writeString(offsets[26], object.subCategoryKey);
+  writer.writeString(offsets[27], object.syncKey);
+  writer.writeStringList(offsets[28], object.tagKeys);
+  writer.writeDateTime(offsets[29], object.timestamp);
+  writer.writeLong(offsets[30], object.toAccountId);
+  writer.writeDouble(offsets[31], object.toAmount);
+  writer.writeString(offsets[32], object.type);
+  writer.writeDateTime(offsets[33], object.updatedAt);
 }
 
 JiveTransaction _jiveTransactionDeserialize(
@@ -458,29 +532,35 @@ JiveTransaction _jiveTransactionDeserialize(
   object.bookId = reader.readLongOrNull(offsets[3]);
   object.category = reader.readStringOrNull(offsets[4]);
   object.categoryKey = reader.readStringOrNull(offsets[5]);
-  object.exchangeFee = reader.readDoubleOrNull(offsets[6]);
-  object.exchangeFeeType = reader.readStringOrNull(offsets[7]);
-  object.exchangeRate = reader.readDoubleOrNull(offsets[8]);
-  object.excludeFromBudget = reader.readBool(offsets[9]);
+  object.discountAmount = reader.readDoubleOrNull(offsets[6]);
+  object.exchangeFee = reader.readDoubleOrNull(offsets[7]);
+  object.exchangeFeeType = reader.readStringOrNull(offsets[8]);
+  object.exchangeRate = reader.readDoubleOrNull(offsets[9]);
+  object.excludeFromBudget = reader.readBool(offsets[10]);
+  object.excludeFromTotals = reader.readBool(offsets[11]);
+  object.feeAmount = reader.readDoubleOrNull(offsets[12]);
   object.id = id;
-  object.note = reader.readStringOrNull(offsets[10]);
-  object.projectId = reader.readLongOrNull(offsets[11]);
-  object.rawText = reader.readStringOrNull(offsets[12]);
-  object.recurringKey = reader.readStringOrNull(offsets[13]);
-  object.recurringRuleId = reader.readLongOrNull(offsets[14]);
-  object.smartTagKeys = reader.readStringList(offsets[15]) ?? [];
-  object.smartTagOptOutAll = reader.readBool(offsets[16]);
-  object.smartTagOptOutKeys = reader.readStringList(offsets[17]) ?? [];
-  object.source = reader.readString(offsets[18]);
-  object.subCategory = reader.readStringOrNull(offsets[19]);
-  object.subCategoryKey = reader.readStringOrNull(offsets[20]);
-  object.syncKey = reader.readString(offsets[21]);
-  object.tagKeys = reader.readStringList(offsets[22]) ?? [];
-  object.timestamp = reader.readDateTime(offsets[23]);
-  object.toAccountId = reader.readLongOrNull(offsets[24]);
-  object.toAmount = reader.readDoubleOrNull(offsets[25]);
-  object.type = reader.readStringOrNull(offsets[26]);
-  object.updatedAt = reader.readDateTime(offsets[27]);
+  object.note = reader.readStringOrNull(offsets[13]);
+  object.projectId = reader.readLongOrNull(offsets[14]);
+  object.quickActionId = reader.readLongOrNull(offsets[15]);
+  object.rawText = reader.readStringOrNull(offsets[16]);
+  object.recurringKey = reader.readStringOrNull(offsets[17]);
+  object.recurringRuleId = reader.readLongOrNull(offsets[18]);
+  object.reimbursementStatus = reader.readStringOrNull(offsets[19]);
+  object.smartTagKeys = reader.readStringList(offsets[20]) ?? [];
+  object.smartTagOptOutAll = reader.readBool(offsets[21]);
+  object.smartTagOptOutKeys = reader.readStringList(offsets[22]) ?? [];
+  object.source = reader.readString(offsets[23]);
+  object.splitGroupKey = reader.readStringOrNull(offsets[24]);
+  object.subCategory = reader.readStringOrNull(offsets[25]);
+  object.subCategoryKey = reader.readStringOrNull(offsets[26]);
+  object.syncKey = reader.readString(offsets[27]);
+  object.tagKeys = reader.readStringList(offsets[28]) ?? [];
+  object.timestamp = reader.readDateTime(offsets[29]);
+  object.toAccountId = reader.readLongOrNull(offsets[30]);
+  object.toAmount = reader.readDoubleOrNull(offsets[31]);
+  object.type = reader.readStringOrNull(offsets[32]);
+  object.updatedAt = reader.readDateTime(offsets[33]);
   return object;
 }
 
@@ -506,46 +586,58 @@ P _jiveTransactionDeserializeProp<P>(
     case 6:
       return (reader.readDoubleOrNull(offset)) as P;
     case 7:
-      return (reader.readStringOrNull(offset)) as P;
-    case 8:
       return (reader.readDoubleOrNull(offset)) as P;
+    case 8:
+      return (reader.readStringOrNull(offset)) as P;
     case 9:
-      return (reader.readBool(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 10:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 11:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 12:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 13:
       return (reader.readStringOrNull(offset)) as P;
     case 14:
       return (reader.readLongOrNull(offset)) as P;
     case 15:
-      return (reader.readStringList(offset) ?? []) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 16:
-      return (reader.readBool(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 17:
-      return (reader.readStringList(offset) ?? []) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 18:
-      return (reader.readString(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 19:
       return (reader.readStringOrNull(offset)) as P;
     case 20:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readStringList(offset) ?? []) as P;
     case 21:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 22:
       return (reader.readStringList(offset) ?? []) as P;
     case 23:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 24:
-      return (reader.readLongOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 25:
-      return (reader.readDoubleOrNull(offset)) as P;
+      return (reader.readStringOrNull(offset)) as P;
     case 26:
       return (reader.readStringOrNull(offset)) as P;
     case 27:
+      return (reader.readString(offset)) as P;
+    case 28:
+      return (reader.readStringList(offset) ?? []) as P;
+    case 29:
+      return (reader.readDateTime(offset)) as P;
+    case 30:
+      return (reader.readLongOrNull(offset)) as P;
+    case 31:
+      return (reader.readDoubleOrNull(offset)) as P;
+    case 32:
+      return (reader.readStringOrNull(offset)) as P;
+    case 33:
       return (reader.readDateTime(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -1707,6 +1799,140 @@ extension JiveTransactionQueryWhere
       ));
     });
   }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      splitGroupKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'splitGroupKey',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      splitGroupKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'splitGroupKey',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      splitGroupKeyEqualTo(String? splitGroupKey) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'splitGroupKey',
+        value: [splitGroupKey],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      splitGroupKeyNotEqualTo(String? splitGroupKey) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'splitGroupKey',
+              lower: [],
+              upper: [splitGroupKey],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'splitGroupKey',
+              lower: [splitGroupKey],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'splitGroupKey',
+              lower: [splitGroupKey],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'splitGroupKey',
+              lower: [],
+              upper: [splitGroupKey],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      reimbursementStatusIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'reimbursementStatus',
+        value: [null],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      reimbursementStatusIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.between(
+        indexName: r'reimbursementStatus',
+        lower: [null],
+        includeLower: false,
+        upper: [],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      reimbursementStatusEqualTo(String? reimbursementStatus) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addWhereClause(IndexWhereClause.equalTo(
+        indexName: r'reimbursementStatus',
+        value: [reimbursementStatus],
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterWhereClause>
+      reimbursementStatusNotEqualTo(String? reimbursementStatus) {
+    return QueryBuilder.apply(this, (query) {
+      if (query.whereSort == Sort.asc) {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'reimbursementStatus',
+              lower: [],
+              upper: [reimbursementStatus],
+              includeUpper: false,
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'reimbursementStatus',
+              lower: [reimbursementStatus],
+              includeLower: false,
+              upper: [],
+            ));
+      } else {
+        return query
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'reimbursementStatus',
+              lower: [reimbursementStatus],
+              includeLower: false,
+              upper: [],
+            ))
+            .addWhereClause(IndexWhereClause.between(
+              indexName: r'reimbursementStatus',
+              lower: [],
+              upper: [reimbursementStatus],
+              includeUpper: false,
+            ));
+      }
+    });
+  }
 }
 
 extension JiveTransactionQueryFilter
@@ -2461,6 +2687,90 @@ extension JiveTransactionQueryFilter
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      discountAmountIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'discountAmount',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      discountAmountIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'discountAmount',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      discountAmountEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'discountAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      discountAmountGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'discountAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      discountAmountLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'discountAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      discountAmountBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'discountAmount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
       exchangeFeeIsNull() {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(const FilterCondition.isNull(
@@ -2793,6 +3103,100 @@ extension JiveTransactionQueryFilter
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      excludeFromTotalsEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'excludeFromTotals',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      feeAmountIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'feeAmount',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      feeAmountIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'feeAmount',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      feeAmountEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'feeAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      feeAmountGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'feeAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      feeAmountLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'feeAmount',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      feeAmountBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'feeAmount',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
       idEqualTo(Id value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -3068,6 +3472,80 @@ extension JiveTransactionQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'projectId',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'quickActionId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'quickActionId',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'quickActionId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'quickActionId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'quickActionId',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      quickActionIdBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'quickActionId',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -3454,6 +3932,160 @@ extension JiveTransactionQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'reimbursementStatus',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'reimbursementStatus',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'reimbursementStatus',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'reimbursementStatus',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'reimbursementStatus',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'reimbursementStatus',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'reimbursementStatus',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'reimbursementStatus',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'reimbursementStatus',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'reimbursementStatus',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'reimbursementStatus',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      reimbursementStatusIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'reimbursementStatus',
+        value: '',
       ));
     });
   }
@@ -4051,6 +4683,160 @@ extension JiveTransactionQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.greaterThan(
         property: r'source',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'splitGroupKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'splitGroupKey',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyEqualTo(
+    String? value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'splitGroupKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyGreaterThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'splitGroupKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyLessThan(
+    String? value, {
+    bool include = false,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'splitGroupKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyBetween(
+    String? lower,
+    String? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'splitGroupKey',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyStartsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.startsWith(
+        property: r'splitGroupKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyEndsWith(
+    String value, {
+    bool caseSensitive = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.endsWith(
+        property: r'splitGroupKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyContains(String value, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.contains(
+        property: r'splitGroupKey',
+        value: value,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyMatches(String pattern, {bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.matches(
+        property: r'splitGroupKey',
+        wildcard: pattern,
+        caseSensitive: caseSensitive,
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyIsEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'splitGroupKey',
+        value: '',
+      ));
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterFilterCondition>
+      splitGroupKeyIsNotEmpty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        property: r'splitGroupKey',
         value: '',
       ));
     });
@@ -5227,6 +6013,20 @@ extension JiveTransactionQuerySortBy
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByDiscountAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'discountAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByDiscountAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'discountAmount', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
       sortByExchangeFee() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'exchangeFee', Sort.asc);
@@ -5282,6 +6082,34 @@ extension JiveTransactionQuerySortBy
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByExcludeFromTotals() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'excludeFromTotals', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByExcludeFromTotalsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'excludeFromTotals', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByFeeAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'feeAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByFeeAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'feeAmount', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> sortByNote() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'note', Sort.asc);
@@ -5306,6 +6134,20 @@ extension JiveTransactionQuerySortBy
       sortByProjectIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'projectId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByQuickActionId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quickActionId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByQuickActionIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quickActionId', Sort.desc);
     });
   }
 
@@ -5351,6 +6193,20 @@ extension JiveTransactionQuerySortBy
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByReimbursementStatus() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'reimbursementStatus', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortByReimbursementStatusDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'reimbursementStatus', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
       sortBySmartTagOptOutAll() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'smartTagOptOutAll', Sort.asc);
@@ -5374,6 +6230,20 @@ extension JiveTransactionQuerySortBy
       sortBySourceDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'source', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortBySplitGroupKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'splitGroupKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      sortBySplitGroupKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'splitGroupKey', Sort.desc);
     });
   }
 
@@ -5559,6 +6429,20 @@ extension JiveTransactionQuerySortThenBy
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByDiscountAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'discountAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByDiscountAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'discountAmount', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
       thenByExchangeFee() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'exchangeFee', Sort.asc);
@@ -5614,6 +6498,34 @@ extension JiveTransactionQuerySortThenBy
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByExcludeFromTotals() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'excludeFromTotals', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByExcludeFromTotalsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'excludeFromTotals', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByFeeAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'feeAmount', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByFeeAmountDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'feeAmount', Sort.desc);
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -5650,6 +6562,20 @@ extension JiveTransactionQuerySortThenBy
       thenByProjectIdDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'projectId', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByQuickActionId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quickActionId', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByQuickActionIdDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'quickActionId', Sort.desc);
     });
   }
 
@@ -5695,6 +6621,20 @@ extension JiveTransactionQuerySortThenBy
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByReimbursementStatus() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'reimbursementStatus', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenByReimbursementStatusDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'reimbursementStatus', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
       thenBySmartTagOptOutAll() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'smartTagOptOutAll', Sort.asc);
@@ -5718,6 +6658,20 @@ extension JiveTransactionQuerySortThenBy
       thenBySourceDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'source', Sort.desc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenBySplitGroupKey() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'splitGroupKey', Sort.asc);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QAfterSortBy>
+      thenBySplitGroupKeyDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'splitGroupKey', Sort.desc);
     });
   }
 
@@ -5875,6 +6829,13 @@ extension JiveTransactionQueryWhereDistinct
   }
 
   QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByDiscountAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'discountAmount');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
       distinctByExchangeFee() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'exchangeFee');
@@ -5903,6 +6864,20 @@ extension JiveTransactionQueryWhereDistinct
     });
   }
 
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByExcludeFromTotals() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'excludeFromTotals');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByFeeAmount() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'feeAmount');
+    });
+  }
+
   QueryBuilder<JiveTransaction, JiveTransaction, QDistinct> distinctByNote(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -5914,6 +6889,13 @@ extension JiveTransactionQueryWhereDistinct
       distinctByProjectId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'projectId');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByQuickActionId() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'quickActionId');
     });
   }
 
@@ -5935,6 +6917,14 @@ extension JiveTransactionQueryWhereDistinct
       distinctByRecurringRuleId() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'recurringRuleId');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctByReimbursementStatus({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'reimbursementStatus',
+          caseSensitive: caseSensitive);
     });
   }
 
@@ -5963,6 +6953,14 @@ extension JiveTransactionQueryWhereDistinct
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'source', caseSensitive: caseSensitive);
+    });
+  }
+
+  QueryBuilder<JiveTransaction, JiveTransaction, QDistinct>
+      distinctBySplitGroupKey({bool caseSensitive = true}) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'splitGroupKey',
+          caseSensitive: caseSensitive);
     });
   }
 
@@ -6078,6 +7076,13 @@ extension JiveTransactionQueryProperty
   }
 
   QueryBuilder<JiveTransaction, double?, QQueryOperations>
+      discountAmountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'discountAmount');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, double?, QQueryOperations>
       exchangeFeeProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'exchangeFee');
@@ -6105,6 +7110,19 @@ extension JiveTransactionQueryProperty
     });
   }
 
+  QueryBuilder<JiveTransaction, bool, QQueryOperations>
+      excludeFromTotalsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'excludeFromTotals');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, double?, QQueryOperations> feeAmountProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'feeAmount');
+    });
+  }
+
   QueryBuilder<JiveTransaction, String?, QQueryOperations> noteProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'note');
@@ -6114,6 +7132,13 @@ extension JiveTransactionQueryProperty
   QueryBuilder<JiveTransaction, int?, QQueryOperations> projectIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'projectId');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, int?, QQueryOperations>
+      quickActionIdProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'quickActionId');
     });
   }
 
@@ -6134,6 +7159,13 @@ extension JiveTransactionQueryProperty
       recurringRuleIdProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'recurringRuleId');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, String?, QQueryOperations>
+      reimbursementStatusProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'reimbursementStatus');
     });
   }
 
@@ -6161,6 +7193,13 @@ extension JiveTransactionQueryProperty
   QueryBuilder<JiveTransaction, String, QQueryOperations> sourceProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'source');
+    });
+  }
+
+  QueryBuilder<JiveTransaction, String?, QQueryOperations>
+      splitGroupKeyProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'splitGroupKey');
     });
   }
 

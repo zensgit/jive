@@ -4,6 +4,8 @@ import 'package:isar/isar.dart';
 
 import '../../core/database/bill_relation_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/repository/isar_transaction_repository.dart';
+import '../../core/repository/transaction_repository.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/reimbursement_service.dart';
 
@@ -32,7 +34,8 @@ class _ReimbursementLabScreenState extends State<ReimbursementLabScreen> {
     setState(() => _loading = true);
     final isar = _isar ?? await DatabaseService.getInstance();
     final service = ReimbursementService(isar);
-    final all = await isar.collection<JiveTransaction>().where().findAll();
+    final TransactionRepository txRepo = IsarTransactionRepository(isar);
+    final all = await txRepo.getAll();
     final source = all.where((tx) {
       final type = (tx.type ?? 'expense').trim();
       return type == 'expense' || type == 'income';
