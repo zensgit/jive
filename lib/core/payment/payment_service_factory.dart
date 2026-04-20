@@ -4,6 +4,7 @@ import 'alipay_payment_service.dart';
 import '../entitlement/entitlement_service.dart';
 import 'app_store_payment_service.dart';
 import 'domestic_payment_order_client.dart';
+import 'domestic_payment_service_base.dart';
 import 'payment_provider_resolver.dart';
 import 'payment_service.dart';
 import 'play_store_payment_service.dart';
@@ -37,6 +38,16 @@ PaymentService createPlatformPaymentService({
   );
 
   if (providers.isNotEmpty) {
+    final domesticProviders = providers.where((p) => p.isDomestic).toList();
+    if (domesticProviders.length > 1) {
+      return DomesticPaymentService(
+        providers: domesticProviders,
+        orderClient:
+            domesticOrderClient ?? SupabaseDomesticPaymentOrderClient(),
+        channel: paymentChannel,
+      );
+    }
+
     switch (providers.first) {
       case PaymentProvider.appleAppStore:
         return appStoreBuilder?.call() ??
@@ -142,8 +153,10 @@ class _UnavailablePaymentService extends PaymentService {
   Future<void> init() async {}
 
   @override
-  Future<PurchaseResult> purchase(String productId) async =>
-      PurchaseResult.error(_message);
+  Future<PurchaseResult> purchase(
+    String productId, {
+    PaymentProvider? provider,
+  }) async => PurchaseResult.error(_message, provider: provider);
 
   @override
   Future<PurchaseResult> restorePurchases() async =>

@@ -8,6 +8,7 @@ import '../../core/entitlement/user_tier.dart';
 import '../../core/payment/payment_provider_resolver.dart';
 import '../../core/payment/payment_service.dart';
 import '../../core/payment/product_ids.dart';
+import '../../core/payment/subscription_status_service.dart';
 
 /// Subscription comparison screen showing the 3-tier plan.
 ///
@@ -181,8 +182,13 @@ class _PlanCard extends StatefulWidget {
 
 class _PlanCardState extends State<_PlanCard> {
   bool _loading = false;
+  PaymentProvider? _selectedProvider;
 
-  Future<void> _handlePurchase(String productId, String tierLabel) async {
+  Future<void> _handlePurchase(
+    String productId,
+    String tierLabel, {
+    PaymentProvider? provider,
+  }) async {
     final payment = context.read<PaymentService>();
     if (!payment.isAvailable) {
       SubscriptionScreen._showSnackBar(context, '支付服务暂不可用');
@@ -191,7 +197,7 @@ class _PlanCardState extends State<_PlanCard> {
 
     setState(() => _loading = true);
     try {
-      final result = await payment.purchase(productId);
+      final result = await payment.purchase(productId, provider: provider);
       if (!mounted) return;
       if (result.success) {
         SubscriptionScreen._showSnackBar(context, '已升级到 $tierLabel');
@@ -242,13 +248,17 @@ class _PlanCardState extends State<_PlanCard> {
                 ],
                 const SizedBox(height: 12),
                 Text(
-                  '完成支付后，请回到 App 并点击“恢复购买”刷新权益。',
+                  '完成支付后，请回到 App 并点击“刷新权益”。',
                   style: TextStyle(color: Colors.grey.shade700),
                 ),
               ],
             ),
           ),
           actions: [
+            TextButton(
+              onPressed: () => _refreshEntitlement(dialogContext),
+              child: const Text('刷新权益'),
+            ),
             if (result.redirectUrl != null)
               TextButton(
                 onPressed: () async {
@@ -270,6 +280,27 @@ class _PlanCardState extends State<_PlanCard> {
         );
       },
     );
+  }
+
+  Future<void> _refreshEntitlement(BuildContext dialogContext) async {
+    final subscriptionStatus = context.read<SubscriptionStatusService>();
+    final entitlement = context.read<EntitlementService>();
+    final previousTier = entitlement.tier;
+
+    await subscriptionStatus.checkAndSync();
+    if (!mounted || !dialogContext.mounted) return;
+
+    final currentTier = entitlement.tier;
+    final upgraded =
+        currentTier != previousTier && currentTier != UserTier.free;
+    final message = upgraded ? '权益已刷新为${currentTier.label}' : '暂未检测到支付成功，请稍后再试';
+
+    ScaffoldMessenger.of(
+      dialogContext,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    if (upgraded) {
+      Navigator.of(dialogContext).pop();
+    }
   }
 
   /// Look up the store price for [productId], falling back to [fallback].
@@ -379,10 +410,8 @@ class _PlanCardState extends State<_PlanCard> {
                   const SizedBox(height: 16),
                   if (_loading)
                     const Center(child: CircularProgressIndicator())
-                  else if (widget.tier == UserTier.subscriber)
-                    _buildSubscriberButtons(payment)
                   else
-                    _buildSingleButton(payment),
+                    _buildPurchaseSection(payment),
                 ],
               ],
             ),
@@ -392,13 +421,86 @@ class _PlanCardState extends State<_PlanCard> {
     );
   }
 
+  Widget _buildPurchaseSection(PaymentService payment) {
+    final selector = _buildPaymentProviderSelector(payment);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (selector != null) ...[selector, const SizedBox(height: 12)],
+        if (widget.tier == UserTier.subscriber)
+          _buildSubscriberButtons(payment)
+        else
+          _buildSingleButton(payment),
+      ],
+    );
+  }
+
+  Widget? _buildPaymentProviderSelector(PaymentService payment) {
+    final providers = payment.availableProviders;
+    if (providers.length <= 1) return null;
+
+    final selectedProvider = _selectedProviderFor(payment);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '选择支付方式',
+          style: TextStyle(
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final provider in providers)
+              ChoiceChip(
+                label: Text(provider.label),
+                avatar: Icon(_iconForProvider(provider), size: 18),
+                selected: provider == selectedProvider,
+                onSelected: (_) => setState(() {
+                  _selectedProvider = provider;
+                }),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  PaymentProvider? _selectedProviderFor(PaymentService payment) {
+    final providers = payment.availableProviders;
+    if (_selectedProvider != null && providers.contains(_selectedProvider)) {
+      return _selectedProvider;
+    }
+    return payment.defaultProvider;
+  }
+
+  IconData _iconForProvider(PaymentProvider provider) {
+    switch (provider) {
+      case PaymentProvider.wechatPay:
+        return Icons.chat_bubble_outline;
+      case PaymentProvider.alipay:
+        return Icons.account_balance_wallet_outlined;
+      case PaymentProvider.googlePlay:
+      case PaymentProvider.appleAppStore:
+        return Icons.store_outlined;
+    }
+  }
+
   Widget _buildSingleButton(PaymentService payment) {
     final priceLabel = _storePrice(payment, ProductIds.paidUnlock, '¥28');
+    final provider = _selectedProviderFor(payment);
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
-        onPressed: () =>
-            _handlePurchase(ProductIds.paidUnlock, widget.tier.label),
+        onPressed: () => _handlePurchase(
+          ProductIds.paidUnlock,
+          widget.tier.label,
+          provider: provider,
+        ),
         style: FilledButton.styleFrom(
           backgroundColor: widget.highlight
               ? JiveTheme.primaryGreen
@@ -417,6 +519,7 @@ class _PlanCardState extends State<_PlanCard> {
   }
 
   Widget _buildSubscriberButtons(PaymentService payment) {
+    final provider = _selectedProviderFor(payment);
     final monthlyPrice = _storePrice(
       payment,
       ProductIds.subscriberMonthly,
@@ -436,6 +539,7 @@ class _PlanCardState extends State<_PlanCard> {
             onPressed: () => _handlePurchase(
               ProductIds.subscriberMonthly,
               widget.tier.label,
+              provider: provider,
             ),
             style: FilledButton.styleFrom(
               backgroundColor: Colors.grey.shade800,
@@ -454,8 +558,11 @@ class _PlanCardState extends State<_PlanCard> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: () =>
-                _handlePurchase(ProductIds.subscriberYearly, widget.tier.label),
+            onPressed: () => _handlePurchase(
+              ProductIds.subscriberYearly,
+              widget.tier.label,
+              provider: provider,
+            ),
             style: FilledButton.styleFrom(
               backgroundColor: JiveTheme.primaryGreen,
               padding: const EdgeInsets.symmetric(vertical: 14),
