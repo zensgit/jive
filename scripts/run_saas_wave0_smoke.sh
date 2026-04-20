@@ -37,7 +37,10 @@ resolve_flutter_bin() {
   for candidate in \
     "$APP_DIR/../../.flutter_sdk/bin/flutter" \
     "$APP_DIR/../.flutter_sdk/bin/flutter" \
-    "$APP_DIR/.flutter_sdk/bin/flutter"; do
+    "$APP_DIR/.flutter_sdk/bin/flutter" \
+    "$HOME/development/flutter/bin/flutter" \
+    "$HOME/flutter/bin/flutter" \
+    "/opt/homebrew/bin/flutter"; do
     if [[ -x "$candidate" ]]; then
       printf '%s\n' "$candidate"
       return 0

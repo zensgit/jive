@@ -14,6 +14,7 @@ scripts/run_saas_staging_rollout.sh preflight \
   --project-ref "$STAGING_PROJECT_REF" \
   --db-password "$STAGING_DB_PASSWORD" \
   --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --profile core \
   --env-file /tmp/jive-saas-staging.env
 ```
 
@@ -23,7 +24,8 @@ scripts/run_saas_staging_rollout.sh preflight \
 - `STAGING_DB_PASSWORD`
 - `SUPABASE_ACCESS_TOKEN`
 - `/tmp/jive-saas-staging.env` 是否存在
-- secrets 文件里 16 个必需键是否都有值
+- secrets 文件里当前 profile 所需键是否都有值
+- 如启用 `--pg-fallback`，还会检查 `STAGING_DB_URL` 与 Python `psycopg`
 
 ## 值班顺序
 
@@ -132,6 +134,50 @@ scripts/run_saas_staging_rollout.sh dry-run \
 - 如果只是“少了部分编号”，先确认是不是远端已应用
 - 如果 history 明显错乱，先不要继续 apply
 - 保留 dry-run 输出，单独处理 migration history
+
+### 7.1 `db push` 卡在远端数据库连接阶段
+症状：
+- `supabase db push` 长时间停在连接远端数据库
+- 或 Supabase CLI 远端连接失败，但你有可用的 direct Postgres URL
+
+处理：
+- 先用 fallback plan 看远端状态：
+
+```bash
+scripts/run_saas_staging_rollout.sh dry-run \
+  --profile core \
+  --pg-fallback-only \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --db-url "$STAGING_DB_URL"
+```
+
+- 如果 plan 输出的 `baseline_versions` / `pending_versions` 符合预期，再 apply：
+
+```bash
+scripts/run_saas_staging_rollout.sh apply \
+  --profile core \
+  --pg-fallback-only \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --db-url "$STAGING_DB_URL"
+```
+
+### 7.2 `pg fallback runtime missing psycopg`
+症状：
+- `preflight --pg-fallback` 报缺少 `psycopg`
+
+处理：
+
+```bash
+python3 -m pip install --user 'psycopg[binary]'
+```
+
+说明：
+- fallback 只支持仓库中已显式审核过的迁移版本
+- 如果新增迁移未加入 fallback 白名单，脚本会直接失败，避免误 apply 未审 SQL
 
 ### 8. `functions deploy` 成功但 Dashboard 看不到最新版本
 症状：

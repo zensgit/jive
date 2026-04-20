@@ -8,6 +8,7 @@ ENV_FILE="${STAGING_ENV_FILE:-/tmp/jive-saas-staging.env}"
 PROJECT_REF="${STAGING_PROJECT_REF:-}"
 DB_PASSWORD="${STAGING_DB_PASSWORD:-}"
 ACCESS_TOKEN="${SUPABASE_ACCESS_TOKEN:-}"
+DB_URL="${STAGING_DB_URL:-}"
 FUNCTIONS_URL="${SUPABASE_FUNCTIONS_URL:-}"
 SKIP_LOCAL_SMOKE=0
 SKIP_DRY_RUN=0
@@ -16,6 +17,10 @@ SKIP_DEPLOY=0
 SKIP_FUNCTION_SMOKE=0
 SKIP_APK=0
 SKIP_ONLINE_READINESS=0
+PG_FALLBACK=0
+PG_FALLBACK_ONLY=0
+PG_LOCK_TIMEOUT="${STAGING_DB_LOCK_TIMEOUT:-4s}"
+PG_STATEMENT_TIMEOUT="${STAGING_DB_STATEMENT_TIMEOUT:-60s}"
 
 usage() {
   cat <<'EOF'
@@ -27,7 +32,13 @@ Options:
   --project-ref <ref>     Supabase project ref. Falls back to STAGING_PROJECT_REF.
   --db-password <value>   Supabase DB password. Falls back to STAGING_DB_PASSWORD.
   --access-token <value>  Supabase access token. Falls back to SUPABASE_ACCESS_TOKEN.
+  --db-url <value>        Remote Postgres URL for migration fallback. Falls back to STAGING_DB_URL.
   --functions-url <url>   Optional functions base URL. Defaults to SUPABASE_URL/functions/v1.
+  --pg-fallback           Allow direct Postgres fallback when Supabase CLI db push fails.
+  --pg-fallback-only      Skip Supabase CLI db push and use the direct Postgres path immediately.
+  --pg-lock-timeout <v>   Lock timeout used by the Postgres fallback. Defaults to STAGING_DB_LOCK_TIMEOUT or 4s.
+  --pg-statement-timeout <v>
+                          Statement timeout used by the Postgres fallback. Defaults to STAGING_DB_STATEMENT_TIMEOUT or 60s.
   --skip-local-smoke      Skip scripts/run_saas_wave0_smoke.sh.
   --skip-dry-run          Skip migration dry-run.
   --skip-apply            Skip migration apply.
@@ -77,8 +88,29 @@ parse_args() {
         ACCESS_TOKEN="${2:-}"
         shift 2
         ;;
+      --db-url)
+        DB_URL="${2:-}"
+        shift 2
+        ;;
       --functions-url)
         FUNCTIONS_URL="${2:-}"
+        shift 2
+        ;;
+      --pg-fallback)
+        PG_FALLBACK=1
+        shift
+        ;;
+      --pg-fallback-only)
+        PG_FALLBACK=1
+        PG_FALLBACK_ONLY=1
+        shift
+        ;;
+      --pg-lock-timeout)
+        PG_LOCK_TIMEOUT="${2:-}"
+        shift 2
+        ;;
+      --pg-statement-timeout)
+        PG_STATEMENT_TIMEOUT="${2:-}"
         shift 2
         ;;
       --skip-local-smoke)
@@ -130,6 +162,9 @@ with_staging_env() {
   STAGING_ENV_FILE="$ENV_FILE" \
   STAGING_PROJECT_REF="$PROJECT_REF" \
   STAGING_DB_PASSWORD="$DB_PASSWORD" \
+  STAGING_DB_URL="$DB_URL" \
+  STAGING_DB_LOCK_TIMEOUT="$PG_LOCK_TIMEOUT" \
+  STAGING_DB_STATEMENT_TIMEOUT="$PG_STATEMENT_TIMEOUT" \
   SUPABASE_ACCESS_TOKEN="$ACCESS_TOKEN" \
   SUPABASE_FUNCTIONS_URL="$FUNCTIONS_URL" \
     "$@"
@@ -141,6 +176,21 @@ main() {
   log "env file: $ENV_FILE"
   log "initializing core env file"
   bash "$APP_DIR/scripts/init_saas_staging_env.sh" --env-file "$ENV_FILE"
+
+  local -a rollout_pg_args=()
+  if [[ "$PG_FALLBACK" -eq 1 ]]; then
+    rollout_pg_args+=(--pg-fallback)
+  fi
+  if [[ "$PG_FALLBACK_ONLY" -eq 1 ]]; then
+    rollout_pg_args+=(--pg-fallback-only)
+  fi
+  if [[ -n "$DB_URL" ]]; then
+    rollout_pg_args+=(--db-url "$DB_URL")
+  fi
+  rollout_pg_args+=(
+    --pg-lock-timeout "$PG_LOCK_TIMEOUT"
+    --pg-statement-timeout "$PG_STATEMENT_TIMEOUT"
+  )
 
   local readiness_args=(--profile core --strict --env-file "$ENV_FILE")
   if [[ "$SKIP_ONLINE_READINESS" -ne 1 ]]; then
@@ -166,7 +216,8 @@ main() {
     with_staging_env bash "$APP_DIR/scripts/run_saas_staging_rollout.sh" \
       dry-run \
       --profile core \
-      --env-file "$ENV_FILE"
+      --env-file "$ENV_FILE" \
+      "${rollout_pg_args[@]}"
   else
     log "skipping migration dry-run"
   fi
@@ -177,7 +228,8 @@ main() {
       apply \
       --profile core \
       --skip-link \
-      --env-file "$ENV_FILE"
+      --env-file "$ENV_FILE" \
+      "${rollout_pg_args[@]}"
   else
     log "skipping migration apply"
   fi
