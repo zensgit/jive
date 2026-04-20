@@ -37,11 +37,14 @@ REQUIRED_MIGRATIONS=(
   supabase/migrations/010_create_analytics_events.sql
   supabase/migrations/011_create_notification_queue.sql
   supabase/migrations/012_allow_admin_subscription_override.sql
+  supabase/migrations/013_create_domestic_payment_orders.sql
 )
 
 REQUIRED_FUNCTIONS=(
   supabase/functions/subscription-webhook/index.ts
   supabase/functions/verify-subscription/index.ts
+  supabase/functions/create-payment-order/index.ts
+  supabase/functions/domestic-payment-webhook/index.ts
   supabase/functions/analytics/index.ts
   supabase/functions/send-notification/index.ts
   supabase/functions/admin/index.ts
@@ -73,6 +76,7 @@ BILLING_PROVIDER_ENV_FILE_KEYS=(
   APPLE_APP_STORE_SHARED_SECRET
   APPLE_APP_STORE_APPLE_ID
   APPLE_APP_STORE_ENVIRONMENT
+  DOMESTIC_PAYMENT_WEBHOOK_TOKEN
 )
 
 usage() {

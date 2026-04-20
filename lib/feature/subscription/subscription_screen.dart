@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/design_system/theme.dart';
@@ -65,13 +66,7 @@ class SubscriptionScreen extends StatelessWidget {
               '借贷管理',
               '商户记忆',
             ],
-            lockedFeatures: const [
-              '云同步',
-              '多设备使用',
-              '投资追踪',
-              '高级分析',
-              '语音记账',
-            ],
+            lockedFeatures: const ['云同步', '多设备使用', '投资追踪', '高级分析', '语音记账'],
           ),
           const SizedBox(height: 16),
           _PlanCard(
@@ -202,11 +197,7 @@ class _PlanCardState extends State<_PlanCard> {
         SubscriptionScreen._showSnackBar(context, '已升级到 $tierLabel');
         Navigator.of(context).pop();
       } else if (result.isPending) {
-        final provider = result.provider?.label ?? '支付';
-        SubscriptionScreen._showSnackBar(
-          context,
-          result.errorMessage ?? '$provider 订单已创建，请完成支付后刷新权益',
-        );
+        await _showPendingPaymentDialog(result);
       } else {
         SubscriptionScreen._showSnackBar(
           context,
@@ -216,6 +207,69 @@ class _PlanCardState extends State<_PlanCard> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _showPendingPaymentDialog(PurchaseResult result) async {
+    final provider = result.provider?.label ?? '支付';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('支付订单已创建'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(result.errorMessage ?? '$provider 订单已创建，请完成支付后刷新权益'),
+                if (result.orderId != null) ...[
+                  const SizedBox(height: 12),
+                  _PendingPaymentValue(label: '订单号', value: result.orderId!),
+                ],
+                if (result.redirectUrl != null) ...[
+                  const SizedBox(height: 12),
+                  _PendingPaymentValue(
+                    label: '支付链接',
+                    value: result.redirectUrl!,
+                  ),
+                ],
+                if (result.qrCodeUrl != null) ...[
+                  const SizedBox(height: 12),
+                  _PendingPaymentValue(
+                    label: '二维码链接',
+                    value: result.qrCodeUrl!,
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  '完成支付后，请回到 App 并点击“恢复购买”刷新权益。',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (result.redirectUrl != null)
+              TextButton(
+                onPressed: () async {
+                  await Clipboard.setData(
+                    ClipboardData(text: result.redirectUrl!),
+                  );
+                  if (!dialogContext.mounted) return;
+                  ScaffoldMessenger.of(
+                    dialogContext,
+                  ).showSnackBar(const SnackBar(content: Text('支付链接已复制')));
+                },
+                child: const Text('复制支付链接'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('知道了'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   /// Look up the store price for [productId], falling back to [fallback].
@@ -415,6 +469,31 @@ class _PlanCardState extends State<_PlanCard> {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _PendingPaymentValue extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _PendingPaymentValue({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        SelectableText(value, style: const TextStyle(fontSize: 13)),
       ],
     );
   }

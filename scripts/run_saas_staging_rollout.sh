@@ -83,6 +83,10 @@ FULL_REQUIRED_ENV_FILE_KEYS=(
   NOTIFICATION_ADMIN_TOKEN
 )
 
+OPTIONAL_ENV_FILE_KEYS=(
+  DOMESTIC_PAYMENT_MOCK_BASE_URL
+)
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -236,6 +240,11 @@ selected_env_keys() {
   else
     printf '%s\n' "${FULL_REQUIRED_ENV_FILE_KEYS[@]}"
   fi
+}
+
+selected_secret_keys() {
+  selected_env_keys
+  printf '%s\n' "${OPTIONAL_ENV_FILE_KEYS[@]}"
 }
 
 selected_functions() {
@@ -463,7 +472,7 @@ build_env_subset_file() {
     if [[ -n "$value" ]]; then
       printf '%s=%s\n' "$key" "$value" >> "$output_file"
     fi
-  done < <(selected_env_keys)
+  done < <(selected_secret_keys)
 
   printf '%s\n' "$output_file"
 }

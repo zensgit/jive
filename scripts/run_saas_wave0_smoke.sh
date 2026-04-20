@@ -168,20 +168,20 @@ fi
 
 if have_all supabase/functions/create-payment-order/index.ts supabase/functions/create-payment-order/index_test.ts; then
   log "billing create-payment-order smoke"
-  "${DENO_RUNNER[@]}" check \
+  run_deno check \
     supabase/functions/create-payment-order/index.ts \
     supabase/functions/create-payment-order/index_test.ts
-  "${DENO_RUNNER[@]}" test --allow-env supabase/functions/create-payment-order/index_test.ts
+  run_deno test --allow-env supabase/functions/create-payment-order/index_test.ts
 else
   log "billing create-payment-order smoke skipped (create-payment-order files not present)"
 fi
 
 if have_all supabase/functions/domestic-payment-webhook/index.ts supabase/functions/domestic-payment-webhook/index_test.ts; then
   log "billing domestic-payment-webhook smoke"
-  "${DENO_RUNNER[@]}" check \
+  run_deno check \
     supabase/functions/domestic-payment-webhook/index.ts \
     supabase/functions/domestic-payment-webhook/index_test.ts
-  "${DENO_RUNNER[@]}" test --allow-env supabase/functions/domestic-payment-webhook/index_test.ts
+  run_deno test --allow-env supabase/functions/domestic-payment-webhook/index_test.ts
 else
   log "billing domestic-payment-webhook smoke skipped (domestic-payment-webhook files not present)"
 fi
