@@ -67,7 +67,8 @@ class InvestmentLedgerService {
       ..securityId = securityId
       ..action = InvestmentAction.dividend.name
       ..quantity = 0
-      ..price = amount // store dividend amount in price field
+      // Store dividend amount in the price field for ledger-only events.
+      ..price = amount
       ..fee = 0
       ..accountId = accountId
       ..transactionDate = date ?? DateTime.now()
@@ -101,7 +102,8 @@ class InvestmentLedgerService {
     final tx = JiveInvestmentTransaction()
       ..securityId = securityId
       ..action = InvestmentAction.split.name
-      ..quantity = ratio // store ratio in quantity
+      // Store split ratio in the quantity field for ledger-only events.
+      ..quantity = ratio
       ..price = 0
       ..fee = 0
       ..accountId = accountId
@@ -178,8 +180,8 @@ class InvestmentLedgerService {
   }
 
   /// 从数据库获取成本基础
-  Future<CostBasis> getCostBasis(int securityId) async {
-    final txs = await getInvestmentHistory(securityId);
+  Future<CostBasis> getCostBasis(int securityId, {int? accountId}) async {
+    final txs = await getInvestmentHistory(securityId, accountId: accountId);
     return calculateCostBasis(txs);
   }
 
@@ -219,8 +221,8 @@ class InvestmentLedgerService {
   }
 
   /// 从数据库获取已实现盈亏
-  Future<double> getRealizedGain(int securityId) async {
-    final txs = await getInvestmentHistory(securityId);
+  Future<double> getRealizedGain(int securityId, {int? accountId}) async {
+    final txs = await getInvestmentHistory(securityId, accountId: accountId);
     return calculateRealizedGain(txs);
   }
 
@@ -228,23 +230,27 @@ class InvestmentLedgerService {
 
   /// 获取某证券的全部交易记录，按日期排序
   Future<List<JiveInvestmentTransaction>> getInvestmentHistory(
-    int securityId,
-  ) async {
+    int securityId, {
+    int? accountId,
+  }) async {
     return _isar.jiveInvestmentTransactions
         .filter()
         .securityIdEqualTo(securityId)
+        .optional(accountId != null, (q) => q.accountIdEqualTo(accountId))
         .sortByTransactionDate()
         .findAll();
   }
 
   /// 获取某证券的分红记录
   Future<List<JiveInvestmentTransaction>> getDividendHistory(
-    int securityId,
-  ) async {
+    int securityId, {
+    int? accountId,
+  }) async {
     return _isar.jiveInvestmentTransactions
         .filter()
         .securityIdEqualTo(securityId)
         .actionEqualTo(InvestmentAction.dividend.name)
+        .optional(accountId != null, (q) => q.accountIdEqualTo(accountId))
         .sortByTransactionDate()
         .findAll();
   }

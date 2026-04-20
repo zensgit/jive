@@ -6,6 +6,7 @@ import 'package:isar/isar.dart';
 import 'package:jive/core/database/currency_model.dart';
 import 'package:jive/core/database/investment_model.dart';
 import 'package:jive/core/service/currency_service.dart';
+import 'package:jive/core/service/investment_ledger_service.dart';
 import 'package:jive/core/service/investment_service.dart';
 
 class _NullRateCurrencyService extends CurrencyService {
@@ -197,6 +198,58 @@ void main() {
     expect(holdings[1].accountId, 2);
     expect(holdings[1].quantity, 5);
     expect(holdings[1].costBasis, closeTo(20, 1e-9));
+  });
+
+  test('investment ledger history can be scoped by accountId', () async {
+    final ledgerService = InvestmentLedgerService(isar);
+    final security = await investmentService.addSecurity(
+      ticker: 'TSLA',
+      name: 'Tesla',
+      type: SecurityType.stock,
+      currency: 'USD',
+      latestPrice: 200,
+    );
+
+    await investmentService.recordTransaction(
+      securityId: security.id,
+      action: 'buy',
+      quantity: 10,
+      price: 100,
+      accountId: 1,
+    );
+    await investmentService.recordTransaction(
+      securityId: security.id,
+      action: 'buy',
+      quantity: 5,
+      price: 120,
+      accountId: 2,
+    );
+    await ledgerService.recordDividend(
+      securityId: security.id,
+      amount: 12,
+      accountId: 1,
+    );
+
+    final allHistory = await ledgerService.getInvestmentHistory(security.id);
+    final accountOneHistory = await ledgerService.getInvestmentHistory(
+      security.id,
+      accountId: 1,
+    );
+    final accountOneDividends = await ledgerService.getDividendHistory(
+      security.id,
+      accountId: 1,
+    );
+    final accountTwoCost = await ledgerService.getCostBasis(
+      security.id,
+      accountId: 2,
+    );
+
+    expect(allHistory, hasLength(3));
+    expect(accountOneHistory, hasLength(2));
+    expect(accountOneHistory.every((tx) => tx.accountId == 1), isTrue);
+    expect(accountOneDividends, hasLength(1));
+    expect(accountTwoCost.totalShares, 5);
+    expect(accountTwoCost.totalCost, 600);
   });
 
   test(

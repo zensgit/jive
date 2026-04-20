@@ -11,8 +11,13 @@ import '../../core/service/investment_service.dart';
 /// 投资明细账本页面
 class InvestmentLedgerScreen extends StatefulWidget {
   final int securityId;
+  final int? accountId;
 
-  const InvestmentLedgerScreen({super.key, required this.securityId});
+  const InvestmentLedgerScreen({
+    super.key,
+    required this.securityId,
+    this.accountId,
+  });
 
   @override
   State<InvestmentLedgerScreen> createState() => _InvestmentLedgerScreenState();
@@ -46,7 +51,10 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
 
   Future<void> _loadData() async {
     final security = await _isar.jiveSecuritys.get(widget.securityId);
-    final txs = await _ledgerService.getInvestmentHistory(widget.securityId);
+    final txs = await _ledgerService.getInvestmentHistory(
+      widget.securityId,
+      accountId: widget.accountId,
+    );
     final costBasis = _ledgerService.calculateCostBasis(txs);
     final realizedGain = _ledgerService.calculateRealizedGain(txs);
 
@@ -124,8 +132,10 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: JiveTheme.primaryGreen.withAlpha(25),
                     borderRadius: BorderRadius.circular(6),
@@ -197,18 +207,8 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
             const SizedBox(height: 12),
             Row(
               children: [
-                _statItem(
-                  theme,
-                  '未实现盈亏',
-                  _unrealizedPL,
-                  showSign: true,
-                ),
-                _statItem(
-                  theme,
-                  '已实现盈亏',
-                  _realizedGain,
-                  showSign: true,
-                ),
+                _statItem(theme, '未实现盈亏', _unrealizedPL, showSign: true),
+                _statItem(theme, '已实现盈亏', _realizedGain, showSign: true),
               ],
             ),
           ],
@@ -374,10 +374,12 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
 
     switch (action) {
       case InvestmentAction.buy:
-        subtitle = '${tx.quantity.toStringAsFixed(2)} 股 @ ${tx.price.toStringAsFixed(2)}';
+        subtitle =
+            '${tx.quantity.toStringAsFixed(2)} 股 @ ${tx.price.toStringAsFixed(2)}';
         amountText = '-${tx.totalAmount.toStringAsFixed(2)}';
       case InvestmentAction.sell:
-        subtitle = '${tx.quantity.toStringAsFixed(2)} 股 @ ${tx.price.toStringAsFixed(2)}';
+        subtitle =
+            '${tx.quantity.toStringAsFixed(2)} 股 @ ${tx.price.toStringAsFixed(2)}';
         amountText = '+${tx.totalAmount.toStringAsFixed(2)}';
       case InvestmentAction.dividend:
         subtitle = '现金分红';
@@ -484,22 +486,25 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
           children: [
             TextField(
               controller: qtyCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(labelText: '数量'),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: priceCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(labelText: '单价'),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: feeCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(labelText: '手续费'),
             ),
           ],
@@ -525,9 +530,9 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
 
     if (qty == null || qty <= 0 || price == null || price <= 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请输入有效的数量和价格')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请输入有效的数量和价格')));
       }
       return;
     }
@@ -539,13 +544,14 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
         quantity: qty,
         price: price,
         fee: fee,
+        accountId: widget.accountId,
       );
       await _loadData();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
       }
     }
   }
@@ -564,8 +570,9 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
             children: [
               TextField(
                 controller: amountCtrl,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: const InputDecoration(labelText: '分红金额'),
               ),
               const SizedBox(height: 12),
@@ -606,9 +613,9 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
     final amount = double.tryParse(amountCtrl.text);
     if (amount == null || amount <= 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请输入有效的分红金额')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请输入有效的分红金额')));
       }
       return;
     }
@@ -617,14 +624,15 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
       await _ledgerService.recordDividend(
         securityId: widget.securityId,
         amount: amount,
+        accountId: widget.accountId,
         date: selectedDate,
       );
       await _loadData();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
       }
     }
   }
@@ -641,8 +649,9 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
           children: [
             TextField(
               controller: ratioCtrl,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: '拆股比例',
                 hintText: '例: 2 表示 2:1 拆股',
@@ -668,9 +677,9 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
     final ratio = double.tryParse(ratioCtrl.text);
     if (ratio == null || ratio <= 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('请输入有效的拆股比例')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请输入有效的拆股比例')));
       }
       return;
     }
@@ -679,13 +688,14 @@ class _InvestmentLedgerScreenState extends State<InvestmentLedgerScreen> {
       await _ledgerService.recordSplit(
         securityId: widget.securityId,
         ratio: ratio,
+        accountId: widget.accountId,
       );
       await _loadData();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('操作失败: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('操作失败: $e')));
       }
     }
   }
