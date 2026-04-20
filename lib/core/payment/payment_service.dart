@@ -96,8 +96,18 @@ abstract class PaymentService extends ChangeNotifier {
   /// Available products from the store.
   List<StoreProduct> get products;
 
+  /// Payment providers exposed by this service in UI order.
+  List<PaymentProvider> get availableProviders => const [];
+
+  /// Default provider used when the caller does not choose one explicitly.
+  PaymentProvider? get defaultProvider =>
+      availableProviders.isEmpty ? null : availableProviders.first;
+
   /// Purchase a product by its [productId].
-  Future<PurchaseResult> purchase(String productId);
+  Future<PurchaseResult> purchase(
+    String productId, {
+    PaymentProvider? provider,
+  });
 
   /// Restore previously purchased products.
   Future<PurchaseResult> restorePurchases();

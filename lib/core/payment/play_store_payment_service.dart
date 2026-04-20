@@ -5,6 +5,7 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../entitlement/entitlement_service.dart';
+import 'payment_provider_resolver.dart';
 import 'payment_service.dart';
 import 'product_ids.dart';
 import 'subscription_truth_repository.dart';
@@ -50,6 +51,11 @@ class PlayStorePaymentService extends PaymentService {
   List<StoreProduct> get products => List.unmodifiable(_products);
 
   @override
+  List<PaymentProvider> get availableProviders => const [
+    PaymentProvider.googlePlay,
+  ];
+
+  @override
   Future<void> init() async {
     _isAvailable = await _iap.isAvailable();
     if (!_isAvailable) {
@@ -89,7 +95,16 @@ class PlayStorePaymentService extends PaymentService {
   }
 
   @override
-  Future<PurchaseResult> purchase(String productId) async {
+  Future<PurchaseResult> purchase(
+    String productId, {
+    PaymentProvider? provider,
+  }) async {
+    if (provider != null && provider != PaymentProvider.googlePlay) {
+      return PurchaseResult.error(
+        'Google Play 不支持${provider.label}',
+        provider: provider,
+      );
+    }
     if (!_isAvailable || !_isReady) {
       return const PurchaseResult.error('支付服务不可用');
     }

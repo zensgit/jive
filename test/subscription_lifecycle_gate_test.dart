@@ -7,6 +7,7 @@ import 'package:jive/app/subscription_lifecycle_gate.dart';
 import 'package:jive/core/auth/auth_service.dart';
 import 'package:jive/core/auth/auth_state.dart';
 import 'package:jive/core/entitlement/entitlement_service.dart';
+import 'package:jive/core/payment/payment_provider_resolver.dart';
 import 'package:jive/core/payment/payment_service.dart';
 import 'package:jive/core/payment/subscription_status_service.dart';
 import 'package:jive/core/payment/subscription_truth_model.dart';
@@ -78,8 +79,10 @@ class FakePaymentService extends PaymentService {
   List<StoreProduct> get products => const [];
 
   @override
-  Future<PurchaseResult> purchase(String productId) async =>
-      const PurchaseResult.error('not implemented');
+  Future<PurchaseResult> purchase(
+    String productId, {
+    PaymentProvider? provider,
+  }) async => const PurchaseResult.error('not implemented');
 
   @override
   Future<PurchaseResult> restorePurchases() async {

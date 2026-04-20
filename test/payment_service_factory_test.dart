@@ -21,8 +21,10 @@ class _FakePaymentService extends PaymentService {
   List<StoreProduct> get products => const [];
 
   @override
-  Future<PurchaseResult> purchase(String productId) async =>
-      const PurchaseResult.error('not implemented');
+  Future<PurchaseResult> purchase(
+    String productId, {
+    PaymentProvider? provider,
+  }) async => const PurchaseResult.error('not implemented');
 
   @override
   Future<PurchaseResult> restorePurchases() async =>
@@ -126,6 +128,29 @@ void main() {
         );
 
         expect(service.isAvailable, isFalse);
+      },
+    );
+
+    test(
+      'creates multi-provider domestic payment service when both providers are enabled',
+      () async {
+        final entitlement = EntitlementService();
+
+        final service = createPlatformPaymentService(
+          entitlementService: entitlement,
+          platformOverride: TargetPlatform.android,
+          isWeb: false,
+          paymentChannel: PaymentChannel.directAndroid,
+          enableWechatPay: true,
+          enableAlipay: true,
+        );
+        await service.init();
+
+        expect(
+          service.availableProviders,
+          equals(const [PaymentProvider.wechatPay, PaymentProvider.alipay]),
+        );
+        expect(service.defaultProvider, PaymentProvider.wechatPay);
       },
     );
   });

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../entitlement/entitlement_service.dart';
 import '../entitlement/user_tier.dart';
+import 'payment_provider_resolver.dart';
 import 'payment_service.dart';
 import 'product_ids.dart';
 import 'subscription_truth_model.dart';
@@ -93,6 +94,11 @@ class AppStorePaymentService extends PaymentService {
   List<StoreProduct> get products => List.unmodifiable(_products);
 
   @override
+  List<PaymentProvider> get availableProviders => const [
+    PaymentProvider.appleAppStore,
+  ];
+
+  @override
   Future<void> init() async {
     _isAvailable = await _iap.isAvailable();
     if (!_isAvailable) {
@@ -132,7 +138,16 @@ class AppStorePaymentService extends PaymentService {
   }
 
   @override
-  Future<PurchaseResult> purchase(String productId) async {
+  Future<PurchaseResult> purchase(
+    String productId, {
+    PaymentProvider? provider,
+  }) async {
+    if (provider != null && provider != PaymentProvider.appleAppStore) {
+      return PurchaseResult.error(
+        'App Store 不支持${provider.label}',
+        provider: provider,
+      );
+    }
     if (!_isAvailable || !_isReady) {
       return const PurchaseResult.error('支付服务不可用');
     }
@@ -187,14 +202,16 @@ class AppStorePaymentService extends PaymentService {
       }
     }
 
-    return pending.future.timeout(
-      _restoreTimeout,
-      onTimeout: () => const PurchaseResult.error('没有可恢复的有效购买'),
-    ).whenComplete(() {
-      if (identical(_pendingRestore, pending)) {
-        _pendingRestore = null;
-      }
-    });
+    return pending.future
+        .timeout(
+          _restoreTimeout,
+          onTimeout: () => const PurchaseResult.error('没有可恢复的有效购买'),
+        )
+        .whenComplete(() {
+          if (identical(_pendingRestore, pending)) {
+            _pendingRestore = null;
+          }
+        });
   }
 
   void _handlePurchaseUpdates(List<PurchaseDetails> purchases) {
