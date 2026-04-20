@@ -51,10 +51,10 @@ class TransactionCalculatorKey extends StatelessWidget {
       final okColor = speechActive
           ? const Color(0xFFFF7043)
           : txType == TransactionType.income
-              ? const Color(0xFF4CAF50)
-              : txType == TransactionType.transfer
-                  ? const Color(0xFF1976D2)
-                  : const Color(0xFFEF5350);
+          ? const Color(0xFF4CAF50)
+          : txType == TransactionType.transfer
+          ? const Color(0xFF1976D2)
+          : const Color(0xFFEF5350);
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => onKeyPress(keyValue),
@@ -86,39 +86,55 @@ class TransactionCalculatorKey extends StatelessWidget {
 
     // ── +/× 和 -/÷ 可切换运算符键 ──
     if (isPlus || isMinus) {
-      final displayLabel =
-          isPlus ? (plusLabel ?? '+') : (minusLabel ?? '-');
+      final displayLabel = isPlus ? (plusLabel ?? '+') : (minusLabel ?? '-');
       final altLabel = isPlus ? '长按×' : '长按÷';
-      final isShowingAlt =
-          isPlus ? displayLabel == '×' : displayLabel == '÷';
+      final isShowingAlt = isPlus ? displayLabel == '×' : displayLabel == '÷';
+      final activeColor = JiveTheme.primaryGreen;
+      final activeBackground = activeColor.withValues(alpha: 0.10);
 
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => onKeyPress(keyValue),
         onLongPress: onOperatorToggle,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                displayLabel,
-                style: TextStyle(
-                  fontSize: 22,
-                  color: JiveTheme.primaryGreen,
-                  fontWeight: FontWeight.w500,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: isShowingAlt ? activeBackground : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isShowingAlt
+                  ? activeColor.withValues(alpha: 0.28)
+                  : Colors.transparent,
+            ),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  displayLabel,
+                  style: TextStyle(
+                    fontSize: 22,
+                    color: activeColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              // 小字提示另一个运算符
-              Text(
-                isShowingAlt
-                    ? (isPlus ? '长按+' : '长按-')
-                    : altLabel,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: secondary.withValues(alpha: 0.5),
+                // 小字提示另一个运算符，同时在 ×/÷ 状态下给出更明显的反馈。
+                Text(
+                  isShowingAlt ? (isPlus ? '当前×' : '当前÷') : altLabel,
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: isShowingAlt
+                        ? activeColor.withValues(alpha: 0.78)
+                        : secondary.withValues(alpha: 0.5),
+                    fontWeight: isShowingAlt
+                        ? FontWeight.w600
+                        : FontWeight.w400,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
@@ -132,22 +148,22 @@ class TransactionCalculatorKey extends StatelessWidget {
         child: isDel
             ? Icon(Icons.backspace_rounded, size: 22, color: secondary)
             : isAgain
-                ? Text(
-                    '再记',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: secondary,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  )
-                : Text(
-                    keyValue,
-                    style: GoogleFonts.rubik(
-                      fontSize: 24,
-                      color: textColor,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
+            ? Text(
+                '再记',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: secondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              )
+            : Text(
+                keyValue,
+                style: GoogleFonts.rubik(
+                  fontSize: 24,
+                  color: textColor,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
       ),
     );
   }

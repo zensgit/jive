@@ -21,6 +21,8 @@ class CompactAmountBar extends StatelessWidget {
   final DateTime selectedTime;
   final TextEditingController noteController;
   final FocusNode noteFocusNode;
+  final bool isNoteExpanded;
+  final VoidCallback onToggleNoteExpanded;
   final VoidCallback onTapTime;
   final VoidCallback? onTapCurrency;
   final double? expressionResult;
@@ -35,6 +37,8 @@ class CompactAmountBar extends StatelessWidget {
     required this.selectedTime,
     required this.noteController,
     required this.noteFocusNode,
+    required this.isNoteExpanded,
+    required this.onToggleNoteExpanded,
     required this.onTapTime,
     this.onTapCurrency,
     this.expressionResult,
@@ -195,8 +199,12 @@ class CompactAmountBar extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          // Row 2: time + note (full width)
+          // Row 2: time + inline note. Long notes expand in place instead of
+          // opening a modal, which keeps the high-frequency entry flow stable.
           Row(
+            crossAxisAlignment: isNoteExpanded
+                ? CrossAxisAlignment.start
+                : CrossAxisAlignment.center,
             children: [
               InkWell(
                 onTap: onTapTime,
@@ -230,15 +238,26 @@ class CompactAmountBar extends StatelessWidget {
                 child: TextField(
                   controller: noteController,
                   focusNode: noteFocusNode,
-                  maxLines: 1,
-                  textInputAction: TextInputAction.done,
+                  minLines: isNoteExpanded ? 2 : 1,
+                  maxLines: isNoteExpanded ? 3 : 1,
+                  keyboardType: isNoteExpanded
+                      ? TextInputType.multiline
+                      : TextInputType.text,
+                  textInputAction: isNoteExpanded
+                      ? TextInputAction.newline
+                      : TextInputAction.done,
                   keyboardAppearance: isDark
                       ? Brightness.dark
                       : Brightness.light,
-                  onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                  onSubmitted: (_) {
+                    if (!isNoteExpanded) {
+                      FocusScope.of(context).unfocus();
+                    }
+                  },
                   style: TextStyle(
                     fontSize: 12,
                     color: JiveTheme.textColor(context),
+                    height: 1.25,
                   ),
                   decoration: InputDecoration(
                     isDense: true,
@@ -251,6 +270,23 @@ class CompactAmountBar extends StatelessWidget {
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 6,
                       vertical: 4,
+                    ),
+                  ),
+                ),
+              ),
+              Tooltip(
+                message: isNoteExpanded ? '收起备注' : '展开备注',
+                child: InkWell(
+                  onTap: onToggleNoteExpanded,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      isNoteExpanded
+                          ? Icons.unfold_less_rounded
+                          : Icons.open_in_full_rounded,
+                      size: 14,
+                      color: JiveTheme.secondaryTextColor(context),
                     ),
                   ),
                 ),

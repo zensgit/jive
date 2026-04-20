@@ -136,6 +136,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   DateTime _selectedTime = DateTime.now();
   final TextEditingController _noteController = TextEditingController();
   final FocusNode _noteFocusNode = FocusNode();
+  bool _isNoteExpanded = false;
   final Map<TransactionType, Map<String, int>> _noteTagUsage = {};
   // ── Merchant memory ──
   MerchantSuggestion? _merchantSuggestion;
@@ -1260,6 +1261,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   void _toggleOperatorKey(String keyValue) {
+    HapticFeedback.selectionClick();
     setState(() {
       if (keyValue == '+') {
         _plusShowsMultiply = !_plusShowsMultiply;
@@ -1281,6 +1283,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _calculateToAmount();
       }
     });
+  }
+
+  void _toggleNoteExpanded() {
+    HapticFeedback.selectionClick();
+    setState(() => _isNoteExpanded = !_isNoteExpanded);
   }
 
   /// 是否包含运算表达式
@@ -1554,6 +1561,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         setState(() {
           _amountStr = "0";
           _noteController.clear();
+          _isNoteExpanded = false;
           _selectedSub = null;
           _selectedTagKeys.clear();
           _selectedProjectId = null;
@@ -1959,6 +1967,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     selectedTime: _selectedTime,
                     noteController: _noteController,
                     noteFocusNode: _noteFocusNode,
+                    isNoteExpanded: _isNoteExpanded,
+                    onToggleNoteExpanded: _toggleNoteExpanded,
                     onTapTime: _showTimePicker,
                     onTapCurrency: _showCurrencyPicker,
                     expressionResult: _expressionPreview(),
