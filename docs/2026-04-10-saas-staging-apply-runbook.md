@@ -77,6 +77,11 @@ bash scripts/check_saas_deployment_readiness.sh \
 - `SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
+说明：
+- 在 Supabase 托管的 Edge Functions 中，这 3 个 `SUPABASE_*` 变量由平台默认提供
+- `run_saas_staging_rollout.sh deploy` 不再把它们通过 `supabase secrets set` 重复推送
+- 如果需要本地 `supabase functions serve` 或构建客户端 APK，仍可以把它们保留在本地 env file
+
 Billing / Google：
 - `GOOGLE_SERVICE_ACCOUNT_EMAIL`
 - `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`
@@ -97,6 +102,23 @@ Ops / Admin：
 - `ADMIN_API_ALLOWED_ORIGINS`
 - `ANALYTICS_ADMIN_TOKEN`
 - `NOTIFICATION_ADMIN_TOKEN`
+
+### 2.1 Core SaaS 最小 secrets
+
+如果当前只想先验证服务器上的登录、同步和运营后台，而不接商店订阅，可先只准备：
+
+- `ADMIN_API_TOKEN`
+- `ADMIN_API_ALLOWED_ORIGINS`
+- `ANALYTICS_ADMIN_TOKEN`
+- `NOTIFICATION_ADMIN_TOKEN`
+
+这条路径会：
+- 仍然 apply 全部数据库迁移
+- 只推送 Core SaaS 所需 secrets
+- 只部署 `analytics`、`send-notification`、`admin`
+- 跳过 `subscription-webhook` 与 `verify-subscription`
+
+如果还要继续执行客户端 APK 构建或真实 App 端联调，仍需要在 env file 中补齐客户端安全的 `SUPABASE_URL` 与 `SUPABASE_ANON_KEY`。
 
 ## 迁移顺序
 
@@ -122,6 +144,34 @@ Ops / Admin：
 
 ```bash
 bash scripts/run_saas_core_staging_lane.sh \
+  --env-file /tmp/jive-saas-staging.env
+```
+
+如果当前 staging 项目的 `supabase db push` 卡在远端数据库连接阶段，可以在分步入口启用 Postgres fallback：
+
+```bash
+bash scripts/run_saas_staging_rollout.sh all \
+  --profile core \
+  --pg-fallback-only \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --db-url "$STAGING_DB_URL" \
+  --env-file /tmp/jive-saas-staging.env
+```
+
+如果远端负载较高，也可以放宽 fallback 的锁和语句超时：
+
+```bash
+bash scripts/run_saas_staging_rollout.sh all \
+  --profile core \
+  --pg-fallback-only \
+  --pg-lock-timeout 10s \
+  --pg-statement-timeout 180s \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --db-url "$STAGING_DB_URL" \
   --env-file /tmp/jive-saas-staging.env
 ```
 
@@ -163,12 +213,42 @@ npx -y supabase@latest db push \
 - 输出里应包含 `004 / 006 / 007 / 008 / 009 / 010 / 011 / 012`
 - 如果远端已有一部分迁移，CLI 会只显示 pending 部分
 
+如果 CLI 卡在 `Connecting to remote database`，改走 fallback dry-run：
+
+```bash
+bash scripts/run_saas_staging_rollout.sh dry-run \
+  --profile core \
+  --pg-fallback-only \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --db-url "$STAGING_DB_URL"
+```
+
+预期：
+- 输出 `remote_history_versions`
+- 输出 `baseline_versions`
+- 输出 `pending_versions`
+- 具体 baseline / pending 组合以远端实时状态为准
+
 ### Step 5. 正式 apply 迁移
 
 ```bash
 npx -y supabase@latest db push \
   --include-all \
   --workdir /Users/chauhua/Documents/GitHub/Jive/app
+```
+
+如果使用 fallback apply：
+
+```bash
+bash scripts/run_saas_staging_rollout.sh apply \
+  --profile core \
+  --pg-fallback-only \
+  --project-ref "$STAGING_PROJECT_REF" \
+  --db-password "$STAGING_DB_PASSWORD" \
+  --access-token "$SUPABASE_ACCESS_TOKEN" \
+  --db-url "$STAGING_DB_URL"
 ```
 
 ### Step 6. 准备 secrets 文件
