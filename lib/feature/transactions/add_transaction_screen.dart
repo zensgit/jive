@@ -138,6 +138,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   final FocusNode _noteFocusNode = FocusNode();
   bool _isNoteExpanded = false;
   final Map<TransactionType, Map<String, int>> _noteTagUsage = {};
+  StreamSubscription<void>? _categoryWatcher;
+  bool _isRefreshingCategories = false;
   // ── Merchant memory ──
   MerchantSuggestion? _merchantSuggestion;
   Timer? _merchantDebounce;
@@ -227,6 +229,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   @override
   void dispose() {
     _merchantDebounce?.cancel();
+    _categoryWatcher?.cancel();
     _inlineSearchController.dispose();
     _inlineSearchFocus.dispose();
     _noteController.dispose();
@@ -328,11 +331,19 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         selectSubName: _editingSubName,
       );
       await _loadSplitSiblings();
+      _startCategoryWatcher();
     } catch (e, s) {
       JiveLogger.e("Error loading categories", e, s);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _startCategoryWatcher() {
+    _categoryWatcher ??= _isar
+        .collection<JiveCategory>()
+        .watchLazy(fireImmediately: false)
+        .listen((_) => _refreshCategories());
   }
 
   Future<void> _loadParentsForType({
@@ -852,23 +863,35 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   Future<void> _refreshCategories() async {
-    if (!mounted) return;
-    setState(() {
-      _selectedParent = null;
-      _selectedSub = null;
-      _parentCategories = [];
-      _subCategories = [];
-      _isLoading = true;
-      _searchItems = [];
-      _searchItemsLoaded = false;
-      _searchKeyCache.clear();
-      _searchTokenCache.clear();
-      _isSearchMode = false;
-      _searchQuery = "";
-      _inlineSearchController.clear();
-    });
-    await _loadParentsForType();
-    if (mounted) setState(() => _isLoading = false);
+    if (!mounted || _isRefreshingCategories) return;
+    _isRefreshingCategories = true;
+    final parentKey = _selectedParent?.key;
+    final parentName = _selectedParent?.name;
+    final subKey = _selectedSub?.key;
+    final subName = _selectedSub?.name;
+    try {
+      setState(() {
+        _parentCategories = [];
+        _subCategories = [];
+        _isLoading = true;
+        _searchItems = [];
+        _searchItemsLoaded = false;
+        _searchKeyCache.clear();
+        _searchTokenCache.clear();
+        _isSearchMode = false;
+        _searchQuery = "";
+        _inlineSearchController.clear();
+      });
+      await _loadParentsForType(
+        selectParentKey: parentKey,
+        selectParentName: parentName,
+        selectSubKey: subKey,
+        selectSubName: subName,
+      );
+    } finally {
+      _isRefreshingCategories = false;
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _openCategoryManager() async {
