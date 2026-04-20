@@ -32,6 +32,8 @@ fi
 FULL_FUNCTIONS=(
   subscription-webhook
   verify-subscription
+  create-payment-order
+  domestic-payment-webhook
   analytics
   send-notification
   admin
@@ -45,6 +47,7 @@ CORE_FUNCTIONS=(
 
 NO_VERIFY_JWT_FUNCTIONS=(
   subscription-webhook
+  domestic-payment-webhook
   analytics
   send-notification
   admin
@@ -73,10 +76,15 @@ FULL_REQUIRED_ENV_FILE_KEYS=(
   APPLE_APP_STORE_ENVIRONMENT
   PUBSUB_BEARER_TOKEN
   WEBHOOK_HMAC_SECRET
+  DOMESTIC_PAYMENT_WEBHOOK_TOKEN
   ADMIN_API_TOKEN
   ADMIN_API_ALLOWED_ORIGINS
   ANALYTICS_ADMIN_TOKEN
   NOTIFICATION_ADMIN_TOKEN
+)
+
+OPTIONAL_ENV_FILE_KEYS=(
+  DOMESTIC_PAYMENT_MOCK_BASE_URL
 )
 
 usage() {
@@ -232,6 +240,11 @@ selected_env_keys() {
   else
     printf '%s\n' "${FULL_REQUIRED_ENV_FILE_KEYS[@]}"
   fi
+}
+
+selected_secret_keys() {
+  selected_env_keys
+  printf '%s\n' "${OPTIONAL_ENV_FILE_KEYS[@]}"
 }
 
 selected_functions() {
@@ -459,7 +472,7 @@ build_env_subset_file() {
     if [[ -n "$value" ]]; then
       printf '%s=%s\n' "$key" "$value" >> "$output_file"
     fi
-  done < <(selected_env_keys)
+  done < <(selected_secret_keys)
 
   printf '%s\n' "$output_file"
 }

@@ -80,13 +80,13 @@
 ## 当前代码现实
 
 ### 已有 Alpha 基础
-- **Auth**: [supabase_auth_service.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/core/auth/supabase_auth_service.dart)
-- **入口门控**: [main.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/main.dart), [jive_app.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/app/jive_app.dart)
+- **Auth**: [supabase_auth_service.dart](../lib/core/auth/supabase_auth_service.dart)
+- **入口门控**: [main.dart](../lib/main.dart), [jive_app.dart](../lib/app/jive_app.dart)
 - **订阅体系**: `lib/core/entitlement/`
-- **支付**: [play_store_payment_service.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/core/payment/play_store_payment_service.dart)
-- **同步引擎**: [sync_engine.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/core/sync/sync_engine.dart)
+- **支付**: [play_store_payment_service.dart](../lib/core/payment/play_store_payment_service.dart)
+- **同步引擎**: [sync_engine.dart](../lib/core/sync/sync_engine.dart)
 - **Supabase SQL 迁移**: `supabase/migrations/001-003`
-- **共享账本**: [shared_ledger_model.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/core/database/shared_ledger_model.dart)
+- **共享账本**: [shared_ledger_model.dart](../lib/core/database/shared_ledger_model.dart)
 
 ### 已确认的 Beta 阻塞
 - 本地 `transactions/accounts/budgets` 已有 `bookId`，但当前同步 payload 和 SQL schema 没有对应的 `book_id/book_key/workspace_key`
@@ -100,9 +100,42 @@
 - 先修边界，再修可信度，最后再补运营能力
 - 每个任务做成小 PR，不跨阶段扩 scope
 - 不顺手做 Web 端
-- 不顺手做国内支付/广告平台扩展
 - 不新增 SaaS 之外的产品功能
 - 每个阶段都要有文档、迁移说明和最小必要测试
+
+## 2026-04-12 增补：国内支付接入主线
+
+SaaS Beta 主线已经进入“上线后补可用支付渠道”的阶段，微信支付 / 支付宝接入改为单独主线推进。
+
+本轮决策：
+- 支持微信支付 / 支付宝
+- 优先渠道：`自托管 Web + Android 直装 / 国内渠道包`
+- `Google Play / App Store` 继续保持各自商店支付主链
+- `user_subscriptions` 继续作为唯一权益真相
+- 不把国内支付塞进现有 `verify-subscription` 商店验签链路
+
+执行文档：
+- [2026-04-12-wechat-alipay-payment-design.md](2026-04-12-wechat-alipay-payment-design.md)
+- [2026-04-12-wechat-alipay-payment-validation.md](2026-04-12-wechat-alipay-payment-validation.md)
+
+当前实现入口：
+- PR: `#147`
+- 分支: `codex/wechat-alipay-payment-design`
+- 已落地骨架：
+  - provider/channel 路由扩展
+  - `PaymentRuntimeConfig` 平台/构建渠道收口
+  - `WechatPayPaymentService` / `AlipayPaymentService`
+  - `create-payment-order` / `domestic-payment-webhook`
+  - `payment_orders` / `payment_events` migration
+  - 订阅页 `pending` 购买提示
+
+新增任务边界：
+- 允许新增 `payment_orders`
+- 允许新增国内支付 webhook / 建单函数
+- 允许新增 `WechatPayPaymentService` / `AlipayPaymentService`
+- 允许改造订阅页支付方式选择
+- 不切 RevenueCat
+- 不把国内支付作为 App Store / Google Play 默认替代
 
 ---
 
@@ -148,7 +181,7 @@
 
 **涉及**
 - `supabase/migrations/`
-- [sync_engine.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/core/sync/sync_engine.dart)
+- [sync_engine.dart](../lib/core/sync/sync_engine.dart)
 
 **必须处理**
 - transactions 增加 `book_key` 或等价字段
@@ -227,7 +260,7 @@ create table public.user_subscriptions (
 **目标**: 把订阅可信链路真正接到 App 生命周期
 
 **必须核对**
-- [subscription_status_service.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/core/payment/subscription_status_service.dart) 是否在启动链路执行
+- [subscription_status_service.dart](../lib/core/payment/subscription_status_service.dart) 是否在启动链路执行
 - 购买后是否记录可信状态同步
 - restore / expiry / downgrade 是否真实生效
 
@@ -239,8 +272,8 @@ create table public.user_subscriptions (
 **目标**: 先把最小真实登录跑通
 
 **范围**
-- [auth_screen.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/feature/auth/auth_screen.dart)
-- [supabase_auth_service.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/core/auth/supabase_auth_service.dart)
+- [auth_screen.dart](../lib/feature/auth/auth_screen.dart)
+- [supabase_auth_service.dart](../lib/core/auth/supabase_auth_service.dart)
 
 **必须处理**
 - 邮箱注册
@@ -268,9 +301,9 @@ create table public.user_subscriptions (
 **目标**: 页面文案与实际实现一致
 
 **必须检查**
-- [sync_settings_screen.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/feature/settings/sync_settings_screen.dart)
-- [subscription_screen.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/feature/subscription/subscription_screen.dart)
-- [auth_screen.dart](/Users/chauhua/Documents/GitHub/Jive/app/lib/feature/auth/auth_screen.dart)
+- [sync_settings_screen.dart](../lib/feature/settings/sync_settings_screen.dart)
+- [subscription_screen.dart](../lib/feature/subscription/subscription_screen.dart)
+- [auth_screen.dart](../lib/feature/auth/auth_screen.dart)
 
 **当前已知风险**
 - `SyncSettingsScreen` 提到“端到端加密”，需要核实是否真的存在端侧加解密与密钥管理

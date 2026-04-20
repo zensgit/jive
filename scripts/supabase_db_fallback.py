@@ -46,6 +46,7 @@ KNOWN_MIGRATION_VERSIONS = {
     "010",
     "011",
     "012",
+    "013",
 }
 
 
@@ -242,6 +243,29 @@ def migration_is_applied(version: str, state: RemoteState) -> bool:
         return has_index(
             state, "idx_user_subscriptions_admin_override_unique"
         ) and "admin_override" in constraint
+    if version == "013":
+        constraint = state.constraints.get("user_subscriptions_platform_check", "")
+        required_columns = (
+            ("user_subscriptions", "source_order_no"),
+            ("user_subscriptions", "provider_trade_no"),
+        )
+        required_indexes = (
+            "idx_payment_orders_user_updated",
+            "idx_payment_orders_provider_trade_unique",
+            "idx_payment_events_provider_event_unique",
+            "idx_payment_events_order_created",
+        )
+        return (
+            "wechat_pay" in constraint
+            and "alipay" in constraint
+            and all(
+                has_column(state, table_name, column_name)
+                for table_name, column_name in required_columns
+            )
+            and has_table(state, "payment_orders")
+            and has_table(state, "payment_events")
+            and all(has_index(state, index_name) for index_name in required_indexes)
+        )
     raise RuntimeError(
         f"migration {version} is not reviewed by the direct Postgres fallback yet"
     )

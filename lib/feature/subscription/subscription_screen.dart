@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/design_system/theme.dart';
 import '../../core/entitlement/entitlement_service.dart';
 import '../../core/entitlement/user_tier.dart';
+import '../../core/payment/payment_provider_resolver.dart';
 import '../../core/payment/payment_service.dart';
 import '../../core/payment/product_ids.dart';
 
@@ -21,7 +23,10 @@ class SubscriptionScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: const Text('升级方案', style: TextStyle(fontWeight: FontWeight.w600)),
+        title: const Text(
+          '升级方案',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         backgroundColor: Colors.grey.shade100,
         elevation: 0,
       ),
@@ -42,12 +47,7 @@ class SubscriptionScreen extends StatelessWidget {
               'CSV 导出',
               '含广告',
             ],
-            lockedFeatures: const [
-              '多币种',
-              '登录后云同步',
-              '多设备使用',
-              '投资追踪',
-            ],
+            lockedFeatures: const ['多币种', '登录后云同步', '多设备使用', '投资追踪'],
           ),
           const SizedBox(height: 16),
           _PlanCard(
@@ -66,13 +66,7 @@ class SubscriptionScreen extends StatelessWidget {
               '借贷管理',
               '商户记忆',
             ],
-            lockedFeatures: const [
-              '云同步',
-              '多设备使用',
-              '投资追踪',
-              '高级分析',
-              '语音记账',
-            ],
+            lockedFeatures: const ['云同步', '多设备使用', '投资追踪', '高级分析', '语音记账'],
           ),
           const SizedBox(height: 16),
           _PlanCard(
@@ -120,9 +114,9 @@ class SubscriptionScreen extends StatelessWidget {
   }
 
   static void _showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _buildCurrentTierBanner(UserTier tier) {
@@ -131,7 +125,9 @@ class SubscriptionScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: JiveTheme.primaryGreen.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: JiveTheme.primaryGreen.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
         children: [
@@ -141,7 +137,10 @@ class SubscriptionScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('当前方案', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const Text(
+                  '当前方案',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
                 Text(
                   tier.label,
                   style: TextStyle(
@@ -197,6 +196,8 @@ class _PlanCardState extends State<_PlanCard> {
       if (result.success) {
         SubscriptionScreen._showSnackBar(context, '已升级到 $tierLabel');
         Navigator.of(context).pop();
+      } else if (result.isPending) {
+        await _showPendingPaymentDialog(result);
       } else {
         SubscriptionScreen._showSnackBar(
           context,
@@ -208,8 +209,75 @@ class _PlanCardState extends State<_PlanCard> {
     }
   }
 
+  Future<void> _showPendingPaymentDialog(PurchaseResult result) async {
+    final provider = result.provider?.label ?? '支付';
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('支付订单已创建'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(result.errorMessage ?? '$provider 订单已创建，请完成支付后刷新权益'),
+                if (result.orderId != null) ...[
+                  const SizedBox(height: 12),
+                  _PendingPaymentValue(label: '订单号', value: result.orderId!),
+                ],
+                if (result.redirectUrl != null) ...[
+                  const SizedBox(height: 12),
+                  _PendingPaymentValue(
+                    label: '支付链接',
+                    value: result.redirectUrl!,
+                  ),
+                ],
+                if (result.qrCodeUrl != null) ...[
+                  const SizedBox(height: 12),
+                  _PendingPaymentValue(
+                    label: '二维码链接',
+                    value: result.qrCodeUrl!,
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Text(
+                  '完成支付后，请回到 App 并点击“恢复购买”刷新权益。',
+                  style: TextStyle(color: Colors.grey.shade700),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            if (result.redirectUrl != null)
+              TextButton(
+                onPressed: () async {
+                  await Clipboard.setData(
+                    ClipboardData(text: result.redirectUrl!),
+                  );
+                  if (!dialogContext.mounted) return;
+                  ScaffoldMessenger.of(
+                    dialogContext,
+                  ).showSnackBar(const SnackBar(content: Text('支付链接已复制')));
+                },
+                child: const Text('复制支付链接'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('知道了'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   /// Look up the store price for [productId], falling back to [fallback].
-  String _storePrice(PaymentService payment, String productId, String fallback) {
+  String _storePrice(
+    PaymentService payment,
+    String productId,
+    String fallback,
+  ) {
     if (!payment.isReady) return fallback;
     final products = payment.products;
     for (final p in products) {
@@ -239,7 +307,9 @@ class _PlanCardState extends State<_PlanCard> {
               padding: const EdgeInsets.symmetric(vertical: 6),
               decoration: BoxDecoration(
                 color: JiveTheme.primaryGreen,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(14),
+                ),
               ),
               child: const Text(
                 '最受欢迎',
@@ -268,7 +338,10 @@ class _PlanCardState extends State<_PlanCard> {
                     const Spacer(),
                     if (widget.isCurrent)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: JiveTheme.primaryGreen.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
@@ -289,13 +362,19 @@ class _PlanCardState extends State<_PlanCard> {
                   widget.price,
                   style: TextStyle(
                     fontSize: 16,
-                    color: widget.highlight ? JiveTheme.primaryGreen : Colors.grey.shade700,
+                    color: widget.highlight
+                        ? JiveTheme.primaryGreen
+                        : Colors.grey.shade700,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 16),
-                ...widget.features.map((f) => _FeatureRow(text: f, included: true)),
-                ...widget.lockedFeatures.map((f) => _FeatureRow(text: f, included: false)),
+                ...widget.features.map(
+                  (f) => _FeatureRow(text: f, included: true),
+                ),
+                ...widget.lockedFeatures.map(
+                  (f) => _FeatureRow(text: f, included: false),
+                ),
                 if (!widget.isCurrent && widget.tier != UserTier.free) ...[
                   const SizedBox(height: 16),
                   if (_loading)
@@ -318,10 +397,8 @@ class _PlanCardState extends State<_PlanCard> {
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
-        onPressed: () => _handlePurchase(
-          ProductIds.paidUnlock,
-          widget.tier.label,
-        ),
+        onPressed: () =>
+            _handlePurchase(ProductIds.paidUnlock, widget.tier.label),
         style: FilledButton.styleFrom(
           backgroundColor: widget.highlight
               ? JiveTheme.primaryGreen
@@ -377,10 +454,8 @@ class _PlanCardState extends State<_PlanCard> {
         SizedBox(
           width: double.infinity,
           child: FilledButton(
-            onPressed: () => _handlePurchase(
-              ProductIds.subscriberYearly,
-              widget.tier.label,
-            ),
+            onPressed: () =>
+                _handlePurchase(ProductIds.subscriberYearly, widget.tier.label),
             style: FilledButton.styleFrom(
               backgroundColor: JiveTheme.primaryGreen,
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -394,6 +469,31 @@ class _PlanCardState extends State<_PlanCard> {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _PendingPaymentValue extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _PendingPaymentValue({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        SelectableText(value, style: const TextStyle(fontSize: 13)),
       ],
     );
   }

@@ -166,6 +166,26 @@ else
   log "billing verify-subscription smoke skipped (verify-subscription files not present)"
 fi
 
+if have_all supabase/functions/create-payment-order/index.ts supabase/functions/create-payment-order/index_test.ts; then
+  log "billing create-payment-order smoke"
+  run_deno check \
+    supabase/functions/create-payment-order/index.ts \
+    supabase/functions/create-payment-order/index_test.ts
+  run_deno test --allow-env supabase/functions/create-payment-order/index_test.ts
+else
+  log "billing create-payment-order smoke skipped (create-payment-order files not present)"
+fi
+
+if have_all supabase/functions/domestic-payment-webhook/index.ts supabase/functions/domestic-payment-webhook/index_test.ts; then
+  log "billing domestic-payment-webhook smoke"
+  run_deno check \
+    supabase/functions/domestic-payment-webhook/index.ts \
+    supabase/functions/domestic-payment-webhook/index_test.ts
+  run_deno test --allow-env supabase/functions/domestic-payment-webhook/index_test.ts
+else
+  log "billing domestic-payment-webhook smoke skipped (domestic-payment-webhook files not present)"
+fi
+
 auth_analyze=()
 append_if_exists auth_analyze lib/core/auth/auth_service.dart
 append_if_exists auth_analyze lib/core/auth/guest_auth_service.dart

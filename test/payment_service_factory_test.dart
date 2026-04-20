@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:jive/core/entitlement/entitlement_service.dart';
 import 'package:jive/core/payment/app_store_payment_service.dart';
+import 'package:jive/core/payment/payment_provider_resolver.dart';
 import 'package:jive/core/payment/payment_service.dart';
 import 'package:jive/core/payment/payment_service_factory.dart';
 
@@ -89,6 +90,44 @@ void main() {
 
       expect(identical(service, fakeService), isTrue);
     });
+
+    test(
+      'creates WeChat Pay service for direct Android channel when enabled',
+      () {
+        final entitlement = EntitlementService();
+        final fakeService = _FakePaymentService();
+
+        final service = createPlatformPaymentService(
+          entitlementService: entitlement,
+          platformOverride: TargetPlatform.android,
+          isWeb: false,
+          paymentChannel: PaymentChannel.directAndroid,
+          enableWechatPay: true,
+          wechatPayBuilder: () => fakeService,
+        );
+
+        expect(identical(service, fakeService), isTrue);
+      },
+    );
+
+    test(
+      'returns unavailable service for desktop channel without providers',
+      () {
+        final entitlement = EntitlementService();
+
+        final service = createPlatformPaymentService(
+          entitlementService: entitlement,
+          platformOverride: TargetPlatform.macOS,
+          isWeb: false,
+          paymentChannel: PaymentChannel.desktopWeb,
+          enableStoreBilling: false,
+          enableWechatPay: false,
+          enableAlipay: false,
+        );
+
+        expect(service.isAvailable, isFalse);
+      },
+    );
   });
 
   group('AppStorePaymentService.appStoreAccountTokenForUser', () {
