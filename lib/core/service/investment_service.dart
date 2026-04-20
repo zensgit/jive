@@ -75,8 +75,8 @@ class InvestmentService {
     required String ticker,
     required String name,
     required String type,
+    required String currency,
     String? exchange,
-    String currency = 'CNY',
     double? latestPrice,
   }) async {
     final normalizedTicker = ticker.toUpperCase().trim();
