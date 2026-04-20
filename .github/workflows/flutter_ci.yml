@@ -83,12 +83,71 @@ jobs:
         if: steps.asset_only.outputs.skip_flutter != 'true'
         run: flutter test
 
+  detect_saas_wave0_smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      should_run: ${{ steps.detect.outputs.should_run }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect SaaS Wave 0 smoke trigger
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ github.event.inputs.run_saas_wave0_smoke }}" == "true" ]]; then
+              echo "should_run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]] && [[ "${{ contains(github.event.pull_request.labels.*.name, 'saas') }}" == "true" ]]; then
+            echo "SaaS label present; smoke lane will run."
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(mktemp)"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            if git rev-parse --verify HEAD^2 >/dev/null 2>&1; then
+              git -c core.quotepath=false diff --name-only HEAD^1 HEAD^2 > "$changed_files"
+            else
+              git -c core.quotepath=false diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > "$changed_files"
+            fi
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            before_sha="${{ github.event.before }}"
+            if [[ -n "$before_sha" ]] && [[ "$before_sha" != "0000000000000000000000000000000000000000" ]] && git cat-file -e "$before_sha^{commit}" 2>/dev/null; then
+              git -c core.quotepath=false diff --name-only "$before_sha" HEAD > "$changed_files"
+            elif git rev-parse --verify HEAD^1 >/dev/null 2>&1; then
+              git -c core.quotepath=false diff --name-only HEAD^1 HEAD > "$changed_files"
+            else
+              git -c core.quotepath=false diff-tree --no-commit-id --name-only -r HEAD > "$changed_files"
+            fi
+          else
+            : > "$changed_files"
+          fi
+
+          echo "Changed files considered for SaaS Wave 0 smoke:"
+          cat "$changed_files"
+
+          should_run="$(bash scripts/should_run_saas_wave0_smoke.sh < "$changed_files")"
+          echo "should_run=$should_run" >> "$GITHUB_OUTPUT"
+          echo "SaaS Wave 0 smoke should_run=$should_run"
+
   saas_wave0_smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    if: >-
-      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_saas_wave0_smoke == 'true') ||
-      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'saas'))
+    needs: detect_saas_wave0_smoke
+    if: needs.detect_saas_wave0_smoke.outputs.should_run == 'true'
 
     steps:
       - name: Checkout
