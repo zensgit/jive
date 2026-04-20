@@ -72,13 +72,16 @@ curl -fsSL https://raw.githubusercontent.com/actions/upload-artifact/v7/action.y
 
 Confirmed all upgraded official actions declare `runs.using: node24`.
 
-## CI Verification Plan
+## PR CI Verification
 
-The `flutter_ci.yml` change should be verified by opening a PR:
+PR: https://github.com/zensgit/jive/pull/172
+Run: https://github.com/zensgit/jive/actions/runs/24674734745
 
-- `analyze_and_test` should pass.
-- `detect_saas_wave0_smoke` should pass.
-- `saas_wave0_smoke` should auto-run because `.github/workflows/flutter_ci.yml` is a SaaS smoke trigger path.
-- The previous Node.js 20 action-runtime annotation should no longer appear on the PR run.
+- `analyze_and_test`: passed.
+- `detect_saas_wave0_smoke`: passed.
+- `saas_wave0_smoke`: passed and auto-ran because `.github/workflows/flutter_ci.yml` is a SaaS smoke trigger path.
+- `android_integration_test`: skipped as expected because no `e2e` label or manual input was used.
+
+The previous GitHub Actions Node.js 20 runtime annotation did not appear in the PR run logs. Log grep for `Node.js 20`, `Node 20`, `forced to run with Node.js 24`, and `FORCE_JAVASCRIPT` confirmed the opt-in environment is present on workflow steps, while the old action-runtime warning is absent.
 
 `saas_core_staging.yml` is `workflow_dispatch` only and depends on staging secrets, so it should not be manually run just for this PR unless staging validation is explicitly needed.
