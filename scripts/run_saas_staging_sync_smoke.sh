@@ -31,10 +31,11 @@ Required env keys:
 What this smoke validates:
   1. Admin API can create an email-confirmed staging test user.
   2. The staging user can sign in with anon credentials.
-  3. A transaction-shaped sync payload can be inserted through RLS with the user JWT.
-  4. A second user session can pull the inserted transaction by sync_key.
-  5. The row can be updated with deleted_at as a tombstone through RLS.
-  6. Test rows and temporary user are cleaned up unless skipped.
+  3. Account, transaction, and budget sync payloads can be inserted through RLS.
+  4. A second user session can pull inserted core rows by sync_key.
+  5. Transaction account_sync_key references survive the round trip.
+  6. Transaction and budget rows can be updated with deleted_at tombstones through RLS.
+  7. Test rows and temporary user are cleaned up unless skipped.
 
 Notes:
   The script writes only redacted metadata and smoke artifacts. It does not print secrets.
@@ -161,8 +162,12 @@ password = "JiveSyncSmoke!" + "".join(
     secrets.choice(string.ascii_letters + string.digits) for _ in range(18)
 )
 sync_key = f"jive_sync_smoke_tx_{stamp}_{suffix}"
+account_sync_key = f"jive_sync_smoke_acct_{stamp}_{suffix}"
+budget_sync_key = f"jive_sync_smoke_budget_{stamp}_{suffix}"
 book_key = "book_default"
 local_id = int(time.time() * 1000) % 900000000000
+account_local_id = local_id + 1
+budget_local_id = local_id + 2
 now = dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 created_user_id: str | None = None
@@ -269,6 +274,28 @@ def cleanup() -> None:
     except Exception as error:  # noqa: BLE001 - cleanup must not hide original result.
         cleanup_errors.append(f"transaction cleanup failed: {error}")
 
+    budget_query = urllib.parse.urlencode({"sync_key": f"eq.{budget_sync_key}"})
+    try:
+        request_json(
+            "DELETE",
+            rest_url("budgets", budget_query),
+            headers=service_headers(),
+            expected=(200, 204),
+        )
+    except Exception as error:  # noqa: BLE001 - cleanup must not hide original result.
+        cleanup_errors.append(f"budget cleanup failed: {error}")
+
+    account_query = urllib.parse.urlencode({"sync_key": f"eq.{account_sync_key}"})
+    try:
+        request_json(
+            "DELETE",
+            rest_url("accounts", account_query),
+            headers=service_headers(),
+            expected=(200, 204),
+        )
+    except Exception as error:  # noqa: BLE001 - cleanup must not hide original result.
+        cleanup_errors.append(f"account cleanup failed: {error}")
+
     if created_user_id and not keep_user:
         try:
             request_json(
@@ -289,8 +316,12 @@ try:
             "supabaseUrlHost": urllib.parse.urlparse(supabase_url).netloc,
             "email": email,
             "syncKey": sync_key,
+            "accountSyncKey": account_sync_key,
+            "budgetSyncKey": budget_sync_key,
             "bookKey": book_key,
             "localId": local_id,
+            "accountLocalId": account_local_id,
+            "budgetLocalId": budget_local_id,
             "keepUser": keep_user,
             "skipCleanup": skip_cleanup,
         },
@@ -319,6 +350,78 @@ try:
         raise SmokeFailure("signed-in user id does not match created user id")
     write_json("sessions.redacted.json", {"userId": created_user_id, "sessionCount": 2})
 
+    account_payload = {
+        "user_id": created_user_id,
+        "local_id": account_local_id,
+        "sync_key": account_sync_key,
+        "book_key": book_key,
+        "name": f"Staging Smoke Account {stamp}",
+        "type": "asset",
+        "sub_type": "cash",
+        "opening_balance": 100.0,
+        "credit_limit": None,
+        "currency": "CNY",
+        "is_archived": False,
+        "sort_order": 880,
+        "updated_at": now,
+    }
+    _, account_insert_payload, _ = request_json(
+        "POST",
+        rest_url("accounts"),
+        headers={
+            **anon_headers(access_token_1),
+            "Prefer": "return=representation",
+        },
+        payload=account_payload,
+        expected=(201,),
+    )
+    if not isinstance(account_insert_payload, list) or len(account_insert_payload) != 1:
+        raise SmokeFailure(f"account insert returned unexpected payload: {account_insert_payload!r}")
+    inserted_account = account_insert_payload[0]
+    if (
+        not isinstance(inserted_account, dict)
+        or inserted_account.get("sync_key") != account_sync_key
+    ):
+        raise SmokeFailure("inserted account did not echo expected sync_key")
+    write_json(
+        "inserted-account.redacted.json",
+        {
+            "id": inserted_account.get("id"),
+            "user_id": inserted_account.get("user_id"),
+            "local_id": inserted_account.get("local_id"),
+            "sync_key": inserted_account.get("sync_key"),
+            "book_key": inserted_account.get("book_key"),
+            "name": inserted_account.get("name"),
+            "type": inserted_account.get("type"),
+            "currency": inserted_account.get("currency"),
+            "updated_at": inserted_account.get("updated_at"),
+        },
+    )
+
+    account_select_query = urllib.parse.urlencode(
+        {
+            "select": "id,user_id,local_id,sync_key,book_key,name,type,currency,updated_at",
+            "sync_key": f"eq.{account_sync_key}",
+            "order": "updated_at.desc",
+        }
+    )
+    _, account_pull_payload, _ = request_json(
+        "GET",
+        rest_url("accounts", account_select_query),
+        headers=anon_headers(access_token_2),
+        expected=(200,),
+    )
+    if not isinstance(account_pull_payload, list) or len(account_pull_payload) != 1:
+        raise SmokeFailure(f"second-session account pull returned {account_pull_payload!r}")
+    pulled_account = account_pull_payload[0]
+    if not isinstance(pulled_account, dict):
+        raise SmokeFailure("second-session account pull returned non-object row")
+    if pulled_account.get("sync_key") != account_sync_key:
+        raise SmokeFailure("second-session account pull sync_key mismatch")
+    if pulled_account.get("book_key") != book_key:
+        raise SmokeFailure("second-session account pull book_key mismatch")
+    write_json("pulled-account.redacted.json", pulled_account)
+
     tx_payload = {
         "user_id": created_user_id,
         "local_id": local_id,
@@ -331,6 +434,8 @@ try:
         "category_key": "cat_food",
         "category": "餐饮",
         "note": f"staging sync smoke {stamp}",
+        "account_id": account_local_id,
+        "account_sync_key": account_sync_key,
         "raw_text": "staging sync smoke",
         "deleted_at": None,
         "updated_at": now,
@@ -359,6 +464,8 @@ try:
             "sync_key": inserted.get("sync_key"),
             "book_key": inserted.get("book_key"),
             "amount": inserted.get("amount"),
+            "account_id": inserted.get("account_id"),
+            "account_sync_key": inserted.get("account_sync_key"),
             "deleted_at": inserted.get("deleted_at"),
             "updated_at": inserted.get("updated_at"),
         },
@@ -366,7 +473,7 @@ try:
 
     select_query = urllib.parse.urlencode(
         {
-            "select": "id,user_id,local_id,sync_key,book_key,amount,deleted_at,updated_at",
+            "select": "id,user_id,local_id,sync_key,book_key,amount,account_id,account_sync_key,deleted_at,updated_at",
             "sync_key": f"eq.{sync_key}",
             "order": "updated_at.desc",
         }
@@ -386,9 +493,95 @@ try:
         raise SmokeFailure("second-session pull sync_key mismatch")
     if pulled.get("book_key") != book_key:
         raise SmokeFailure("second-session pull book_key mismatch")
+    if pulled.get("account_sync_key") != account_sync_key:
+        raise SmokeFailure("second-session pull account_sync_key mismatch")
     if abs(float(pulled.get("amount", 0)) - 12.34) > 0.0001:
         raise SmokeFailure("second-session pull amount mismatch")
     write_json("pulled-transaction.redacted.json", pulled)
+
+    end_date = (
+        dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30)
+    ).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    # Match the current SyncEngine payload contract: it writes one category key
+    # as a scalar jsonb string and reads both scalar and list forms.
+    budget_payload = {
+        "user_id": created_user_id,
+        "local_id": budget_local_id,
+        "sync_key": budget_sync_key,
+        "book_key": book_key,
+        "name": f"Staging Smoke Budget {stamp}",
+        "amount": 880.0,
+        "period": "monthly",
+        "start_date": now,
+        "end_date": end_date,
+        "category_keys": "cat_food",
+        "is_active": True,
+        "carry_over": False,
+        "deleted_at": None,
+        "updated_at": now,
+    }
+    _, budget_insert_payload, _ = request_json(
+        "POST",
+        rest_url("budgets"),
+        headers={
+            **anon_headers(access_token_1),
+            "Prefer": "return=representation",
+        },
+        payload=budget_payload,
+        expected=(201,),
+    )
+    if not isinstance(budget_insert_payload, list) or len(budget_insert_payload) != 1:
+        raise SmokeFailure(f"budget insert returned unexpected payload: {budget_insert_payload!r}")
+    inserted_budget = budget_insert_payload[0]
+    if (
+        not isinstance(inserted_budget, dict)
+        or inserted_budget.get("sync_key") != budget_sync_key
+    ):
+        raise SmokeFailure("inserted budget did not echo expected sync_key")
+    write_json(
+        "inserted-budget.redacted.json",
+        {
+            "id": inserted_budget.get("id"),
+            "user_id": inserted_budget.get("user_id"),
+            "local_id": inserted_budget.get("local_id"),
+            "sync_key": inserted_budget.get("sync_key"),
+            "book_key": inserted_budget.get("book_key"),
+            "name": inserted_budget.get("name"),
+            "amount": inserted_budget.get("amount"),
+            "period": inserted_budget.get("period"),
+            "category_keys": inserted_budget.get("category_keys"),
+            "deleted_at": inserted_budget.get("deleted_at"),
+            "updated_at": inserted_budget.get("updated_at"),
+        },
+    )
+
+    budget_select_query = urllib.parse.urlencode(
+        {
+            "select": "id,user_id,local_id,sync_key,book_key,name,amount,period,category_keys,deleted_at,updated_at",
+            "sync_key": f"eq.{budget_sync_key}",
+            "order": "updated_at.desc",
+        }
+    )
+    _, budget_pull_payload, _ = request_json(
+        "GET",
+        rest_url("budgets", budget_select_query),
+        headers=anon_headers(access_token_2),
+        expected=(200,),
+    )
+    if not isinstance(budget_pull_payload, list) or len(budget_pull_payload) != 1:
+        raise SmokeFailure(f"second-session budget pull returned {budget_pull_payload!r}")
+    pulled_budget = budget_pull_payload[0]
+    if not isinstance(pulled_budget, dict):
+        raise SmokeFailure("second-session budget pull returned non-object row")
+    if pulled_budget.get("sync_key") != budget_sync_key:
+        raise SmokeFailure("second-session budget pull sync_key mismatch")
+    if pulled_budget.get("book_key") != book_key:
+        raise SmokeFailure("second-session budget pull book_key mismatch")
+    if abs(float(pulled_budget.get("amount", 0)) - 880.0) > 0.0001:
+        raise SmokeFailure("second-session budget pull amount mismatch")
+    if pulled_budget.get("category_keys") != "cat_food":
+        raise SmokeFailure("second-session budget pull category_keys mismatch")
+    write_json("pulled-budget.redacted.json", pulled_budget)
 
     deleted_at = dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     update_query = urllib.parse.urlencode({"sync_key": f"eq.{sync_key}"})
@@ -418,6 +611,34 @@ try:
         },
     )
 
+    budget_deleted_at = dt.datetime.now(dt.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    budget_update_query = urllib.parse.urlencode({"sync_key": f"eq.{budget_sync_key}"})
+    _, budget_tombstone_payload, _ = request_json(
+        "PATCH",
+        rest_url("budgets", budget_update_query),
+        headers={
+            **anon_headers(access_token_1),
+            "Prefer": "return=representation",
+        },
+        payload={"deleted_at": budget_deleted_at, "updated_at": budget_deleted_at},
+        expected=(200,),
+    )
+    if not isinstance(budget_tombstone_payload, list) or len(budget_tombstone_payload) != 1:
+        raise SmokeFailure(f"budget tombstone update returned {budget_tombstone_payload!r}")
+    tombstoned_budget = budget_tombstone_payload[0]
+    if not isinstance(tombstoned_budget, dict) or not tombstoned_budget.get("deleted_at"):
+        raise SmokeFailure("budget tombstone update did not persist deleted_at")
+    write_json(
+        "tombstoned-budget.redacted.json",
+        {
+            "id": tombstoned_budget.get("id"),
+            "sync_key": tombstoned_budget.get("sync_key"),
+            "book_key": tombstoned_budget.get("book_key"),
+            "deleted_at": tombstoned_budget.get("deleted_at"),
+            "updated_at": tombstoned_budget.get("updated_at"),
+        },
+    )
+
     cleanup()
     if cleanup_errors:
         raise SmokeFailure("; ".join(cleanup_errors))
@@ -428,14 +649,22 @@ try:
         "userId": created_user_id,
         "email": email,
         "syncKey": sync_key,
+        "accountSyncKey": account_sync_key,
+        "budgetSyncKey": budget_sync_key,
         "bookKey": book_key,
         "validated": [
             "admin_user_create",
             "anon_password_sign_in_session_1",
             "anon_password_sign_in_session_2",
+            "rls_insert_account",
+            "second_session_pull_account_by_sync_key",
             "rls_insert_transaction",
-            "second_session_pull_by_sync_key",
-            "rls_tombstone_update",
+            "second_session_pull_transaction_by_sync_key",
+            "transaction_account_sync_key_round_trip",
+            "rls_insert_budget",
+            "second_session_pull_budget_by_sync_key",
+            "rls_transaction_tombstone_update",
+            "rls_budget_tombstone_update",
             "cleanup" if not skip_cleanup else "cleanup_skipped",
         ],
         "cleanup": "skipped" if skip_cleanup else ("user_kept" if keep_user else "complete"),
@@ -446,7 +675,9 @@ try:
         f"- status: {summary['status']}\n"
         f"- userId: {created_user_id}\n"
         f"- email: {email}\n"
-        f"- syncKey: {sync_key}\n"
+        f"- transactionSyncKey: {sync_key}\n"
+        f"- accountSyncKey: {account_sync_key}\n"
+        f"- budgetSyncKey: {budget_sync_key}\n"
         f"- bookKey: {book_key}\n"
         f"- cleanup: {summary['cleanup']}\n"
         f"- artifacts: {out_dir}\n",
@@ -464,6 +695,8 @@ except Exception as error:  # noqa: BLE001 - report exact smoke failure.
                 "userId": created_user_id,
                 "email": email,
                 "syncKey": sync_key,
+                "accountSyncKey": account_sync_key,
+                "budgetSyncKey": budget_sync_key,
                 "cleanupErrors": cleanup_errors,
             },
         )
@@ -473,7 +706,9 @@ except Exception as error:  # noqa: BLE001 - report exact smoke failure.
             f"- error: {error}\n"
             f"- userId: {created_user_id}\n"
             f"- email: {email}\n"
-            f"- syncKey: {sync_key}\n"
+            f"- transactionSyncKey: {sync_key}\n"
+            f"- accountSyncKey: {account_sync_key}\n"
+            f"- budgetSyncKey: {budget_sync_key}\n"
             f"- artifacts: {out_dir}\n",
             encoding="utf-8",
         )
