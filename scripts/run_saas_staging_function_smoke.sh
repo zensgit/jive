@@ -6,6 +6,7 @@ APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 ENV_FILE="${STAGING_ENV_FILE:-/tmp/jive-saas-staging.env}"
 FUNCTIONS_URL="${SUPABASE_FUNCTIONS_URL:-}"
+PROFILE="${JIVE_SAAS_STAGING_PROFILE:-full}"
 FAILURES=0
 
 usage() {
@@ -16,15 +17,18 @@ Usage:
 Options:
   --env-file <path>      Staging env file. Defaults to STAGING_ENV_FILE or /tmp/jive-saas-staging.env.
   --functions-url <url>  Optional functions base URL. Defaults to SUPABASE_URL/functions/v1.
+  --profile <name>       full or core. Defaults to JIVE_SAAS_STAGING_PROFILE or full.
+                         core checks only analytics, admin, and notification functions.
+  --core-only            Alias for --profile core.
   --help                 Show this help.
 
 Required env-file keys:
   SUPABASE_URL
   SUPABASE_ANON_KEY
-  PUBSUB_BEARER_TOKEN
   ADMIN_API_TOKEN
   ANALYTICS_ADMIN_TOKEN
   NOTIFICATION_ADMIN_TOKEN
+  PUBSUB_BEARER_TOKEN (full profile only)
   DOMESTIC_PAYMENT_WEBHOOK_TOKEN (optional; enables domestic payment smoke)
 
 Notes:
@@ -81,6 +85,14 @@ parse_args() {
         FUNCTIONS_URL="${2:-}"
         shift 2
         ;;
+      --profile)
+        PROFILE="${2:-}"
+        shift 2
+        ;;
+      --core-only)
+        PROFILE="core"
+        shift
+        ;;
       --help|-h)
         usage
         exit 0
@@ -90,6 +102,14 @@ parse_args() {
         ;;
     esac
   done
+
+  case "$PROFILE" in
+    full|core)
+      ;;
+    *)
+      die "unknown profile: $PROFILE"
+      ;;
+  esac
 }
 
 json_google_test_notification() {
@@ -167,12 +187,18 @@ main() {
 
   supabase_url="$(require_key "SUPABASE_URL")"
   anon_key="$(require_key "SUPABASE_ANON_KEY")"
-  pubsub_token="$(require_key "PUBSUB_BEARER_TOKEN")"
   admin_token="$(require_key "ADMIN_API_TOKEN")"
   analytics_token="$(require_key "ANALYTICS_ADMIN_TOKEN")"
   notification_token="$(require_key "NOTIFICATION_ADMIN_TOKEN")"
-  domestic_token="$(value_from_env_file "DOMESTIC_PAYMENT_WEBHOOK_TOKEN" "$ENV_FILE")"
-  package_name="$(value_from_env_file "GOOGLE_PLAY_PACKAGE_NAME" "$ENV_FILE")"
+  pubsub_token=""
+  domestic_token=""
+  package_name=""
+
+  if [[ "$PROFILE" == "full" ]]; then
+    pubsub_token="$(require_key "PUBSUB_BEARER_TOKEN")"
+    domestic_token="$(value_from_env_file "DOMESTIC_PAYMENT_WEBHOOK_TOKEN" "$ENV_FILE")"
+    package_name="$(value_from_env_file "GOOGLE_PLAY_PACKAGE_NAME" "$ENV_FILE")"
+  fi
 
   if [[ -z "$FUNCTIONS_URL" ]]; then
     base_url="${supabase_url%/}/functions/v1"
@@ -181,14 +207,19 @@ main() {
   fi
 
   log "functions url: $base_url"
+  log "profile: $PROFILE"
   log "checking deployed function auth and core responses"
 
-  expect_status "verify-subscription requires a real user session" "401" \
-    -X POST "$base_url/verify-subscription" \
-    -H "apikey: $anon_key" \
-    -H "Authorization: Bearer $anon_key" \
-    -H "Content-Type: application/json" \
-    --data '{"platform":"google_play","product_id":"jive_subscriber_monthly","purchase_token":"smoke"}'
+  if [[ "$PROFILE" == "full" ]]; then
+    expect_status "verify-subscription requires a real user session" "401" \
+      -X POST "$base_url/verify-subscription" \
+      -H "apikey: $anon_key" \
+      -H "Authorization: Bearer $anon_key" \
+      -H "Content-Type: application/json" \
+      --data '{"platform":"google_play","product_id":"jive_subscriber_monthly","purchase_token":"smoke"}'
+  else
+    log "billing and webhook smoke skipped for core profile"
+  fi
 
   expect_status "analytics rejects missing admin token" "401" \
     -X GET "$base_url/analytics?days=7" \
@@ -218,36 +249,38 @@ main() {
     -H "Content-Type: application/json" \
     --data '{"action":"system_notice","dry_run":true,"user_ids":["00000000-0000-0000-0000-000000000001"],"notice_key":"staging-smoke","title":"Staging smoke","body":"Staging function smoke."}'
 
-  webhook_payload="$(json_google_test_notification "$package_name")"
-  expect_status "subscription-webhook accepts Google test notification" "200" \
-    -X POST "$base_url/subscription-webhook" \
-    -H "apikey: $anon_key" \
-    -H "Authorization: Bearer $pubsub_token" \
-    -H "Content-Type: application/json" \
-    --data "$webhook_payload"
-
-  if [[ -n "$domestic_token" ]]; then
-    expect_status "create-payment-order requires a real user session" "401" \
-      -X POST "$base_url/create-payment-order" \
+  if [[ "$PROFILE" == "full" ]]; then
+    webhook_payload="$(json_google_test_notification "$package_name")"
+    expect_status "subscription-webhook accepts Google test notification" "200" \
+      -X POST "$base_url/subscription-webhook" \
       -H "apikey: $anon_key" \
-      -H "Authorization: Bearer $anon_key" \
+      -H "Authorization: Bearer $pubsub_token" \
       -H "Content-Type: application/json" \
-      --data '{"provider":"wechat_pay","product_id":"jive_paid_unlock","plan_code":"pro_lifetime","client_channel":"self_hosted_web"}'
+      --data "$webhook_payload"
 
-    expect_status "domestic-payment-webhook rejects missing token" "401" \
-      -X POST "$base_url/domestic-payment-webhook" \
-      -H "apikey: $anon_key" \
-      -H "Content-Type: application/json" \
-      --data '{"provider":"wechat_pay","event_id":"smoke-missing-token","event_type":"payment.paid","order_no":"missing","status":"paid"}'
+    if [[ -n "$domestic_token" ]]; then
+      expect_status "create-payment-order requires a real user session" "401" \
+        -X POST "$base_url/create-payment-order" \
+        -H "apikey: $anon_key" \
+        -H "Authorization: Bearer $anon_key" \
+        -H "Content-Type: application/json" \
+        --data '{"provider":"wechat_pay","product_id":"jive_paid_unlock","plan_code":"pro_lifetime","client_channel":"self_hosted_web"}'
 
-    expect_status "domestic-payment-webhook accepts token and checks order existence" "404" \
-      -X POST "$base_url/domestic-payment-webhook" \
-      -H "apikey: $anon_key" \
-      -H "x-domestic-payment-token: $domestic_token" \
-      -H "Content-Type: application/json" \
-      --data '{"provider":"wechat_pay","event_id":"smoke-missing-order","event_type":"payment.paid","order_no":"jive_missing_smoke_order","status":"paid","provider_trade_no":"smoke_trade"}'
-  else
-    log "domestic payment smoke skipped (DOMESTIC_PAYMENT_WEBHOOK_TOKEN not set)"
+      expect_status "domestic-payment-webhook rejects missing token" "401" \
+        -X POST "$base_url/domestic-payment-webhook" \
+        -H "apikey: $anon_key" \
+        -H "Content-Type: application/json" \
+        --data '{"provider":"wechat_pay","event_id":"smoke-missing-token","event_type":"payment.paid","order_no":"missing","status":"paid"}'
+
+      expect_status "domestic-payment-webhook accepts token and checks order existence" "404" \
+        -X POST "$base_url/domestic-payment-webhook" \
+        -H "apikey: $anon_key" \
+        -H "x-domestic-payment-token: $domestic_token" \
+        -H "Content-Type: application/json" \
+        --data '{"provider":"wechat_pay","event_id":"smoke-missing-order","event_type":"payment.paid","order_no":"jive_missing_smoke_order","status":"paid","provider_trade_no":"smoke_trade"}'
+    else
+      log "domestic payment smoke skipped (DOMESTIC_PAYMENT_WEBHOOK_TOKEN not set)"
+    fi
   fi
 
   if [[ "$FAILURES" -gt 0 ]]; then
