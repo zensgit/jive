@@ -246,7 +246,7 @@ main() {
 
   if [[ "$SKIP_FUNCTION_SMOKE" -ne 1 ]]; then
     log "running deployed Functions smoke"
-    local function_smoke_args=(--env-file "$ENV_FILE")
+    local function_smoke_args=(--profile core --env-file "$ENV_FILE")
     if [[ -n "$FUNCTIONS_URL" ]]; then
       function_smoke_args+=(--functions-url "$FUNCTIONS_URL")
     fi
