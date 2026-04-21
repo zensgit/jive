@@ -14,6 +14,7 @@ import '../database/tag_model.dart';
 import '../database/transaction_model.dart';
 import '../entitlement/entitlement_service.dart';
 import '../service/book_service.dart';
+import 'sync_budget_payload.dart';
 import 'sync_config.dart';
 import 'sync_conflict_service.dart';
 import 'sync_key_generator.dart';
@@ -646,7 +647,7 @@ class SyncEngine extends ChangeNotifier {
             'period': budget.period,
             'start_date': budget.startDate.toIso8601String(),
             'end_date': budget.endDate.toIso8601String(),
-            'category_keys': budget.categoryKey ?? '',
+            'category_keys': syncBudgetCategoryKeys(budget.categoryKey),
             'is_active': budget.isActive,
             'carry_over': budget.rollover,
             'deleted_at': null,
@@ -1205,7 +1206,7 @@ class SyncEngine extends ChangeNotifier {
     'period': budget.period,
     'start_date': budget.startDate.toIso8601String(),
     'end_date': budget.endDate.toIso8601String(),
-    'category_keys': budget.categoryKey ?? '',
+    'category_keys': syncBudgetCategoryKeys(budget.categoryKey),
     'is_active': budget.isActive,
     'carry_over': budget.rollover,
     'deleted_at': null,

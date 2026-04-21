@@ -133,6 +133,7 @@ void main() {
       ..amount = 800
       ..currency = 'CNY'
       ..period = 'monthly'
+      ..categoryKey = 'cat_food'
       ..startDate = DateTime(2026, 4, 1)
       ..endDate = DateTime(2026, 4, 30, 23, 59, 59)
       ..bookId = defaultBook.id
@@ -150,73 +151,80 @@ void main() {
     expect(entries.single.payload['local_id'], budget.id);
     expect(entries.single.payload['sync_key'], 'budget_sync_1');
     expect(entries.single.payload['name'], '餐饮预算');
+    expect(entries.single.payload['category_keys'], ['cat_food']);
     expect(entries.single.payload['book_key'], BookService.defaultBookKey);
     expect(entries.single.payload['deleted_at'], isA<String>());
   });
 
-  test('creates tombstone when entity changed after cursor but sync exists', () async {
-    final cursor = DateTime(2026, 4, 5, 10, 0);
-    SharedPreferences.setMockInitialValues({
-      'sync_cursor_transactions': cursor.toIso8601String(),
-    });
-    await SyncTombstoneStore.clear();
+  test(
+    'creates tombstone when entity changed after cursor but sync exists',
+    () async {
+      final cursor = DateTime(2026, 4, 5, 10, 0);
+      SharedPreferences.setMockInitialValues({
+        'sync_cursor_transactions': cursor.toIso8601String(),
+      });
+      await SyncTombstoneStore.clear();
 
-    final tx = JiveTransaction()
-      ..amount = 50
-      ..source = '支付宝'
-      ..timestamp = DateTime(2026, 4, 5, 11, 0)
-      ..type = 'expense'
-      ..updatedAt = cursor.add(const Duration(minutes: 1))
-      ..bookId = defaultBook.id;
+      final tx = JiveTransaction()
+        ..amount = 50
+        ..source = '支付宝'
+        ..timestamp = DateTime(2026, 4, 5, 11, 0)
+        ..type = 'expense'
+        ..updatedAt = cursor.add(const Duration(minutes: 1))
+        ..bookId = defaultBook.id;
 
-    await isar.writeTxn(() async {
-      await isar.jiveTransactions.put(tx);
-    });
+      await isar.writeTxn(() async {
+        await isar.jiveTransactions.put(tx);
+      });
 
-    await service.markTransactionDeleted(tx);
+      await service.markTransactionDeleted(tx);
 
-    final entries = await SyncTombstoneStore.listForTable('transactions');
-    expect(entries, hasLength(1));
-    expect(entries.single.payload['local_id'], tx.id);
-  });
+      final entries = await SyncTombstoneStore.listForTable('transactions');
+      expect(entries, hasLength(1));
+      expect(entries.single.payload['local_id'], tx.id);
+    },
+  );
 
-  test('markTransactionsDeleted writes multiple tombstones in one batch', () async {
-    final cursor = DateTime(2026, 4, 5, 10, 0);
-    SharedPreferences.setMockInitialValues({
-      'sync_cursor_transactions': cursor.toIso8601String(),
-    });
-    await SyncTombstoneStore.clear();
+  test(
+    'markTransactionsDeleted writes multiple tombstones in one batch',
+    () async {
+      final cursor = DateTime(2026, 4, 5, 10, 0);
+      SharedPreferences.setMockInitialValues({
+        'sync_cursor_transactions': cursor.toIso8601String(),
+      });
+      await SyncTombstoneStore.clear();
 
-    final first = JiveTransaction()
-      ..syncKey = 'tx_batch_1'
-      ..amount = 18
-      ..source = '微信'
-      ..timestamp = DateTime(2026, 4, 5, 8, 0)
-      ..type = 'expense'
-      ..updatedAt = cursor.subtract(const Duration(minutes: 5))
-      ..bookId = defaultBook.id;
+      final first = JiveTransaction()
+        ..syncKey = 'tx_batch_1'
+        ..amount = 18
+        ..source = '微信'
+        ..timestamp = DateTime(2026, 4, 5, 8, 0)
+        ..type = 'expense'
+        ..updatedAt = cursor.subtract(const Duration(minutes: 5))
+        ..bookId = defaultBook.id;
 
-    final second = JiveTransaction()
-      ..syncKey = 'tx_batch_2'
-      ..amount = 42
-      ..source = '支付宝'
-      ..timestamp = DateTime(2026, 4, 5, 9, 0)
-      ..type = 'expense'
-      ..updatedAt = cursor.add(const Duration(minutes: 3))
-      ..bookId = defaultBook.id;
+      final second = JiveTransaction()
+        ..syncKey = 'tx_batch_2'
+        ..amount = 42
+        ..source = '支付宝'
+        ..timestamp = DateTime(2026, 4, 5, 9, 0)
+        ..type = 'expense'
+        ..updatedAt = cursor.add(const Duration(minutes: 3))
+        ..bookId = defaultBook.id;
 
-    await isar.writeTxn(() async {
-      await isar.jiveTransactions.put(first);
-      await isar.jiveTransactions.put(second);
-    });
+      await isar.writeTxn(() async {
+        await isar.jiveTransactions.put(first);
+        await isar.jiveTransactions.put(second);
+      });
 
-    await service.markTransactionsDeleted([first, second]);
+      await service.markTransactionsDeleted([first, second]);
 
-    final entries = await SyncTombstoneStore.listForTable('transactions');
-    expect(entries, hasLength(2));
-    expect(
-      entries.map((entry) => entry.entityKey).toSet(),
-      {'sync:tx_batch_1', 'sync:tx_batch_2'},
-    );
-  });
+      final entries = await SyncTombstoneStore.listForTable('transactions');
+      expect(entries, hasLength(2));
+      expect(entries.map((entry) => entry.entityKey).toSet(), {
+        'sync:tx_batch_1',
+        'sync:tx_batch_2',
+      });
+    },
+  );
 }

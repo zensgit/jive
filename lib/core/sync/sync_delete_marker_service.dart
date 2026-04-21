@@ -7,6 +7,7 @@ import '../database/book_model.dart';
 import '../database/budget_model.dart';
 import '../database/transaction_model.dart';
 import '../service/book_service.dart';
+import 'sync_budget_payload.dart';
 import 'sync_key_generator.dart';
 import 'sync_tombstone_entry.dart';
 import 'sync_tombstone_store.dart';
@@ -75,7 +76,7 @@ class SyncDeleteMarkerService {
           'period': budget.period,
           'start_date': budget.startDate.toIso8601String(),
           'end_date': budget.endDate.toIso8601String(),
-          'category_keys': budget.categoryKey ?? '',
+          'category_keys': syncBudgetCategoryKeys(budget.categoryKey),
           'is_active': budget.isActive,
           'carry_over': budget.rollover,
           'book_key': _bookKeyFor(budget.bookId, bookKeyById),
@@ -118,7 +119,10 @@ class SyncDeleteMarkerService {
         'sub_category': tx.subCategory,
         'note': tx.note,
         'account_id': tx.accountId,
-        'account_sync_key': _accountSyncKeyFor(tx.accountId, accountSyncKeyById),
+        'account_sync_key': _accountSyncKeyFor(
+          tx.accountId,
+          accountSyncKeyById,
+        ),
         'to_account_id': tx.toAccountId,
         'to_account_sync_key': _accountSyncKeyFor(
           tx.toAccountId,
