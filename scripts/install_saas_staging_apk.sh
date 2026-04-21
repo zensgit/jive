@@ -9,6 +9,7 @@ APK_PATH="${APK_PATH:-}"
 DEVICE="${ANDROID_SERIAL:-}"
 PACKAGE_ID="${JIVE_ANDROID_APP_ID:-com.jivemoney.app.dev}"
 ALLOW_UNINSTALL=0
+BACKUP_BEFORE_UNINSTALL_DIR=""
 
 usage() {
   cat <<'EOF'
@@ -23,6 +24,9 @@ Options:
   --allow-uninstall-on-signature-mismatch
                                        If install -r fails because existing signatures differ, uninstall
                                        the existing package and install again. This deletes app data.
+  --backup-before-uninstall <dir>      Store a tar backup of app data in <dir> before uninstalling.
+                                       Only used when --allow-uninstall-on-signature-mismatch is set.
+                                       If the backup cannot be created and verified, uninstall is aborted.
   --help                               Show this help.
 
 Notes:
@@ -40,28 +44,43 @@ die() {
   exit 1
 }
 
+require_value() {
+  local flag="${1:-}"
+  local value="${2:-}"
+  [[ -n "$value" ]] || die "$flag requires a value"
+}
+
 parse_args() {
   while (($#)); do
     case "$1" in
       --apk)
+        require_value "$1" "${2:-}"
         APK_PATH="${2:-}"
         shift 2
         ;;
       --device)
+        require_value "$1" "${2:-}"
         DEVICE="${2:-}"
         shift 2
         ;;
       --package)
+        require_value "$1" "${2:-}"
         PACKAGE_ID="${2:-}"
         shift 2
         ;;
       --adb)
+        require_value "$1" "${2:-}"
         ADB="${2:-}"
         shift 2
         ;;
       --allow-uninstall-on-signature-mismatch)
         ALLOW_UNINSTALL=1
         shift
+        ;;
+      --backup-before-uninstall)
+        require_value "$1" "${2:-}"
+        BACKUP_BEFORE_UNINSTALL_DIR="${2:-}"
+        shift 2
         ;;
       --help|-h)
         usage
@@ -118,6 +137,50 @@ print_device_info() {
   log "device=${serial:-unknown} model=${model:-unknown} android=${release:-unknown} ${size:-}"
 }
 
+backup_app_data() {
+  local backup_dir backup_stamp backup_file tmp_file err_file status stderr_output
+
+  [[ -n "$BACKUP_BEFORE_UNINSTALL_DIR" ]] || return 0
+
+  backup_dir="$BACKUP_BEFORE_UNINSTALL_DIR"
+  mkdir -p "$backup_dir" || die "cannot create backup directory: $backup_dir"
+
+  backup_stamp="$(date +%Y%m%d-%H%M%S)"
+  backup_file="$backup_dir/${PACKAGE_ID}-appdata-${backup_stamp}.tar"
+  tmp_file="${backup_file}.tmp"
+  err_file="${tmp_file}.err"
+
+  log "backing up app data for $PACKAGE_ID to $backup_file"
+  set +e
+  run_adb exec-out run-as "$PACKAGE_ID" tar -cf - . >"$tmp_file" 2>"$err_file"
+  status=$?
+  set -e
+
+  if [[ "$status" -ne 0 ]]; then
+    stderr_output="$(tr -d '\r' < "$err_file" | tail -n 1 || true)"
+    rm -f "$tmp_file" "$err_file"
+    if [[ -n "$stderr_output" ]]; then
+      die "failed to back up app data for $PACKAGE_ID; uninstall aborted. $stderr_output"
+    fi
+    die "failed to back up app data for $PACKAGE_ID; uninstall aborted."
+  fi
+
+  mv "$tmp_file" "$backup_file" || {
+    rm -f "$tmp_file" "$err_file"
+    die "failed to finalize app data backup for $PACKAGE_ID; uninstall aborted."
+  }
+  rm -f "$err_file"
+
+  tar -tf "$backup_file" >"${backup_file}.list" \
+    || die "failed to verify app data backup for $PACKAGE_ID; uninstall aborted."
+  wc -c "$backup_file" >"${backup_file}.size" || true
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$backup_file" >"${backup_file}.sha256" || true
+  fi
+
+  log "app data backup complete: $backup_file"
+}
+
 install_apk() {
   local output status
   set +e
@@ -138,6 +201,7 @@ install_apk() {
     die "signature mismatch for $PACKAGE_ID. Re-run with --allow-uninstall-on-signature-mismatch only if deleting local app data is acceptable."
   fi
 
+  backup_app_data
   log "signature mismatch detected; uninstalling $PACKAGE_ID because explicit uninstall flag was provided"
   run_adb uninstall "$PACKAGE_ID"
   run_adb install "$APK_PATH"
