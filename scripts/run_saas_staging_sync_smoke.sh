@@ -502,8 +502,6 @@ try:
     end_date = (
         dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30)
     ).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-    # Match the current SyncEngine payload contract: it writes one category key
-    # as a scalar jsonb string and reads both scalar and list forms.
     budget_payload = {
         "user_id": created_user_id,
         "local_id": budget_local_id,
@@ -514,7 +512,7 @@ try:
         "period": "monthly",
         "start_date": now,
         "end_date": end_date,
-        "category_keys": "cat_food",
+        "category_keys": ["cat_food"],
         "is_active": True,
         "carry_over": False,
         "deleted_at": None,
@@ -579,7 +577,7 @@ try:
         raise SmokeFailure("second-session budget pull book_key mismatch")
     if abs(float(pulled_budget.get("amount", 0)) - 880.0) > 0.0001:
         raise SmokeFailure("second-session budget pull amount mismatch")
-    if pulled_budget.get("category_keys") != "cat_food":
+    if pulled_budget.get("category_keys") != ["cat_food"]:
         raise SmokeFailure("second-session budget pull category_keys mismatch")
     write_json("pulled-budget.redacted.json", pulled_budget)
 

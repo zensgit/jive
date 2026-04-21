@@ -61,7 +61,7 @@
 
 这样能验证 SaaS 同步真正使用跨设备稳定账户标识，而不是只依赖本机 Isar int ID。
 
-`budgets.category_keys` 仍按当前 `SyncEngine` 口径写入单个字符串 `cat_food`。这是对现状的锁定验证，不代表它是最终理想模型；后续如要把云端统一为数组，应另起 schema/client 兼容迁移。
+后续更新：`budgets.category_keys` 已在 `2026-04-21-saas-budget-category-keys-array-dev-verify.md` 中收敛为数组口径；旧字符串读取仍保留兼容。
 
 ## 验证
 
@@ -137,5 +137,5 @@ rg -n "eyJ|sbp_|SERVICE_ROLE|access_token|refresh_token|password|Bearer|apikey" 
 ## 剩余风险
 
 - 这是 PostgREST/RLS 级 smoke，不等价于 App 内订阅用户完整同步流程。
-- `budgets.category_keys` 当前云端 jsonb 存 scalar string，Dart 侧也同时兼容 String/List；建议后续单独做一次预算分类字段契约收敛。
+- `budgets.category_keys` 已后续收敛为数组口径；Dart 侧仍兼容读取旧 String/List。当前仍是本地 `categoryKey` 单值映射到云端单元素数组，不是多分类预算语义。
 - `sync_key` 虽已作为 SaaS 稳定标识使用，但 legacy `unique(user_id, local_id)` 仍存在；后续跨设备冲突测试还需要覆盖重复 local ID 场景。
