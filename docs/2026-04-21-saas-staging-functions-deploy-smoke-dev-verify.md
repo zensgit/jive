@@ -214,6 +214,7 @@ This is expected for these scoped runs and did not affect the job conclusion.
 Completed:
 
 - GitHub Actions secrets are sufficient for the core staging lane.
+- Function smoke failure logs summarize unexpected response bodies by shape and redact token/key/password-like field names or values instead of printing raw response previews.
 - Staging database migrations are aligned.
 - Core Edge Functions deploy successfully.
 - Deployed core Edge Functions pass runtime smoke checks.
