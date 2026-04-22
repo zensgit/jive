@@ -26,6 +26,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - Long press on `-` toggles that key between `-` and `÷`.
 - Continuous-entry reset restores the operator keys to `+` and `-`, so a long-press mode from the previous transaction does not leak into the next entry.
 - `OK` still calls the existing save path, and save still reads the computed numeric amount from `_amountStr`.
+- The route pop guard now only intercepts category search mode, so normal save/close actions can return their existing boolean result instead of being blocked by `PopScope(canPop: false)`.
 
 ### Inline Note
 
@@ -49,6 +50,13 @@ This change optimizes the add transaction flow without changing transaction pers
 - Validation now shows clear snackbars for missing category or missing amount instead of silently doing nothing.
 - `GuidedSetupScreen` keeps production defaults unchanged, while exposing small test seams for injected categories and first-transaction saving so the onboarding transaction flow can be covered by a stable widget test.
 
+### Transaction Entry Testability
+
+- `AddTransactionScreen` now exposes stable widget keys for amount formula/result, amount keys, parent/subcategory rows, inline note controls, and the save button.
+- Production data loading and save behavior remain the default.
+- Widget tests can inject Isar, initial categories/accounts/tags/projects, a transaction saver, and a smart-tag resolver to verify the entry UX without bootstrapping the full app database.
+- The full add-transaction widget regression now covers `1+2×3`, long-press operator switching, custom category selection, inline note entry, save return value, and the generated `JiveTransaction` payload.
+
 ## Files
 
 - `lib/feature/transactions/add_transaction_screen.dart`
@@ -59,6 +67,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - `lib/feature/budget/project_budget_screen.dart`
 - `test/pdf_report_service_test.dart`
 - `test/amount_expression_test.dart`
+- `test/add_transaction_screen_entry_ux_test.dart`
 - `test/category_picker_user_categories_test.dart`
 - `test/guided_setup_screen_test.dart`
 
@@ -72,6 +81,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - Added category picker UI coverage that verifies a hidden system parent behaves as a group row only, while tapping the custom child returns the selected result.
 - Stabilized note suggestion chips to reduce layout movement when inline notes are expanded.
 - Added a guided-setup widget regression test for selecting a category, tapping "下一步", saving the first expense payload, and advancing to the "设分类" step.
+- Added an add-transaction widget regression for expression entry, custom category selection, inline note entry, save callback payload, and save route result.
 - These follow-up changes do not change transaction persistence, project budget behavior, or PDF generation behavior.
 
 ## Validation
@@ -86,12 +96,14 @@ This change optimizes the add transaction flow without changing transaction pers
 - `/Users/chauhua/development/flutter/bin/flutter test test/category_picker_user_categories_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/amount_expression_test.dart test/category_picker_user_categories_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart test/transaction_query_service_test.dart test/transaction_query_spec_test.dart test/pdf_report_service_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/guided_setup_screen_test.dart`
+- `/Users/chauhua/development/flutter/bin/flutter test test/add_transaction_screen_entry_ux_test.dart`
+- `/Users/chauhua/development/flutter/bin/flutter test test/add_transaction_screen_entry_ux_test.dart test/guided_setup_screen_test.dart test/amount_expression_test.dart test/category_picker_user_categories_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart test/transaction_query_service_test.dart test/transaction_query_spec_test.dart test/pdf_report_service_test.dart`
 
 ### Parallel Review Notes
 
 - A parallel read-only pass recommended an `AddTransactionScreen` end-to-end widget test for amount expression, inline note, custom category, and save behavior.
-- That test should be added after the screen has stable widget keys and a narrow persistence seam; otherwise it must rely on broad real database bootstrapping and fragile text/icon selectors.
-- The current round therefore adds the lower-risk category picker UI regression first, while preserving the existing manual smoke scenario for the full add-transaction flow.
+- The current implementation follows that recommendation with stable widget keys plus narrow test seams for initial data, smart-tag resolution, and transaction saving.
+- The test intentionally captures the generated `JiveTransaction` through the saver seam; production default saving still writes through the existing Isar, tag usage, and merchant-memory path.
 
 ### Analyze
 

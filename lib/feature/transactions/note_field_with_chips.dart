@@ -9,6 +9,7 @@ class NoteFieldWithChips extends StatelessWidget {
   final ValueChanged<String>? onTagSelected;
   final FocusNode? focusNode;
   final VoidCallback? onTap;
+  final Key? textFieldKey;
 
   const NoteFieldWithChips({
     super.key,
@@ -18,6 +19,7 @@ class NoteFieldWithChips extends StatelessWidget {
     this.onTagSelected,
     this.focusNode,
     this.onTap,
+    this.textFieldKey,
   });
 
   @override
@@ -28,6 +30,7 @@ class NoteFieldWithChips extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
+            key: textFieldKey,
             controller: controller,
             focusNode: focusNode,
             onTap: onTap,
