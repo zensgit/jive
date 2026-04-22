@@ -134,6 +134,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import secrets
 import string
 import sys
@@ -183,6 +184,84 @@ def write_json(name: str, payload: object) -> None:
     )
 
 
+def redact_sensitive_text(text: str) -> str:
+    redacted = re.sub(
+        r"(?i)(Bearer\s+)[A-Za-z0-9._~+/=-]+",
+        r"\1<redacted>",
+        text,
+    )
+    redacted = re.sub(
+        r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
+        "<redacted-jwt>",
+        redacted,
+    )
+    redacted = re.sub(
+        r"sbp_[A-Za-z0-9]{16,}",
+        "<redacted-supabase-token>",
+        redacted,
+    )
+    redacted = re.sub(
+        r"(?i)(access[_-]?token|refresh[_-]?token|password|apikey|api[_-]?key|"
+        r"authorization|service[_-]?role(?:[_-]?key)?|anon[_-]?key)"
+        r"([\"']?\s*[:=]\s*[\"']?)[^,\"'}\s]+",
+        r"\1\2<redacted>",
+        redacted,
+    )
+    return redacted
+
+
+def safe_error(error: BaseException) -> str:
+    return redact_sensitive_text(str(error))
+
+
+def safe_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    query_pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    query_keys = sorted({key for key, _ in query_pairs})
+    safe_query = "&".join(f"{key}=<redacted>" for key in query_keys)
+    return urllib.parse.urlunparse(
+        (parsed.scheme, parsed.netloc, parsed.path, "", safe_query, "")
+    )
+
+
+def safe_key_name(key: object) -> str:
+    key_text = str(key)
+    if re.search(
+        r"(?i)(access[_-]?token|refresh[_-]?token|password|apikey|api[_-]?key|"
+        r"authorization|service[_-]?role|anon[_-]?key|jwt)",
+        key_text,
+    ):
+        return "<sensitive>"
+    return key_text
+
+
+def key_summary(payload: dict[object, object], *, limit: int = 8) -> str:
+    keys = sorted(safe_key_name(key) for key in payload.keys())
+    visible = ", ".join(keys[:limit])
+    suffix = ", ..." if len(keys) > limit else ""
+    return f"[{visible}{suffix}]"
+
+
+def payload_shape(payload: object) -> str:
+    if isinstance(payload, dict):
+        return f"object(keys={key_summary(payload)})"
+    if isinstance(payload, list):
+        if not payload:
+            return "array(len=0)"
+        return f"array(len={len(payload)}, first={payload_shape(payload[0])})"
+    if payload is None:
+        return "null"
+    return type(payload).__name__
+
+
+def response_summary(parsed: object | None, raw: str) -> str:
+    if parsed is not None:
+        return payload_shape(parsed)
+    if raw:
+        return f"non_json_body(bytes={len(raw.encode('utf-8', errors='replace'))})"
+    return "empty_body"
+
+
 def request_json(
     method: str,
     url: str,
@@ -205,18 +284,20 @@ def request_json(
         raw = error.read().decode("utf-8", errors="replace")
         status = error.code
     except urllib.error.URLError as error:
-        raise SmokeFailure(f"{method} {url} failed: {error}") from error
+        raise SmokeFailure(f"{method} {safe_url(url)} failed: {error}") from error
 
     parsed: object | None = None
     if raw.strip():
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError:
-            parsed = {"raw": raw}
+            parsed = None
 
     if status not in expected:
+        safe_response = response_summary(parsed, raw)
         raise SmokeFailure(
-            f"{method} {url} returned {status}, expected {expected}: {raw[:500]}"
+            f"{method} {safe_url(url)} returned {status}, expected {expected}; "
+            f"response={safe_response}"
         )
     return status, parsed, raw
 
@@ -249,7 +330,9 @@ def sign_in() -> tuple[str, str]:
         expected=(200,),
     )
     if not isinstance(parsed, dict):
-        raise SmokeFailure(f"sign-in returned non-object payload: {parsed!r}")
+        raise SmokeFailure(
+            f"sign-in returned non-object payload: {payload_shape(parsed)}"
+        )
     token = parsed.get("access_token")
     user = parsed.get("user")
     if not isinstance(token, str) or not token:
@@ -272,7 +355,7 @@ def cleanup() -> None:
             expected=(200, 204),
         )
     except Exception as error:  # noqa: BLE001 - cleanup must not hide original result.
-        cleanup_errors.append(f"transaction cleanup failed: {error}")
+        cleanup_errors.append(f"transaction cleanup failed: {safe_error(error)}")
 
     budget_query = urllib.parse.urlencode({"sync_key": f"eq.{budget_sync_key}"})
     try:
@@ -283,7 +366,7 @@ def cleanup() -> None:
             expected=(200, 204),
         )
     except Exception as error:  # noqa: BLE001 - cleanup must not hide original result.
-        cleanup_errors.append(f"budget cleanup failed: {error}")
+        cleanup_errors.append(f"budget cleanup failed: {safe_error(error)}")
 
     account_query = urllib.parse.urlencode({"sync_key": f"eq.{account_sync_key}"})
     try:
@@ -294,7 +377,7 @@ def cleanup() -> None:
             expected=(200, 204),
         )
     except Exception as error:  # noqa: BLE001 - cleanup must not hide original result.
-        cleanup_errors.append(f"account cleanup failed: {error}")
+        cleanup_errors.append(f"account cleanup failed: {safe_error(error)}")
 
     if created_user_id and not keep_user:
         try:
@@ -305,7 +388,7 @@ def cleanup() -> None:
                 expected=(200, 204),
             )
         except Exception as error:  # noqa: BLE001
-            cleanup_errors.append(f"user cleanup failed: {error}")
+            cleanup_errors.append(f"user cleanup failed: {safe_error(error)}")
 
 
 try:
@@ -376,7 +459,10 @@ try:
         expected=(201,),
     )
     if not isinstance(account_insert_payload, list) or len(account_insert_payload) != 1:
-        raise SmokeFailure(f"account insert returned unexpected payload: {account_insert_payload!r}")
+        raise SmokeFailure(
+            "account insert returned unexpected payload: "
+            f"{payload_shape(account_insert_payload)}"
+        )
     inserted_account = account_insert_payload[0]
     if (
         not isinstance(inserted_account, dict)
@@ -412,7 +498,10 @@ try:
         expected=(200,),
     )
     if not isinstance(account_pull_payload, list) or len(account_pull_payload) != 1:
-        raise SmokeFailure(f"second-session account pull returned {account_pull_payload!r}")
+        raise SmokeFailure(
+            "second-session account pull returned unexpected payload: "
+            f"{payload_shape(account_pull_payload)}"
+        )
     pulled_account = account_pull_payload[0]
     if not isinstance(pulled_account, dict):
         raise SmokeFailure("second-session account pull returned non-object row")
@@ -451,7 +540,10 @@ try:
         expected=(201,),
     )
     if not isinstance(insert_payload, list) or len(insert_payload) != 1:
-        raise SmokeFailure(f"insert returned unexpected payload: {insert_payload!r}")
+        raise SmokeFailure(
+            "insert returned unexpected payload: "
+            f"{payload_shape(insert_payload)}"
+        )
     inserted = insert_payload[0]
     if not isinstance(inserted, dict) or inserted.get("sync_key") != sync_key:
         raise SmokeFailure("inserted transaction did not echo expected sync_key")
@@ -485,7 +577,10 @@ try:
         expected=(200,),
     )
     if not isinstance(pull_payload, list) or len(pull_payload) != 1:
-        raise SmokeFailure(f"second-session pull returned {pull_payload!r}")
+        raise SmokeFailure(
+            "second-session pull returned unexpected payload: "
+            f"{payload_shape(pull_payload)}"
+        )
     pulled = pull_payload[0]
     if not isinstance(pulled, dict):
         raise SmokeFailure("second-session pull returned non-object row")
@@ -529,7 +624,10 @@ try:
         expected=(201,),
     )
     if not isinstance(budget_insert_payload, list) or len(budget_insert_payload) != 1:
-        raise SmokeFailure(f"budget insert returned unexpected payload: {budget_insert_payload!r}")
+        raise SmokeFailure(
+            "budget insert returned unexpected payload: "
+            f"{payload_shape(budget_insert_payload)}"
+        )
     inserted_budget = budget_insert_payload[0]
     if (
         not isinstance(inserted_budget, dict)
@@ -567,7 +665,10 @@ try:
         expected=(200,),
     )
     if not isinstance(budget_pull_payload, list) or len(budget_pull_payload) != 1:
-        raise SmokeFailure(f"second-session budget pull returned {budget_pull_payload!r}")
+        raise SmokeFailure(
+            "second-session budget pull returned unexpected payload: "
+            f"{payload_shape(budget_pull_payload)}"
+        )
     pulled_budget = budget_pull_payload[0]
     if not isinstance(pulled_budget, dict):
         raise SmokeFailure("second-session budget pull returned non-object row")
@@ -594,7 +695,10 @@ try:
         expected=(200,),
     )
     if not isinstance(tombstone_payload, list) or len(tombstone_payload) != 1:
-        raise SmokeFailure(f"tombstone update returned {tombstone_payload!r}")
+        raise SmokeFailure(
+            "tombstone update returned unexpected payload: "
+            f"{payload_shape(tombstone_payload)}"
+        )
     tombstoned = tombstone_payload[0]
     if not isinstance(tombstoned, dict) or not tombstoned.get("deleted_at"):
         raise SmokeFailure("tombstone update did not persist deleted_at")
@@ -622,7 +726,10 @@ try:
         expected=(200,),
     )
     if not isinstance(budget_tombstone_payload, list) or len(budget_tombstone_payload) != 1:
-        raise SmokeFailure(f"budget tombstone update returned {budget_tombstone_payload!r}")
+        raise SmokeFailure(
+            "budget tombstone update returned unexpected payload: "
+            f"{payload_shape(budget_tombstone_payload)}"
+        )
     tombstoned_budget = budget_tombstone_payload[0]
     if not isinstance(tombstoned_budget, dict) or not tombstoned_budget.get("deleted_at"):
         raise SmokeFailure("budget tombstone update did not persist deleted_at")
@@ -685,23 +792,25 @@ except Exception as error:  # noqa: BLE001 - report exact smoke failure.
     try:
         cleanup()
     finally:
+        safe_message = safe_error(error)
+        safe_cleanup_errors = [redact_sensitive_text(item) for item in cleanup_errors]
         write_json(
             "summary.json",
             {
                 "status": "FAIL",
-                "error": str(error),
+                "error": safe_message,
                 "userId": created_user_id,
                 "email": email,
                 "syncKey": sync_key,
                 "accountSyncKey": account_sync_key,
                 "budgetSyncKey": budget_sync_key,
-                "cleanupErrors": cleanup_errors,
+                "cleanupErrors": safe_cleanup_errors,
             },
         )
         (out_dir / "summary.md").write_text(
             "# SaaS Staging Sync Smoke\n\n"
             "- status: FAIL\n"
-            f"- error: {error}\n"
+            f"- error: {safe_message}\n"
             f"- userId: {created_user_id}\n"
             f"- email: {email}\n"
             f"- transactionSyncKey: {sync_key}\n"
@@ -710,7 +819,8 @@ except Exception as error:  # noqa: BLE001 - report exact smoke failure.
             f"- artifacts: {out_dir}\n",
             encoding="utf-8",
         )
-    raise
+        print(f"[saas-sync-smoke] ERROR: {safe_message}", file=sys.stderr)
+    sys.exit(1)
 PY
 
   log "PASS"

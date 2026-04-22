@@ -105,7 +105,7 @@ scripts/run_saas_staging_sync_smoke.sh \
 [saas-sync-smoke] ERROR: env file not found: /tmp/jive-saas-staging.env
 ```
 
-因此本次远端 Supabase 实测尚未完成，原因是本机临时 env 文件已不存在；脚本没有打印或写入任何密钥。
+因此本次远端 Supabase 实测尚未完成，原因是本机临时 env 文件已不存在；脚本没有打印或写入任何密钥。后续失败路径也应只记录状态码与响应结构摘要，不落原始响应体。
 
 ## 远端复跑命令
 
