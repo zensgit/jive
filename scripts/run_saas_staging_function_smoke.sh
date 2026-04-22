@@ -141,17 +141,102 @@ print(json.dumps(payload, separators=(",", ":")))
 PY
 }
 
+redact_text() {
+  python3 -c '
+import re
+import sys
+
+text = sys.stdin.read()
+text = re.sub(r"(?i)(Bearer\s+)[A-Za-z0-9._~+/=-]+", r"\1<redacted>", text)
+text = re.sub(
+    r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
+    "<redacted-jwt>",
+    text,
+)
+text = re.sub(r"sbp_[A-Za-z0-9]{16,}", "<redacted-supabase-token>", text)
+text = re.sub(
+    r"(?i)(access[_-]?token|refresh[_-]?token|purchase[_-]?token|password|"
+    r"apikey|api[_-]?key|authorization|service[_-]?role(?:[_-]?key)?|"
+    r"anon[_-]?key|admin[_-]?token|webhook[_-]?token)"
+    r"([\"'\'']?\s*[:=]\s*[\"'\'']?)[^,\"'\''}\s]+",
+    r"\1\2<redacted>",
+    text,
+)
+sys.stdout.write(text)
+'
+}
+
+response_summary() {
+  local body_file="$1"
+
+  python3 - "$body_file" <<'PY'
+import json
+import re
+import sys
+from pathlib import Path
+
+body = Path(sys.argv[1]).read_bytes()
+text = body.decode("utf-8", errors="replace")
+
+
+def safe_key_name(key):
+    key_text = str(key)
+    if re.search(
+        r"(?i)(access[_-]?token|refresh[_-]?token|purchase[_-]?token|password|"
+        r"apikey|api[_-]?key|authorization|service[_-]?role|anon[_-]?key|"
+        r"admin[_-]?token|webhook[_-]?token|jwt)",
+        key_text,
+    ):
+        return "<sensitive>"
+    return key_text
+
+
+def key_summary(payload, limit=8):
+    keys = sorted(safe_key_name(key) for key in payload.keys())
+    visible = ", ".join(keys[:limit])
+    suffix = ", ..." if len(keys) > limit else ""
+    return f"[{visible}{suffix}]"
+
+
+def shape(payload):
+    if isinstance(payload, dict):
+        return f"object(keys={key_summary(payload)})"
+    if isinstance(payload, list):
+        if not payload:
+            return "array(len=0)"
+        return f"array(len={len(payload)}, first={shape(payload[0])})"
+    if payload is None:
+        return "null"
+    return type(payload).__name__
+
+
+if not text.strip():
+    print("empty_body")
+    raise SystemExit
+
+try:
+    parsed = json.loads(text)
+except json.JSONDecodeError:
+    print(f"non_json_body(bytes={len(body)})")
+else:
+    print(shape(parsed))
+PY
+}
+
 expect_status() {
   local label="$1"
   local expected="$2"
   shift 2
 
   local body_file
+  local curl_error
   local http_status
+  local summary
   body_file="$(mktemp)"
 
   if ! http_status="$(curl -sS -o "$body_file" -w "%{http_code}" "$@" 2>"$body_file.err")"; then
-    warn "$label curl failed: $(tr '\n' ' ' < "$body_file.err")"
+    curl_error="$(tr '\n' ' ' < "$body_file.err" | redact_text)"
+    warn "$label curl failed: $curl_error"
     FAILURES=$((FAILURES + 1))
     rm -f "$body_file" "$body_file.err"
     return 0
@@ -162,8 +247,9 @@ expect_status() {
   if [[ ",$expected," == *",$http_status,"* ]]; then
     log "PASS: $label -> HTTP $http_status"
   else
+    summary="$(response_summary "$body_file")"
     warn "$label expected HTTP $expected but got $http_status"
-    warn "$label response: $(head -c 500 "$body_file" | tr '\n' ' ')"
+    warn "$label response: $summary"
     FAILURES=$((FAILURES + 1))
   fi
 
