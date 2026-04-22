@@ -86,6 +86,7 @@ class CategoryPickerScreen extends StatefulWidget {
   final bool onlyUserCategories;
   final Isar? isar;
   final String title;
+  final CategoryPickerData? initialData;
 
   const CategoryPickerScreen({
     super.key,
@@ -93,6 +94,7 @@ class CategoryPickerScreen extends StatefulWidget {
     this.onlyUserCategories = false,
     this.isar,
     this.title = '选择分类',
+    this.initialData,
   });
 
   @override
@@ -121,6 +123,11 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
       if (value == _query) return;
       setState(() => _query = value);
     });
+    final initialData = widget.initialData;
+    if (initialData != null) {
+      _applyData(initialData);
+      return;
+    }
     _load();
   }
 
@@ -153,18 +160,7 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
       );
 
       if (!mounted) return;
-      setState(() {
-        _parents = data.parents;
-        _childrenByParentKey = data.childrenByParentKey;
-        _items = data.items;
-        if (widget.onlyUserCategories) {
-          _expandedParents
-            ..clear()
-            ..addAll(data.expandedParents);
-        }
-        _searchKeyCache.clear();
-        _isLoading = false;
-      });
+      setState(() => _applyData(data));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -175,6 +171,19 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _applyData(CategoryPickerData data) {
+    _parents = data.parents;
+    _childrenByParentKey = data.childrenByParentKey;
+    _items = data.items;
+    _expandedParents
+      ..clear()
+      ..addAll(
+        widget.onlyUserCategories ? data.expandedParents : const <String>{},
+      );
+    _searchKeyCache.clear();
+    _isLoading = false;
   }
 
   List<CategorySearchResult> _filter(String query) {

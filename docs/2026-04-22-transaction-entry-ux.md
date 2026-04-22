@@ -41,6 +41,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - `CategoryPickerScreen` now handles the user-only category case where a user-created child belongs to a system parent.
 - In user-only mode, system parents with user children remain visible as grouping rows, even if the parent itself is hidden.
 - Hidden/system grouping parents are not selectable search results, while their visible custom children are included in search/list data.
+- `CategoryPickerScreen` keeps production loading from Isar, while accepting prebuilt picker data for stable widget-level regression tests.
 
 ### Guided Setup
 
@@ -68,6 +69,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - Tightened `PdfReportService.generateAnnualReport` signature coverage so the test no longer relies on an always-true function type check.
 - Added expression coverage for negative prefix input, trailing operators, chained incomplete formulas, and decimals.
 - Added category coverage for hidden system parents that still own visible custom child categories.
+- Added category picker UI coverage that verifies a hidden system parent behaves as a group row only, while tapping the custom child returns the selected result.
 - Stabilized note suggestion chips to reduce layout movement when inline notes are expanded.
 - Added a guided-setup widget regression test for selecting a category, tapping "下一步", saving the first expense payload, and advancing to the "设分类" step.
 - These follow-up changes do not change transaction persistence, project budget behavior, or PDF generation behavior.
@@ -84,6 +86,12 @@ This change optimizes the add transaction flow without changing transaction pers
 - `/Users/chauhua/development/flutter/bin/flutter test test/category_picker_user_categories_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/amount_expression_test.dart test/category_picker_user_categories_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart test/transaction_query_service_test.dart test/transaction_query_spec_test.dart test/pdf_report_service_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/guided_setup_screen_test.dart`
+
+### Parallel Review Notes
+
+- A parallel read-only pass recommended an `AddTransactionScreen` end-to-end widget test for amount expression, inline note, custom category, and save behavior.
+- That test should be added after the screen has stable widget keys and a narrow persistence seam; otherwise it must rely on broad real database bootstrapping and fragile text/icon selectors.
+- The current round therefore adds the lower-risk category picker UI regression first, while preserving the existing manual smoke scenario for the full add-transaction flow.
 
 ### Analyze
 
