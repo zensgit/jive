@@ -10,6 +10,76 @@ import '../../core/service/database_service.dart';
 import 'category_manager_screen.dart';
 import 'category_search_delegate.dart';
 
+@visibleForTesting
+class CategoryPickerData {
+  final List<JiveCategory> parents;
+  final Map<String, List<JiveCategory>> childrenByParentKey;
+  final List<CategorySearchResult> items;
+  final Set<String> expandedParents;
+
+  const CategoryPickerData({
+    required this.parents,
+    required this.childrenByParentKey,
+    required this.items,
+    required this.expandedParents,
+  });
+}
+
+@visibleForTesting
+CategoryPickerData buildCategoryPickerData(
+  List<JiveCategory> all, {
+  required bool isIncome,
+  required bool onlyUserCategories,
+}) {
+  final visible = all.where((cat) {
+    if (cat.isHidden) return false;
+    if (cat.isIncome != isIncome) return false;
+    return true;
+  }).toList();
+
+  final childCandidates = visible.where((cat) {
+    if (cat.parentKey == null) return false;
+    if (!onlyUserCategories) return true;
+    return !cat.isSystem;
+  }).toList();
+  final parentKeysWithUserChildren = childCandidates
+      .map((cat) => cat.parentKey)
+      .whereType<String>()
+      .toSet();
+  final parents = visible.where((cat) {
+    if (cat.parentKey != null) return false;
+    if (!onlyUserCategories) return true;
+    return !cat.isSystem || parentKeysWithUserChildren.contains(cat.key);
+  }).toList()..sort((a, b) => a.order.compareTo(b.order));
+
+  final childrenByParent = <String, List<JiveCategory>>{};
+  for (final child in childCandidates) {
+    final parentKey = child.parentKey!;
+    childrenByParent.putIfAbsent(parentKey, () => []).add(child);
+  }
+  for (final list in childrenByParent.values) {
+    list.sort((a, b) => a.order.compareTo(b.order));
+  }
+
+  final items = <CategorySearchResult>[];
+  for (final parent in parents) {
+    if (!onlyUserCategories || !parent.isSystem) {
+      items.add(CategorySearchResult(parent: parent));
+    }
+    final children = childrenByParent[parent.key] ?? const <JiveCategory>[];
+    for (final child in children) {
+      items.add(CategorySearchResult(parent: parent, sub: child));
+    }
+  }
+
+  return CategoryPickerData(
+    parents: parents,
+    childrenByParentKey: childrenByParent,
+    items: items,
+    expandedParents: onlyUserCategories ? parentKeysWithUserChildren : {},
+  );
+}
+
 class CategoryPickerScreen extends StatefulWidget {
   final bool isIncome;
   final bool onlyUserCategories;
@@ -75,38 +145,22 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
     try {
       final isar = await _ensureIsar();
       final all = await isar.collection<JiveCategory>().where().findAll();
-      final filtered = all.where((cat) {
-        if (cat.isHidden) return false;
-        if (cat.isIncome != widget.isIncome) return false;
-        if (widget.onlyUserCategories && cat.isSystem) return false;
-        return true;
-      }).toList();
-
-      final parents = filtered.where((cat) => cat.parentKey == null).toList()
-        ..sort((a, b) => a.order.compareTo(b.order));
-      final childrenByParent = <String, List<JiveCategory>>{};
-      for (final child in filtered.where((cat) => cat.parentKey != null)) {
-        final parentKey = child.parentKey!;
-        childrenByParent.putIfAbsent(parentKey, () => []).add(child);
-      }
-      for (final list in childrenByParent.values) {
-        list.sort((a, b) => a.order.compareTo(b.order));
-      }
-
-      final items = <CategorySearchResult>[];
-      for (final parent in parents) {
-        items.add(CategorySearchResult(parent: parent));
-        final children = childrenByParent[parent.key] ?? const <JiveCategory>[];
-        for (final child in children) {
-          items.add(CategorySearchResult(parent: parent, sub: child));
-        }
-      }
+      final data = buildCategoryPickerData(
+        all,
+        isIncome: widget.isIncome,
+        onlyUserCategories: widget.onlyUserCategories,
+      );
 
       if (!mounted) return;
       setState(() {
-        _parents = parents;
-        _childrenByParentKey = childrenByParent;
-        _items = items;
+        _parents = data.parents;
+        _childrenByParentKey = data.childrenByParentKey;
+        _items = data.items;
+        if (widget.onlyUserCategories) {
+          _expandedParents
+            ..clear()
+            ..addAll(data.expandedParents);
+        }
         _searchKeyCache.clear();
         _isLoading = false;
       });
@@ -329,8 +383,20 @@ class _CategoryPickerScreenState extends State<CategoryPickerScreen> {
                   ? const Text('一级分类')
                   : Text('${children.length} 个子类'),
               trailing: expandToggle,
-              onTap: () =>
-                  Navigator.pop(context, CategorySearchResult(parent: parent)),
+              onTap: widget.onlyUserCategories && parent.isSystem && canExpand
+                  ? () {
+                      setState(() {
+                        if (isExpanded) {
+                          _expandedParents.remove(parent.key);
+                        } else {
+                          _expandedParents.add(parent.key);
+                        }
+                      });
+                    }
+                  : () => Navigator.pop(
+                      context,
+                      CategorySearchResult(parent: parent),
+                    ),
             ),
             if (children.isNotEmpty && isExpanded)
               Padding(

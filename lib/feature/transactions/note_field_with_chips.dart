@@ -7,6 +7,8 @@ class NoteFieldWithChips extends StatelessWidget {
   final bool isLandscape;
   final List<String> suggestions;
   final ValueChanged<String>? onTagSelected;
+  final FocusNode? focusNode;
+  final VoidCallback? onTap;
 
   const NoteFieldWithChips({
     super.key,
@@ -14,6 +16,8 @@ class NoteFieldWithChips extends StatelessWidget {
     required this.isLandscape,
     required this.suggestions,
     this.onTagSelected,
+    this.focusNode,
+    this.onTap,
   });
 
   @override
@@ -25,6 +29,8 @@ class NoteFieldWithChips extends StatelessWidget {
         children: [
           TextField(
             controller: controller,
+            focusNode: focusNode,
+            onTap: onTap,
             textAlign: TextAlign.center,
             maxLines: 1,
             decoration: InputDecoration(
@@ -33,7 +39,10 @@ class NoteFieldWithChips extends StatelessWidget {
               filled: true,
               isDense: true,
               fillColor: Colors.grey.shade100,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide.none,
@@ -53,25 +62,28 @@ class NoteFieldWithChips extends StatelessWidget {
                   children: suggestions.map((tag) {
                     final selected = _noteHasTag(noteText, tag);
                     return ChoiceChip(
-                      label: Text(
-                        tag,
-                        style: GoogleFonts.lato(fontSize: 11),
-                      ),
+                      label: Text(tag, style: GoogleFonts.lato(fontSize: 11)),
                       selected: selected,
                       onSelected: (_) {
                         final next = _toggleNoteTag(noteText, tag);
                         controller.value = TextEditingValue(
                           text: next,
-                          selection: TextSelection.collapsed(offset: next.length),
+                          selection: TextSelection.collapsed(
+                            offset: next.length,
+                          ),
                         );
                         if (!selected && _noteHasTag(next, tag)) {
                           onTagSelected?.call(tag);
                         }
                       },
-                      selectedColor: JiveTheme.primaryGreen.withValues(alpha: 0.15),
+                      selectedColor: JiveTheme.primaryGreen.withValues(
+                        alpha: 0.15,
+                      ),
                       backgroundColor: Colors.grey.shade100,
                       side: BorderSide(
-                        color: selected ? JiveTheme.primaryGreen : Colors.transparent,
+                        color: selected
+                            ? JiveTheme.primaryGreen
+                            : Colors.transparent,
                       ),
                       visualDensity: VisualDensity.compact,
                     );
