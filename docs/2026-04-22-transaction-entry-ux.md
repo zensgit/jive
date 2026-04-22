@@ -46,6 +46,7 @@ This change optimizes the add transaction flow without changing transaction pers
 
 - In the welcome guided setup "记一笔" step, tapping a category now dismisses the keyboard so the bottom "下一步" button is reachable.
 - Validation now shows clear snackbars for missing category or missing amount instead of silently doing nothing.
+- `GuidedSetupScreen` keeps production defaults unchanged, while exposing small test seams for injected categories and first-transaction saving so the onboarding transaction flow can be covered by a stable widget test.
 
 ## Files
 
@@ -58,6 +59,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - `test/pdf_report_service_test.dart`
 - `test/amount_expression_test.dart`
 - `test/category_picker_user_categories_test.dart`
+- `test/guided_setup_screen_test.dart`
 
 ## Follow-Up Hardening
 
@@ -67,6 +69,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - Added expression coverage for negative prefix input, trailing operators, chained incomplete formulas, and decimals.
 - Added category coverage for hidden system parents that still own visible custom child categories.
 - Stabilized note suggestion chips to reduce layout movement when inline notes are expanded.
+- Added a guided-setup widget regression test for selecting a category, tapping "下一步", saving the first expense payload, and advancing to the "设分类" step.
 - These follow-up changes do not change transaction persistence, project budget behavior, or PDF generation behavior.
 
 ## Validation
@@ -80,6 +83,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - `/Users/chauhua/development/flutter/bin/flutter test test/transaction_query_spec_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/category_picker_user_categories_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/amount_expression_test.dart test/category_picker_user_categories_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart test/transaction_query_service_test.dart test/transaction_query_spec_test.dart test/pdf_report_service_test.dart`
+- `/Users/chauhua/development/flutter/bin/flutter test test/guided_setup_screen_test.dart`
 
 ### Analyze
 
