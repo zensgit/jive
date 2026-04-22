@@ -113,6 +113,60 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Mask staging secret values
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_PROJECT_REF: ${{ secrets.STAGING_PROJECT_REF }}
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_SUPABASE_FUNCTIONS_URL: ${{ secrets.STAGING_SUPABASE_FUNCTIONS_URL }}
+          STAGING_GOOGLE_SERVICE_ACCOUNT_EMAIL: ${{ secrets.STAGING_GOOGLE_SERVICE_ACCOUNT_EMAIL }}
+          STAGING_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.STAGING_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY }}
+          STAGING_GOOGLE_PLAY_PACKAGE_NAME: ${{ secrets.STAGING_GOOGLE_PLAY_PACKAGE_NAME }}
+          STAGING_APPLE_APP_STORE_BUNDLE_ID: ${{ secrets.STAGING_APPLE_APP_STORE_BUNDLE_ID }}
+          STAGING_APPLE_APP_STORE_SHARED_SECRET: ${{ secrets.STAGING_APPLE_APP_STORE_SHARED_SECRET }}
+          STAGING_APPLE_APP_STORE_APPLE_ID: ${{ secrets.STAGING_APPLE_APP_STORE_APPLE_ID }}
+          STAGING_APPLE_APP_STORE_ENVIRONMENT: ${{ secrets.STAGING_APPLE_APP_STORE_ENVIRONMENT }}
+          STAGING_PUBSUB_BEARER_TOKEN: ${{ secrets.STAGING_PUBSUB_BEARER_TOKEN }}
+          STAGING_WEBHOOK_HMAC_SECRET: ${{ secrets.STAGING_WEBHOOK_HMAC_SECRET }}
+          STAGING_ADMIN_API_TOKEN: ${{ secrets.STAGING_ADMIN_API_TOKEN }}
+          STAGING_ADMIN_API_ALLOWED_ORIGINS: ${{ secrets.STAGING_ADMIN_API_ALLOWED_ORIGINS }}
+          STAGING_ANALYTICS_ADMIN_TOKEN: ${{ secrets.STAGING_ANALYTICS_ADMIN_TOKEN }}
+          STAGING_NOTIFICATION_ADMIN_TOKEN: ${{ secrets.STAGING_NOTIFICATION_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+          keys=(
+            STAGING_SUPABASE_ACCESS_TOKEN
+            STAGING_PROJECT_REF
+            STAGING_DB_PASSWORD
+            STAGING_SUPABASE_URL
+            STAGING_SUPABASE_ANON_KEY
+            STAGING_SUPABASE_SERVICE_ROLE_KEY
+            STAGING_SUPABASE_FUNCTIONS_URL
+            STAGING_GOOGLE_SERVICE_ACCOUNT_EMAIL
+            STAGING_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+            STAGING_GOOGLE_PLAY_PACKAGE_NAME
+            STAGING_APPLE_APP_STORE_BUNDLE_ID
+            STAGING_APPLE_APP_STORE_SHARED_SECRET
+            STAGING_APPLE_APP_STORE_APPLE_ID
+            STAGING_APPLE_APP_STORE_ENVIRONMENT
+            STAGING_PUBSUB_BEARER_TOKEN
+            STAGING_WEBHOOK_HMAC_SECRET
+            STAGING_ADMIN_API_TOKEN
+            STAGING_ADMIN_API_ALLOWED_ORIGINS
+            STAGING_ANALYTICS_ADMIN_TOKEN
+            STAGING_NOTIFICATION_ADMIN_TOKEN
+          )
+
+          for key in "${keys[@]}"; do
+            value="${!key:-}"
+            if [[ -n "$value" ]]; then
+              printf '::add-mask::%s\n' "$value"
+            fi
+          done
+
       - name: Create staging env file
         env:
           SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
@@ -226,6 +280,39 @@ jobs:
           fi
 
           bash scripts/run_saas_core_staging_lane.sh "${args[@]}"
+
+      - name: Guard SaaS staging report artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+          roots=()
+          [[ -d build/reports/saas-staging ]] && roots+=(build/reports/saas-staging)
+          [[ -d build/saas-staging ]] && roots+=(build/saas-staging)
+
+          if (( ${#roots[@]} == 0 )); then
+            exit 0
+          fi
+
+          blocked_file="$(mktemp)"
+          trap 'rm -f "$blocked_file"' EXIT
+
+          find "${roots[@]}" -type f \
+              \( \
+                -name '*.env' -o \
+                -name '*.pem' -o \
+                -name '*.key' -o \
+                -iname '*secret*' -o \
+                -iname '*secrets*' -o \
+                -iname '*credential*' -o \
+                -iname '*credentials*' -o \
+                -iname '*dart-defines*' \
+              \) | sort > "$blocked_file"
+
+          if [[ -s "$blocked_file" ]]; then
+            printf 'SaaS staging artifact guard blocked sensitive-looking files:\n' >&2
+            sed 's/^/ - /' "$blocked_file" >&2
+            exit 1
+          fi
 
       - name: Upload SaaS staging reports
         if: always()
