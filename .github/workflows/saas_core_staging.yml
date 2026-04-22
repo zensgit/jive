@@ -23,6 +23,11 @@ on:
         required: false
         type: boolean
         default: false
+      run_sync_smoke:
+        description: "Run staging DB core sync smoke with temporary test rows"
+        required: false
+        type: boolean
+        default: false
       build_apk:
         description: "Build dev debug APK with staging dart-defines"
         required: false
@@ -198,6 +203,10 @@ jobs:
 
           if [[ "${{ inputs.run_local_smoke }}" != "true" ]]; then
             args+=(--skip-local-smoke)
+          fi
+
+          if [[ "${{ inputs.run_sync_smoke }}" == "true" ]]; then
+            args+=(--run-sync-smoke)
           fi
 
           if [[ "${{ inputs.apply_migrations }}" != "true" ]]; then

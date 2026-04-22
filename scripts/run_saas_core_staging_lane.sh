@@ -11,6 +11,7 @@ ACCESS_TOKEN="${SUPABASE_ACCESS_TOKEN:-}"
 DB_URL="${STAGING_DB_URL:-}"
 FUNCTIONS_URL="${SUPABASE_FUNCTIONS_URL:-}"
 SKIP_LOCAL_SMOKE=0
+RUN_SYNC_SMOKE=0
 SKIP_DRY_RUN=0
 SKIP_APPLY=0
 SKIP_DEPLOY=0
@@ -40,6 +41,7 @@ Options:
   --pg-statement-timeout <v>
                           Statement timeout used by the Postgres fallback. Defaults to STAGING_DB_STATEMENT_TIMEOUT or 60s.
   --skip-local-smoke      Skip scripts/run_saas_wave0_smoke.sh.
+  --run-sync-smoke        Run scripts/run_saas_staging_sync_smoke.sh against staging.
   --skip-dry-run          Skip migration dry-run.
   --skip-apply            Skip migration apply.
   --skip-deploy           Skip Edge Functions deploy.
@@ -115,6 +117,10 @@ parse_args() {
         ;;
       --skip-local-smoke)
         SKIP_LOCAL_SMOKE=1
+        shift
+        ;;
+      --run-sync-smoke)
+        RUN_SYNC_SMOKE=1
         shift
         ;;
       --skip-dry-run)
@@ -232,6 +238,16 @@ main() {
       "${rollout_pg_args[@]}"
   else
     log "skipping migration apply"
+  fi
+
+  if [[ "$RUN_SYNC_SMOKE" -eq 1 ]]; then
+    local sync_smoke_out="$APP_DIR/build/reports/saas-staging/sync-smoke-$(date +%Y%m%d-%H%M%S)"
+    log "running staging core sync smoke"
+    with_staging_env bash "$APP_DIR/scripts/run_saas_staging_sync_smoke.sh" \
+      --env-file "$ENV_FILE" \
+      --out-dir "$sync_smoke_out"
+  else
+    log "skipping staging core sync smoke"
   fi
 
   if [[ "$SKIP_DEPLOY" -ne 1 ]]; then
