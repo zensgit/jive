@@ -31,7 +31,7 @@ The script:
 - verifies `sync_key`, `book_key`, and amount
 - updates `deleted_at` through the user JWT to validate tombstone writes
 - deletes the test transaction and temporary user by default
-- writes only redacted artifacts; it does not print or persist Supabase keys/tokens
+- writes only redacted artifacts; success and failure paths avoid persisting Supabase keys/tokens or raw HTTP response bodies
 
 Supported options:
 

@@ -22,7 +22,7 @@
 
 - 默认不改变现有 core staging workflow 行为，必须手动勾选 `run_sync_smoke=true` 才会访问 staging 数据库。
 - workflow 继续使用 `STAGING_SUPABASE_URL`、`STAGING_SUPABASE_ANON_KEY`、`STAGING_SUPABASE_SERVICE_ROLE_KEY` 三个 GitHub Actions secrets 创建临时 env 文件。
-- `run_saas_staging_sync_smoke.sh` 不打印 token/key/password，只写脱敏 metadata 与测试行标识。
+- `run_saas_staging_sync_smoke.sh` 不打印 token/key/password；成功和失败 artifacts 都只写脱敏 metadata、测试行标识、HTTP 状态和响应结构摘要，不落原始响应体。
 - smoke 默认清理临时 auth user、account、transaction、budget 测试行。
 
 ## 运行方式
