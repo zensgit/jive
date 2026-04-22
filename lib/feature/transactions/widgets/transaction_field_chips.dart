@@ -15,6 +15,7 @@ import '../../tag/tag_icon_catalog.dart';
 class SubCategoryGrid extends StatelessWidget {
   final List<JiveCategory> subCategories;
   final JiveCategory? selectedSub;
+  final Key Function(JiveCategory category)? categoryKeyBuilder;
   final double aspectRatio;
   final double mainAxisSpacing;
   final ValueChanged<JiveCategory> onSelect;
@@ -25,6 +26,7 @@ class SubCategoryGrid extends StatelessWidget {
     super.key,
     required this.subCategories,
     required this.selectedSub,
+    this.categoryKeyBuilder,
     required this.aspectRatio,
     required this.mainAxisSpacing,
     required this.onSelect,
@@ -76,17 +78,18 @@ class SubCategoryGrid extends StatelessWidget {
         final inactiveColor = JiveTheme.categoryIconInactive;
         final isCategoryAssetIcon =
             (cat.iconName.endsWith('.png') || cat.iconName.endsWith('.svg')) &&
-                (!cat.iconName.startsWith('assets/') ||
-                    cat.iconName.startsWith('assets/category_icons/'));
+            (!cat.iconName.startsWith('assets/') ||
+                cat.iconName.startsWith('assets/category_icons/'));
         final shouldTintIcon = isCategoryAssetIcon
             ? (cat.iconForceTinted ||
-                CategoryIconStyleConfig.current.shouldTintForCategory(
-                  isSystemCategory: cat.isSystem,
-                ))
+                  CategoryIconStyleConfig.current.shouldTintForCategory(
+                    isSystemCategory: cat.isSystem,
+                  ))
             : true;
         final coloredIcons = !shouldTintIcon;
 
         return GestureDetector(
+          key: categoryKeyBuilder?.call(cat),
           onTap: () => onSelect(cat),
           onLongPress: () => onLongPress(cat),
           child: Column(
@@ -97,11 +100,11 @@ class SubCategoryGrid extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? (coloredIcons
-                          ? activeColor.withValues(alpha: 0.14)
-                          : activeColor)
+                            ? activeColor.withValues(alpha: 0.14)
+                            : activeColor)
                       : (coloredIcons
-                          ? Colors.white
-                          : JiveTheme.categoryIconInactiveBackground),
+                            ? Colors.white
+                            : JiveTheme.categoryIconInactiveBackground),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: isSelected

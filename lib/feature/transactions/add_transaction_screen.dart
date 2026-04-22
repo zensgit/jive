@@ -64,6 +64,27 @@ import 'widgets/transaction_type_selector.dart';
 
 enum TransactionType { expense, income, transfer }
 
+typedef AddTransactionSaver = Future<void> Function(JiveTransaction tx);
+typedef AddTransactionSmartTagResolver =
+    Future<List<String>> Function(JiveTransaction tx);
+
+class AddTransactionScreenKeys {
+  static const amountFormula = ValueKey('add-transaction-amount-formula');
+  static const amountResult = ValueKey('add-transaction-amount-result');
+  static const noteCollapsed = ValueKey('add-transaction-note-collapsed');
+  static const noteTextField = ValueKey('add-transaction-note-text-field');
+  static const saveButton = ValueKey('add-transaction-save-button');
+
+  static ValueKey<String> amountKey(String key) =>
+      ValueKey('add-transaction-amount-key-$key');
+
+  static ValueKey<String> parentCategory(String key) =>
+      ValueKey('add-transaction-parent-category-$key');
+
+  static ValueKey<String> subCategory(String key) =>
+      ValueKey('add-transaction-sub-category-$key');
+}
+
 class AddTransactionScreen extends StatefulWidget {
   final JiveTransaction? editingTransaction;
   final JiveTransaction? prefillTransaction;
@@ -71,6 +92,26 @@ class AddTransactionScreen extends StatefulWidget {
   final bool startWithSpeech;
   final String? initialSpeechText;
   final int? bookId;
+  @visibleForTesting
+  final Isar? isar;
+  @visibleForTesting
+  final bool bootstrapDefaults;
+  @visibleForTesting
+  final List<JiveCategory>? initialParentCategories;
+  @visibleForTesting
+  final List<JiveCategory>? initialSubCategories;
+  @visibleForTesting
+  final List<JiveAccount>? initialAccounts;
+  @visibleForTesting
+  final Map<int, double>? initialAccountBalances;
+  @visibleForTesting
+  final List<JiveTag>? initialTags;
+  @visibleForTesting
+  final List<JiveProject>? initialProjects;
+  @visibleForTesting
+  final AddTransactionSaver? transactionSaver;
+  @visibleForTesting
+  final AddTransactionSmartTagResolver? smartTagResolver;
 
   const AddTransactionScreen({
     super.key,
@@ -80,7 +121,26 @@ class AddTransactionScreen extends StatefulWidget {
     this.startWithSpeech = false,
     this.initialSpeechText,
     this.bookId,
-  });
+    this.isar,
+    this.bootstrapDefaults = true,
+    this.initialParentCategories,
+    this.initialSubCategories,
+    this.initialAccounts,
+    this.initialAccountBalances,
+    this.initialTags,
+    this.initialProjects,
+    this.transactionSaver,
+    this.smartTagResolver,
+  }) : assert(
+         (initialParentCategories == null &&
+                 initialSubCategories == null &&
+                 initialAccounts == null &&
+                 initialAccountBalances == null &&
+                 initialTags == null &&
+                 initialProjects == null) ||
+             isar != null,
+         'Initial transaction entry data requires an injected Isar.',
+       );
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -88,6 +148,7 @@ class AddTransactionScreen extends StatefulWidget {
 
 class _AddTransactionScreenState extends State<AddTransactionScreen> {
   static const String _noteTagUsageKeyPrefix = 'note_tag_usage_v1_';
+  static const int _kMaxAmountExpressionLength = 28;
 
   // ── Voice recognition state ──
   final SpeechIntentParser _speechParser = SpeechIntentParser();
@@ -311,14 +372,20 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   Future<void> _initData() async {
     try {
       JiveLogger.d(">>> INIT DATA STARTED");
-      _isar = await DatabaseService.getInstance();
+      _isar = widget.isar ?? await DatabaseService.getInstance();
       _transactionRepo = IsarTransactionRepository(_isar);
 
       _currencyService = CurrencyService(_isar);
+      if (_hasInitialEntryData) {
+        _applyInitialEntryData();
+        return;
+      }
       _baseCurrency = await _currencyService!.getBaseCurrency();
-      await CategoryService(_isar).initDefaultCategories();
-      await AccountService(_isar).initDefaultAccounts();
-      await TagService(_isar).initDefaultGroups();
+      if (widget.bootstrapDefaults) {
+        await CategoryService(_isar).initDefaultCategories();
+        await AccountService(_isar).initDefaultAccounts();
+        await TagService(_isar).initDefaultGroups();
+      }
       await _loadAccounts();
       await _loadAccountUsage();
       await _loadTags();
@@ -337,6 +404,40 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  bool get _hasInitialEntryData =>
+      widget.initialParentCategories != null ||
+      widget.initialSubCategories != null ||
+      widget.initialAccounts != null ||
+      widget.initialAccountBalances != null ||
+      widget.initialTags != null ||
+      widget.initialProjects != null;
+
+  void _applyInitialEntryData() {
+    final parents = widget.initialParentCategories ?? const <JiveCategory>[];
+    final subs = widget.initialSubCategories ?? const <JiveCategory>[];
+    final accounts = widget.initialAccounts ?? const <JiveAccount>[];
+    final tags = widget.initialTags ?? const <JiveTag>[];
+    final projects = widget.initialProjects ?? const <JiveProject>[];
+    if (!mounted) return;
+    setState(() {
+      _parentCategories = parents;
+      _selectedParent = parents.isEmpty ? null : parents.first;
+      _subCategories = subs;
+      _selectedSub = null;
+      _accounts = accounts;
+      _accountBalances =
+          widget.initialAccountBalances ??
+          {for (final account in accounts) account.id: account.openingBalance};
+      _selectedAccount = accounts.isEmpty ? null : accounts.first;
+      _selectedToAccount = accounts.length > 1 ? accounts[1] : null;
+      _tags = tags;
+      _projects = projects;
+      _baseCurrency = accounts.isEmpty ? 'CNY' : accounts.first.currency;
+      _isFallbackMode = false;
+      _isLoading = false;
+    });
   }
 
   void _startCategoryWatcher() {
@@ -1229,18 +1330,26 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
     if (key == 'OK') {
       if (_hasExpression(_amountStr)) {
-        final evaluated = _evaluateExpression(_amountStr);
-        if (evaluated != _amountStr) {
-          setState(() {
-            _amountStr = evaluated;
-            if (!_isEditingToAmount && _crossCurrencyRate != null) {
-              _calculateToAmount();
-            }
-          });
+        final preview = _expressionPreview();
+        if (preview == null || preview <= 0) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              const SnackBar(
+                content: Text('算式无效，请调整后再保存'),
+                duration: Duration(seconds: 1),
+              ),
+            );
+          return;
         }
-      } else {
-        unawaited(_saveTransaction());
+        setState(() {
+          _amountStr = _formatAmountInput(preview);
+          if (!_isEditingToAmount && _crossCurrencyRate != null) {
+            _calculateToAmount();
+          }
+        });
       }
+      unawaited(_saveTransaction());
       return;
     }
     setState(() {
@@ -1258,7 +1367,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         if (_amountStr == "0" || _amountStr.isEmpty) return;
         final lastChar = _amountStr[_amountStr.length - 1];
         if ('+-×÷.'.contains(lastChar)) return;
-        if (_amountStr.length < 20) {
+        if (_amountStr.length < _kMaxAmountExpressionLength) {
           _amountStr += actualOp;
         }
       } else {
@@ -1267,11 +1376,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         } else if (key == '.') {
           // 只在当前数字段没有小数点时允许
           final lastSegment = _amountStr.split(RegExp('[+\\-×÷]')).last;
-          if (!lastSegment.contains('.') && _amountStr.length < 20) {
+          if (!lastSegment.contains('.') &&
+              _amountStr.length < _kMaxAmountExpressionLength) {
             _amountStr += key;
           }
         } else {
-          if (_amountStr.length < 20) {
+          if (_amountStr.length < _kMaxAmountExpressionLength) {
             _amountStr += key;
           }
         }
@@ -1315,10 +1425,6 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   /// 是否包含运算表达式
   bool _hasExpression(String s) => TransactionAmountExpression.hasExpression(s);
-
-  /// 计算四则运算表达式（先乘除后加减），返回格式化结果
-  String _evaluateExpression(String expr) =>
-      TransactionAmountExpression.evaluate(expr, _formatAmountInput);
 
   /// 获取表达式的预览结果（供显示用）
   double? _expressionPreview() =>
@@ -1498,7 +1604,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ..bookId = _currentBook?.id ?? widget.bookId ?? tx.bookId;
 
     if (!_isEditing) {
-      final matched = await TagRuleService(_isar).resolveMatchingTags(tx);
+      final matched =
+          await (widget.smartTagResolver ??
+              TagRuleService(_isar).resolveMatchingTags)(tx);
       if (matched.isNotEmpty) {
         final merged = <String>{...tx.tagKeys, ...matched}.toList();
         tx.tagKeys = merged;
@@ -1512,65 +1620,70 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     TransactionService.touchSyncMetadata(tx);
-    if (_isSplitMode) {
-      // 组合模式：tx 变成模板，从 _splits 里实际生成 N 行。
-      final groupKey =
-          _editingSplitGroupKey ??
-          'split_${DateTime.now().millisecondsSinceEpoch}_${tx.syncKey}';
-      // 如果是编辑既有 split group，先删除整组
-      if (_editingSplitGroupKey != null) {
-        final old = await _transactionRepo.getBySplitGroupKey(
-          _editingSplitGroupKey!,
-        );
-        if (old.isNotEmpty) {
-          await _transactionRepo.deleteAll(old.map((r) => r.id).toList());
+    final transactionSaver = widget.transactionSaver;
+    if (transactionSaver != null) {
+      await transactionSaver(tx);
+    } else {
+      if (_isSplitMode) {
+        // 组合模式：tx 变成模板，从 _splits 里实际生成 N 行。
+        final groupKey =
+            _editingSplitGroupKey ??
+            'split_${DateTime.now().millisecondsSinceEpoch}_${tx.syncKey}';
+        // 如果是编辑既有 split group，先删除整组
+        if (_editingSplitGroupKey != null) {
+          final old = await _transactionRepo.getBySplitGroupKey(
+            _editingSplitGroupKey!,
+          );
+          if (old.isNotEmpty) {
+            await _transactionRepo.deleteAll(old.map((r) => r.id).toList());
+          }
+        }
+        final rows = <JiveTransaction>[];
+        for (final split in _splits) {
+          final row = JiveTransaction()
+            ..amount = split.amount
+            ..source = tx.source
+            ..type = tx.type
+            ..categoryKey = tx.categoryKey
+            ..subCategoryKey = tx.subCategoryKey
+            ..category = tx.category
+            ..subCategory = tx.subCategory
+            ..rawText = tx.rawText
+            ..note = tx.note
+            ..accountId = split.account.id
+            ..projectId = tx.projectId
+            ..tagKeys = List<String>.from(tx.tagKeys)
+            ..smartTagKeys = List<String>.from(tx.smartTagKeys)
+            ..excludeFromBudget = tx.excludeFromBudget
+            ..excludeFromTotals = tx.excludeFromTotals
+            ..discountAmount = split.discount
+            ..feeAmount = split.fee
+            ..timestamp = tx.timestamp
+            ..bookId = tx.bookId
+            ..splitGroupKey = groupKey;
+          TransactionService.touchSyncMetadata(row);
+          rows.add(row);
+        }
+        await _transactionRepo.insertAll(rows);
+      } else {
+        if (_isEditing) {
+          await _transactionRepo.update(tx);
+        } else {
+          await _transactionRepo.insert(tx);
         }
       }
-      final rows = <JiveTransaction>[];
-      for (final split in _splits) {
-        final row = JiveTransaction()
-          ..amount = split.amount
-          ..source = tx.source
-          ..type = tx.type
-          ..categoryKey = tx.categoryKey
-          ..subCategoryKey = tx.subCategoryKey
-          ..category = tx.category
-          ..subCategory = tx.subCategory
-          ..rawText = tx.rawText
-          ..note = tx.note
-          ..accountId = split.account.id
-          ..projectId = tx.projectId
-          ..tagKeys = List<String>.from(tx.tagKeys)
-          ..smartTagKeys = List<String>.from(tx.smartTagKeys)
-          ..excludeFromBudget = tx.excludeFromBudget
-          ..excludeFromTotals = tx.excludeFromTotals
-          ..discountAmount = split.discount
-          ..feeAmount = split.fee
-          ..timestamp = tx.timestamp
-          ..bookId = tx.bookId
-          ..splitGroupKey = groupKey;
-        TransactionService.touchSyncMetadata(row);
-        rows.add(row);
+      if (tx.tagKeys.isNotEmpty) {
+        await TagService(_isar).markTagsUsed(tx.tagKeys, tx.timestamp);
       }
-      await _transactionRepo.insertAll(rows);
-    } else {
-      if (_isEditing) {
-        await _transactionRepo.update(tx);
-      } else {
-        await _transactionRepo.insert(tx);
+
+      // Track account usage frequency
+      if (_selectedAccount != null) {
+        await _incrementAccountUsage(_selectedAccount!.id);
       }
-    }
-    if (tx.tagKeys.isNotEmpty) {
-      await TagService(_isar).markTagsUsed(tx.tagKeys, tx.timestamp);
-    }
 
-    // Track account usage frequency
-    if (_selectedAccount != null) {
-      await _incrementAccountUsage(_selectedAccount!.id);
+      // 商户记忆自动学习
+      await MerchantMemoryService(_isar).learnFromTransaction(tx);
     }
-
-    // 商户记忆自动学习
-    await MerchantMemoryService(_isar).learnFromTransaction(tx);
 
     JiveLogger.i("Manual Transaction Saved: $amount");
     _hasDataChanges = true;
@@ -1583,6 +1696,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         final keepDate = _selectedTime;
         setState(() {
           _amountStr = "0";
+          _plusShowsMultiply = false;
+          _minusShowsDivide = false;
           _noteController.clear();
           _isNoteExpanded = false;
           _selectedSub = null;
@@ -1732,14 +1847,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _selectedAccount!.currency != _selectedToAccount!.currency;
 
     return PopScope(
-      canPop: false,
+      canPop: !_isSearchMode,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_isSearchMode) {
           _exitSearchMode();
           return;
         }
-        Navigator.pop(context, _hasDataChanges);
       },
       child: Scaffold(
         backgroundColor: JiveTheme.surfaceColor(context),
@@ -1818,6 +1932,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                                     ? activeColor
                                     : inactiveColor;
                                 return GestureDetector(
+                                  key: AddTransactionScreenKeys.parentCategory(
+                                    cat.key,
+                                  ),
                                   onTap: () {
                                     setState(() {
                                       _selectedParent = cat;
@@ -1985,6 +2102,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 if (!hideAmountInSearch)
                   CompactAmountBar(
                     amountStr: _amountStr,
+                    formulaKey: AddTransactionScreenKeys.amountFormula,
+                    resultKey: AddTransactionScreenKeys.amountResult,
+                    noteTextFieldKey: AddTransactionScreenKeys.noteTextField,
+                    noteToggleKey: AddTransactionScreenKeys.noteCollapsed,
                     currency: _selectedAccount?.currency ?? _baseCurrency,
                     txType: _txType,
                     selectedTime: _selectedTime,
@@ -2017,6 +2138,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       itemBuilder: (context, index) {
                         final keyValue = _keys[index];
                         return TransactionCalculatorKey(
+                          key: keyValue == 'OK'
+                              ? AddTransactionScreenKeys.saveButton
+                              : AddTransactionScreenKeys.amountKey(keyValue),
                           keyValue: keyValue,
                           txType: _txType,
                           onKeyPress: _onKeyPress,
@@ -3318,6 +3442,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     return SubCategoryGrid(
       subCategories: _subCategories,
       selectedSub: _selectedSub,
+      categoryKeyBuilder: (cat) =>
+          AddTransactionScreenKeys.subCategory(cat.key),
       aspectRatio: subGridAspectRatio,
       mainAxisSpacing: subGridMainAxisSpacing,
       onSelect: (cat) => setState(() => _selectedSub = cat),

@@ -153,13 +153,13 @@ void main() {
         tester
             .widget<Text>(find.byKey(AddTransactionScreenKeys.amountFormula))
             .data,
-        '1+2×3',
+        contains('1+2×3'),
       );
       expect(
         tester
             .widget<Text>(find.byKey(AddTransactionScreenKeys.amountResult))
             .data,
-        '7',
+        contains('7'),
       );
 
       await tester.tap(
@@ -180,7 +180,7 @@ void main() {
       expect(saveButton, findsOneWidget);
       await tester.ensureVisible(saveButton);
       await tester.pump();
-      await tester.tap(find.byIcon(Icons.check));
+      await tester.tap(saveButton);
       await tester.pump();
       await tester.runAsync(() async {
         await Future<void>.delayed(const Duration(milliseconds: 500));

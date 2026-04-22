@@ -2,7 +2,7 @@
 
 Date: 2026-04-22
 Branch: `feature/transaction-entry-ux`
-Base: `origin/main@6ea8b06`
+Base: `origin/main@6311cd8`
 
 ## Scope
 
@@ -12,12 +12,14 @@ This change optimizes the add transaction flow without changing transaction pers
 
 ### Amount Entry
 
-- The amount header now has a stable two-line display.
+- The latest mainline transaction editor already uses the split component architecture (`CompactAmountBar`, `TransactionCalculatorKey`, field chips, and category panels); this PR ports the entry UX and tests onto that architecture instead of restoring the older monolithic layout.
+- The amount header has a stable two-line display.
 - The first line shows the current formula in small text and keeps the tail when the formula is long.
 - The second line shows the live calculated result in the original large amount style.
 - The display area uses a fixed height so entering digits/operators does not visibly jump between one-line and two-line states.
-- `AmountExpression` evaluates `+`, `-`, `×`, and `÷` with multiplication/division precedence.
+- `TransactionAmountExpression` evaluates `+`, `-`, `×`, and `÷` with multiplication/division precedence.
 - Incomplete formulas keep the last valid result, for example `1+2×` displays the formula while the result remains `3`.
+- Invalid formulas such as division by zero no longer display a valid-looking `0`; tapping save shows an explicit invalid-formula message.
 
 ### Keyboard
 
@@ -25,15 +27,15 @@ This change optimizes the add transaction flow without changing transaction pers
 - Long press on `+` toggles that key between `+` and `×`.
 - Long press on `-` toggles that key between `-` and `÷`.
 - Continuous-entry reset restores the operator keys to `+` and `-`, so a long-press mode from the previous transaction does not leak into the next entry.
-- `OK` still calls the existing save path, and save still reads the computed numeric amount from `_amountStr`.
+- `OK` evaluates and saves a valid formula in the same tap, preserving the fast-entry flow.
 - The route pop guard now only intercepts category search mode, so normal save/close actions can return their existing boolean result instead of being blocked by `PopScope(canPop: false)`.
 
 ### Inline Note
 
 - The note entry is now directly under the amount display.
-- It starts as a compact inline "备注（可选）" control.
-- Tapping it expands the existing `NoteFieldWithChips` inline, preserving note chips and note save behavior.
-- Suggestion chips use a single-line horizontal scroller to avoid vertical layout growth when the note area expands.
+- It is rendered inside `CompactAmountBar` as an inline text field.
+- Tapping the expand control grows the note field in place instead of opening a modal.
+- The current mainline quick-field chips stay outside this note field, so the note area no longer depends on the older `NoteFieldWithChips` component.
 - No modal dialog is introduced for notes.
 
 ### Categories
@@ -52,21 +54,24 @@ This change optimizes the add transaction flow without changing transaction pers
 
 ### Transaction Entry Testability
 
-- `AddTransactionScreen` now exposes stable widget keys for amount formula/result, amount keys, parent/subcategory rows, inline note controls, and the save button.
+- `AddTransactionScreen`, `CompactAmountBar`, `TransactionCalculatorKey`, and `SubCategoryGrid` now expose stable widget keys for amount formula/result, amount keys, parent/subcategory rows, inline note controls, and the save button.
 - Production data loading and save behavior remain the default.
 - Widget tests can inject Isar, initial categories/accounts/tags/projects, a transaction saver, and a smart-tag resolver to verify the entry UX without bootstrapping the full app database.
 - The full add-transaction widget regression now covers `1+2×3`, long-press operator switching, custom category selection, inline note entry, save return value, and the generated `JiveTransaction` payload.
+- The test seams are annotated as testing-only and production call sites continue to use the default Isar repository, smart-tag, tag-usage, account-usage, and merchant-memory save path.
 
 ## Files
 
 - `lib/feature/transactions/add_transaction_screen.dart`
-- `lib/feature/transactions/amount_expression.dart`
-- `lib/feature/transactions/note_field_with_chips.dart`
+- `lib/feature/transactions/transaction_amount_expression.dart`
+- `lib/feature/transactions/widgets/compact_amount_bar.dart`
+- `lib/feature/transactions/widgets/transaction_field_chips.dart`
 - `lib/feature/category/category_picker_screen.dart`
 - `lib/feature/onboarding/guided_setup_screen.dart`
 - `lib/feature/budget/project_budget_screen.dart`
 - `test/pdf_report_service_test.dart`
 - `test/amount_expression_test.dart`
+- `test/transaction_amount_expression_test.dart`
 - `test/add_transaction_screen_entry_ux_test.dart`
 - `test/category_picker_user_categories_test.dart`
 - `test/guided_setup_screen_test.dart`
@@ -77,11 +82,15 @@ This change optimizes the add transaction flow without changing transaction pers
 - Removed unused local budget-service construction in the project budget screen.
 - Tightened `PdfReportService.generateAnnualReport` signature coverage so the test no longer relies on an always-true function type check.
 - Added expression coverage for negative prefix input, trailing operators, chained incomplete formulas, and decimals.
+- Preserved the existing non-negative amount guard by clamping negative expression results to `0`, while still treating zero/negative saves as invalid in the entry flow.
+- Removed the duplicated `AmountExpression` helper after rebasing onto latest main; expression behavior now lives in `TransactionAmountExpression`.
+- Extracted amount expression length into a named constant and removed the old hardcoded limit from keypad input.
 - Added category coverage for hidden system parents that still own visible custom child categories.
 - Added category picker UI coverage that verifies a hidden system parent behaves as a group row only, while tapping the custom child returns the selected result.
 - Stabilized note suggestion chips to reduce layout movement when inline notes are expanded.
 - Added a guided-setup widget regression test for selecting a category, tapping "下一步", saving the first expense payload, and advancing to the "设分类" step.
 - Added an add-transaction widget regression for expression entry, custom category selection, inline note entry, save callback payload, and save route result.
+- Rebasing onto latest `origin/main` kept the new componentized transaction platform and re-applied only the transaction-entry UX anchors/seams on top.
 - These follow-up changes do not change transaction persistence, project budget behavior, or PDF generation behavior.
 
 ## Validation
@@ -97,7 +106,9 @@ This change optimizes the add transaction flow without changing transaction pers
 - `/Users/chauhua/development/flutter/bin/flutter test test/amount_expression_test.dart test/category_picker_user_categories_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart test/transaction_query_service_test.dart test/transaction_query_spec_test.dart test/pdf_report_service_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/guided_setup_screen_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/add_transaction_screen_entry_ux_test.dart`
-- `/Users/chauhua/development/flutter/bin/flutter test test/add_transaction_screen_entry_ux_test.dart test/guided_setup_screen_test.dart test/amount_expression_test.dart test/category_picker_user_categories_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart test/transaction_query_service_test.dart test/transaction_query_spec_test.dart test/pdf_report_service_test.dart`
+- `/Users/chauhua/development/flutter/bin/flutter test test/amount_expression_test.dart test/add_transaction_screen_entry_ux_test.dart`
+- `/Users/chauhua/development/flutter/bin/flutter test test/transaction_amount_expression_test.dart test/amount_expression_test.dart test/add_transaction_screen_entry_ux_test.dart`
+- `/Users/chauhua/development/flutter/bin/flutter test test/add_transaction_screen_entry_ux_test.dart test/guided_setup_screen_test.dart test/transaction_amount_expression_test.dart test/amount_expression_test.dart test/category_picker_user_categories_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart test/transaction_query_service_test.dart test/transaction_query_spec_test.dart test/pdf_report_service_test.dart`
 
 ### Parallel Review Notes
 
