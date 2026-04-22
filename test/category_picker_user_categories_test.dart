@@ -13,7 +13,7 @@ void main() {
         ..iconName = 'restaurant'
         ..order = 0
         ..isSystem = true
-        ..isHidden = false
+        ..isHidden = true
         ..isIncome = false
         ..updatedAt = now;
       final customChild = JiveCategory()
@@ -46,6 +46,7 @@ void main() {
       expect(data.parents.map((cat) => cat.name), contains('餐饮'));
       expect(data.expandedParents, contains(parent.key));
       expect(data.items.map((item) => item.primaryName), contains('自制咖啡'));
+      expect(data.items.map((item) => item.primaryName), isNot(contains('餐饮')));
       expect(
         data.items.map((item) => item.primaryName),
         isNot(contains('系统午餐')),

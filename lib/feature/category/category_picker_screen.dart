@@ -31,14 +31,14 @@ CategoryPickerData buildCategoryPickerData(
   required bool isIncome,
   required bool onlyUserCategories,
 }) {
-  final visible = all.where((cat) {
-    if (cat.isHidden) return false;
+  final typeMatched = all.where((cat) {
     if (cat.isIncome != isIncome) return false;
     return true;
   }).toList();
 
-  final childCandidates = visible.where((cat) {
+  final childCandidates = typeMatched.where((cat) {
     if (cat.parentKey == null) return false;
+    if (cat.isHidden) return false;
     if (!onlyUserCategories) return true;
     return !cat.isSystem;
   }).toList();
@@ -46,10 +46,11 @@ CategoryPickerData buildCategoryPickerData(
       .map((cat) => cat.parentKey)
       .whereType<String>()
       .toSet();
-  final parents = visible.where((cat) {
+  final parents = typeMatched.where((cat) {
     if (cat.parentKey != null) return false;
-    if (!onlyUserCategories) return true;
-    return !cat.isSystem || parentKeysWithUserChildren.contains(cat.key);
+    if (!onlyUserCategories) return !cat.isHidden;
+    return (!cat.isSystem && !cat.isHidden) ||
+        parentKeysWithUserChildren.contains(cat.key);
   }).toList()..sort((a, b) => a.order.compareTo(b.order));
 
   final childrenByParent = <String, List<JiveCategory>>{};
@@ -63,7 +64,7 @@ CategoryPickerData buildCategoryPickerData(
 
   final items = <CategorySearchResult>[];
   for (final parent in parents) {
-    if (!onlyUserCategories || !parent.isSystem) {
+    if (!onlyUserCategories || (!parent.isSystem && !parent.isHidden)) {
       items.add(CategorySearchResult(parent: parent));
     }
     final children = childrenByParent[parent.key] ?? const <JiveCategory>[];

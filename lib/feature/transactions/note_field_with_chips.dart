@@ -55,39 +55,49 @@ class NoteFieldWithChips extends StatelessWidget {
               valueListenable: controller,
               builder: (context, value, _) {
                 final noteText = value.text;
-                return Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  alignment: WrapAlignment.center,
-                  children: suggestions.map((tag) {
-                    final selected = _noteHasTag(noteText, tag);
-                    return ChoiceChip(
-                      label: Text(tag, style: GoogleFonts.lato(fontSize: 11)),
-                      selected: selected,
-                      onSelected: (_) {
-                        final next = _toggleNoteTag(noteText, tag);
-                        controller.value = TextEditingValue(
-                          text: next,
-                          selection: TextSelection.collapsed(
-                            offset: next.length,
+                return SizedBox(
+                  height: 34,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: suggestions.map((tag) {
+                        final selected = _noteHasTag(noteText, tag);
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: ChoiceChip(
+                            label: Text(
+                              tag,
+                              style: GoogleFonts.lato(fontSize: 11),
+                            ),
+                            selected: selected,
+                            onSelected: (_) {
+                              final next = _toggleNoteTag(noteText, tag);
+                              controller.value = TextEditingValue(
+                                text: next,
+                                selection: TextSelection.collapsed(
+                                  offset: next.length,
+                                ),
+                              );
+                              if (!selected && _noteHasTag(next, tag)) {
+                                onTagSelected?.call(tag);
+                              }
+                            },
+                            selectedColor: JiveTheme.primaryGreen.withValues(
+                              alpha: 0.15,
+                            ),
+                            backgroundColor: Colors.grey.shade100,
+                            side: BorderSide(
+                              color: selected
+                                  ? JiveTheme.primaryGreen
+                                  : Colors.transparent,
+                            ),
+                            visualDensity: VisualDensity.compact,
                           ),
                         );
-                        if (!selected && _noteHasTag(next, tag)) {
-                          onTagSelected?.call(tag);
-                        }
-                      },
-                      selectedColor: JiveTheme.primaryGreen.withValues(
-                        alpha: 0.15,
-                      ),
-                      backgroundColor: Colors.grey.shade100,
-                      side: BorderSide(
-                        color: selected
-                            ? JiveTheme.primaryGreen
-                            : Colors.transparent,
-                      ),
-                      visualDensity: VisualDensity.compact,
-                    );
-                  }).toList(),
+                      }).toList(),
+                    ),
+                  ),
                 );
               },
             ),

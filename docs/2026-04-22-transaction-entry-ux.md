@@ -24,6 +24,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - Short tap on number/operator keys updates the formula and result immediately.
 - Long press on `+` toggles that key between `+` and `×`.
 - Long press on `-` toggles that key between `-` and `÷`.
+- Continuous-entry reset restores the operator keys to `+` and `-`, so a long-press mode from the previous transaction does not leak into the next entry.
 - `OK` still calls the existing save path, and save still reads the computed numeric amount from `_amountStr`.
 
 ### Inline Note
@@ -31,13 +32,15 @@ This change optimizes the add transaction flow without changing transaction pers
 - The note entry is now directly under the amount display.
 - It starts as a compact inline "备注（可选）" control.
 - Tapping it expands the existing `NoteFieldWithChips` inline, preserving note chips and note save behavior.
+- Suggestion chips use a single-line horizontal scroller to avoid vertical layout growth when the note area expands.
 - No modal dialog is introduced for notes.
 
 ### Categories
 
 - Add transaction subcategories now filter out hidden subcategories.
 - `CategoryPickerScreen` now handles the user-only category case where a user-created child belongs to a system parent.
-- In user-only mode, system parents with user children remain visible as grouping rows, and their custom children are included in search/list data.
+- In user-only mode, system parents with user children remain visible as grouping rows, even if the parent itself is hidden.
+- Hidden/system grouping parents are not selectable search results, while their visible custom children are included in search/list data.
 
 ### Guided Setup
 
@@ -51,18 +54,32 @@ This change optimizes the add transaction flow without changing transaction pers
 - `lib/feature/transactions/note_field_with_chips.dart`
 - `lib/feature/category/category_picker_screen.dart`
 - `lib/feature/onboarding/guided_setup_screen.dart`
+- `lib/feature/budget/project_budget_screen.dart`
+- `test/pdf_report_service_test.dart`
 - `test/amount_expression_test.dart`
 - `test/category_picker_user_categories_test.dart`
+
+## Follow-Up Hardening
+
+- Removed a stale unused `DateFormat` field from the transaction entry screen.
+- Removed unused local budget-service construction in the project budget screen.
+- Tightened `PdfReportService.generateAnnualReport` signature coverage so the test no longer relies on an always-true function type check.
+- Added expression coverage for negative prefix input, trailing operators, chained incomplete formulas, and decimals.
+- Added category coverage for hidden system parents that still own visible custom child categories.
+- Stabilized note suggestion chips to reduce layout movement when inline notes are expanded.
+- These follow-up changes do not change transaction persistence, project budget behavior, or PDF generation behavior.
 
 ## Validation
 
 ### Passed
 
 - `/Users/chauhua/development/flutter/bin/dart format ...`
+- `/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos`
 - `/Users/chauhua/development/flutter/bin/flutter test test/amount_expression_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/transaction_query_service_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/transaction_query_spec_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/category_picker_user_categories_test.dart`
+- `/Users/chauhua/development/flutter/bin/flutter test test/amount_expression_test.dart test/category_picker_user_categories_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart test/transaction_query_service_test.dart test/transaction_query_spec_test.dart test/pdf_report_service_test.dart`
 
 ### Analyze
 
@@ -72,13 +89,7 @@ Command:
 /Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos
 ```
 
-Result: completed with no compile errors, but returned exit code 1 because the current `origin/main` tree already has warning-level analyzer findings. Examples include:
-
-- `lib/feature/budget/project_budget_screen.dart`: unused local variable `budgetService`
-- `test/pdf_report_service_test.dart`: unused import and unnecessary type check
-- `lib/feature/transactions/add_transaction_screen.dart`: existing unused `_dateTimeFormat` field and existing async `BuildContext` lint warnings
-
-These were not changed in this task to avoid unrelated cleanup scope.
+Result: passed with exit code 0. The command still reports existing info-level lints from the broader tree, but there are no warning/error-level blockers.
 
 ### Manual Smoke
 
