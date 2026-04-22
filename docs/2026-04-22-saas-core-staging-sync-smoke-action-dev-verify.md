@@ -87,3 +87,70 @@ git diff --check
 - `Run core staging lane` 中出现 `running staging core sync smoke`。
 - artifact `saas-staging-reports-<run_id>` 包含 `sync-smoke-*/summary.md` 与脱敏 JSON。
 - core sync smoke summary 为 `PASS`。
+
+## Post-Merge 实测
+
+已在 main 上触发手动 workflow：
+
+```bash
+gh workflow run saas_core_staging.yml \
+  --ref main \
+  -f run_local_smoke=false \
+  -f run_sync_smoke=true \
+  -f apply_migrations=false \
+  -f deploy_functions=false \
+  -f run_function_smoke=false \
+  -f build_apk=false
+```
+
+结果：
+
+- Workflow run: `24783963356`
+- URL: `https://github.com/zensgit/jive/actions/runs/24783963356`
+- Head SHA: `236764686ce0710913626514799a6a60b407f045`
+- Status: `success`
+- Job: `core_staging` passed
+- `Guard core staging secrets`: passed
+- `Run core staging lane`: passed
+- `Upload SaaS staging reports`: passed
+
+日志确认：
+
+```text
+[saas-core-lane] running staging core sync smoke
+[saas-sync-smoke] PASS
+[saas-core-lane] core staging lane completed
+```
+
+Artifact 确认：
+
+- `saas-staging-reports-24783963356`
+- `reports/saas-staging/sync-smoke-20260422-142825/summary.md`
+- `reports/saas-staging/sync-smoke-20260422-142825/summary.json`
+- `reports/saas-staging/sync-smoke-20260422-142825/*.redacted.json`
+
+Summary 确认：
+
+```text
+status: PASS
+cleanup: complete
+bookKey: book_default
+```
+
+Validated checks:
+
+- `admin_user_create`
+- `anon_password_sign_in_session_1`
+- `anon_password_sign_in_session_2`
+- `rls_insert_account`
+- `second_session_pull_account_by_sync_key`
+- `rls_insert_transaction`
+- `second_session_pull_transaction_by_sync_key`
+- `transaction_account_sync_key_round_trip`
+- `rls_insert_budget`
+- `second_session_pull_budget_by_sync_key`
+- `rls_transaction_tombstone_update`
+- `rls_budget_tombstone_update`
+- `cleanup`
+
+Secret scan against downloaded artifacts found no token/key/password values; only validation labels such as `anon_password_sign_in_session_1` matched the broad search pattern.
