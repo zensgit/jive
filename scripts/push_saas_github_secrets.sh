@@ -177,6 +177,14 @@ build_secret_mappings() {
 validate_values() {
   local missing=0
   local i
+  local xtrace_was_on=0
+
+  case "$-" in
+    *x*)
+      xtrace_was_on=1
+      set +x
+      ;;
+  esac
 
   for i in "${!SECRET_NAMES[@]}"; do
     local secret_name="${SECRET_NAMES[$i]}"
@@ -197,11 +205,23 @@ validate_values() {
   if [[ "$missing" -gt 0 ]]; then
     die "$missing required secret value(s) missing"
   fi
+
+  if [[ "$xtrace_was_on" -eq 1 ]]; then
+    set -x
+  fi
 }
 
 push_values() {
   local repo="$1"
   local i
+  local xtrace_was_on=0
+
+  case "$-" in
+    *x*)
+      xtrace_was_on=1
+      set +x
+      ;;
+  esac
 
   for i in "${!SECRET_NAMES[@]}"; do
     local secret_name="${SECRET_NAMES[$i]}"
@@ -211,11 +231,19 @@ push_values() {
 
     value="$(lookup_value "$env_key" "$file_key")"
     log "uploading $secret_name"
-    gh secret set "$secret_name" \
+    if ! printf '%s' "$value" | gh secret set "$secret_name" \
       --repo "$repo" \
-      --app actions \
-      --body "$value" >/dev/null
+      --app actions >/dev/null; then
+      if [[ "$xtrace_was_on" -eq 1 ]]; then
+        set -x
+      fi
+      return 1
+    fi
   done
+
+  if [[ "$xtrace_was_on" -eq 1 ]]; then
+    set -x
+  fi
 }
 
 main() {

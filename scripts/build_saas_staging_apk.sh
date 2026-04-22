@@ -11,6 +11,8 @@ BUILD_KIND="${JIVE_SAAS_BUILD_KIND:-apk}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_ROOT="${JIVE_SAAS_BUILD_ARTIFACT_DIR:-$APP_DIR/build/saas-staging/$STAMP-$FLAVOR-$MODE}"
 REPORT_DIR="$APP_DIR/build/reports/saas-staging"
+TEMP_FILES=()
+DART_DEFINE_FILE=""
 
 usage() {
   cat <<'EOF'
@@ -42,6 +44,20 @@ die() {
   printf '[saas-staging-build] ERROR: %s\n' "$*" >&2
   exit 1
 }
+
+cleanup_temp_files() {
+  if [[ "${#TEMP_FILES[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  local path
+  for path in "${TEMP_FILES[@]}"; do
+    [[ -n "$path" ]] || continue
+    rm -rf -- "$path"
+  done
+}
+
+trap cleanup_temp_files EXIT INT TERM
 
 value_from_env_file() {
   local key="$1"
@@ -169,6 +185,42 @@ file_size_bytes() {
   wc -c < "$file" | tr -d '[:space:]'
 }
 
+build_dart_define_file() {
+  local supabase_url="$1"
+  local supabase_anon_key="$2"
+  local output_dir
+  local output_file
+
+  output_dir="$(mktemp -d "${TMPDIR:-/tmp}/jive-saas-dart-defines.XXXXXX")"
+  chmod 700 "$output_dir"
+  TEMP_FILES+=("$output_dir")
+
+  output_file="$output_dir/dart-defines.json"
+  : > "$output_file"
+  chmod 600 "$output_file"
+
+  python3 - "$output_file" "$supabase_url" "$supabase_anon_key" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+output_file, supabase_url, supabase_anon_key = sys.argv[1:]
+Path(output_file).write_text(
+    json.dumps(
+        {
+            "SUPABASE_URL": supabase_url,
+            "SUPABASE_ANON_KEY": supabase_anon_key,
+        },
+        ensure_ascii=False,
+        indent=2,
+    ),
+    encoding="utf-8",
+)
+PY
+
+  DART_DEFINE_FILE="$output_file"
+}
+
 write_report() {
   local artifact_path="$1"
   local artifact_bytes="$2"
@@ -265,6 +317,7 @@ main() {
   log "flavor=$FLAVOR mode=$MODE kind=$BUILD_KIND"
   log "env file=$ENV_FILE"
   log "service role is intentionally not passed to Flutter"
+  build_dart_define_file "$supabase_url" "$supabase_anon_key"
 
   if [[ "$MODE" == "release" ]]; then
     mode_flag="--release"
@@ -278,14 +331,12 @@ main() {
     (cd "$APP_DIR" && "$flutter_bin" build appbundle \
       "$mode_flag" \
       --flavor "$FLAVOR" \
-      --dart-define="SUPABASE_URL=$supabase_url" \
-      --dart-define="SUPABASE_ANON_KEY=$supabase_anon_key")
+      --dart-define-from-file="$DART_DEFINE_FILE")
   else
     (cd "$APP_DIR" && "$flutter_bin" build apk \
       "$mode_flag" \
       --flavor "$FLAVOR" \
-      --dart-define="SUPABASE_URL=$supabase_url" \
-      --dart-define="SUPABASE_ANON_KEY=$supabase_anon_key")
+      --dart-define-from-file="$DART_DEFINE_FILE")
   fi
 
   artifact_path="$(find_artifact "$MODE" "$FLAVOR")"
