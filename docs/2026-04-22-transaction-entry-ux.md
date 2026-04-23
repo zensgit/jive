@@ -149,6 +149,19 @@ Manual scenario still recommended on a developer machine with UI automation or d
 4. Select a custom category.
 5. Tap note, enter inline note text, and save.
 
+## Merge Readiness
+
+- PR: `#186 Improve transaction entry UX`
+- Latest documented ready-to-merge head before this closeout note: `e1e10394`
+- GitHub checks passed:
+  - `analyze_and_test`
+  - `detect_saas_wave0_smoke`
+- Workflow-skipped checks:
+  - `android_integration_test`
+  - `saas_wave0_smoke`
+- All previously outdated AI review threads were resolved after the follow-up fixes landed.
+- The remaining merge gate is process-only: if repository protection requires human approval, that approval still needs to come from GitHub review flow rather than additional code changes.
+
 ## Out Of Scope
 
 - No changes to `supabase/migrations`.
