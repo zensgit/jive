@@ -1,6 +1,7 @@
 # Transaction Entry UX Development And Validation
 
 Date: 2026-04-22
+Updated: 2026-04-23
 Branch: `feature/transaction-entry-ux`
 Base: `origin/main@6311cd8`
 
@@ -20,6 +21,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - `TransactionAmountExpression` evaluates `+`, `-`, `×`, and `÷` with multiplication/division precedence.
 - Incomplete formulas keep the last valid result, for example `1+2×` displays the formula while the result remains `3`.
 - Invalid formulas such as division by zero no longer display a valid-looking `0`; tapping save shows an explicit invalid-formula message.
+- Invalid formulas continue to use the same two-line header: the formula remains on the first line and the result line switches to an explicit `无效` state instead of collapsing back to a single raw-expression line.
 
 ### Keyboard
 
@@ -58,6 +60,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - Production data loading and save behavior remain the default.
 - Widget tests can inject Isar, initial categories/accounts/tags/projects, a transaction saver, and a smart-tag resolver to verify the entry UX without bootstrapping the full app database.
 - The full add-transaction widget regression now covers `1+2×3`, long-press operator switching, custom category selection, inline note entry, save return value, and the generated `JiveTransaction` payload.
+- A follow-up widget regression also covers long-press `-` to `÷`, `1÷0` invalid-state rendering, and save blocking with the existing snackbar feedback.
 - The test seams are annotated as testing-only and production call sites continue to use the default Isar repository, smart-tag, tag-usage, account-usage, and merchant-memory save path.
 
 ## Files
@@ -90,6 +93,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - Stabilized note suggestion chips to reduce layout movement when inline notes are expanded.
 - Added a guided-setup widget regression test for selecting a category, tapping "下一步", saving the first expense payload, and advancing to the "设分类" step.
 - Added an add-transaction widget regression for expression entry, custom category selection, inline note entry, save callback payload, and save route result.
+- Added a second add-transaction widget regression that locks in `- -> ÷`, explicit invalid-result rendering, and the divide-by-zero save guard.
 - Rebasing onto latest `origin/main` kept the new componentized transaction platform and re-applied only the transaction-entry UX anchors/seams on top.
 - These follow-up changes do not change transaction persistence, project budget behavior, or PDF generation behavior.
 
@@ -109,6 +113,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - `/Users/chauhua/development/flutter/bin/flutter test test/amount_expression_test.dart test/add_transaction_screen_entry_ux_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/transaction_amount_expression_test.dart test/amount_expression_test.dart test/add_transaction_screen_entry_ux_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/add_transaction_screen_entry_ux_test.dart test/guided_setup_screen_test.dart test/transaction_amount_expression_test.dart test/amount_expression_test.dart test/category_picker_user_categories_test.dart test/note_field_with_chips_test.dart test/account_category_sync_repository_test.dart test/transaction_query_service_test.dart test/transaction_query_spec_test.dart test/pdf_report_service_test.dart`
+- `git diff --name-only -- supabase/migrations lib/core/sync .github/workflows`
 
 ### Parallel Review Notes
 

@@ -2106,6 +2106,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     resultKey: AddTransactionScreenKeys.amountResult,
                     noteTextFieldKey: AddTransactionScreenKeys.noteTextField,
                     noteToggleKey: AddTransactionScreenKeys.noteCollapsed,
+                    hasExpression: _hasExpression(_amountStr),
                     currency: _selectedAccount?.currency ?? _baseCurrency,
                     txType: _txType,
                     selectedTime: _selectedTime,

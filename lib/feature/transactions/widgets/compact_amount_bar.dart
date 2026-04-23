@@ -20,6 +20,7 @@ class CompactAmountBar extends StatelessWidget {
   final Key? resultKey;
   final Key? noteTextFieldKey;
   final Key? noteToggleKey;
+  final bool hasExpression;
   final String currency;
   final TransactionType txType;
   final DateTime selectedTime;
@@ -40,6 +41,7 @@ class CompactAmountBar extends StatelessWidget {
     this.resultKey,
     this.noteTextFieldKey,
     this.noteToggleKey,
+    this.hasExpression = false,
     required this.currency,
     required this.txType,
     required this.selectedTime,
@@ -77,10 +79,15 @@ class CompactAmountBar extends StatelessWidget {
     final timeText = isToday
         ? DateFormat('HH:mm').format(selectedTime)
         : DateFormat('MM-dd HH:mm').format(selectedTime);
-    final hasExpression = expressionResult != null;
-    final resultText = hasExpression
+    final isInvalidExpression = hasExpression && expressionResult == null;
+    final resultText = isInvalidExpression
+        ? '无效'
+        : hasExpression
         ? '$symbol ${expressionResult!.toStringAsFixed(2)}'
         : '$symbol $amountStr';
+    final resultColor = isInvalidExpression
+        ? JiveTheme.secondaryTextColor(context)
+        : _amountColor();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -160,7 +167,7 @@ class CompactAmountBar extends StatelessWidget {
                             textAlign: TextAlign.right,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.rubik(
-                              color: _amountColor(),
+                              color: resultColor,
                               fontSize: 28,
                               fontWeight: FontWeight.w600,
                               height: 1.0,

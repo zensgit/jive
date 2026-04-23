@@ -202,6 +202,95 @@ void main() {
       expect(tx.accountId, harness.account.id);
     },
   );
+
+  testWidgets(
+    'add transaction entry shows invalid state for divide by zero and blocks save',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      var saverCalls = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddTransactionScreen(
+                      isar: harness.isar,
+                      bootstrapDefaults: false,
+                      initialParentCategories: [harness.parent],
+                      initialSubCategories: [harness.child],
+                      initialAccounts: [harness.account],
+                      initialAccountBalances: {harness.account.id: 0},
+                      initialTags: const [],
+                      initialProjects: const [],
+                      smartTagResolver: (_) async => const [],
+                      transactionSaver: (_) async {
+                        saverCalls++;
+                      },
+                    ),
+                  ),
+                );
+              },
+              child: const Text('open add transaction'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open add transaction'));
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      });
+      await _pumpUntilFound(
+        tester,
+        find.byKey(AddTransactionScreenKeys.amountKey('1')),
+      );
+
+      await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('1')));
+      await tester.longPress(
+        find.byKey(AddTransactionScreenKeys.amountKey('-')),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('-')));
+      await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('0')));
+      await tester.pump();
+
+      expect(
+        tester
+            .widget<Text>(find.byKey(AddTransactionScreenKeys.amountFormula))
+            .data,
+        contains('1÷0'),
+      );
+      expect(
+        tester
+            .widget<Text>(find.byKey(AddTransactionScreenKeys.amountResult))
+            .data,
+        '无效',
+      );
+
+      await tester.tap(
+        find.byKey(AddTransactionScreenKeys.subCategory('custom_coffee')),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(AddTransactionScreenKeys.saveButton));
+      await tester.pump();
+
+      expect(find.text('算式无效，请调整后再保存'), findsOneWidget);
+      expect(saverCalls, 0);
+      expect(
+        find.byKey(AddTransactionScreenKeys.amountKey('1')),
+        findsOneWidget,
+      );
+    },
+  );
 }
 
 class _AddTransactionHarness {
