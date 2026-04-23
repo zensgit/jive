@@ -291,6 +291,119 @@ void main() {
       );
     },
   );
+
+  testWidgets(
+    'continuous entry save resets operator toggle state for next transaction',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      var saverCalls = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddTransactionScreen(
+                      isar: harness.isar,
+                      bootstrapDefaults: false,
+                      initialParentCategories: [harness.parent],
+                      initialSubCategories: [harness.child],
+                      initialAccounts: [harness.account],
+                      initialAccountBalances: {harness.account.id: 0},
+                      initialTags: const [],
+                      initialProjects: const [],
+                      smartTagResolver: (_) async => const [],
+                      transactionSaver: (_) async {
+                        saverCalls++;
+                      },
+                    ),
+                  ),
+                );
+              },
+              child: const Text('open add transaction'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open add transaction'));
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      });
+      await _pumpUntilFound(
+        tester,
+        find.byKey(AddTransactionScreenKeys.amountKey('1')),
+      );
+
+      final plusKey = find.byKey(AddTransactionScreenKeys.amountKey('+'));
+      final minusKey = find.byKey(AddTransactionScreenKeys.amountKey('-'));
+
+      await tester.longPress(plusKey);
+      await tester.longPress(minusKey);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        find.descendant(of: plusKey, matching: find.text('当前×')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: minusKey, matching: find.text('当前÷')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('AGAIN')));
+      await tester.pump();
+      expect(find.text('连续记账：开'), findsOneWidget);
+
+      await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('1')));
+      await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('+')));
+      await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('2')));
+      await tester.pump();
+      await tester.tap(
+        find.byKey(AddTransactionScreenKeys.subCategory('custom_coffee')),
+      );
+      await tester.pump();
+
+      await tester.tap(find.byKey(AddTransactionScreenKeys.saveButton));
+      await tester.pump();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      });
+      await tester.pump();
+
+      expect(saverCalls, 1);
+      expect(
+        tester
+            .widget<Text>(find.byKey(AddTransactionScreenKeys.amountResult))
+            .data,
+        contains('0'),
+      );
+      expect(
+        find.descendant(of: plusKey, matching: find.text('长按×')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: minusKey, matching: find.text('长按÷')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: plusKey, matching: find.text('当前×')),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: minusKey, matching: find.text('当前÷')),
+        findsNothing,
+      );
+    },
+  );
 }
 
 class _AddTransactionHarness {

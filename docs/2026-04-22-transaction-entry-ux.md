@@ -61,6 +61,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - Widget tests can inject Isar, initial categories/accounts/tags/projects, a transaction saver, and a smart-tag resolver to verify the entry UX without bootstrapping the full app database.
 - The full add-transaction widget regression now covers `1+2×3`, long-press operator switching, custom category selection, inline note entry, save return value, and the generated `JiveTransaction` payload.
 - A follow-up widget regression also covers long-press `-` to `÷`, `1÷0` invalid-state rendering, and save blocking with the existing snackbar feedback.
+- A second follow-up widget regression covers continuous-entry mode, proving that a saved transaction resets `+/-` operator toggles before the next entry starts.
 - The test seams are annotated as testing-only and production call sites continue to use the default Isar repository, smart-tag, tag-usage, account-usage, and merchant-memory save path.
 
 ## Files
@@ -94,6 +95,7 @@ This change optimizes the add transaction flow without changing transaction pers
 - Added a guided-setup widget regression test for selecting a category, tapping "下一步", saving the first expense payload, and advancing to the "设分类" step.
 - Added an add-transaction widget regression for expression entry, custom category selection, inline note entry, save callback payload, and save route result.
 - Added a second add-transaction widget regression that locks in `- -> ÷`, explicit invalid-result rendering, and the divide-by-zero save guard.
+- Added a continuous-entry widget regression that verifies operator toggle state is reset after a successful save in `连续记账` mode.
 - Rebasing onto latest `origin/main` kept the new componentized transaction platform and re-applied only the transaction-entry UX anchors/seams on top.
 - These follow-up changes do not change transaction persistence, project budget behavior, or PDF generation behavior.
 
