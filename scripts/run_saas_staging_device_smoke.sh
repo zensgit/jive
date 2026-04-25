@@ -10,7 +10,8 @@ DEVICE="${ANDROID_SERIAL:-}"
 PACKAGE_ID="${JIVE_ANDROID_APP_ID:-com.jivemoney.app.dev}"
 ACTIVITY="${JIVE_ANDROID_ACTIVITY:-}"
 OUT_DIR="${JIVE_SAAS_DEVICE_SMOKE_OUT_DIR:-}"
-WAIT_SECONDS="${JIVE_SAAS_DEVICE_SMOKE_WAIT_SECONDS:-12}"
+WAIT_SECONDS="${JIVE_SAAS_DEVICE_SMOKE_WAIT_SECONDS:-45}"
+POLL_INTERVAL_SECONDS="${JIVE_SAAS_DEVICE_SMOKE_POLL_INTERVAL_SECONDS:-3}"
 ADB_TIMEOUT_SECONDS="${JIVE_SAAS_DEVICE_SMOKE_ADB_TIMEOUT_SECONDS:-25}"
 EXPECT_SCREEN="${JIVE_SAAS_DEVICE_SMOKE_EXPECT:-any}"
 ALLOW_UNINSTALL=0
@@ -31,7 +32,8 @@ Options:
   --activity <component>               Activity component. Defaults to <package>/com.jive.app.MainActivity.
   --adb <path>                         adb binary. Falls back to ADB, PATH, or common Android SDK paths.
   --out-dir <path>                     Artifact directory. Defaults to /tmp/jive-saas-device-smoke-<stamp>.
-  --wait-seconds <n>                   Seconds to wait after launch. Defaults to 12.
+  --wait-seconds <n>                   Max seconds to wait for a recognizable screen. Defaults to 45.
+  --poll-interval-seconds <n>          Seconds between UI polls while waiting. Defaults to 3.
   --adb-timeout-seconds <n>            Timeout per adb command. Defaults to 25.
   --expect <any|welcome|home|auth|guided>
                                        Expected screen state after launch. Defaults to any.
@@ -105,6 +107,11 @@ parse_args() {
       --wait-seconds)
         require_value "$1" "${2:-}"
         WAIT_SECONDS="${2:-}"
+        shift 2
+        ;;
+      --poll-interval-seconds)
+        require_value "$1" "${2:-}"
+        POLL_INTERVAL_SECONDS="${2:-}"
         shift 2
         ;;
       --adb-timeout-seconds)
@@ -194,6 +201,14 @@ run_adb() {
   run_with_timeout "$ADB_TIMEOUT_SECONDS" "$ADB" "${serial_args[@]}" "$@"
 }
 
+validate_positive_integer() {
+  local name="$1"
+  local value="$2"
+  if [[ ! "$value" =~ ^[1-9][0-9]*$ ]]; then
+    die "$name must be a positive integer"
+  fi
+}
+
 write_metadata() {
   {
     printf 'timestamp=%s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
@@ -203,6 +218,8 @@ write_metadata() {
     printf 'activity=%s\n' "$ACTIVITY"
     printf 'apk=%s\n' "${APK_PATH:-skip-install}"
     printf 'expect=%s\n' "$EXPECT_SCREEN"
+    printf 'wait_seconds=%s\n' "$WAIT_SECONDS"
+    printf 'poll_interval_seconds=%s\n' "$POLL_INTERVAL_SECONDS"
     printf 'seed_home_prefs=%s\n' "$SEED_HOME_PREFS"
     run_adb get-serialno 2>/dev/null | sed 's/^/adb_serial=/'
     run_adb shell getprop ro.product.model 2>/dev/null | tr -d '\r' | sed 's/^/device_model=/'
@@ -261,19 +278,75 @@ capture_package_metadata() {
     "$OUT_DIR/package-dumpsys.txt" >"$OUT_DIR/package-version.txt" || true
 }
 
-launch_and_capture() {
-  log "launching $ACTIVITY"
-  run_adb logcat -c >/dev/null || true
-  run_adb shell am force-stop "$PACKAGE_ID" >/dev/null || true
-  run_adb shell am start -n "$ACTIVITY" >"$OUT_DIR/am-start.txt"
-  sleep "$WAIT_SECONDS"
+detect_screen_from_xml() {
+  local xml="$1"
+  local detected="unknown"
 
+  if [[ -s "$xml" ]]; then
+    if grep -q '欢迎使用积叶' "$xml"; then
+      detected="welcome"
+    elif grep -Eq '净资产|最近交易|Home 第|访客' "$xml"; then
+      detected="home"
+    elif grep -Eq '跳过，以游客身份使用|邮箱|手机号|验证码' "$xml"; then
+      detected="auth"
+    elif grep -Eq '可选步骤|记一笔|选择分类|设分类' "$xml"; then
+      detected="guided"
+    fi
+  fi
+
+  printf '%s\n' "$detected"
+}
+
+capture_launch_snapshot() {
   run_adb exec-out screencap -p >"$OUT_DIR/launch.png" \
     || rm -f "$OUT_DIR/launch.png"
   run_adb exec-out uiautomator dump /dev/tty >"$OUT_DIR/launch.xml" \
     || true
   run_adb shell dumpsys activity activities >"$OUT_DIR/activities.txt" \
     || true
+}
+
+wait_for_launch_screen() {
+  local start deadline now elapsed remaining sleep_seconds detected
+  local poll_log="$OUT_DIR/screen-poll-log.tsv"
+
+  start="$SECONDS"
+  deadline=$((start + WAIT_SECONDS))
+  printf 'elapsed_seconds\tdetected_screen\n' >"$poll_log"
+
+  while true; do
+    capture_launch_snapshot
+    now="$SECONDS"
+    elapsed=$((now - start))
+    detected="$(detect_screen_from_xml "$OUT_DIR/launch.xml")"
+    printf '%s\t%s\n' "$elapsed" "$detected" >>"$poll_log"
+    printf '%s\n' "$detected" >"$OUT_DIR/detected-screen.txt"
+
+    if [[ "$detected" != "unknown" ]]; then
+      log "detected screen=$detected after ${elapsed}s"
+      return 0
+    fi
+
+    if ((now >= deadline)); then
+      log "screen remained unknown after ${WAIT_SECONDS}s"
+      return 0
+    fi
+
+    remaining=$((deadline - now))
+    sleep_seconds="$POLL_INTERVAL_SECONDS"
+    if ((sleep_seconds > remaining)); then
+      sleep_seconds="$remaining"
+    fi
+    sleep "$sleep_seconds"
+  done
+}
+
+launch_and_capture() {
+  log "launching $ACTIVITY"
+  run_adb logcat -c >/dev/null || true
+  run_adb shell am force-stop "$PACKAGE_ID" >/dev/null || true
+  run_adb shell am start -n "$ACTIVITY" >"$OUT_DIR/am-start.txt"
+  wait_for_launch_screen
 
   local pid
   pid="$(run_adb shell pidof -s "$PACKAGE_ID" 2>/dev/null | tr -d '\r[:space:]' || true)"
@@ -286,17 +359,9 @@ launch_and_capture() {
 
 detect_screen() {
   local xml="$OUT_DIR/launch.xml"
-  local detected="unknown"
+  local detected
 
-  if grep -q '欢迎使用积叶' "$xml"; then
-    detected="welcome"
-  elif grep -Eq '净资产|最近交易|Home 第|访客' "$xml"; then
-    detected="home"
-  elif grep -Eq '跳过，以游客身份使用|邮箱|手机号|验证码' "$xml"; then
-    detected="auth"
-  elif grep -Eq '可选步骤|记一笔|选择分类|设分类' "$xml"; then
-    detected="guided"
-  fi
+  detected="$(detect_screen_from_xml "$xml")"
 
   printf '%s\n' "$detected" >"$OUT_DIR/detected-screen.txt"
 
@@ -305,7 +370,7 @@ detect_screen() {
   fi
 
   if [[ "$detected" == "unknown" ]]; then
-    die "could not identify launch screen"
+    die "could not identify launch screen after ${WAIT_SECONDS}s"
   fi
 }
 
@@ -331,8 +396,11 @@ write_summary() {
 - apk: ${APK_PATH:-skip-install}
 - expectedScreen: $EXPECT_SCREEN
 - detectedScreen: $detected
+- waitSeconds: $WAIT_SECONDS
+- pollIntervalSeconds: $POLL_INTERVAL_SECONDS
 - seedHomePrefs: $SEED_HOME_PREFS
 - artifacts: $OUT_DIR
+- screenPollLog: $OUT_DIR/screen-poll-log.tsv
 
 ## Result
 
@@ -346,6 +414,8 @@ main() {
     any|welcome|home|auth|guided) ;;
     *) die "--expect must be one of: any, welcome, home, auth, guided" ;;
   esac
+  validate_positive_integer "--wait-seconds" "$WAIT_SECONDS"
+  validate_positive_integer "--poll-interval-seconds" "$POLL_INTERVAL_SECONDS"
 
   ADB="$(find_adb)"
   ACTIVITY="${ACTIVITY:-$PACKAGE_ID/com.jive.app.MainActivity}"
