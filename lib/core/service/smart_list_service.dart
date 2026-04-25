@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../database/smart_list_model.dart';
 import '../model/transaction_list_filter_state.dart';
 
 /// SmartList 服务 — 管理保存的筛选视图。
 class SmartListService {
-  final Isar _isar;
+  static const defaultSmartListIdKey = 'jive.default_smart_list_id';
 
-  SmartListService(this._isar);
+  final Isar _isar;
+  final SharedPreferences? _prefs;
+
+  SmartListService(this._isar, {SharedPreferences? prefs}) : _prefs = prefs;
 
   /// 创建新视图
   Future<JiveSmartList> create({
@@ -65,6 +69,10 @@ class SmartListService {
     await _isar.writeTxn(() async {
       await _isar.jiveSmartLists.delete(id);
     });
+    final current = await getDefaultId();
+    if (current == id) {
+      await clearDefaultView();
+    }
   }
 
   /// 获取全部视图，置顶优先，再按 sortOrder 排序。
@@ -82,6 +90,27 @@ class SmartListService {
     final list = await _isar.jiveSmartLists.where().findAll();
     return list.where((e) => e.isPinned).toList()
       ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+  }
+
+  Future<void> setDefaultView(JiveSmartList smartList) async {
+    final prefs = await _preferences();
+    await prefs.setInt(defaultSmartListIdKey, smartList.id);
+  }
+
+  Future<void> clearDefaultView() async {
+    final prefs = await _preferences();
+    await prefs.remove(defaultSmartListIdKey);
+  }
+
+  Future<int?> getDefaultId() async {
+    final prefs = await _preferences();
+    return prefs.getInt(defaultSmartListIdKey);
+  }
+
+  Future<JiveSmartList?> getDefaultView() async {
+    final id = await getDefaultId();
+    if (id == null) return null;
+    return _isar.jiveSmartLists.get(id);
   }
 
   /// 根据 JiveSmartList 构建 TransactionListFilterState。
@@ -226,5 +255,9 @@ class SmartListService {
       default:
         return type;
     }
+  }
+
+  Future<SharedPreferences> _preferences() async {
+    return _prefs ?? SharedPreferences.getInstance();
   }
 }

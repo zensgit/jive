@@ -8,17 +8,21 @@ import '../../core/database/tag_model.dart';
 import '../../core/database/project_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/category_service.dart';
+import '../../core/service/category_path_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/data_reload_bus.dart';
+import '../../core/service/template_service.dart';
 import '../../core/repository/transaction_repository.dart';
 import '../../core/repository/isar_transaction_repository.dart';
 import '../tag/tag_picker_sheet.dart';
+import '../template/widgets/save_template_dialog.dart';
 import 'transaction_entry_params.dart';
 import 'widgets/transaction_amount_display.dart';
 import 'widgets/transaction_source_banner.dart';
 import 'widgets/transaction_core_fields.dart';
 import 'widgets/transaction_advanced_section.dart';
 import 'widgets/transaction_footer_bar.dart';
+import 'widgets/quick_action_suggest_bar.dart';
 
 /// Form-based transaction editor (完整编辑页).
 ///
@@ -52,6 +56,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   // Selections
   JiveCategory? _selectedCategory;
   JiveAccount? _selectedAccount;
+  JiveAccount? _selectedToAccount;
   List<String> _selectedTagKeys = [];
   int? _selectedProjectId;
 
@@ -85,13 +90,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     if (p.prefillTagKeys != null) _selectedTagKeys = List.of(p.prefillTagKeys!);
 
     if (p.prefillCategoryKey != null) {
-      _selectedCategory = categories
-          .where((c) => c.key == p.prefillCategoryKey)
-          .firstOrNull;
+      final key = p.prefillSubCategoryKey ?? p.prefillCategoryKey;
+      _selectedCategory = categories.where((c) => c.key == key).firstOrNull;
     }
     if (p.prefillAccountId != null) {
-      _selectedAccount =
-          accounts.where((a) => a.id == p.prefillAccountId).firstOrNull;
+      _selectedAccount = accounts
+          .where((a) => a.id == p.prefillAccountId)
+          .firstOrNull;
+    }
+    if (p.prefillToAccountId != null) {
+      _selectedToAccount = accounts
+          .where((a) => a.id == p.prefillToAccountId)
+          .firstOrNull;
     }
 
     // For edit mode, populate from existing transaction
@@ -102,10 +112,15 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _note = tx.note ?? '';
       _excludeFromBudget = tx.excludeFromBudget;
       _txType = tx.type ?? 'expense';
-      _selectedCategory =
-          categories.where((c) => c.key == tx.categoryKey).firstOrNull;
-      _selectedAccount =
-          accounts.where((a) => a.id == tx.accountId).firstOrNull;
+      _selectedCategory = categories
+          .where((c) => c.key == (tx.subCategoryKey ?? tx.categoryKey))
+          .firstOrNull;
+      _selectedAccount = accounts
+          .where((a) => a.id == tx.accountId)
+          .firstOrNull;
+      _selectedToAccount = accounts
+          .where((a) => a.id == tx.toAccountId)
+          .firstOrNull;
       _selectedTagKeys = List.of(tx.tagKeys);
       _selectedProjectId = tx.projectId;
     }
@@ -128,32 +143,68 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   String? get _selectedProjectName {
     if (_selectedProjectId == null) return null;
-    return _projects
-        .where((p) => p.id == _selectedProjectId)
-        .firstOrNull
-        ?.name;
+    return _projects.where((p) => p.id == _selectedProjectId).firstOrNull?.name;
   }
 
   Future<void> _save({bool andNew = false}) async {
     if (_amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入金额')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入金额')));
+      return;
+    }
+    if (_selectedAccount == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请选择账户')));
+      return;
+    }
+    if (_txType == 'transfer') {
+      if (_selectedToAccount == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请选择转入账户')));
+        return;
+      }
+      if (_selectedToAccount?.id == _selectedAccount?.id) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('转出和转入账户不能相同')));
+        return;
+      }
+    } else if (_selectedCategory == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请选择分类')));
       return;
     }
 
+    final categoryKeys = const CategoryPathService().toTransactionKeys(
+      _categories,
+      _selectedCategory,
+    );
     final tx = widget.params.editingTransaction ?? JiveTransaction();
     tx.amount = _amount;
     tx.timestamp = _selectedDate;
-    tx.source = 'manual';
+    tx.source = widget.params.source == TransactionEntrySource.quickAction
+        ? 'quick_action'
+        : 'manual';
     tx.note = _note.isEmpty ? null : _note;
-    tx.categoryKey = _selectedCategory?.key;
-    tx.category = _selectedCategory?.name;
+    tx.categoryKey = _txType == 'transfer' ? null : categoryKeys.categoryKey;
+    tx.subCategoryKey = _txType == 'transfer'
+        ? null
+        : categoryKeys.subCategoryKey;
+    tx.category = _txType == 'transfer' ? '转账' : categoryKeys.categoryName;
+    tx.subCategory = _txType == 'transfer'
+        ? null
+        : categoryKeys.subCategoryName;
     tx.accountId = _selectedAccount?.id;
+    tx.toAccountId = _txType == 'transfer' ? _selectedToAccount?.id : null;
     tx.excludeFromBudget = _excludeFromBudget;
     tx.tagKeys = _selectedTagKeys;
     tx.projectId = _selectedProjectId;
     tx.type = _txType;
+    tx.quickActionId = _parseQuickActionLegacyId(widget.params.quickActionId);
     tx.updatedAt = DateTime.now();
 
     if (widget.params.editingTransaction != null) {
@@ -172,6 +223,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         _amount = 0;
         _note = '';
         _selectedCategory = null;
+        _selectedToAccount = null;
         _selectedTagKeys = [];
         _selectedProjectId = null;
         _excludeFromBudget = false;
@@ -196,10 +248,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           controller: controller,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           autofocus: true,
-          decoration: const InputDecoration(
-            hintText: '0.00',
-            prefixText: '¥ ',
-          ),
+          decoration: const InputDecoration(hintText: '0.00', prefixText: '¥ '),
         ),
         actions: [
           TextButton(
@@ -223,10 +272,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
 
   void _showCategoryPicker() async {
     final isIncome = _txType == 'income';
-    final filtered = _categories
-        .where((c) => c.isIncome == isIncome && !c.isHidden)
-        .where((c) => c.parentKey == null) // only top-level
-        .toList();
+    final paths = const CategoryPathService().visiblePaths(
+      _categories,
+      isIncome: isIncome,
+    );
 
     final result = await showModalBottomSheet<JiveCategory>(
       context: context,
@@ -240,60 +289,36 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Text(
-                '选择分类',
-                style: Theme.of(ctx).textTheme.titleMedium,
-              ),
+              child: Text('选择分类', style: Theme.of(ctx).textTheme.titleMedium),
             ),
             Expanded(
-              child: GridView.builder(
+              child: ListView.separated(
                 controller: scrollController,
-                padding: const EdgeInsets.all(12),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                ),
-                itemCount: filtered.length,
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
+                itemCount: paths.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, i) {
-                  final cat = filtered[i];
+                  final path = paths[i];
+                  final cat = path.leaf!;
                   final isSelected = cat.key == _selectedCategory?.key;
-                  return GestureDetector(
-                    onTap: () => Navigator.pop(ctx, cat),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Theme.of(ctx)
-                                .colorScheme
-                                .primary
-                                .withValues(alpha: 0.1)
-                            : null,
-                        borderRadius: BorderRadius.circular(8),
-                        border: isSelected
-                            ? Border.all(
-                                color: Theme.of(ctx).colorScheme.primary,
-                              )
-                            : null,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CategoryService.buildIcon(
-                            cat.iconName,
-                            size: 24,
-                            isSystemCategory: cat.isSystem,
-                            forceTinted: cat.iconForceTinted,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            cat.name,
-                            style: const TextStyle(fontSize: 11),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
+                  return ListTile(
+                    leading: CategoryService.buildIcon(
+                      cat.iconName,
+                      size: 24,
+                      isSystemCategory: cat.isSystem,
+                      forceTinted: cat.iconForceTinted,
                     ),
+                    title: Text(path.displayName),
+                    subtitle: path.segments.length > 1
+                        ? Text('叶子分类: ${cat.name}')
+                        : null,
+                    trailing: isSelected
+                        ? Icon(
+                            Icons.check_circle,
+                            color: Theme.of(ctx).colorScheme.primary,
+                          )
+                        : null,
+                    onTap: () => Navigator.pop(ctx, cat),
                   );
                 },
               ),
@@ -305,6 +330,99 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     if (result != null && mounted) {
       setState(() => _selectedCategory = result);
     }
+  }
+
+  void _showToAccountPicker() async {
+    final candidates = _accounts
+        .where((a) => a.id != _selectedAccount?.id)
+        .toList();
+    final result = await showModalBottomSheet<JiveAccount>(
+      context: context,
+      builder: (ctx) => ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: candidates.length,
+        itemBuilder: (_, i) {
+          final acct = candidates[i];
+          final isSelected = acct.id == _selectedToAccount?.id;
+          return ListTile(
+            leading: Icon(
+              Icons.call_received,
+              color: isSelected ? Theme.of(ctx).colorScheme.primary : null,
+            ),
+            title: Text(acct.name),
+            subtitle: Text(acct.currency),
+            selected: isSelected,
+            onTap: () => Navigator.pop(ctx, acct),
+          );
+        },
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() => _selectedToAccount = result);
+    }
+  }
+
+  Future<void> _saveCurrentAsQuickAction() async {
+    if (_amount <= 0 || _selectedAccount == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先补全金额和账户')));
+      return;
+    }
+    if (_txType != 'transfer' && _selectedCategory == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先选择分类')));
+      return;
+    }
+
+    final categoryKeys = const CategoryPathService().toTransactionKeys(
+      _categories,
+      _selectedCategory,
+    );
+    final tx = JiveTransaction()
+      ..amount = _amount
+      ..source = 'quick_action_seed'
+      ..timestamp = _selectedDate
+      ..type = _txType
+      ..categoryKey = _txType == 'transfer' ? null : categoryKeys.categoryKey
+      ..subCategoryKey = _txType == 'transfer'
+          ? null
+          : categoryKeys.subCategoryKey
+      ..category = _txType == 'transfer' ? '转账' : categoryKeys.categoryName
+      ..subCategory = _txType == 'transfer'
+          ? null
+          : categoryKeys.subCategoryName
+      ..accountId = _selectedAccount?.id
+      ..toAccountId = _txType == 'transfer' ? _selectedToAccount?.id : null
+      ..note = _note.isEmpty ? null : _note
+      ..tagKeys = List<String>.from(_selectedTagKeys);
+
+    final result = await showSaveTemplateDialog(
+      context: context,
+      transaction: tx,
+      categoryName: categoryKeys.subCategoryName ?? categoryKeys.categoryName,
+    );
+    if (result == null) return;
+
+    await TemplateService(_isar).createFromTransaction(
+      transaction: tx,
+      name: result['name'] as String,
+      saveAmount: result['saveAmount'] as bool? ?? true,
+      groupName: result['groupName'] as String?,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已保存为快速动作')));
+  }
+
+  static int? _parseQuickActionLegacyId(String? id) {
+    if (id == null || id.isEmpty) return null;
+    if (id.startsWith('template:')) {
+      return int.tryParse(id.substring('template:'.length));
+    }
+    return int.tryParse(id);
   }
 
   void _showAccountPicker() async {
@@ -370,10 +488,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final result = await showModalBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => TagPickerSheet(
-        tags: _tags,
-        selectedKeys: _selectedTagKeys,
-      ),
+      builder: (ctx) =>
+          TagPickerSheet(tags: _tags, selectedKeys: _selectedTagKeys),
     );
     if (result != null && mounted) {
       setState(() => _selectedTagKeys = result);
@@ -415,10 +531,36 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     }
 
     final params = widget.params;
-    final amountStr =
-        _amount > 0 ? _amount.toStringAsFixed(2) : '0.00';
-    final currency =
-        CurrencyDefaults.getSymbol(_selectedAccount?.currency ?? 'CNY');
+    final amountStr = _amount > 0 ? _amount.toStringAsFixed(2) : '0.00';
+    final currency = CurrencyDefaults.getSymbol(
+      _selectedAccount?.currency ?? 'CNY',
+    );
+    final selectedCategoryName = _selectedCategory == null
+        ? null
+        : const CategoryPathService()
+              .resolveFromSelection(_categories, _selectedCategory)
+              .displayName;
+    final highlightAmount =
+        params.shouldHighlight(TransactionHighlightField.amount) &&
+        _amount <= 0;
+    final highlightCategory =
+        params.shouldHighlight(TransactionHighlightField.category) &&
+        _txType != 'transfer' &&
+        _selectedCategory == null;
+    final highlightAccount =
+        params.shouldHighlight(TransactionHighlightField.account) &&
+        _selectedAccount == null;
+    final highlightTransferAccount =
+        params.shouldHighlight(TransactionHighlightField.transferAccount) &&
+        _txType == 'transfer' &&
+        _selectedToAccount == null;
+    final canSave =
+        _amount > 0 &&
+        _selectedAccount != null &&
+        (_txType == 'transfer'
+            ? _selectedToAccount != null &&
+                  _selectedToAccount?.id != _selectedAccount?.id
+            : _selectedCategory != null);
 
     return Scaffold(
       appBar: AppBar(
@@ -460,6 +602,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                             .surfaceContainerHighest
                             .withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(16),
+                        border: highlightAmount
+                            ? Border.all(
+                                color: Theme.of(context).colorScheme.error,
+                              )
+                            : null,
                       ),
                       child: TransactionAmountDisplay(
                         amountStr: amountStr,
@@ -469,14 +616,33 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+                  QuickActionSuggestBar(
+                    onSaveAsAction: _amount > 0 && _selectedAccount != null
+                        ? _saveCurrentAsQuickAction
+                        : null,
+                  ),
+                  if (_amount > 0 && _selectedAccount != null)
+                    const SizedBox(height: 12),
 
                   // Core fields card
                   TransactionCoreFields(
-                    categoryName: _selectedCategory?.name,
+                    categoryName: _txType == 'transfer'
+                        ? '转账'
+                        : selectedCategoryName,
                     accountName: _selectedAccount?.name,
                     note: _note.isEmpty ? null : _note,
                     date: _selectedDate,
-                    onCategoryTap: _showCategoryPicker,
+                    highlightCategory: highlightCategory,
+                    highlightAccount: highlightAccount,
+                    highlightDate: params.shouldHighlight(
+                      TransactionHighlightField.time,
+                    ),
+                    highlightNote: params.shouldHighlight(
+                      TransactionHighlightField.note,
+                    ),
+                    onCategoryTap: _txType == 'transfer'
+                        ? null
+                        : _showCategoryPicker,
                     onAccountTap: _showAccountPicker,
                     onNoteTap: _showNoteInput,
                     onDateSelected: (date) {
@@ -491,6 +657,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                       });
                     },
                   ),
+                  if (_txType == 'transfer') ...[
+                    const SizedBox(height: 12),
+                    _TransferTargetCard(
+                      accountName: _selectedToAccount?.name,
+                      highlighted: highlightTransferAccount,
+                      onTap: _showToAccountPicker,
+                    ),
+                  ],
                   const SizedBox(height: 12),
 
                   // Advanced section
@@ -518,7 +692,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             isContinuousMode: _continuousMode,
             onToggleContinuous: () =>
                 setState(() => _continuousMode = !_continuousMode),
-            enabled: _amount > 0,
+            enabled: canSave,
             onSave: () => _save(),
             onSaveAndNew: () => _save(andNew: true),
           ),
@@ -558,6 +732,73 @@ class _TypeSelector extends StatelessWidget {
       selected: {currentType},
       onSelectionChanged: (s) => onChanged(s.first),
       showSelectedIcon: false,
+    );
+  }
+}
+
+class _TransferTargetCard extends StatelessWidget {
+  final String? accountName;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  const _TransferTargetCard({
+    required this.accountName,
+    required this.highlighted,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: highlighted
+              ? theme.colorScheme.errorContainer.withValues(alpha: 0.35)
+              : theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: highlighted
+                ? theme.colorScheme.error
+                : theme.dividerColor.withValues(alpha: 0.4),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.call_received,
+              color: highlighted
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            const Text('转入账户'),
+            const Spacer(),
+            if (highlighted)
+              Text(
+                '待补全',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            if (highlighted) const SizedBox(width: 8),
+            Text(
+              accountName ?? '未选择',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: accountName == null
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+          ],
+        ),
+      ),
     );
   }
 }

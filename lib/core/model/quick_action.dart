@@ -23,8 +23,11 @@ class QuickAction {
 
   final int? bookId;
   final int? accountId;
+  final int? toAccountId;
   final String? categoryKey;
   final String? subCategoryKey;
+  final String? categoryName;
+  final String? subCategoryName;
   final List<String> tagKeys;
   final double? defaultAmount;
   final String? defaultNote;
@@ -53,8 +56,11 @@ class QuickAction {
     required this.transactionType,
     this.bookId,
     this.accountId,
+    this.toAccountId,
     this.categoryKey,
     this.subCategoryKey,
+    this.categoryName,
+    this.subCategoryName,
     this.tagKeys = const [],
     this.defaultAmount,
     this.defaultNote,
@@ -74,8 +80,11 @@ class QuickAction {
     String? transactionType,
     int? bookId,
     int? accountId,
+    int? toAccountId,
     String? categoryKey,
     String? subCategoryKey,
+    String? categoryName,
+    String? subCategoryName,
     List<String>? tagKeys,
     double? defaultAmount,
     String? defaultNote,
@@ -93,8 +102,11 @@ class QuickAction {
       transactionType: transactionType ?? this.transactionType,
       bookId: bookId ?? this.bookId,
       accountId: accountId ?? this.accountId,
+      toAccountId: toAccountId ?? this.toAccountId,
       categoryKey: categoryKey ?? this.categoryKey,
       subCategoryKey: subCategoryKey ?? this.subCategoryKey,
+      categoryName: categoryName ?? this.categoryName,
+      subCategoryName: subCategoryName ?? this.subCategoryName,
       tagKeys: tagKeys ?? this.tagKeys,
       defaultAmount: defaultAmount ?? this.defaultAmount,
       defaultNote: defaultNote ?? this.defaultNote,

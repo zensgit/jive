@@ -17,6 +17,7 @@ import '../../core/repository/account_repository.dart';
 import '../../core/repository/isar_account_repository.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/category_path_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/tag_rule_service.dart';
 import '../refund/add_refund_screen.dart';
@@ -91,7 +92,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       if (hasStoredSmartKeys) {
         displaySmartKeys = tx.smartTagKeys.toSet();
       } else if (tx.tagKeys.isNotEmpty) {
-        displaySmartKeys = (await TagRuleService(isar).resolveMatchingTags(tx)).toSet();
+        displaySmartKeys = (await TagRuleService(
+          isar,
+        ).resolveMatchingTags(tx)).toSet();
       }
       final explainByTag = <String, SmartTagMatchExplanation>{};
       if (displaySmartKeys.isNotEmpty) {
@@ -100,7 +103,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           tagKeys: displaySmartKeys,
           onlySmartTagged: hasStoredSmartKeys,
         );
-        explainByTag.addEntries(explanations.map((item) => MapEntry(item.tagKey, item)));
+        explainByTag.addEntries(
+          explanations.map((item) => MapEntry(item.tagKey, item)),
+        );
       }
 
       // 加载多币种转换数据
@@ -111,7 +116,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       final txCurrency = account?.currency ?? 'CNY';
       double? convertedAmount;
       if (txCurrency != baseCurrency) {
-        convertedAmount = await _currencyService!.convert(tx.amount, txCurrency, baseCurrency);
+        convertedAmount = await _currencyService!.convert(
+          tx.amount,
+          txCurrency,
+          baseCurrency,
+        );
       }
 
       if (!mounted) return;
@@ -228,8 +237,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            ReimbursementDetailScreen(sourceTransactionId: tx.id),
+        builder: (_) => ReimbursementDetailScreen(sourceTransactionId: tx.id),
       ),
     ).then((_) {
       _hasDataChanges = true;
@@ -372,7 +380,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final smartTagKeys = _smartDisplayKeys.isEmpty
         ? tx.smartTagKeys.toSet()
         : _smartDisplayKeys;
-    final smartTags = tags.where((tag) => smartTagKeys.contains(tag.key)).toList();
+    final smartTags = tags
+        .where((tag) => smartTagKeys.contains(tag.key))
+        .toList();
     final optOutTags = _resolveOptOutTags(tx);
     final isOptOutAll = tx.smartTagOptOutAll;
     final isLandscape =
@@ -393,7 +403,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final baseCurrencySymbol = CurrencyDefaults.getSymbol(_baseCurrency);
     final txDecimals = CurrencyDefaults.getDecimalPlaces(txCurrency);
     final baseDecimals = CurrencyDefaults.getDecimalPlaces(_baseCurrency);
-    final amountText = '$amountPrefix$txCurrencySymbol${tx.amount.toStringAsFixed(txDecimals)}';
+    final amountText =
+        '$amountPrefix$txCurrencySymbol${tx.amount.toStringAsFixed(txDecimals)}';
 
     final header = Column(
       children: [
@@ -411,10 +422,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           const SizedBox(height: 4),
           Text(
             '≈ $baseCurrencySymbol${_convertedAmount!.toStringAsFixed(baseDecimals)}',
-            style: GoogleFonts.rubik(
-              fontSize: 14,
-              color: Colors.grey.shade500,
-            ),
+            style: GoogleFonts.rubik(fontSize: 14, color: Colors.grey.shade500),
           ),
         ],
         const SizedBox(height: 6),
@@ -446,36 +454,22 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       ]),
       const SizedBox(height: 12),
       _buildDetailCard([
-        if (!isTransfer) _buildDetailRow('分类', _categoryTitle(tx)),
-        if (!isTransfer) _buildDetailRow('子类', _categorySubtitle(tx)),
+        if (!isTransfer) _buildDetailRow('分类路径', _categoryTitle(tx)),
+        if (!isTransfer && _categorySubtitle(tx).isNotEmpty)
+          _buildDetailRow('子类', _categorySubtitle(tx)),
         _buildDetailRow('账户', _resolveAccountName(tx.accountId)),
         if (isTransfer)
           _buildDetailRow('转入账户', _resolveAccountName(tx.toAccountId)),
         // 跨币种转账信息
-        if (isTransfer && tx.toAmount != null) ...[
-          _buildCrossCurrencyRow(tx),
-        ],
+        if (isTransfer && tx.toAmount != null) ...[_buildCrossCurrencyRow(tx)],
         if (tx.discountAmount != null && tx.discountAmount! > 0)
-          _buildDetailRow(
-            '优惠',
-            '-¥${tx.discountAmount!.toStringAsFixed(2)}',
-          ),
+          _buildDetailRow('优惠', '-¥${tx.discountAmount!.toStringAsFixed(2)}'),
         if (tx.feeAmount != null && tx.feeAmount! > 0)
-          _buildDetailRow(
-            '手续费',
-            '+¥${tx.feeAmount!.toStringAsFixed(2)}',
-          ),
+          _buildDetailRow('手续费', '+¥${tx.feeAmount!.toStringAsFixed(2)}'),
         if ((tx.discountAmount != null && tx.discountAmount! > 0) ||
             (tx.feeAmount != null && tx.feeAmount! > 0))
-          _buildDetailRow(
-            '实付',
-            '¥${tx.netAmount.toStringAsFixed(2)}',
-          ),
-        if (tx.splitGroupKey != null)
-          _buildDetailRow(
-            '组合',
-            '一次手工记账的组合条目',
-          ),
+          _buildDetailRow('实付', '¥${tx.netAmount.toStringAsFixed(2)}'),
+        if (tx.splitGroupKey != null) _buildDetailRow('组合', '一次手工记账的组合条目'),
         _buildProjectRow(tx.projectId),
       ]),
       const SizedBox(height: 12),
@@ -530,9 +524,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               icon: tx.reimbursementStatus != null
                   ? Icons.money_off_rounded
                   : Icons.receipt_long_rounded,
-              color: tx.reimbursementStatus != null
-                  ? Colors.grey
-                  : Colors.teal,
+              color: tx.reimbursementStatus != null ? Colors.grey : Colors.teal,
               tooltip: tx.reimbursementStatus != null ? '取消待报销' : '标记待报销',
               onPressed: _toggleReimbursementPending,
             ),
@@ -568,10 +560,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             controller: scrollController,
             physics: listPhysics,
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            children: [
-              ...detailCards,
-              const SizedBox(height: 80),
-            ],
+            children: [...detailCards, const SizedBox(height: 80)],
           ),
         ),
         actionRow,
@@ -652,9 +641,14 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 3,
+                ),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: JiveTheme.isDark(context) ? 0.25 : 0.1),
+                  color: color.withValues(
+                    alpha: JiveTheme.isDark(context) ? 0.25 : 0.1,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: color.withValues(alpha: 0.5)),
                 ),
@@ -677,8 +671,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  Icon(Icons.receipt_long,
-                      size: 16, color: JiveTheme.primaryGreen),
+                  Icon(
+                    Icons.receipt_long,
+                    size: 16,
+                    color: JiveTheme.primaryGreen,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     '查看报销详情',
@@ -690,9 +687,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     ),
                   ),
                   const Spacer(),
-                  Icon(Icons.chevron_right,
-                      size: 18,
-                      color: JiveTheme.secondaryTextColor(context)),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: JiveTheme.secondaryTextColor(context),
+                  ),
                 ],
               ),
             ),
@@ -736,8 +735,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildCrossCurrencyRow(JiveTransaction tx) {
-    final fromAccount = tx.accountId != null ? _accountById[tx.accountId] : null;
-    final toAccount = tx.toAccountId != null ? _accountById[tx.toAccountId] : null;
+    final fromAccount = tx.accountId != null
+        ? _accountById[tx.accountId]
+        : null;
+    final toAccount = tx.toAccountId != null
+        ? _accountById[tx.toAccountId]
+        : null;
     final fromCurrency = fromAccount?.currency ?? 'CNY';
     final toCurrency = toAccount?.currency ?? 'CNY';
 
@@ -778,7 +781,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.currency_exchange, size: 14, color: Colors.orange.shade700),
+                    Icon(
+                      Icons.currency_exchange,
+                      size: 14,
+                      color: Colors.orange.shade700,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       toAmountText,
@@ -862,9 +869,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ),
             const SizedBox(width: 8),
             if (smartTags.isNotEmpty)
-              Expanded(
-                child: _buildSmartSummary(smartTags),
-              ),
+              Expanded(child: _buildSmartSummary(smartTags)),
           ],
         ),
         if (optOutTags.isNotEmpty || isOptOutAll) ...[
@@ -878,16 +883,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         Wrap(
           spacing: 6,
           runSpacing: 6,
-          children: tags.map((tag) => _buildTagChip(tag, smartKeys.contains(tag.key))).toList(),
+          children: tags
+              .map((tag) => _buildTagChip(tag, smartKeys.contains(tag.key)))
+              .toList(),
         ),
       ],
     );
   }
 
-  Widget _buildSmartSummary(
-    List<JiveTag> smartTags, {
-    int maxLines = 1,
-  }) {
+  Widget _buildSmartSummary(List<JiveTag> smartTags, {int maxLines = 1}) {
     const label = '智能标签：点击查看命中规则';
     return Align(
       alignment: Alignment.centerRight,
@@ -918,8 +922,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildOptOutSummary(List<JiveTag> optOutTags, bool isOptOutAll) {
-    final label =
-        isOptOutAll ? '已停用全部智能标签：点击恢复' : '已停用智能标签：点击恢复';
+    final label = isOptOutAll ? '已停用全部智能标签：点击恢复' : '已停用智能标签：点击恢复';
     return TextButton(
       onPressed: () => _openSmartOptOutSheet(optOutTags, isOptOutAll),
       style: TextButton.styleFrom(
@@ -980,7 +983,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               decoration: BoxDecoration(
                 color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: JiveTheme.primaryGreen.withValues(alpha: 0.4)),
+                border: Border.all(
+                  color: JiveTheme.primaryGreen.withValues(alpha: 0.4),
+                ),
               ),
               child: const Icon(
                 Icons.auto_awesome,
@@ -1019,7 +1024,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
           builder: (context, scrollController) {
             return Material(
               color: Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
               child: SafeArea(
                 top: false,
                 child: Column(
@@ -1037,7 +1044,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                       child: Row(
                         children: [
-                          const Icon(Icons.auto_awesome, color: JiveTheme.primaryGreen),
+                          const Icon(
+                            Icons.auto_awesome,
+                            color: JiveTheme.primaryGreen,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             '智能标签命中规则',
@@ -1049,7 +1059,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           const Spacer(),
                           Text(
                             '${sortedTags.length} 个标签',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
                           ),
                         ],
                       ),
@@ -1060,7 +1073,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                         alignment: Alignment.centerLeft,
                         child: Text(
                           '点击标签可查看命中详情与停止自动打标',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ),
                     ),
@@ -1077,9 +1093,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           final summary = matchCount == 0
                               ? '查看命中规则'
                               : matchCount == 1
-                                  ? '匹配 1 条规则'
-                                  : '匹配 $matchCount 条规则';
-                          final color = AccountService.parseColorHex(tag.colorHex) ??
+                              ? '匹配 1 条规则'
+                              : '匹配 $matchCount 条规则';
+                          final color =
+                              AccountService.parseColorHex(tag.colorHex) ??
                               JiveTheme.primaryGreen;
                           final tagIcon = hasTagIcon(tag)
                               ? tagIconWidget(tag, size: 14, color: color)
@@ -1093,23 +1110,31 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 await _openSmartExplainSheet(tag, explanation);
                               },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.grey.shade50,
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: Colors.grey.shade200),
+                                  border: Border.all(
+                                    color: Colors.grey.shade200,
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
                                     CircleAvatar(
                                       radius: 14,
-                                      backgroundColor: color.withValues(alpha: 0.15),
+                                      backgroundColor: color.withValues(
+                                        alpha: 0.15,
+                                      ),
                                       child: tagIcon,
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             tagDisplayName(tag),
@@ -1210,7 +1235,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 final hasAnyOptOut = globalOptOut || tagCount > 0;
                 return Material(
                   color: Colors.white,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
+                  ),
                   child: SafeArea(
                     top: false,
                     child: Column(
@@ -1240,15 +1267,20 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               const Spacer(),
                               if (tagCount > 0)
                                 Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.grey.shade100,
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
                                     '$tagCount 个标签',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade700,
+                                    ),
                                   ),
                                 ),
                             ],
@@ -1260,7 +1292,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             alignment: Alignment.centerLeft,
                             child: Text(
                               '点击“恢复”可重新启用本笔交易的智能打标',
-                              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
                             ),
                           ),
                         ),
@@ -1275,26 +1310,34 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 TextButton(
                                   onPressed: hasAnyOptOut
                                       ? () async {
-                                          final countBefore = currentTags.length;
+                                          final countBefore =
+                                              currentTags.length;
                                           final wasGlobal = globalOptOut;
                                           final matchedCount = wasGlobal
                                               ? await _restoreAllSmartTagsForTransaction()
-                                              : await _restoreAllSmartTags(currentTags);
-                                          if (!mounted || !context.mounted) return;
+                                              : await _restoreAllSmartTags(
+                                                  currentTags,
+                                                );
+                                          if (!mounted || !context.mounted)
+                                            return;
                                           setSheetState(() {
                                             currentTags.clear();
                                             globalOptOut = false;
                                           });
                                           final message = wasGlobal
                                               ? matchedCount == 0
-                                                  ? '已恢复全部智能标签（当前规则未命中）'
-                                                  : '已恢复全部智能标签，命中 $matchedCount 个'
+                                                    ? '已恢复全部智能标签（当前规则未命中）'
+                                                    : '已恢复全部智能标签，命中 $matchedCount 个'
                                               : matchedCount == 0
-                                                  ? '已恢复 $countBefore 个标签（当前规则未命中）'
-                                                  : matchedCount == countBefore
-                                                      ? '已恢复 $countBefore 个智能标签'
-                                                      : '已恢复 $countBefore 个标签，命中 $matchedCount 个';
-                                          showBanner(context, setSheetState, message);
+                                              ? '已恢复 $countBefore 个标签（当前规则未命中）'
+                                              : matchedCount == countBefore
+                                              ? '已恢复 $countBefore 个智能标签'
+                                              : '已恢复 $countBefore 个标签，命中 $matchedCount 个';
+                                          showBanner(
+                                            context,
+                                            setSheetState,
+                                            message,
+                                          );
                                         }
                                       : null,
                                   child: const Text('全部恢复'),
@@ -1302,8 +1345,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 TextButton(
                                   onPressed: hasAnyOptOut
                                       ? () async {
-                                          final removed = await _clearAllOptOuts();
-                                          if (!mounted || !context.mounted) return;
+                                          final removed =
+                                              await _clearAllOptOuts();
+                                          if (!mounted || !context.mounted)
+                                            return;
                                           setSheetState(() {
                                             currentTags.clear();
                                             globalOptOut = false;
@@ -1311,7 +1356,11 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                           final message = removed == 0
                                               ? '未找到可移除的豁免'
                                               : '已移除 $removed 个智能标签豁免';
-                                          showBanner(context, setSheetState, message);
+                                          showBanner(
+                                            context,
+                                            setSheetState,
+                                            message,
+                                          );
                                         }
                                       : null,
                                   child: const Text('移除豁免'),
@@ -1325,15 +1374,23 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             child: Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.green.shade50,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.green.shade100),
+                                border: Border.all(
+                                  color: Colors.green.shade100,
+                                ),
                               ),
                               child: Text(
                                 bannerMessage!,
-                                style: TextStyle(fontSize: 12, color: Colors.green.shade700),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.green.shade700,
+                                ),
                               ),
                             ),
                           ),
@@ -1342,7 +1399,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                             child: Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.red.shade50,
                                 borderRadius: BorderRadius.circular(12),
@@ -1350,7 +1410,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               ),
                               child: Text(
                                 '本笔交易已停用全部智能标签，可点“全部恢复”重新启用',
-                                style: TextStyle(fontSize: 12, color: Colors.red.shade700),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.red.shade700,
+                                ),
                               ),
                             ),
                           ),
@@ -1359,22 +1422,40 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                               ? Center(
                                   child: Text(
                                     globalOptOut ? '暂无单独停用的标签' : '暂无停用的智能标签',
-                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade500,
+                                    ),
                                   ),
                                 )
                               : ListView.separated(
                                   controller: scrollController,
-                                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    4,
+                                    12,
+                                    16,
+                                  ),
                                   itemCount: currentTags.length,
-                                  separatorBuilder: (_, __) => const SizedBox(height: 6),
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 6),
                                   itemBuilder: (context, index) {
                                     final tag = currentTags[index];
                                     final color =
-                                        AccountService.parseColorHex(tag.colorHex) ??
-                                            JiveTheme.primaryGreen;
+                                        AccountService.parseColorHex(
+                                          tag.colorHex,
+                                        ) ??
+                                        JiveTheme.primaryGreen;
                                     final tagIcon = hasTagIcon(tag)
-                                        ? tagIconWidget(tag, size: 14, color: color)
-                                        : const Icon(Icons.label_outline, size: 16);
+                                        ? tagIconWidget(
+                                            tag,
+                                            size: 14,
+                                            color: color,
+                                          )
+                                        : const Icon(
+                                            Icons.label_outline,
+                                            size: 16,
+                                          );
                                     return Container(
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 12,
@@ -1383,13 +1464,17 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                       decoration: BoxDecoration(
                                         color: Colors.grey.shade50,
                                         borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: Colors.grey.shade200),
+                                        border: Border.all(
+                                          color: Colors.grey.shade200,
+                                        ),
                                       ),
                                       child: Row(
                                         children: [
                                           CircleAvatar(
                                             radius: 14,
-                                            backgroundColor: color.withValues(alpha: 0.15),
+                                            backgroundColor: color.withValues(
+                                              alpha: 0.15,
+                                            ),
                                             child: tagIcon,
                                           ),
                                           const SizedBox(width: 10),
@@ -1409,11 +1494,16 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                                 ? null
                                                 : () async {
                                                     final restored =
-                                                        await _restoreSmartTag(tag);
-                                                    if (!mounted || !context.mounted) return;
+                                                        await _restoreSmartTag(
+                                                          tag,
+                                                        );
+                                                    if (!mounted ||
+                                                        !context.mounted)
+                                                      return;
                                                     setSheetState(() {
                                                       currentTags.removeWhere(
-                                                        (item) => item.key == tag.key,
+                                                        (item) =>
+                                                            item.key == tag.key,
                                                       );
                                                     });
                                                     final message = restored
@@ -1449,10 +1539,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final tx = _transaction;
     final isar = _isar;
     if (tx == null || isar == null) return false;
-    final matched = await TagRuleService(isar).restoreOptOutForTransaction(
-      tx.id,
-      tag.key,
-    );
+    final matched = await TagRuleService(
+      isar,
+    ).restoreOptOutForTransaction(tx.id, tag.key);
     _hasDataChanges = true;
     if (!mounted) return matched;
     await _loadData();
@@ -1465,10 +1554,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     if (tx == null || isar == null) return 0;
     var matchedCount = 0;
     for (final tag in tags) {
-      final matched = await TagRuleService(isar).restoreOptOutForTransaction(
-        tx.id,
-        tag.key,
-      );
+      final matched = await TagRuleService(
+        isar,
+      ).restoreOptOutForTransaction(tx.id, tag.key);
       if (matched) matchedCount += 1;
     }
     _hasDataChanges = true;
@@ -1481,8 +1569,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final tx = _transaction;
     final isar = _isar;
     if (tx == null || isar == null) return 0;
-    final matchedCount =
-        await TagRuleService(isar).restoreAllSmartTagsForTransaction(tx.id);
+    final matchedCount = await TagRuleService(
+      isar,
+    ).restoreAllSmartTagsForTransaction(tx.id);
     _hasDataChanges = true;
     if (!mounted) return matchedCount;
     await _loadData();
@@ -1493,9 +1582,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     final tx = _transaction;
     final isar = _isar;
     if (tx == null || isar == null) return 0;
-    final removed = await TagRuleService(isar).clearAllOptOutsForTransaction(
-      tx.id,
-    );
+    final removed = await TagRuleService(
+      isar,
+    ).clearAllOptOutsForTransaction(tx.id);
     _hasDataChanges = true;
     if (!mounted) return removed;
     await _loadData();
@@ -1587,17 +1676,26 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     const SizedBox(height: 10),
                     const Text(
                       '停止自动打标',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       message,
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey.shade700,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(12),
@@ -1666,9 +1764,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          applyAll
-              ? '已停止本笔交易的全部智能标签'
-              : '已停止本笔交易的智能标签：${tagDisplayName(tag)}',
+          applyAll ? '已停止本笔交易的全部智能标签' : '已停止本笔交易的智能标签：${tagDisplayName(tag)}',
         ),
       ),
     );
@@ -1711,6 +1807,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   String _categoryTitle(JiveTransaction tx) {
+    final path = const CategoryPathService().resolve(
+      _categoryByKey.values,
+      categoryKey: tx.categoryKey,
+      subCategoryKey: tx.subCategoryKey,
+    );
+    if (!path.isEmpty) return path.displayName;
     return _displayCategoryName(tx.categoryKey, tx.category);
   }
 
@@ -1848,7 +1950,10 @@ class _SmartTagExplainSheet extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                   child: Row(
                     children: [
-                      const Icon(Icons.auto_awesome, color: JiveTheme.primaryGreen),
+                      const Icon(
+                        Icons.auto_awesome,
+                        color: JiveTheme.primaryGreen,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -1862,8 +1967,10 @@ class _SmartTagExplainSheet extends StatelessWidget {
                         ),
                       ),
                       Container(
-                        padding:
-                            const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: JiveTheme.primaryGreen.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
@@ -1920,9 +2027,7 @@ class _SmartTagExplainSheet extends StatelessWidget {
                         foregroundColor: Colors.redAccent,
                         side: const BorderSide(color: Colors.redAccent),
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        textStyle: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                        ),
+                        textStyle: const TextStyle(fontWeight: FontWeight.w700),
                       ),
                     ),
                   ),

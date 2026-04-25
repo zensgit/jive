@@ -25,6 +25,11 @@ class TransactionCoreFields extends StatelessWidget {
   /// The currently selected date.
   final DateTime date;
 
+  final bool highlightCategory;
+  final bool highlightAccount;
+  final bool highlightDate;
+  final bool highlightNote;
+
   /// Called when the category row is tapped.
   final VoidCallback? onCategoryTap;
 
@@ -43,6 +48,10 @@ class TransactionCoreFields extends StatelessWidget {
     this.accountName,
     this.note,
     required this.date,
+    this.highlightCategory = false,
+    this.highlightAccount = false,
+    this.highlightDate = false,
+    this.highlightNote = false,
     this.onCategoryTap,
     this.onAccountTap,
     this.onNoteTap,
@@ -54,8 +63,7 @@ class TransactionCoreFields extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final cardColor = isDark ? JiveTheme.darkCard : JiveTheme.cardWhite;
-    final dividerColor =
-        isDark ? JiveTheme.darkDivider : Colors.grey.shade200;
+    final dividerColor = isDark ? JiveTheme.darkDivider : Colors.grey.shade200;
 
     return Container(
       decoration: BoxDecoration(
@@ -73,6 +81,7 @@ class TransactionCoreFields extends StatelessWidget {
             label: '分类',
             value: categoryName ?? '未选择',
             valueColor: categoryName != null ? null : Colors.grey,
+            highlighted: highlightCategory,
             onTap: onCategoryTap,
           ),
           _Divider(color: dividerColor),
@@ -81,11 +90,13 @@ class TransactionCoreFields extends StatelessWidget {
             label: '账户',
             value: accountName ?? '未选择',
             valueColor: accountName != null ? null : Colors.grey,
+            highlighted: highlightAccount,
             onTap: onAccountTap,
           ),
           _Divider(color: dividerColor),
           _DateFieldRow(
             date: date,
+            highlighted: highlightDate,
             onDateSelected: onDateSelected,
           ),
           _Divider(color: dividerColor),
@@ -93,8 +104,8 @@ class TransactionCoreFields extends StatelessWidget {
             icon: Icons.notes_outlined,
             label: '备注',
             value: (note != null && note!.isNotEmpty) ? note! : '添加备注',
-            valueColor:
-                (note != null && note!.isNotEmpty) ? null : Colors.grey,
+            valueColor: (note != null && note!.isNotEmpty) ? null : Colors.grey,
+            highlighted: highlightNote,
             onTap: onNoteTap,
           ),
         ],
@@ -109,6 +120,7 @@ class _FieldRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? valueColor;
+  final bool highlighted;
   final VoidCallback? onTap;
 
   const _FieldRow({
@@ -116,6 +128,7 @@ class _FieldRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.valueColor,
+    this.highlighted = false,
     this.onTap,
   });
 
@@ -127,35 +140,64 @@ class _FieldRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: theme.colorScheme.primary),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const Spacer(),
-            Flexible(
-              child: Text(
-                value,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: valueColor ?? theme.colorScheme.onSurface,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: highlighted
+                ? theme.colorScheme.errorContainer.withValues(alpha: 0.35)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: highlighted
+                ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+                : EdgeInsets.zero,
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: highlighted
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
-              ),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                if (highlighted) ...[
+                  Text(
+                    '待补全',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Text(
+                    value,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: valueColor ?? theme.colorScheme.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: Colors.grey.shade400,
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: Colors.grey.shade400,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -179,10 +221,12 @@ class _Divider extends StatelessWidget {
 /// The date row with an inline [DateQuickSelector].
 class _DateFieldRow extends StatelessWidget {
   final DateTime date;
+  final bool highlighted;
   final ValueChanged<DateTime>? onDateSelected;
 
   const _DateFieldRow({
     required this.date,
+    this.highlighted = false,
     this.onDateSelected,
   });
 
@@ -191,28 +235,43 @@ class _DateFieldRow extends StatelessWidget {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
-        children: [
-          Icon(
-            Icons.schedule_outlined,
-            size: 20,
-            color: theme.colorScheme.primary,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: highlighted
+              ? theme.colorScheme.errorContainer.withValues(alpha: 0.35)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Padding(
+          padding: highlighted
+              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+              : EdgeInsets.zero,
+          child: Row(
+            children: [
+              Icon(
+                Icons.schedule_outlined,
+                size: 20,
+                color: highlighted
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '时间',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: DateQuickSelector(
+                  selectedDate: date,
+                  onDateSelected: onDateSelected ?? (_) {},
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 12),
-          Text(
-            '时间',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: DateQuickSelector(
-              selectedDate: date,
-              onDateSelected: onDateSelected ?? (_) {},
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
