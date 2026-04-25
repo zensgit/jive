@@ -153,8 +153,8 @@ Manual scenario still recommended on a developer machine with UI automation or d
 
 - PR: `#186 Improve transaction entry UX`
 - Status snapshot date: `2026-04-25`
-- Current PR head on this snapshot: `61b5ca44`
-- Latest functional head before the documentation-only refresh commit: `ef59cca2`
+- Latest GitHub-verified green head before the final documentation-only refreshes: `61b5ca44`
+- Latest functional head before the documentation-only refresh commits: `ef59cca2`
 - GitHub checks passed:
   - `analyze_and_test`
   - `detect_saas_wave0_smoke`
@@ -163,7 +163,7 @@ Manual scenario still recommended on a developer machine with UI automation or d
   - `saas_wave0_smoke`
 - All previously outdated AI review threads were resolved after the follow-up fixes landed.
 - PR remains `OPEN + MERGEABLE + ready for review`; there are no unresolved review threads and no requested changes.
-- The `2026-04-25` documentation refresh commit also reran GitHub CI successfully, so the current head is now confirmed green rather than only inferred from the previous functional head.
+- The first `2026-04-25` documentation refresh commit also reran GitHub CI successfully, so the merge-ready status is confirmed at the PR level rather than only inferred from the previous functional head.
 - This `2026-04-25` update is documentation-only and does not introduce new runtime behavior.
 - The remaining merge gate is process-only: if repository protection requires human approval, that approval still needs to come from GitHub review flow rather than additional code changes.
 
