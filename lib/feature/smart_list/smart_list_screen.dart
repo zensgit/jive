@@ -22,6 +22,7 @@ class _SmartListScreenState extends State<SmartListScreen> {
   late Isar _isar;
   late SmartListService _service;
   List<JiveSmartList> _items = [];
+  int? _defaultSmartListId;
   bool _isLoading = true;
 
   @override
@@ -38,7 +39,14 @@ class _SmartListScreenState extends State<SmartListScreen> {
 
   Future<void> _reload() async {
     final items = await _service.getAll();
-    if (mounted) setState(() { _items = items; _isLoading = false; });
+    final defaultId = await _service.getDefaultId();
+    if (mounted) {
+      setState(() {
+        _items = items;
+        _defaultSmartListId = defaultId;
+        _isLoading = false;
+      });
+    }
   }
 
   // ── actions ──
@@ -70,19 +78,31 @@ class _SmartListScreenState extends State<SmartListScreen> {
   Future<void> _openSmartList(JiveSmartList sl) async {
     final filter = _service.buildFilterState(sl);
     if (!mounted) return;
-    await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => CategoryTransactionsScreen(
-        title: sl.name,
-        initialFilterState: filter,
-        initialSearchQuery: sl.keyword,
-        persistFilterState: false,
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CategoryTransactionsScreen(
+          title: sl.name,
+          initialFilterState: filter,
+          initialSearchQuery: sl.keyword,
+          persistFilterState: false,
+        ),
       ),
-    ));
+    );
   }
 
   Future<void> _togglePin(JiveSmartList sl) async {
     sl.isPinned = !sl.isPinned;
     await _service.update(sl);
+    await _reload();
+  }
+
+  Future<void> _setDefault(JiveSmartList sl) async {
+    await _service.setDefaultView(sl);
+    await _reload();
+  }
+
+  Future<void> _clearDefault() async {
+    await _service.clearDefaultView();
     await _reload();
   }
 
@@ -93,8 +113,14 @@ class _SmartListScreenState extends State<SmartListScreen> {
         title: const Text('删除视图'),
         content: Text('确认删除「${sl.name}」？'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
         ],
       ),
     );
@@ -116,7 +142,10 @@ class _SmartListScreenState extends State<SmartListScreen> {
           decoration: const InputDecoration(hintText: '例如：本月餐饮'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
             child: const Text('保存'),
@@ -137,14 +166,16 @@ class _SmartListScreenState extends State<SmartListScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _items.isEmpty
-              ? _buildEmpty(theme)
-              : ListView.separated(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: _items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
-                  itemBuilder: (_, i) => _buildItem(_items[i], theme),
-                ),
-      floatingActionButton: widget.currentFilter != null && widget.currentFilter!.hasAnyFilter
+          ? _buildEmpty(theme)
+          : ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: _items.length,
+              separatorBuilder: (_, __) =>
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+              itemBuilder: (_, i) => _buildItem(_items[i], theme),
+            ),
+      floatingActionButton:
+          widget.currentFilter != null && widget.currentFilter!.hasAnyFilter
           ? FloatingActionButton.extended(
               onPressed: _createFromCurrentFilter,
               icon: const Icon(Icons.bookmark_add_outlined),
@@ -159,7 +190,11 @@ class _SmartListScreenState extends State<SmartListScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.bookmarks_outlined, size: 56, color: theme.colorScheme.onSurfaceVariant),
+          Icon(
+            Icons.bookmarks_outlined,
+            size: 56,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
           const SizedBox(height: 12),
           Text('还没有保存的视图', style: theme.textTheme.bodyLarge),
           const SizedBox(height: 4),
@@ -176,15 +211,34 @@ class _SmartListScreenState extends State<SmartListScreen> {
 
   Widget _buildItem(JiveSmartList sl, ThemeData theme) {
     final summary = _service.describeSummary(sl);
+    final isDefault = sl.id == _defaultSmartListId;
 
     return ListTile(
       leading: Icon(
-        sl.isPinned ? Icons.push_pin : Icons.bookmark_outline,
+        isDefault
+            ? Icons.home_outlined
+            : sl.isPinned
+            ? Icons.push_pin
+            : Icons.bookmark_outline,
         color: sl.colorHex != null
-            ? Color(int.parse('FF${sl.colorHex!.replaceFirst('#', '')}', radix: 16))
+            ? Color(
+                int.parse('FF${sl.colorHex!.replaceFirst('#', '')}', radix: 16),
+              )
             : theme.colorScheme.primary,
       ),
-      title: Text(sl.name),
+      title: Row(
+        children: [
+          Expanded(child: Text(sl.name)),
+          if (isDefault)
+            Chip(
+              label: const Text('默认'),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              side: BorderSide.none,
+              backgroundColor: theme.colorScheme.primaryContainer,
+            ),
+        ],
+      ),
       subtitle: Text(summary, maxLines: 1, overflow: TextOverflow.ellipsis),
       onTap: () => _openSmartList(sl),
       onLongPress: () => _showContextMenu(sl),
@@ -199,14 +253,36 @@ class _SmartListScreenState extends State<SmartListScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(sl.isPinned ? Icons.push_pin_outlined : Icons.push_pin),
+              leading: Icon(
+                sl.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+              ),
               title: Text(sl.isPinned ? '取消置顶' : '置顶'),
-              onTap: () { Navigator.pop(ctx); _togglePin(sl); },
+              onTap: () {
+                Navigator.pop(ctx);
+                _togglePin(sl);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                sl.id == _defaultSmartListId
+                    ? Icons.home_work_outlined
+                    : Icons.home_outlined,
+              ),
+              title: Text(sl.id == _defaultSmartListId ? '取消默认视图' : '设为默认视图'),
+              onTap: () {
+                Navigator.pop(ctx);
+                sl.id == _defaultSmartListId
+                    ? _clearDefault()
+                    : _setDefault(sl);
+              },
             ),
             ListTile(
               leading: const Icon(Icons.delete_outline, color: Colors.red),
               title: const Text('删除', style: TextStyle(color: Colors.red)),
-              onTap: () { Navigator.pop(ctx); _deleteItem(sl); },
+              onTap: () {
+                Navigator.pop(ctx);
+                _deleteItem(sl);
+              },
             ),
           ],
         ),

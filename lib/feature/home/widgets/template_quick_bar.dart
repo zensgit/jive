@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/database/template_model.dart';
-import '../../../core/database/transaction_model.dart';
 import '../../../core/design_system/theme.dart';
 import '../../../core/service/database_service.dart';
+import '../../../core/service/quick_action_service.dart';
 import '../../../core/service/template_service.dart';
+import '../../quick_entry/quick_action_executor.dart';
 import '../../template/template_list_screen.dart';
 
 /// Horizontal quick-bar showing the top 5 most-used templates.
@@ -39,27 +40,24 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
       return b.usageCount.compareTo(a.usageCount);
     });
     final top5 = all.take(5).toList();
-    if (mounted) setState(() { _templates = top5; _isLoading = false; });
+    if (mounted) {
+      setState(() {
+        _templates = top5;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _executeTemplate(JiveTemplate template) async {
-    final isar = await DatabaseService.getInstance();
-    final svc = TemplateService(isar);
-    final tx = svc.createTransactionFromTemplate(template);
-    await isar.writeTxn(() async {
-      await isar.jiveTransactions.put(tx);
-    });
-    await svc.incrementUsage(template);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('已记账: ${template.name}'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      widget.onTransactionCreated?.call();
-      _load(); // refresh order
-    }
+    final action = QuickActionService.toQuickAction(template);
+    await QuickActionExecutor.execute(
+      context,
+      action,
+      onCompleted: () {
+        widget.onTransactionCreated?.call();
+        _load();
+      },
+    );
   }
 
   void _editTemplate(JiveTemplate template) {
@@ -138,20 +136,28 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
                       ),
                       onPressed: () => _executeTemplate(t),
                       backgroundColor: JiveTheme.primaryGreen.withAlpha(20),
-                      side: BorderSide(color: JiveTheme.primaryGreen.withAlpha(60)),
+                      side: BorderSide(
+                        color: JiveTheme.primaryGreen.withAlpha(60),
+                      ),
                       labelStyle: TextStyle(
                         color: JiveTheme.primaryGreen,
                         fontWeight: FontWeight.w500,
                         fontSize: 13,
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                     ),
                     if (t.usageCount > 0)
                       Positioned(
                         top: -4,
                         right: -4,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1,
+                          ),
                           decoration: BoxDecoration(
                             color: JiveTheme.primaryGreen,
                             borderRadius: BorderRadius.circular(8),

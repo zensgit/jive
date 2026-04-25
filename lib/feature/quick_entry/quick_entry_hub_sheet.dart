@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../../core/database/template_model.dart';
-import '../../core/database/transaction_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/entitlement/feature_gate.dart';
 import '../../core/entitlement/feature_id.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/quick_action_service.dart';
 import '../../core/service/template_service.dart';
 import '../import/screenshot_import_screen.dart';
 import '../quick_add/conversational_input_screen.dart';
 import '../template/template_list_screen.dart';
 import '../transactions/add_transaction_screen.dart';
+import 'quick_action_executor.dart';
 
 /// Bottom sheet shown on FAB long press.
 ///
@@ -20,11 +21,7 @@ class QuickEntryHubSheet extends StatefulWidget {
   final int? bookId;
   final VoidCallback? onTransactionCreated;
 
-  const QuickEntryHubSheet({
-    super.key,
-    this.bookId,
-    this.onTransactionCreated,
-  });
+  const QuickEntryHubSheet({super.key, this.bookId, this.onTransactionCreated});
 
   @override
   State<QuickEntryHubSheet> createState() => _QuickEntryHubSheetState();
@@ -49,32 +46,34 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
       return b.usageCount.compareTo(a.usageCount);
     });
     final top5 = all.take(5).toList();
-    if (mounted) setState(() { _templates = top5; _isLoading = false; });
+    if (mounted) {
+      setState(() {
+        _templates = top5;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _executeTemplate(JiveTemplate template) async {
-    final isar = await DatabaseService.getInstance();
-    final svc = TemplateService(isar);
-    final tx = svc.createTransactionFromTemplate(template);
-    await isar.writeTxn(() async {
-      await isar.jiveTransactions.put(tx);
-    });
-    await svc.incrementUsage(template);
-    if (mounted) {
+    final action = QuickActionService.toQuickAction(template);
+    await QuickActionExecutor.execute(
+      context,
+      action,
+      onCompleted: () {
+        widget.onTransactionCreated?.call();
+        _loadTemplates();
+      },
+    );
+    if (mounted && Navigator.canPop(context)) {
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('已记账: ${template.name}'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      widget.onTransactionCreated?.call();
     }
   }
 
   void _navigate(Widget screen) {
     Navigator.pop(context);
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen)).then((_) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen)).then((
+      _,
+    ) {
       widget.onTransactionCreated?.call();
     });
   }
@@ -142,9 +141,8 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
       _EntryCardData(
         emoji: '\u{1F4AC}',
         label: '对话记账',
-        onTap: () => _navigate(
-          ConversationalInputScreen(bookId: widget.bookId),
-        ),
+        onTap: () =>
+            _navigate(ConversationalInputScreen(bookId: widget.bookId)),
       ),
       _EntryCardData(
         emoji: '\u{1F4F8}',
@@ -194,10 +192,7 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              data.emoji,
-              style: const TextStyle(fontSize: 28),
-            ),
+            Text(data.emoji, style: const TextStyle(fontSize: 28)),
             const SizedBox(height: 6),
             Text(
               data.label,

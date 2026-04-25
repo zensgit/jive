@@ -13,6 +13,18 @@ enum TransactionEntrySource {
   edit,
 }
 
+class TransactionHighlightField {
+  static const amount = 'amount';
+  static const category = 'category';
+  static const account = 'account';
+  static const transferAccount = 'transferAccount';
+  static const time = 'time';
+  static const note = 'note';
+  static const tags = 'tags';
+
+  const TransactionHighlightField._();
+}
+
 /// Unified parameter object passed to AddTransactionScreen from any entry
 /// point (manual tap, quick-action, voice input, deep link, etc.).
 ///
@@ -38,10 +50,16 @@ class TransactionEntryParams {
   final String? prefillType;
 
   final String? prefillCategoryKey;
+  final String? prefillSubCategoryKey;
   final int? prefillAccountId;
+  final int? prefillToAccountId;
   final String? prefillNote;
   final DateTime? prefillDate;
   final List<String>? prefillTagKeys;
+
+  /// Fields that should be visually called out because the external source
+  /// did not provide enough information to save safely.
+  final List<String> highlightFields;
 
   // -- Edit mode --------------------------------------------------------------
 
@@ -56,10 +74,13 @@ class TransactionEntryParams {
     this.prefillAmount,
     this.prefillType,
     this.prefillCategoryKey,
+    this.prefillSubCategoryKey,
     this.prefillAccountId,
+    this.prefillToAccountId,
     this.prefillNote,
     this.prefillDate,
     this.prefillTagKeys,
+    this.highlightFields = const [],
     this.editingTransaction,
   });
 
@@ -130,5 +151,44 @@ class TransactionEntryParams {
       case TransactionEntrySource.deepLink:
         return '来自外部链接';
     }
+  }
+
+  bool shouldHighlight(String field) => highlightFields.contains(field);
+
+  TransactionEntryParams copyWith({
+    TransactionEntrySource? source,
+    String? sourceLabel,
+    bool? canDirectSubmit,
+    String? quickActionId,
+    double? prefillAmount,
+    String? prefillType,
+    String? prefillCategoryKey,
+    String? prefillSubCategoryKey,
+    int? prefillAccountId,
+    int? prefillToAccountId,
+    String? prefillNote,
+    DateTime? prefillDate,
+    List<String>? prefillTagKeys,
+    List<String>? highlightFields,
+    JiveTransaction? editingTransaction,
+  }) {
+    return TransactionEntryParams(
+      source: source ?? this.source,
+      sourceLabel: sourceLabel ?? this.sourceLabel,
+      canDirectSubmit: canDirectSubmit ?? this.canDirectSubmit,
+      quickActionId: quickActionId ?? this.quickActionId,
+      prefillAmount: prefillAmount ?? this.prefillAmount,
+      prefillType: prefillType ?? this.prefillType,
+      prefillCategoryKey: prefillCategoryKey ?? this.prefillCategoryKey,
+      prefillSubCategoryKey:
+          prefillSubCategoryKey ?? this.prefillSubCategoryKey,
+      prefillAccountId: prefillAccountId ?? this.prefillAccountId,
+      prefillToAccountId: prefillToAccountId ?? this.prefillToAccountId,
+      prefillNote: prefillNote ?? this.prefillNote,
+      prefillDate: prefillDate ?? this.prefillDate,
+      prefillTagKeys: prefillTagKeys ?? this.prefillTagKeys,
+      highlightFields: highlightFields ?? this.highlightFields,
+      editingTransaction: editingTransaction ?? this.editingTransaction,
+    );
   }
 }
