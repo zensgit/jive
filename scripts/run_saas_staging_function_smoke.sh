@@ -29,7 +29,7 @@ Required env-file keys:
   ANALYTICS_ADMIN_TOKEN
   NOTIFICATION_ADMIN_TOKEN
   PUBSUB_BEARER_TOKEN (full profile only)
-  DOMESTIC_PAYMENT_WEBHOOK_TOKEN (optional; enables domestic payment smoke)
+  DOMESTIC_PAYMENT_WEBHOOK_TOKEN (full profile only)
 
 Notes:
   This script checks deployed Supabase Edge Functions without printing secrets.
@@ -341,7 +341,7 @@ main() {
 
   if [[ "$PROFILE" == "full" ]]; then
     pubsub_token="$(require_key "PUBSUB_BEARER_TOKEN")"
-    domestic_token="$(value_from_env_file "DOMESTIC_PAYMENT_WEBHOOK_TOKEN" "$ENV_FILE")"
+    domestic_token="$(require_key "DOMESTIC_PAYMENT_WEBHOOK_TOKEN")"
     package_name="$(value_from_env_file "GOOGLE_PLAY_PACKAGE_NAME" "$ENV_FILE")"
   fi
 
@@ -403,29 +403,25 @@ main() {
       -H "Content-Type: application/json" \
       --data "$webhook_payload"
 
-    if [[ -n "$domestic_token" ]]; then
-      expect_status "create-payment-order requires a real user session" "401" \
-        -X POST "$base_url/create-payment-order" \
-        -H "apikey: $anon_key" \
-        -H "Authorization: Bearer $anon_key" \
-        -H "Content-Type: application/json" \
-        --data '{"provider":"wechat_pay","product_id":"jive_paid_unlock","plan_code":"pro_lifetime","client_channel":"self_hosted_web"}'
+    expect_status "create-payment-order requires a real user session" "401" \
+      -X POST "$base_url/create-payment-order" \
+      -H "apikey: $anon_key" \
+      -H "Authorization: Bearer $anon_key" \
+      -H "Content-Type: application/json" \
+      --data '{"provider":"wechat_pay","product_id":"jive_paid_unlock","plan_code":"pro_lifetime","client_channel":"self_hosted_web"}'
 
-      expect_json_error "domestic-payment-webhook rejects missing token" "401" "admin_token_required" \
-        -X POST "$base_url/domestic-payment-webhook" \
-        -H "apikey: $anon_key" \
-        -H "Content-Type: application/json" \
-        --data '{"provider":"wechat_pay","event_id":"smoke-missing-token","event_type":"payment.paid","order_no":"missing","status":"paid"}'
+    expect_json_error "domestic-payment-webhook rejects missing token" "401" "admin_token_required" \
+      -X POST "$base_url/domestic-payment-webhook" \
+      -H "apikey: $anon_key" \
+      -H "Content-Type: application/json" \
+      --data '{"provider":"wechat_pay","event_id":"smoke-missing-token","event_type":"payment.paid","order_no":"missing","status":"paid"}'
 
-      expect_json_error "domestic-payment-webhook accepts token and checks order existence" "404" "payment_order_not_found" \
-        -X POST "$base_url/domestic-payment-webhook" \
-        -H "apikey: $anon_key" \
-        -H "x-domestic-payment-token: $domestic_token" \
-        -H "Content-Type: application/json" \
-        --data '{"provider":"wechat_pay","event_id":"smoke-missing-order","event_type":"payment.paid","order_no":"jive_missing_smoke_order","status":"paid","provider_trade_no":"smoke_trade"}'
-    else
-      log "domestic payment smoke skipped (DOMESTIC_PAYMENT_WEBHOOK_TOKEN not set)"
-    fi
+    expect_json_error "domestic-payment-webhook accepts token and checks order existence" "404" "payment_order_not_found" \
+      -X POST "$base_url/domestic-payment-webhook" \
+      -H "apikey: $anon_key" \
+      -H "x-domestic-payment-token: $domestic_token" \
+      -H "Content-Type: application/json" \
+      --data '{"provider":"wechat_pay","event_id":"smoke-missing-order","event_type":"payment.paid","order_no":"jive_missing_smoke_order","status":"paid","provider_trade_no":"smoke_trade"}'
   fi
 
   if [[ "$FAILURES" -gt 0 ]]; then
