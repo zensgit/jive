@@ -194,6 +194,17 @@ void main() {
       expect(policy.label, '继承场景共享');
       expect(policy.warning, contains('同步给场景成员'));
     });
+
+    test('uses shared scope in deletion warnings', () {
+      final warning = const ObjectSharePolicyService().deletionWarning(
+        objectLabel: '加油',
+        affectedTransactionCount: 3,
+        shared: true,
+      );
+
+      expect(warning, contains('共享成员'));
+      expect(warning, contains('3 笔交易'));
+    });
   });
 }
 

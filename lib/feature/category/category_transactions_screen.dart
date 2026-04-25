@@ -19,6 +19,7 @@ import '../../core/service/database_service.dart';
 import '../../core/service/smart_list_service.dart';
 import '../../core/service/ui_pref_service.dart';
 import '../transactions/transaction_detail_screen.dart';
+import '../smart_list/smart_list_screen.dart';
 
 class CategoryTransactionsScreen extends StatefulWidget {
   final String title;
@@ -657,6 +658,21 @@ class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
               ),
             ),
             Padding(
+              padding: const EdgeInsets.only(right: 2),
+              child: IconButton(
+                key: const Key('transaction_save_smart_list_button'),
+                onPressed: hasSearch ? _saveCurrentSmartList : null,
+                tooltip: hasSearch ? '保存为视图' : '筛选或搜索后可保存为视图',
+                icon: Icon(
+                  Icons.bookmark_add_outlined,
+                  size: 20,
+                  color: hasSearch
+                      ? Colors.grey.shade700
+                      : Colors.grey.shade300,
+                ),
+              ),
+            ),
+            Padding(
               padding: const EdgeInsets.only(right: 6),
               child: IconButton(
                 onPressed: _openSortSheet,
@@ -665,6 +681,98 @@ class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveCurrentSmartList() async {
+    final keyword = _searchQuery.trim();
+    if (!_filterState.hasAnyFilter && keyword.isEmpty) return;
+
+    final name = await _promptSmartListName();
+    if (name == null || name.isEmpty) return;
+
+    final service = SmartListService(_isar);
+    final draft = service.fromFilterState(
+      name: name,
+      filterState: _filterState,
+      keyword: keyword.isEmpty ? null : keyword,
+    );
+    await service.create(
+      name: draft.name,
+      categoryKeys: draft.categoryKeys,
+      tagKeys: draft.tagKeys,
+      accountId: draft.accountId,
+      bookId: draft.bookId,
+      transactionType: draft.transactionType,
+      minAmount: draft.minAmount,
+      maxAmount: draft.maxAmount,
+      dateRangeType: draft.dateRangeType,
+      customStartDate: draft.customStartDate,
+      customEndDate: draft.customEndDate,
+      keyword: draft.keyword,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已保存视图「$name」'),
+        action: SnackBarAction(label: '管理', onPressed: _openSmartListManager),
+      ),
+    );
+  }
+
+  Future<String?> _promptSmartListName() async {
+    final controller = TextEditingController(text: _suggestSmartListName());
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('保存当前视图'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '例如：本月餐饮超过 50 元'),
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return name?.trim();
+  }
+
+  String _suggestSmartListName() {
+    final keyword = _searchQuery.trim();
+    if (keyword.isNotEmpty) return keyword;
+    if (_filterState.normalizedTag != null) {
+      return '#${_filterState.normalizedTag}';
+    }
+    if (_filterState.categoryKey != null) {
+      return _categoryByKey[_filterState.categoryKey]?.name ?? '分类视图';
+    }
+    if (_filterState.accountId != null) {
+      return _accountById[_filterState.accountId]?.name ?? '账户视图';
+    }
+    if (_filterState.dateRange != null) return '日期视图';
+    return '我的视图';
+  }
+
+  void _openSmartListManager() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SmartListScreen(
+          currentFilter: _filterState,
+          currentKeyword: _searchQuery,
         ),
       ),
     );
