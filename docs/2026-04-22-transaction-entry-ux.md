@@ -1,7 +1,7 @@
 # Transaction Entry UX Development And Validation
 
 Date: 2026-04-22
-Updated: 2026-04-23
+Updated: 2026-04-25
 Branch: `feature/transaction-entry-ux`
 Base: `origin/main@6311cd8`
 
@@ -152,7 +152,8 @@ Manual scenario still recommended on a developer machine with UI automation or d
 ## Merge Readiness
 
 - PR: `#186 Improve transaction entry UX`
-- Latest documented ready-to-merge head before this closeout note: `e1e10394`
+- Status snapshot date: `2026-04-25`
+- Latest functional head before this documentation-only refresh: `ef59cca2`
 - GitHub checks passed:
   - `analyze_and_test`
   - `detect_saas_wave0_smoke`
@@ -160,6 +161,8 @@ Manual scenario still recommended on a developer machine with UI automation or d
   - `android_integration_test`
   - `saas_wave0_smoke`
 - All previously outdated AI review threads were resolved after the follow-up fixes landed.
+- PR remains `OPEN + MERGEABLE + ready for review`; there are no unresolved review threads and no requested changes.
+- This `2026-04-25` update is a documentation refresh only and does not introduce new runtime behavior.
 - The remaining merge gate is process-only: if repository protection requires human approval, that approval still needs to come from GitHub review flow rather than additional code changes.
 
 ## Out Of Scope
