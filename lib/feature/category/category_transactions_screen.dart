@@ -16,6 +16,7 @@ import '../../core/service/transaction_query_service.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/smart_list_service.dart';
 import '../../core/service/ui_pref_service.dart';
 import '../transactions/transaction_detail_screen.dart';
 
@@ -44,8 +45,7 @@ class CategoryTransactionsScreen extends StatefulWidget {
       _CategoryTransactionsScreenState();
 }
 
-class _CategoryTransactionsScreenState
-    extends State<CategoryTransactionsScreen>
+class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
     with TickerProviderStateMixin {
   late Isar _isar;
   bool _isLoading = true;
@@ -79,6 +79,7 @@ class _CategoryTransactionsScreenState
   bool _groupByDate = false;
   bool _showDateHeadersWhenNotDate = false;
   bool _showSmartTagBadge = true;
+  String? _appliedDefaultSmartListName;
   late bool _includeSubCategories;
 
   static const double _floatingBarHeight = 60;
@@ -120,7 +121,10 @@ class _CategoryTransactionsScreenState
       _isar = await DatabaseService.getInstance();
       _transactionQueryService = TransactionQueryService(_isar);
       if (!_hasInitialOverrides) {
-        await _loadPersistedFilterState();
+        final appliedDefault = await _loadDefaultSmartListState();
+        if (!appliedDefault) {
+          await _loadPersistedFilterState();
+        }
       }
 
       final showBadge = await UiPrefService.getShowSmartTagBadge();
@@ -135,9 +139,7 @@ class _CategoryTransactionsScreenState
       final tagMap = {for (final t in tags) t.key: t};
 
       // Pre-sort for filter sheet (avoid sorting on UI thread when opening menu)
-      final sortedCats = categoryMap.values
-          .where((c) => !c.isHidden)
-          .toList()
+      final sortedCats = categoryMap.values.where((c) => !c.isHidden).toList()
         ..sort((a, b) => a.name.compareTo(b.name));
       final sortedAccts = accountMap.values.toList()
         ..sort((a, b) => a.name.compareTo(b.name));
@@ -183,6 +185,19 @@ class _CategoryTransactionsScreenState
     }
   }
 
+  Future<bool> _loadDefaultSmartListState() async {
+    if (!_shouldPersistFilterState) return false;
+    final service = SmartListService(_isar);
+    final view = await service.getDefaultView();
+    if (view == null) return false;
+    final keyword = view.keyword?.trim() ?? '';
+    _filterState = service.buildFilterState(view);
+    _searchQuery = keyword;
+    _searchController.text = keyword;
+    _appliedDefaultSmartListName = view.name;
+    return true;
+  }
+
   Future<void> _persistFilterState() async {
     if (!_shouldPersistFilterState) return;
     final prefs = await SharedPreferences.getInstance();
@@ -204,9 +219,19 @@ class _CategoryTransactionsScreenState
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: Text(
-          widget.title,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            if (_appliedDefaultSmartListName != null)
+              Text(
+                '默认视图: $_appliedDefaultSmartListName',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+          ],
         ),
         backgroundColor: Colors.grey.shade100,
         elevation: 0,
@@ -225,7 +250,12 @@ class _CategoryTransactionsScreenState
       );
     }
     final visible = _transactions;
-    final hash = Object.hashAll([visible.length, _sortField, _sortDirection, _shouldShowDateHeaders()]);
+    final hash = Object.hashAll([
+      visible.length,
+      _sortField,
+      _sortDirection,
+      _shouldShowDateHeaders(),
+    ]);
     if (_cachedListItems == null || _cachedListItemsHash != hash) {
       _cachedListItems = _buildListItems(visible);
       _cachedListItemsHash = hash;
@@ -784,10 +814,12 @@ class _CategoryTransactionsScreenState
 
   Future<void> _openSearchSheet() async {
     FocusScope.of(context).unfocus();
-    final categories = _sortedVisibleCategories ??
+    final categories =
+        _sortedVisibleCategories ??
         (_categoryByKey.values.where((c) => !c.isHidden).toList()
           ..sort((a, b) => a.name.compareTo(b.name)));
-    final accounts = _sortedAccounts ??
+    final accounts =
+        _sortedAccounts ??
         (_accountById.values.toList()
           ..sort((a, b) => a.name.compareTo(b.name)));
 

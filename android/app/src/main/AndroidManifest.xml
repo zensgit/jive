@@ -55,12 +55,14 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Deep link entry for Shortcuts/Automation: jive://auto?... -->
+            <!-- Deep link entries for Shortcuts/Automation and quick entry. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="jive" android:host="auto"/>
+                <data android:scheme="jive" android:host="quick-action"/>
+                <data android:scheme="jive" android:host="transaction"/>
             </intent-filter>
         </activity>
         <!-- Jive: Today Summary Home Screen Widget -->

@@ -1813,6 +1813,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                 await _editCategory(sub);
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline),
+              title: const Text("添加下级分类"),
+              subtitle: const Text("用于出行 / 私家车 / 加油这类三层路径"),
+              onTap: () async {
+                Navigator.pop(context);
+                await _promptAddSubCategory(sub);
+              },
+            ),
             if (!sub.isSystem)
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
@@ -2249,7 +2258,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     bool showAddChip = true,
     String? highlightQuery,
   }) {
-    final children = childrenOverride ?? _childrenByParentKey[parent.key] ?? [];
+    final children = childrenOverride ?? _descendantsForParent(parent.key);
     final isCollapsed = allowCollapse && _collapsedParents.contains(parent.key);
     final isHidden = parent.isHidden;
     final parentIconColor = isHidden
@@ -2393,6 +2402,20 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     );
   }
 
+  List<JiveCategory> _descendantsForParent(String parentKey) {
+    final result = <JiveCategory>[];
+    void visit(String key) {
+      final children = _childrenByParentKey[key] ?? const <JiveCategory>[];
+      for (final child in children) {
+        result.add(child);
+        visit(child.key);
+      }
+    }
+
+    visit(parentKey);
+    return result;
+  }
+
   Widget _buildSubCategoryGrid(
     JiveCategory parent,
     List<JiveCategory> children, {
@@ -2523,6 +2546,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         ? Colors.grey.shade400
         : _resolveCategoryColor(sub, fallback: Colors.grey.shade700);
     final labelColor = isHidden ? Colors.grey.shade400 : Colors.grey.shade600;
+    final label = _descendantLabel(sub);
     return Opacity(
       opacity: isHidden ? 0.6 : 1,
       child: Container(
@@ -2550,7 +2574,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                   ),
                   const SizedBox(height: 4),
                   _buildHighlightedText(
-                    sub.name,
+                    label,
                     TextStyle(
                       fontSize: 10,
                       height: 1.0,
@@ -2573,6 +2597,23 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         ),
       ),
     );
+  }
+
+  String _descendantLabel(JiveCategory category) {
+    final names = <String>[category.name];
+    var parentKey = category.parentKey;
+    final byKey = <String, JiveCategory>{
+      for (final parent in _parents) parent.key: parent,
+      for (final list in _childrenByParentKey.values)
+        for (final child in list) child.key: child,
+    };
+    while (parentKey != null) {
+      final parent = byKey[parentKey];
+      if (parent == null || parent.parentKey == null) break;
+      names.insert(0, parent.name);
+      parentKey = parent.parentKey;
+    }
+    return names.join(' / ');
   }
 
   Widget _buildAddSubChip(JiveCategory parent) {
