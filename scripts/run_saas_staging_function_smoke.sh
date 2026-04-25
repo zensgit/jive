@@ -256,6 +256,65 @@ expect_status() {
   rm -f "$body_file"
 }
 
+json_error_matches() {
+  local body_file="$1"
+  local expected_error="$2"
+
+  python3 - "$body_file" "$expected_error" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+body_file = Path(sys.argv[1])
+expected_error = sys.argv[2]
+
+try:
+    payload = json.loads(body_file.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    raise SystemExit(1)
+
+if not isinstance(payload, dict):
+    raise SystemExit(1)
+
+raise SystemExit(0 if payload.get("error") == expected_error else 1)
+PY
+}
+
+expect_json_error() {
+  local label="$1"
+  local expected_status="$2"
+  local expected_error="$3"
+  shift 3
+
+  local body_file
+  local curl_error
+  local http_status
+  local summary
+  body_file="$(mktemp)"
+
+  if ! http_status="$(curl -sS -o "$body_file" -w "%{http_code}" "$@" 2>"$body_file.err")"; then
+    curl_error="$(tr '\n' ' ' < "$body_file.err" | redact_text)"
+    warn "$label curl failed: $curl_error"
+    FAILURES=$((FAILURES + 1))
+    rm -f "$body_file" "$body_file.err"
+    return 0
+  fi
+
+  rm -f "$body_file.err"
+
+  if [[ "$http_status" == "$expected_status" ]] &&
+    json_error_matches "$body_file" "$expected_error"; then
+    log "PASS: $label -> HTTP $http_status error=$expected_error"
+  else
+    summary="$(response_summary "$body_file")"
+    warn "$label expected HTTP $expected_status with error=$expected_error but got $http_status"
+    warn "$label response: $summary"
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  rm -f "$body_file"
+}
+
 main() {
   parse_args "$@"
   [[ -f "$ENV_FILE" ]] || die "env file not found: $ENV_FILE"
@@ -352,13 +411,13 @@ main() {
         -H "Content-Type: application/json" \
         --data '{"provider":"wechat_pay","product_id":"jive_paid_unlock","plan_code":"pro_lifetime","client_channel":"self_hosted_web"}'
 
-      expect_status "domestic-payment-webhook rejects missing token" "401" \
+      expect_json_error "domestic-payment-webhook rejects missing token" "401" "admin_token_required" \
         -X POST "$base_url/domestic-payment-webhook" \
         -H "apikey: $anon_key" \
         -H "Content-Type: application/json" \
         --data '{"provider":"wechat_pay","event_id":"smoke-missing-token","event_type":"payment.paid","order_no":"missing","status":"paid"}'
 
-      expect_status "domestic-payment-webhook accepts token and checks order existence" "404" \
+      expect_json_error "domestic-payment-webhook accepts token and checks order existence" "404" "payment_order_not_found" \
         -X POST "$base_url/domestic-payment-webhook" \
         -H "apikey: $anon_key" \
         -H "x-domestic-payment-token: $domestic_token" \
