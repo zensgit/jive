@@ -31,6 +31,48 @@ type SubscriptionProjection = {
   expires_at: string | null;
 };
 
+type DomesticWebhookQueryResult = {
+  error: unknown | null;
+};
+
+type DomesticWebhookSingleResult = {
+  data: Record<string, unknown> | null;
+  error: unknown | null;
+};
+
+type DomesticWebhookQuery = {
+  upsert(
+    payload: Record<string, unknown>,
+    options?: Record<string, unknown>,
+  ): DomesticWebhookQuery;
+  update(payload: Record<string, unknown>): DomesticWebhookQuery;
+  select(columns?: string): DomesticWebhookQuery;
+  eq(column: string, value: unknown): DomesticWebhookQuery;
+  single(): Promise<DomesticWebhookSingleResult>;
+  then<TResult1 = DomesticWebhookQueryResult, TResult2 = never>(
+    onfulfilled?:
+      | ((
+        value: DomesticWebhookQueryResult,
+      ) => TResult1 | PromiseLike<TResult1>)
+      | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): Promise<TResult1 | TResult2>;
+};
+
+type DomesticWebhookSupabaseClient = {
+  from(table: string): DomesticWebhookQuery;
+};
+
+type DomesticWebhookRuntime = {
+  env?: ReturnType<typeof readEnv>;
+  createClient?: (
+    supabaseUrl: string,
+    supabaseServiceRoleKey: string,
+  ) => DomesticWebhookSupabaseClient;
+  now?: () => Date;
+  logError?: (message?: unknown, ...optionalParams: unknown[]) => void;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -50,20 +92,36 @@ if (import.meta.main) {
   Deno.serve(handleRequest);
 }
 
-export async function handleRequest(req: Request): Promise<Response> {
+export function handleRequest(req: Request): Promise<Response> {
+  return handleDomesticWebhookRequest(req);
+}
+
+export async function handleDomesticWebhookRequest(
+  req: Request,
+  runtime: DomesticWebhookRuntime = {},
+): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  const logError = runtime.logError ?? console.error;
+
   try {
-    const env = readEnv();
+    const env = runtime.env ?? readEnv();
     assertWebhookAuthorized(req, env);
 
     const parsedBody = parseDomesticWebhookRequest(
       (await req.json()) as DomesticWebhookRequest,
     );
 
-    const adminClient = createClient(
+    const createSupabaseClient = runtime.createClient ??
+      ((supabaseUrl: string, supabaseServiceRoleKey: string) =>
+        createClient(
+          supabaseUrl,
+          supabaseServiceRoleKey,
+        ) as unknown as DomesticWebhookSupabaseClient);
+
+    const adminClient = createSupabaseClient(
       env.supabaseUrl,
       env.supabaseServiceRoleKey,
     );
@@ -81,7 +139,7 @@ export async function handleRequest(req: Request): Promise<Response> {
         ignoreDuplicates: true,
       });
     if (eventError != null) {
-      console.error("domestic-payment-webhook event upsert failed", eventError);
+      logError("domestic-payment-webhook event upsert failed", eventError);
       return json({ error: "payment_event_upsert_failed" }, 500);
     }
 
@@ -92,7 +150,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       return json({ error: "payment_order_not_found" }, 404);
     }
 
-    const now = new Date().toISOString();
+    const now = (runtime.now?.() ?? new Date()).toISOString();
     const updatedOrder = {
       status: parsedBody.status,
       provider_trade_no: parsedBody.provider_trade_no,
@@ -105,7 +163,7 @@ export async function handleRequest(req: Request): Promise<Response> {
     const { error: updateOrderError } = await adminClient.from("payment_orders")
       .update(updatedOrder).eq("order_no", parsedBody.order_no);
     if (updateOrderError != null) {
-      console.error(
+      logError(
         "domestic-payment-webhook order update failed",
         updateOrderError,
       );
@@ -147,7 +205,7 @@ export async function handleRequest(req: Request): Promise<Response> {
           onConflict: "platform,purchase_token",
         }).select().single();
       if (error != null) {
-        console.error(
+        logError(
           "domestic-payment-webhook subscription upsert failed",
           error,
         );
@@ -170,7 +228,7 @@ export async function handleRequest(req: Request): Promise<Response> {
       200,
     );
   } catch (error) {
-    console.error("domestic-payment-webhook unexpected error", error);
+    logError("domestic-payment-webhook unexpected error", error);
     return json(
       { error: error instanceof Error ? error.message : "unknown_error" },
       error instanceof HttpError ? error.status : 500,
@@ -297,13 +355,17 @@ function readEnv() {
   };
 }
 
-function normalizeNonEmptyString(value: string | undefined | null): string | null {
+function normalizeNonEmptyString(
+  value: string | undefined | null,
+): string | null {
   if (typeof value != "string") return null;
   const trimmed = value.trim();
   return trimmed.length === 0 ? null : trimmed;
 }
 
-function normalizeNullableDateString(value: string | null | undefined): string | null {
+function normalizeNullableDateString(
+  value: string | null | undefined,
+): string | null {
   const normalized = normalizeNonEmptyString(value);
   return normalized == null ? null : normalized;
 }
