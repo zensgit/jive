@@ -8,6 +8,17 @@ ENV_FILE="${STAGING_ENV_FILE:-/tmp/jive-saas-staging.env}"
 FUNCTIONS_URL="${SUPABASE_FUNCTIONS_URL:-}"
 PROFILE="${JIVE_SAAS_STAGING_PROFILE:-full}"
 FAILURES=0
+RUN_DOMESTIC_PAYMENT_E2E=0
+DOMESTIC_E2E_PROVIDER="${JIVE_DOMESTIC_PAYMENT_E2E_PROVIDER:-wechat_pay}"
+DOMESTIC_E2E_PRODUCT_ID="${JIVE_DOMESTIC_PAYMENT_E2E_PRODUCT_ID:-jive_paid_unlock}"
+DOMESTIC_E2E_PLAN_CODE="${JIVE_DOMESTIC_PAYMENT_E2E_PLAN_CODE:-pro_lifetime}"
+DOMESTIC_E2E_CLIENT_CHANNEL="${JIVE_DOMESTIC_PAYMENT_E2E_CLIENT_CHANNEL:-self_hosted_web}"
+DOMESTIC_E2E_SUPABASE_URL=""
+DOMESTIC_E2E_SERVICE_ROLE_KEY=""
+DOMESTIC_E2E_USER_ID=""
+DOMESTIC_E2E_ORDER_NO=""
+DOMESTIC_E2E_EVENT_ID=""
+DOMESTIC_E2E_PROVIDER_TRADE_NO=""
 
 usage() {
   cat <<'EOF'
@@ -20,6 +31,10 @@ Options:
   --profile <name>       full or core. Defaults to JIVE_SAAS_STAGING_PROFILE or full.
                          core checks only analytics, admin, and notification functions.
   --core-only            Alias for --profile core.
+  --run-domestic-payment-e2e
+                         Opt in to a staging write-path smoke for domestic payment:
+                         create a temporary user, create an order, post a paid webhook,
+                         verify the subscription projection, then clean up.
   --help                 Show this help.
 
 Required env-file keys:
@@ -30,10 +45,13 @@ Required env-file keys:
   NOTIFICATION_ADMIN_TOKEN
   PUBSUB_BEARER_TOKEN (full profile only)
   DOMESTIC_PAYMENT_WEBHOOK_TOKEN (full profile only)
+  SUPABASE_SERVICE_ROLE_KEY (--run-domestic-payment-e2e only)
 
 Notes:
   This script checks deployed Supabase Edge Functions without printing secrets.
   It assumes custom-auth functions were deployed with --no-verify-jwt.
+  The domestic payment E2E smoke is off by default because it writes temporary
+  auth, payment, and subscription rows before cleaning them up.
 EOF
 }
 
@@ -93,6 +111,10 @@ parse_args() {
         PROFILE="core"
         shift
         ;;
+      --run-domestic-payment-e2e)
+        RUN_DOMESTIC_PAYMENT_E2E=1
+        shift
+        ;;
       --help|-h)
         usage
         exit 0
@@ -110,6 +132,10 @@ parse_args() {
       die "unknown profile: $PROFILE"
       ;;
   esac
+
+  if [[ "$RUN_DOMESTIC_PAYMENT_E2E" == "1" && "$PROFILE" != "full" ]]; then
+    die "--run-domestic-payment-e2e requires --profile full"
+  fi
 }
 
 json_google_test_notification() {
@@ -315,6 +341,313 @@ expect_json_error() {
   rm -f "$body_file"
 }
 
+json_get() {
+  local body_file="$1"
+  local path="$2"
+
+  python3 - "$body_file" "$path" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+value = payload
+for part in sys.argv[2].split("."):
+    if isinstance(value, dict) and part in value:
+        value = value[part]
+    else:
+        raise SystemExit(1)
+
+if value is None or isinstance(value, (dict, list)):
+    raise SystemExit(1)
+
+print(value)
+PY
+}
+
+json_expect_subscription_projection() {
+  local body_file="$1"
+  local expected_user_id="$2"
+  local expected_provider="$3"
+  local expected_order_no="$4"
+  local expected_trade_no="$5"
+  local expected_tier="$6"
+
+  python3 - "$body_file" "$expected_user_id" "$expected_provider" \
+    "$expected_order_no" "$expected_trade_no" "$expected_tier" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+expected = {
+    "user_id": sys.argv[2],
+    "platform": sys.argv[3],
+    "source_order_no": sys.argv[4],
+    "purchase_token": sys.argv[5],
+    "entitlement_tier": sys.argv[6],
+    "status": "active",
+}
+
+if not isinstance(payload, list):
+    raise SystemExit(1)
+
+for row in payload:
+    if not isinstance(row, dict):
+        continue
+    if all(row.get(key) == value for key, value in expected.items()):
+        raise SystemExit(0)
+
+raise SystemExit(1)
+PY
+}
+
+domestic_e2e_expected_tier() {
+  case "$DOMESTIC_E2E_PLAN_CODE" in
+    pro_lifetime)
+      printf 'paid\n'
+      ;;
+    *)
+      printf 'subscriber\n'
+      ;;
+  esac
+}
+
+domestic_e2e_request() {
+  local label="$1"
+  local expected="$2"
+  local body_file="$3"
+  shift 3
+
+  local curl_error
+  local http_status
+  local summary
+
+  if ! http_status="$(curl -sS -o "$body_file" -w "%{http_code}" "$@" 2>"$body_file.err")"; then
+    curl_error="$(tr '\n' ' ' < "$body_file.err" | redact_text)"
+    warn "$label curl failed: $curl_error"
+    FAILURES=$((FAILURES + 1))
+    rm -f "$body_file.err"
+    return 1
+  fi
+
+  rm -f "$body_file.err"
+
+  if [[ ",$expected," == *",$http_status,"* ]]; then
+    log "PASS: $label -> HTTP $http_status"
+    return 0
+  fi
+
+  summary="$(response_summary "$body_file")"
+  warn "$label expected HTTP $expected but got $http_status"
+  warn "$label response: $summary"
+  FAILURES=$((FAILURES + 1))
+  return 1
+}
+
+domestic_e2e_cleanup_request() {
+  local label="$1"
+  shift
+
+  local body_file
+  local http_status
+  body_file="$(mktemp)"
+
+  if http_status="$(curl -sS -o "$body_file" -w "%{http_code}" "$@" 2>/dev/null)"; then
+    if [[ ",200,204," == *",$http_status,"* ]]; then
+      log "cleanup: $label -> HTTP $http_status"
+    else
+      warn "cleanup: $label returned HTTP $http_status"
+    fi
+  else
+    warn "cleanup: $label curl failed"
+  fi
+
+  rm -f "$body_file"
+}
+
+cleanup_domestic_payment_e2e() {
+  if [[ "$RUN_DOMESTIC_PAYMENT_E2E" != "1" ]]; then
+    return 0
+  fi
+  if [[ -z "$DOMESTIC_E2E_SUPABASE_URL" || -z "$DOMESTIC_E2E_SERVICE_ROLE_KEY" ]]; then
+    return 0
+  fi
+
+  local rest_url
+  rest_url="${DOMESTIC_E2E_SUPABASE_URL%/}/rest/v1"
+
+  if [[ -n "$DOMESTIC_E2E_EVENT_ID" ]]; then
+    domestic_e2e_cleanup_request "payment event" \
+      -X DELETE "$rest_url/payment_events?provider=eq.$DOMESTIC_E2E_PROVIDER&event_id=eq.$DOMESTIC_E2E_EVENT_ID" \
+      -H "apikey: $DOMESTIC_E2E_SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $DOMESTIC_E2E_SERVICE_ROLE_KEY"
+  fi
+
+  if [[ -n "$DOMESTIC_E2E_ORDER_NO" ]]; then
+    domestic_e2e_cleanup_request "subscription projection" \
+      -X DELETE "$rest_url/user_subscriptions?source_order_no=eq.$DOMESTIC_E2E_ORDER_NO" \
+      -H "apikey: $DOMESTIC_E2E_SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $DOMESTIC_E2E_SERVICE_ROLE_KEY"
+
+    domestic_e2e_cleanup_request "payment order" \
+      -X DELETE "$rest_url/payment_orders?order_no=eq.$DOMESTIC_E2E_ORDER_NO" \
+      -H "apikey: $DOMESTIC_E2E_SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $DOMESTIC_E2E_SERVICE_ROLE_KEY"
+  fi
+
+  if [[ -n "$DOMESTIC_E2E_USER_ID" ]]; then
+    domestic_e2e_cleanup_request "auth user" \
+      -X DELETE "${DOMESTIC_E2E_SUPABASE_URL%/}/auth/v1/admin/users/$DOMESTIC_E2E_USER_ID" \
+      -H "apikey: $DOMESTIC_E2E_SERVICE_ROLE_KEY" \
+      -H "Authorization: Bearer $DOMESTIC_E2E_SERVICE_ROLE_KEY"
+  fi
+}
+
+run_domestic_payment_e2e_smoke() {
+  local supabase_url="$1"
+  local base_url="$2"
+  local anon_key="$3"
+  local service_role_key="$4"
+  local domestic_token="$5"
+
+  local smoke_id
+  local smoke_email
+  local smoke_password
+  local user_body
+  local token_body
+  local order_body
+  local webhook_body
+  local subscription_body
+  local access_token
+  local token_user_id
+  local expected_tier
+  local now_iso
+
+  smoke_id="$(python3 - <<'PY'
+import uuid
+print(uuid.uuid4().hex[:16])
+PY
+)"
+  smoke_email="jive-smoke-$smoke_id@example.com"
+  smoke_password="Jive-smoke-$smoke_id-Aa1!"
+  DOMESTIC_E2E_EVENT_ID="jive_smoke_event_$smoke_id"
+  DOMESTIC_E2E_PROVIDER_TRADE_NO="jive_smoke_trade_$smoke_id"
+  DOMESTIC_E2E_SUPABASE_URL="$supabase_url"
+  DOMESTIC_E2E_SERVICE_ROLE_KEY="$service_role_key"
+
+  log "domestic payment E2E smoke enabled; creating temporary staging user/order"
+
+  user_body="$(mktemp)"
+  if ! domestic_e2e_request "domestic E2E creates temporary auth user" "200,201" "$user_body" \
+    -X POST "${supabase_url%/}/auth/v1/admin/users" \
+    -H "apikey: $service_role_key" \
+    -H "Authorization: Bearer $service_role_key" \
+    -H "Content-Type: application/json" \
+    --data "{\"email\":\"$smoke_email\",\"password\":\"$smoke_password\",\"email_confirm\":true,\"user_metadata\":{\"source\":\"jive_domestic_payment_smoke\"}}"; then
+    rm -f "$user_body"
+    return 0
+  fi
+  if ! DOMESTIC_E2E_USER_ID="$(json_get "$user_body" "id")"; then
+    warn "domestic E2E could not read temporary user id"
+    FAILURES=$((FAILURES + 1))
+    rm -f "$user_body"
+    return 0
+  fi
+  rm -f "$user_body"
+
+  token_body="$(mktemp)"
+  if ! domestic_e2e_request "domestic E2E signs in temporary user" "200" "$token_body" \
+    -X POST "${supabase_url%/}/auth/v1/token?grant_type=password" \
+    -H "apikey: $anon_key" \
+    -H "Content-Type: application/json" \
+    --data "{\"email\":\"$smoke_email\",\"password\":\"$smoke_password\"}"; then
+    rm -f "$token_body"
+    return 0
+  fi
+  if ! access_token="$(json_get "$token_body" "access_token")"; then
+    warn "domestic E2E could not read temporary user access token"
+    FAILURES=$((FAILURES + 1))
+    rm -f "$token_body"
+    return 0
+  fi
+  if ! token_user_id="$(json_get "$token_body" "user.id")"; then
+    warn "domestic E2E could not read signed-in user id"
+    FAILURES=$((FAILURES + 1))
+    rm -f "$token_body"
+    return 0
+  fi
+  rm -f "$token_body"
+
+  if [[ "$token_user_id" != "$DOMESTIC_E2E_USER_ID" ]]; then
+    warn "domestic E2E signed-in user id did not match created user id"
+    FAILURES=$((FAILURES + 1))
+    return 0
+  fi
+
+  order_body="$(mktemp)"
+  if ! domestic_e2e_request "domestic E2E creates payment order" "201" "$order_body" \
+    -X POST "$base_url/create-payment-order" \
+    -H "apikey: $anon_key" \
+    -H "Authorization: Bearer $access_token" \
+    -H "Content-Type: application/json" \
+    --data "{\"provider\":\"$DOMESTIC_E2E_PROVIDER\",\"product_id\":\"$DOMESTIC_E2E_PRODUCT_ID\",\"plan_code\":\"$DOMESTIC_E2E_PLAN_CODE\",\"client_channel\":\"$DOMESTIC_E2E_CLIENT_CHANNEL\"}"; then
+    rm -f "$order_body"
+    return 0
+  fi
+  if ! DOMESTIC_E2E_ORDER_NO="$(json_get "$order_body" "order.order_no")"; then
+    warn "domestic E2E could not read payment order number"
+    FAILURES=$((FAILURES + 1))
+    rm -f "$order_body"
+    return 0
+  fi
+  rm -f "$order_body"
+
+  now_iso="$(python3 - <<'PY'
+from datetime import datetime, timezone
+print(datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+PY
+)"
+  webhook_body="$(mktemp)"
+  if ! domestic_e2e_request "domestic E2E posts paid webhook" "200" "$webhook_body" \
+    -X POST "$base_url/domestic-payment-webhook" \
+    -H "apikey: $anon_key" \
+    -H "x-domestic-payment-token: $domestic_token" \
+    -H "Content-Type: application/json" \
+    --data "{\"provider\":\"$DOMESTIC_E2E_PROVIDER\",\"event_id\":\"$DOMESTIC_E2E_EVENT_ID\",\"event_type\":\"payment.paid\",\"order_no\":\"$DOMESTIC_E2E_ORDER_NO\",\"status\":\"paid\",\"provider_trade_no\":\"$DOMESTIC_E2E_PROVIDER_TRADE_NO\",\"paid_at\":\"$now_iso\",\"payload\":{\"source\":\"jive_domestic_payment_e2e_smoke\"}}"; then
+    rm -f "$webhook_body"
+    return 0
+  fi
+  if [[ "$(json_get "$webhook_body" "order_status" 2>/dev/null || true)" != "paid" ]]; then
+    warn "domestic E2E webhook did not report paid order status"
+    FAILURES=$((FAILURES + 1))
+    rm -f "$webhook_body"
+    return 0
+  fi
+  rm -f "$webhook_body"
+
+  expected_tier="$(domestic_e2e_expected_tier)"
+  subscription_body="$(mktemp)"
+  if ! domestic_e2e_request "domestic E2E reads projected subscription" "200" "$subscription_body" \
+    -X GET "${supabase_url%/}/rest/v1/user_subscriptions?source_order_no=eq.$DOMESTIC_E2E_ORDER_NO&select=user_id,platform,purchase_token,entitlement_tier,status,source_order_no" \
+    -H "apikey: $service_role_key" \
+    -H "Authorization: Bearer $service_role_key"; then
+    rm -f "$subscription_body"
+    return 0
+  fi
+  if json_expect_subscription_projection "$subscription_body" "$DOMESTIC_E2E_USER_ID" \
+    "$DOMESTIC_E2E_PROVIDER" "$DOMESTIC_E2E_ORDER_NO" \
+    "$DOMESTIC_E2E_PROVIDER_TRADE_NO" "$expected_tier"; then
+    log "PASS: domestic E2E subscription projection matches temporary order"
+  else
+    warn "domestic E2E subscription projection did not match expected shape"
+    FAILURES=$((FAILURES + 1))
+  fi
+  rm -f "$subscription_body"
+}
+
+trap cleanup_domestic_payment_e2e EXIT INT TERM
+
 main() {
   parse_args "$@"
   [[ -f "$ENV_FILE" ]] || die "env file not found: $ENV_FILE"
@@ -326,6 +659,7 @@ main() {
   local analytics_token
   local notification_token
   local domestic_token
+  local service_role_key
   local package_name
   local base_url
   local webhook_payload
@@ -337,12 +671,16 @@ main() {
   notification_token="$(require_key "NOTIFICATION_ADMIN_TOKEN")"
   pubsub_token=""
   domestic_token=""
+  service_role_key=""
   package_name=""
 
   if [[ "$PROFILE" == "full" ]]; then
     pubsub_token="$(require_key "PUBSUB_BEARER_TOKEN")"
     domestic_token="$(require_key "DOMESTIC_PAYMENT_WEBHOOK_TOKEN")"
     package_name="$(value_from_env_file "GOOGLE_PLAY_PACKAGE_NAME" "$ENV_FILE")"
+  fi
+  if [[ "$RUN_DOMESTIC_PAYMENT_E2E" == "1" ]]; then
+    service_role_key="$(require_key "SUPABASE_SERVICE_ROLE_KEY")"
   fi
 
   if [[ -z "$FUNCTIONS_URL" ]]; then
@@ -422,6 +760,11 @@ main() {
       -H "x-domestic-payment-token: $domestic_token" \
       -H "Content-Type: application/json" \
       --data '{"provider":"wechat_pay","event_id":"smoke-missing-order","event_type":"payment.paid","order_no":"jive_missing_smoke_order","status":"paid","provider_trade_no":"smoke_trade"}'
+
+    if [[ "$RUN_DOMESTIC_PAYMENT_E2E" == "1" ]]; then
+      run_domestic_payment_e2e_smoke "$supabase_url" "$base_url" "$anon_key" \
+        "$service_role_key" "$domestic_token"
+    fi
   fi
 
   if [[ "$FAILURES" -gt 0 ]]; then
