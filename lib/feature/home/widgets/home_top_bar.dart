@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/database/book_model.dart';
+import '../../../core/service/object_share_policy_service.dart';
 
 class HomeTopBar extends StatelessWidget {
   final bool compact;
@@ -164,8 +165,12 @@ class HomeTopBar extends StatelessWidget {
                     onBookSwitch(null);
                   },
                 ),
-                ...books.map(
-                  (book) => ListTile(
+                ...books.map((book) {
+                  final sharePolicy = const ObjectSharePolicyService().evaluate(
+                    book: book,
+                    objectLabel: '场景',
+                  );
+                  return ListTile(
                     leading: Icon(
                       book.isDefault
                           ? Icons.auto_awesome_mosaic
@@ -173,7 +178,14 @@ class HomeTopBar extends StatelessWidget {
                       size: 20,
                       color: book.isDefault ? const Color(0xFF2E7D32) : null,
                     ),
-                    title: Text(book.name),
+                    title: Row(
+                      children: [
+                        Expanded(child: Text(book.name)),
+                        if (sharePolicy.visibility !=
+                            ObjectShareVisibility.private)
+                          _buildShareBadge(sharePolicy.label),
+                      ],
+                    ),
                     subtitle: book.isDefault
                         ? const Text(
                             '默认场景',
@@ -190,8 +202,8 @@ class HomeTopBar extends StatelessWidget {
                       Navigator.pop(ctx);
                       onBookSwitch(book.id);
                     },
-                  ),
-                ),
+                  );
+                }),
                 const SizedBox(height: 8),
               ],
             ),
@@ -228,6 +240,25 @@ class HomeTopBar extends StatelessWidget {
               color: const Color(0xFF2E7D32),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShareBadge(String label) {
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E7D32).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.lato(
+          fontSize: 9,
+          color: const Color(0xFF2E7D32),
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

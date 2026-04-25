@@ -4,6 +4,7 @@ import 'package:isar/isar.dart';
 
 import '../../core/database/book_model.dart';
 import '../../core/service/book_service.dart';
+import '../../core/service/object_share_policy_service.dart';
 import 'book_stats_screen.dart';
 
 /// 多账本管理屏幕
@@ -80,9 +81,9 @@ class _BookManagerScreenState extends State<BookManagerScreen> {
 
   Future<void> _archiveBook(JiveBook book) async {
     if (book.isDefault) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('不能归档默认账本')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('不能归档默认账本')));
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -151,34 +152,40 @@ class _BookManagerScreenState extends State<BookManagerScreen> {
             icon: const Icon(Icons.bar_chart),
             tooltip: '账本统计',
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const BookStatsScreen()));
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const BookStatsScreen()),
+              );
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _createBook,
-          ),
+          IconButton(icon: const Icon(Icons.add), onPressed: _createBook),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _books.isEmpty
-              ? const Center(child: Text('暂无账本'))
-              : ListView.builder(
-                  itemCount: _books.length,
-                  padding: const EdgeInsets.all(16),
-                  itemBuilder: (context, index) => _buildBookTile(_books[index]),
-                ),
+          ? const Center(child: Text('暂无账本'))
+          : ListView.builder(
+              itemCount: _books.length,
+              padding: const EdgeInsets.all(16),
+              itemBuilder: (context, index) => _buildBookTile(_books[index]),
+            ),
     );
   }
 
   Widget _buildBookTile(JiveBook book) {
     final isDefault = book.isDefault;
+    final sharePolicy = const ObjectSharePolicyService().evaluate(
+      book: book,
+      objectLabel: '场景',
+    );
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: isDefault ? const Color(0xFF2E7D32) : Colors.grey.shade300,
+          backgroundColor: isDefault
+              ? const Color(0xFF2E7D32)
+              : Colors.grey.shade300,
           child: Icon(
             Icons.book,
             color: isDefault ? Colors.white : Colors.grey.shade600,
@@ -225,6 +232,10 @@ class _BookManagerScreenState extends State<BookManagerScreen> {
                 ),
               ),
             ],
+            if (sharePolicy.visibility != ObjectShareVisibility.private) ...[
+              const SizedBox(width: 8),
+              _buildShareBadge(sharePolicy.label),
+            ],
           ],
         ),
         subtitle: Text(
@@ -252,6 +263,24 @@ class _BookManagerScreenState extends State<BookManagerScreen> {
                 break;
             }
           },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShareBadge(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E7D32).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.lato(
+          fontSize: 11,
+          color: const Color(0xFF2E7D32),
+          fontWeight: FontWeight.w600,
         ),
       ),
     );

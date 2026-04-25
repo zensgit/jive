@@ -11,8 +11,9 @@ import '../category/category_transactions_screen.dart';
 class SmartListScreen extends StatefulWidget {
   /// 如果提供，则在页面显示「保存当前筛选」入口。
   final TransactionListFilterState? currentFilter;
+  final String? currentKeyword;
 
-  const SmartListScreen({super.key, this.currentFilter});
+  const SmartListScreen({super.key, this.currentFilter, this.currentKeyword});
 
   @override
   State<SmartListScreen> createState() => _SmartListScreenState();
@@ -51,12 +52,22 @@ class _SmartListScreenState extends State<SmartListScreen> {
 
   // ── actions ──
 
+  String? get _normalizedCurrentKeyword {
+    final keyword = widget.currentKeyword?.trim() ?? '';
+    return keyword.isEmpty ? null : keyword;
+  }
+
+  bool get _canSaveCurrentView =>
+      (widget.currentFilter?.hasAnyFilter ?? false) ||
+      _normalizedCurrentKeyword != null;
+
   Future<void> _createFromCurrentFilter() async {
     final name = await _promptName();
     if (name == null || name.isEmpty) return;
     final sl = _service.fromFilterState(
       name: name,
-      filterState: widget.currentFilter!,
+      filterState: widget.currentFilter ?? const TransactionListFilterState(),
+      keyword: _normalizedCurrentKeyword,
     );
     await _service.create(
       name: sl.name,
@@ -174,8 +185,7 @@ class _SmartListScreenState extends State<SmartListScreen> {
                   const Divider(height: 1, indent: 16, endIndent: 16),
               itemBuilder: (_, i) => _buildItem(_items[i], theme),
             ),
-      floatingActionButton:
-          widget.currentFilter != null && widget.currentFilter!.hasAnyFilter
+      floatingActionButton: _canSaveCurrentView
           ? FloatingActionButton.extended(
               onPressed: _createFromCurrentFilter,
               icon: const Icon(Icons.bookmark_add_outlined),
