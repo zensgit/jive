@@ -7,14 +7,14 @@ void main() {
     return text.replaceAll(RegExp(r'\.?0+$'), '');
   }
 
-  test('does not preview incomplete operator expressions', () {
+  test('previews incomplete operator expressions with last valid result', () {
     expect(TransactionAmountExpression.hasExpression('1+'), isTrue);
     expect(TransactionAmountExpression.isComplete('1+'), isFalse);
-    expect(TransactionAmountExpression.preview('1+'), isNull);
-    expect(TransactionAmountExpression.evaluate('1+', format), '1+');
+    expect(TransactionAmountExpression.preview('1+'), 1);
+    expect(TransactionAmountExpression.evaluate('1+', format), '1');
 
-    expect(TransactionAmountExpression.preview('1-'), isNull);
-    expect(TransactionAmountExpression.evaluate('1-', format), '1-');
+    expect(TransactionAmountExpression.preview('1-'), 1);
+    expect(TransactionAmountExpression.evaluate('1-', format), '1');
   });
 
   test('evaluates complete expressions with multiplication precedence', () {

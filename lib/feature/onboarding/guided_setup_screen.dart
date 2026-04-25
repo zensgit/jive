@@ -11,11 +11,30 @@ import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/onboarding_progress_service.dart';
 
+typedef GuidedSetupFirstTransactionSaver =
+    Future<void> Function(JiveTransaction transaction);
+
 /// Multi-step guided setup shown after the initial onboarding carousel.
 class GuidedSetupScreen extends StatefulWidget {
   final VoidCallback onComplete;
+  final Isar? isar;
+  final bool bootstrapCategories;
+  final List<JiveCategory>? initialParentCategories;
+  final GuidedSetupFirstTransactionSaver? firstTransactionSaver;
 
-  const GuidedSetupScreen({super.key, required this.onComplete});
+  const GuidedSetupScreen({
+    super.key,
+    required this.onComplete,
+    this.isar,
+    this.bootstrapCategories = true,
+    this.initialParentCategories,
+    this.firstTransactionSaver,
+  }) : assert(
+         initialParentCategories == null ||
+             isar != null ||
+             firstTransactionSaver != null,
+         'Initial categories without an Isar require a first transaction saver.',
+       );
 
   @override
   State<GuidedSetupScreen> createState() => _GuidedSetupScreenState();
@@ -55,8 +74,20 @@ class _GuidedSetupScreenState extends State<GuidedSetupScreen> {
   }
 
   Future<void> _init() async {
-    _isar = await DatabaseService.getInstance();
-    await CategoryService(_isar).initDefaultCategories();
+    final initialParentCategories = widget.initialParentCategories;
+    if (initialParentCategories != null) {
+      final injectedIsar = widget.isar;
+      if (injectedIsar != null) {
+        _isar = injectedIsar;
+      }
+      _parentCategories = initialParentCategories;
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+    _isar = widget.isar ?? await DatabaseService.getInstance();
+    if (widget.bootstrapCategories) {
+      await CategoryService(_isar).initDefaultCategories();
+    }
     await _loadCategories();
     if (mounted) setState(() => _isLoading = false);
   }
@@ -150,9 +181,14 @@ class _GuidedSetupScreenState extends State<GuidedSetupScreen> {
       ..type = 'expense'
       ..updatedAt = DateTime.now();
 
-    await _isar.writeTxn(() async {
-      await _isar.jiveTransactions.put(tx);
-    });
+    final firstTransactionSaver = widget.firstTransactionSaver;
+    if (firstTransactionSaver != null) {
+      await firstTransactionSaver(tx);
+    } else {
+      await _isar.writeTxn(() async {
+        await _isar.jiveTransactions.put(tx);
+      });
+    }
 
     await OnboardingProgressService.markStepComplete(0);
     await _nextStep();

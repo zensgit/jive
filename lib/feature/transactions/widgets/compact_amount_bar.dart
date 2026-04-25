@@ -16,6 +16,11 @@ import '../add_transaction_screen.dart' show TransactionType;
 /// - transfer → blue
 class CompactAmountBar extends StatelessWidget {
   final String amountStr;
+  final Key? formulaKey;
+  final Key? resultKey;
+  final Key? noteTextFieldKey;
+  final Key? noteToggleKey;
+  final bool hasExpression;
   final String currency;
   final TransactionType txType;
   final DateTime selectedTime;
@@ -32,6 +37,11 @@ class CompactAmountBar extends StatelessWidget {
   const CompactAmountBar({
     super.key,
     required this.amountStr,
+    this.formulaKey,
+    this.resultKey,
+    this.noteTextFieldKey,
+    this.noteToggleKey,
+    this.hasExpression = false,
     required this.currency,
     required this.txType,
     required this.selectedTime,
@@ -69,10 +79,15 @@ class CompactAmountBar extends StatelessWidget {
     final timeText = isToday
         ? DateFormat('HH:mm').format(selectedTime)
         : DateFormat('MM-dd HH:mm').format(selectedTime);
-    final hasExpression = expressionResult != null;
-    final resultText = hasExpression
+    final isInvalidExpression = hasExpression && expressionResult == null;
+    final resultText = isInvalidExpression
+        ? '无效'
+        : hasExpression
         ? '$symbol ${expressionResult!.toStringAsFixed(2)}'
         : '$symbol $amountStr';
+    final resultColor = isInvalidExpression
+        ? JiveTheme.secondaryTextColor(context)
+        : _amountColor();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -127,6 +142,7 @@ class CompactAmountBar extends StatelessWidget {
                               physics: const NeverScrollableScrollPhysics(),
                               child: Text(
                                 '$symbol $amountStr',
+                                key: formulaKey,
                                 maxLines: 1,
                                 style: GoogleFonts.rubik(
                                   color: _amountColor().withValues(alpha: 0.65),
@@ -147,10 +163,11 @@ class CompactAmountBar extends StatelessWidget {
                         Flexible(
                           child: Text(
                             resultText,
+                            key: resultKey,
                             textAlign: TextAlign.right,
                             overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.rubik(
-                              color: _amountColor(),
+                              color: resultColor,
                               fontSize: 28,
                               fontWeight: FontWeight.w600,
                               height: 1.0,
@@ -236,6 +253,7 @@ class CompactAmountBar extends StatelessWidget {
               const SizedBox(width: 4),
               Expanded(
                 child: TextField(
+                  key: noteTextFieldKey,
                   controller: noteController,
                   focusNode: noteFocusNode,
                   minLines: isNoteExpanded ? 2 : 1,
@@ -277,6 +295,7 @@ class CompactAmountBar extends StatelessWidget {
               Tooltip(
                 message: isNoteExpanded ? '收起备注' : '展开备注',
                 child: InkWell(
+                  key: noteToggleKey,
                   onTap: onToggleNoteExpanded,
                   borderRadius: BorderRadius.circular(16),
                   child: Padding(
