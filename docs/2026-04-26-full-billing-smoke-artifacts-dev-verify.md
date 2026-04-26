@@ -54,24 +54,62 @@ Result:
 yaml ok
 ```
 
-Pending post-merge live validation:
+Branch live validation:
 
 ```bash
 gh workflow run saas_full_billing_staging_smoke.yml \
   --repo zensgit/jive \
-  --ref main \
+  --ref codex/full-billing-smoke-artifacts \
   -f sync_domestic_payment_secret=true \
   -f deploy_payment_smoke_functions=true \
   -f run_domestic_payment_e2e=false
 ```
 
-Expected result:
+Result:
 
-- workflow conclusion `success`;
-- Step Summary contains full billing smoke metadata and log tail;
-- artifact `saas-full-billing-smoke-<run_id>` is present;
-- artifact contains `metadata.md`, `smoke.log`, and `summary.md`;
-- artifact guard does not block the normal report bundle.
+- Run ID: `24958622844`
+- URL: `https://github.com/zensgit/jive/actions/runs/24958622844`
+- Head SHA: `5c25b92baaf45227388e9b47b24cc1b10fbda729`
+- Conclusion: `success`
+- Step Summary generation: passed
+- Artifact guard: passed
+- Artifact upload: passed
+- Artifact name: `saas-full-billing-smoke-24958622844`
+
+Downloaded artifact contents:
+
+```text
+metadata.md
+smoke.log
+summary.md
+```
+
+`summary.md` recorded:
+
+```text
+- status: PASS
+- smokeOutcome: success
+[saas-function-smoke] PASS: verify-subscription requires a real user session -> HTTP 401
+[saas-function-smoke] PASS: analytics rejects missing admin token -> HTTP 401
+[saas-function-smoke] PASS: analytics summary accepts admin token -> HTTP 200
+[saas-function-smoke] PASS: admin rejects anon token -> HTTP 401
+[saas-function-smoke] PASS: admin summary accepts admin token -> HTTP 200
+[saas-function-smoke] PASS: send-notification dry run accepts notification token -> HTTP 200
+[saas-function-smoke] PASS: subscription-webhook accepts Google test notification -> HTTP 200
+[saas-function-smoke] PASS: create-payment-order requires a real user session -> HTTP 401
+[saas-function-smoke] PASS: domestic-payment-webhook rejects missing token -> HTTP 401 error=admin_token_required
+[saas-function-smoke] PASS: domestic-payment-webhook accepts token and checks order existence -> HTTP 404 error=payment_order_not_found
+[saas-function-smoke] function smoke passed
+```
+
+PR CI:
+
+- `analyze_and_test`: passed
+- `detect_saas_wave0_smoke`: passed
+- `saas_wave0_smoke`: skipped as expected for this workflow/docs-only change
+- `android_integration_test`: skipped as expected
+
+Post-merge main validation should rerun the same workflow on `main` to confirm the artifact path after merge.
 
 ## Deferred
 
