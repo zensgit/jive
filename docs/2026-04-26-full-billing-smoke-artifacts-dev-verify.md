@@ -141,6 +141,52 @@ summary.md
 
 `summary.md` recorded `status: PASS`, `smokeOutcome: success`, and the same full-profile non-writing function smoke pass set as the branch run.
 
+Post-merge main domestic payment E2E validation:
+
+```bash
+gh workflow run saas_full_billing_staging_smoke.yml \
+  --repo zensgit/jive \
+  --ref main \
+  -f sync_domestic_payment_secret=true \
+  -f deploy_payment_smoke_functions=true \
+  -f run_domestic_payment_e2e=true
+```
+
+Result:
+
+- Run ID: `24958852162`
+- URL: `https://github.com/zensgit/jive/actions/runs/24958852162`
+- Head SHA: `d6e922a0ef45aace7b7fa58f602ff5b88f91ea52`
+- Conclusion: `success`
+- Step Summary generation: passed
+- Artifact guard: passed
+- Artifact upload: passed
+- Artifact name: `saas-full-billing-smoke-24958852162`
+
+Downloaded artifact contents:
+
+```text
+metadata.md
+smoke.log
+summary.md
+```
+
+`summary.md` recorded the full non-writing smoke pass set plus:
+
+```text
+[saas-function-smoke] domestic payment E2E smoke enabled; creating temporary staging user/order
+[saas-function-smoke] PASS: domestic E2E creates temporary auth user -> HTTP 200
+[saas-function-smoke] PASS: domestic E2E signs in temporary user -> HTTP 200
+[saas-function-smoke] PASS: domestic E2E creates payment order -> HTTP 201
+[saas-function-smoke] PASS: domestic E2E posts paid webhook -> HTTP 200
+[saas-function-smoke] PASS: domestic E2E reads projected subscription -> HTTP 200
+[saas-function-smoke] PASS: domestic E2E subscription projection matches temporary order
+[saas-function-smoke] cleanup: payment event -> HTTP 204
+[saas-function-smoke] cleanup: subscription projection -> HTTP 204
+[saas-function-smoke] cleanup: payment order -> HTTP 204
+[saas-function-smoke] cleanup: auth user -> HTTP 200
+```
+
 ## Deferred
 
 - No change to the existing core staging workflow; it already has its own report upload path.
