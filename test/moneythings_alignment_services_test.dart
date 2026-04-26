@@ -9,6 +9,7 @@ import 'package:jive/core/service/account_group_service.dart';
 import 'package:jive/core/service/category_path_service.dart';
 import 'package:jive/core/service/object_share_policy_service.dart';
 import 'package:jive/core/service/quick_action_service.dart';
+import 'package:jive/feature/quick_entry/quick_action_deep_link_service.dart';
 import 'package:jive/feature/transactions/transaction_entry_params.dart';
 
 void main() {
@@ -102,6 +103,43 @@ void main() {
     });
   });
 
+  group('QuickActionDeepLinkService', () {
+    test('parses template quick action links', () {
+      final request = QuickActionDeepLinkService.parse(
+        Uri.parse('jive://quick-action?id=template:42'),
+      );
+
+      expect(request?.isQuickAction, isTrue);
+      expect(request?.quickActionId, 'template:42');
+      expect(QuickActionDeepLinkService.legacyTemplateId('template:42'), 42);
+    });
+
+    test('parses transaction links and highlights missing fields', () {
+      final request = QuickActionDeepLinkService.parse(
+        Uri.parse(
+          'jive://transaction/new?type=expense&amount=12.5&note=Coffee',
+        ),
+      );
+
+      final params = request?.transactionParams;
+      expect(params?.source, TransactionEntrySource.deepLink);
+      expect(params?.prefillAmount, 12.5);
+      expect(params?.prefillNote, 'Coffee');
+      expect(
+        params?.highlightFields,
+        contains(TransactionHighlightField.account),
+      );
+      expect(
+        params?.highlightFields,
+        contains(TransactionHighlightField.category),
+      );
+      expect(
+        params?.highlightFields,
+        isNot(contains(TransactionHighlightField.amount)),
+      );
+    });
+  });
+
   group('AccountGroupService', () {
     test(
       'groups subaccounts by groupName without changing account identity',
@@ -119,6 +157,18 @@ void main() {
         expect(groups.first.currencies, {'CNY', 'USD'});
       },
     );
+
+    test('does not treat broad legacy group names as subaccount groups', () {
+      final accounts = [
+        _account(id: 1, name: '现金', groupName: '资金账户'),
+        _account(id: 2, name: '微信钱包', groupName: '资金账户'),
+      ];
+
+      final groups = const AccountGroupService().groupAccounts(accounts);
+
+      expect(groups.map((g) => g.name), ['现金', '微信钱包']);
+      expect(groups.every((g) => g.isSingleAccount), isTrue);
+    });
   });
 
   group('ObjectSharePolicyService', () {

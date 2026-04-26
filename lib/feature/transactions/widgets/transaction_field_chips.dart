@@ -16,6 +16,8 @@ class SubCategoryGrid extends StatelessWidget {
   final List<JiveCategory> subCategories;
   final JiveCategory? selectedSub;
   final Key Function(JiveCategory category)? categoryKeyBuilder;
+  final String Function(JiveCategory category)? labelBuilder;
+  final String? Function(JiveCategory category)? subtitleBuilder;
   final double aspectRatio;
   final double mainAxisSpacing;
   final ValueChanged<JiveCategory> onSelect;
@@ -27,6 +29,8 @@ class SubCategoryGrid extends StatelessWidget {
     required this.subCategories,
     required this.selectedSub,
     this.categoryKeyBuilder,
+    this.labelBuilder,
+    this.subtitleBuilder,
     required this.aspectRatio,
     required this.mainAxisSpacing,
     required this.onSelect,
@@ -73,6 +77,8 @@ class SubCategoryGrid extends StatelessWidget {
 
         final cat = subCategories[index];
         final isSelected = cat.key == selectedSub?.key;
+        final label = labelBuilder?.call(cat) ?? cat.name;
+        final subtitle = subtitleBuilder?.call(cat);
         final customColor = CategoryService.parseColorHex(cat.colorHex);
         final activeColor = customColor ?? JiveTheme.primaryGreen;
         final inactiveColor = JiveTheme.categoryIconInactive;
@@ -124,7 +130,7 @@ class SubCategoryGrid extends StatelessWidget {
               ),
               const SizedBox(height: 3),
               Text(
-                cat.name,
+                label,
                 style: TextStyle(
                   fontSize: 9,
                   color: isSelected
@@ -132,8 +138,22 @@ class SubCategoryGrid extends StatelessWidget {
                       : JiveTheme.categoryLabelInactive,
                   fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
                 ),
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              if (subtitle != null && subtitle.isNotEmpty)
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 7,
+                    color: isSelected
+                        ? Colors.black54
+                        : JiveTheme.categoryLabelInactive,
+                    height: 1.05,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
             ],
           ),
         );

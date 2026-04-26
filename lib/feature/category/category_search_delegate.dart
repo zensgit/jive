@@ -7,11 +7,29 @@ import '../../core/service/category_service.dart';
 class CategorySearchResult {
   final JiveCategory parent;
   final JiveCategory? sub;
+  final List<JiveCategory> path;
 
-  const CategorySearchResult({required this.parent, this.sub});
+  const CategorySearchResult({
+    required this.parent,
+    this.sub,
+    List<JiveCategory>? path,
+  }) : path = path ?? const [];
 
   String get primaryName => sub?.name ?? parent.name;
-  String get secondaryName => sub != null ? parent.name : "一级分类";
+  String get secondaryName {
+    final segments = path.isEmpty ? [parent, if (sub != null) sub!] : path;
+    if (segments.length <= 1) return "一级分类";
+    return segments.map((category) => category.name).join(" / ");
+  }
+
+  Iterable<JiveCategory> get searchableCategories sync* {
+    if (path.isNotEmpty) {
+      yield* path;
+      return;
+    }
+    yield parent;
+    if (sub != null) yield sub!;
+  }
 }
 
 class CategorySearchDelegate extends SearchDelegate<CategorySearchResult?> {
@@ -19,10 +37,7 @@ class CategorySearchDelegate extends SearchDelegate<CategorySearchResult?> {
   final String hintText;
   final Map<String, String> _searchKeyCache = {};
 
-  CategorySearchDelegate({
-    required this.items,
-    this.hintText = "搜索分类",
-  });
+  CategorySearchDelegate({required this.items, this.hintText = "搜索分类"});
 
   @override
   String get searchFieldLabel => hintText;
@@ -39,10 +54,7 @@ class CategorySearchDelegate extends SearchDelegate<CategorySearchResult?> {
   List<Widget>? buildActions(BuildContext context) {
     if (query.isEmpty) return [];
     return [
-      IconButton(
-        icon: const Icon(Icons.clear),
-        onPressed: () => query = "",
-      ),
+      IconButton(icon: const Icon(Icons.clear), onPressed: () => query = ""),
     ];
   }
 
@@ -50,9 +62,9 @@ class CategorySearchDelegate extends SearchDelegate<CategorySearchResult?> {
     final q = _normalizeSearch(query);
     if (q.isEmpty) return items;
     return items.where((item) {
-      if (_matches(item.parent, q)) return true;
-      final sub = item.sub;
-      return sub != null && _matches(sub, q);
+      return item.searchableCategories.any((category) {
+        return _matches(category, q);
+      });
     }).toList();
   }
 
@@ -93,16 +105,20 @@ class CategorySearchDelegate extends SearchDelegate<CategorySearchResult?> {
       itemBuilder: (context, index) {
         final item = results[index];
         final iconName = item.sub?.iconName ?? item.parent.iconName;
-        final iconColor = CategoryService.parseColorHex(item.sub?.colorHex ?? item.parent.colorHex);
+        final iconColor = CategoryService.parseColorHex(
+          item.sub?.colorHex ?? item.parent.colorHex,
+        );
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: iconColor?.withValues(alpha: 0.12) ?? Colors.grey.shade100,
+            backgroundColor:
+                iconColor?.withValues(alpha: 0.12) ?? Colors.grey.shade100,
             child: CategoryService.buildIcon(
               iconName,
               size: 18,
               color: iconColor ?? JiveTheme.categoryIconInactive,
               isSystemCategory: item.sub?.isSystem ?? item.parent.isSystem,
-              forceTinted: item.sub?.iconForceTinted ?? item.parent.iconForceTinted,
+              forceTinted:
+                  item.sub?.iconForceTinted ?? item.parent.iconForceTinted,
             ),
           ),
           title: Text(item.primaryName),

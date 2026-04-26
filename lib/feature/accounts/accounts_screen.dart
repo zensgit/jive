@@ -9,12 +9,15 @@ import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../core/data/account_type_catalog.dart';
 import '../../core/data/bank_catalog.dart';
+import '../../core/database/book_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/database/account_model.dart';
+import '../../core/service/account_group_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/object_share_policy_service.dart';
 import 'account_reconcile_screen.dart';
 
 class AccountsScreen extends StatefulWidget {
@@ -37,6 +40,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
   late Isar _isar;
   bool _isLoading = true;
   List<JiveAccount> _accounts = [];
+  JiveBook? _currentBook;
   Map<int, double> _balances = {};
   AccountTotals _totals = const AccountTotals(assets: 0, liabilities: 0);
   double _creditLimit = 0;
@@ -107,6 +111,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
     await service.initDefaultAccounts();
     final accounts = await service.getActiveAccounts(bookId: widget.bookId);
     final balances = await service.computeBalances(accounts: accounts);
+    final currentBook = widget.bookId == null
+        ? null
+        : await _isar.jiveBooks.get(widget.bookId!);
 
     // 初始化货币服务并获取基础货币
     _currencyService ??= CurrencyService(_isar);
@@ -122,7 +129,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
       _currencyService!,
       baseCurrency,
     );
-    final creditSummary = await _computeCreditSummary(accounts, balances, baseCurrency);
+    final creditSummary = await _computeCreditSummary(
+      accounts,
+      balances,
+      baseCurrency,
+    );
 
     // 计算每个账户的折算余额（针对非基础货币账户）
     final convertedBalances = <int, double>{};
@@ -135,7 +146,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
           baseCurrency,
         );
         if (converted != null) {
-          convertedBalances[account.id] = account.type == AccountService.typeLiability
+          convertedBalances[account.id] =
+              account.type == AccountService.typeLiability
               ? -converted
               : converted;
         }
@@ -145,6 +157,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
     if (!mounted) return;
     setState(() {
       _accounts = accounts;
+      _currentBook = currentBook;
       _balances = balances;
       _totals = totals;
       _creditLimit = creditSummary.limit;
@@ -287,10 +300,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
           editing.colorHex != defaultColor;
     }
 
-	    Future<void> ensureBankSelected(StateSetter setSheetState) async {
-	      if (!selectedType!.requiresBank) return;
-	      final bank = await _showBankPicker(selectedBank);
-	      if (bank == null) return;
+    Future<void> ensureBankSelected(StateSetter setSheetState) async {
+      if (!selectedType!.requiresBank) return;
+      final bank = await _showBankPicker(selectedBank);
+      if (bank == null) return;
       setSheetState(() {
         selectedBank = bank;
         iconName = bank.icon.isEmpty ? iconName : bank.icon;
@@ -304,14 +317,14 @@ class _AccountsScreenState extends State<AccountsScreen> {
             selectedBank,
           );
         }
-	      });
-	    }
+      });
+    }
 
-	    if (!mounted) return null;
-	    return showModalBottomSheet<_AccountDraft>(
-	      context: context,
-	      isScrollControlled: true,
-	      backgroundColor: Colors.white,
+    if (!mounted) return null;
+    return showModalBottomSheet<_AccountDraft>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -338,8 +351,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
             final isFileIcon = AccountService.isFileIcon(iconName);
             final iconLabel = isFileIcon
                 ? '自定义图片'
-                : (iconBank?.name ??
-                      (iconCustomized ? '自定义图标' : '默认图标'));
+                : (iconBank?.name ?? (iconCustomized ? '自定义图标' : '默认图标'));
             final bottomInset = MediaQuery.of(sheetContext).viewInsets.bottom;
             return SafeArea(
               top: false,
@@ -586,11 +598,12 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           isScrollControlled: true,
                           backgroundColor: Colors.white,
                           shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(20),
+                            ),
                           ),
-                          builder: (ctx) => _CurrencyPickerSheet(
-                            selectedCode: currency,
-                          ),
+                          builder: (ctx) =>
+                              _CurrencyPickerSheet(selectedCode: currency),
                         );
                         if (result != null) {
                           setSheetState(() => currency = result);
@@ -606,11 +619,17 @@ class _AccountsScreenState extends State<AccountsScreen> {
                           children: [
                             Builder(
                               builder: (context) {
-                                final currencyData = CurrencyDefaults.getAllCurrencies()
-                                    .firstWhere(
-                                      (c) => c['code'] == currency,
-                                      orElse: () => {'code': currency, 'nameZh': currency, 'symbol': currency, 'flag': null},
-                                    );
+                                final currencyData =
+                                    CurrencyDefaults.getAllCurrencies()
+                                        .firstWhere(
+                                          (c) => c['code'] == currency,
+                                          orElse: () => {
+                                            'code': currency,
+                                            'nameZh': currency,
+                                            'symbol': currency,
+                                            'flag': null,
+                                          },
+                                        );
                                 final flag = currencyData['flag'] as String?;
                                 final symbol = currencyData['symbol'] as String;
                                 return Text(
@@ -622,11 +641,15 @@ class _AccountsScreenState extends State<AccountsScreen> {
                             const SizedBox(width: 8),
                             Builder(
                               builder: (context) {
-                                final currencyData = CurrencyDefaults.getAllCurrencies()
-                                    .firstWhere(
-                                      (c) => c['code'] == currency,
-                                      orElse: () => {'code': currency, 'nameZh': currency},
-                                    );
+                                final currencyData =
+                                    CurrencyDefaults.getAllCurrencies()
+                                        .firstWhere(
+                                          (c) => c['code'] == currency,
+                                          orElse: () => {
+                                            'code': currency,
+                                            'nameZh': currency,
+                                          },
+                                        );
                                 return Text(
                                   '$currency - ${currencyData['nameZh']}',
                                   style: valueStyle,
@@ -792,8 +815,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
         final columns = width >= 460
             ? 6
             : width >= 380
-                ? 5
-                : 4;
+            ? 5
+            : 4;
         final tileHeight = _accountTypeTileHeight(sheetContext, columns);
         return SafeArea(
           child: ListView(
@@ -823,8 +846,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: JiveTheme.cardWhite,
                     borderRadius: BorderRadius.circular(16),
@@ -894,7 +919,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
                                 height: 2,
                                 width: isSelected ? 16 : 0,
                                 decoration: BoxDecoration(
-                                  color: isSelected ? color : Colors.transparent,
+                                  color: isSelected
+                                      ? color
+                                      : Colors.transparent,
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
@@ -912,15 +939,15 @@ class _AccountsScreenState extends State<AccountsScreen> {
         );
       },
     );
-	  }
+  }
 
-	  double _accountTypeTileHeight(BuildContext context, int columns) {
-	    final scale = MediaQuery.textScalerOf(context).scale(14.0) / 14.0;
-	    final base = columns >= 6
-	        ? 64.0
-	        : columns >= 5
-	            ? 68.0
-            : 74.0;
+  double _accountTypeTileHeight(BuildContext context, int columns) {
+    final scale = MediaQuery.textScalerOf(context).scale(14.0) / 14.0;
+    final base = columns >= 6
+        ? 64.0
+        : columns >= 5
+        ? 68.0
+        : 74.0;
     if (scale >= 1.2) return base + 6;
     if (scale >= 1.1) return base + 4;
     return base;
@@ -928,15 +955,15 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
   Future<BankEntry?> _showBankPicker(
     BankEntry? current, {
-	    String title = '选择银行',
-	    String hintText = '搜索银行',
-	  }) async {
-	    final banks = await BankCatalog.load();
-	    if (!mounted) return null;
-	    final controller = TextEditingController();
-	    var filtered = banks;
+    String title = '选择银行',
+    String hintText = '搜索银行',
+  }) async {
+    final banks = await BankCatalog.load();
+    if (!mounted) return null;
+    final controller = TextEditingController();
+    var filtered = banks;
 
-	    return showModalBottomSheet<BankEntry>(
+    return showModalBottomSheet<BankEntry>(
       context: context,
       isScrollControlled: true,
       backgroundColor: JiveTheme.surfaceWhite,
@@ -978,8 +1005,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
                         prefixIcon: const Icon(Icons.search),
                         filled: true,
                         fillColor: JiveTheme.cardWhite,
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,
@@ -1016,7 +1044,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
                               onTap: () => Navigator.pop(sheetContext, bank),
                               child: Container(
                                 color: isSelected
-                                    ? JiveTheme.primaryGreen.withValues(alpha: 0.06)
+                                    ? JiveTheme.primaryGreen.withValues(
+                                        alpha: 0.06,
+                                      )
                                     : Colors.transparent,
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
@@ -1068,10 +1098,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
                               ),
                             );
                           },
-                          separatorBuilder: (_, __) => Divider(
-                            height: 1,
-                            color: Colors.grey.shade200,
-                          ),
+                          separatorBuilder: (_, __) =>
+                              Divider(height: 1, color: Colors.grey.shade200),
                           itemCount: filtered.length,
                         ),
                       ),
@@ -1319,11 +1347,11 @@ class _AccountsScreenState extends State<AccountsScreen> {
               padding: const EdgeInsets.only(right: 8),
               child: FilterChip(
                 avatar: Text(
-                  CurrencyDefaults.getAllCurrencies()
-                          .firstWhere(
+                  CurrencyDefaults.getAllCurrencies().firstWhere(
                             (c) => c['code'] == currency,
                             orElse: () => {'flag': null, 'symbol': currency},
-                          )['flag'] as String? ??
+                          )['flag']
+                          as String? ??
                       CurrencyDefaults.getSymbol(currency),
                   style: const TextStyle(fontSize: 12),
                 ),
@@ -1374,9 +1402,19 @@ class _AccountsScreenState extends State<AccountsScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildMetaStat("资产", _totals.assets, JiveTheme.primaryGreen, currencySymbol),
+              _buildMetaStat(
+                "资产",
+                _totals.assets,
+                JiveTheme.primaryGreen,
+                currencySymbol,
+              ),
               const SizedBox(width: 16),
-              _buildMetaStat("负债", _totals.liabilities, Colors.redAccent, currencySymbol),
+              _buildMetaStat(
+                "负债",
+                _totals.liabilities,
+                Colors.redAccent,
+                currencySymbol,
+              ),
             ],
           ),
           if (_creditLimit > 0) ...[
@@ -1385,9 +1423,24 @@ class _AccountsScreenState extends State<AccountsScreen> {
               spacing: 12,
               runSpacing: 8,
               children: [
-                _buildMetaStat("信用额度", _creditLimit, Colors.blueGrey, currencySymbol),
-                _buildMetaStat("已用", _creditUsed, Colors.redAccent, currencySymbol),
-                _buildMetaStat("可用", _creditAvailable, JiveTheme.primaryGreen, currencySymbol),
+                _buildMetaStat(
+                  "信用额度",
+                  _creditLimit,
+                  Colors.blueGrey,
+                  currencySymbol,
+                ),
+                _buildMetaStat(
+                  "已用",
+                  _creditUsed,
+                  Colors.redAccent,
+                  currencySymbol,
+                ),
+                _buildMetaStat(
+                  "可用",
+                  _creditAvailable,
+                  JiveTheme.primaryGreen,
+                  currencySymbol,
+                ),
               ],
             ),
           ],
@@ -1396,7 +1449,12 @@ class _AccountsScreenState extends State<AccountsScreen> {
     );
   }
 
-  Widget _buildMetaStat(String label, double value, Color color, String symbol) {
+  Widget _buildMetaStat(
+    String label,
+    double value,
+    Color color,
+    String symbol,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -1414,7 +1472,26 @@ class _AccountsScreenState extends State<AccountsScreen> {
     );
   }
 
+  Widget _buildShareBadge(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: JiveTheme.primaryGreen.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.lato(
+          fontSize: 9,
+          color: JiveTheme.primaryGreen,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
   Widget _buildSection(String title, List<JiveAccount> accounts) {
+    final accountGroups = const AccountGroupService().groupAccounts(accounts);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1428,10 +1505,83 @@ class _AccountsScreenState extends State<AccountsScreen> {
         else
           Column(
             children: [
-              for (final account in accounts) _buildAccountItem(account),
+              for (final group in accountGroups)
+                if (group.isSingleAccount)
+                  _buildAccountItem(group.accounts.first)
+                else
+                  _buildAccountGroupCard(group),
             ],
           ),
       ],
+    );
+  }
+
+  Widget _buildAccountGroupCard(AccountGroupSummary group) {
+    final currencies = group.currencies.toList()..sort();
+    final currencyLabel = currencies.join(' / ');
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: JiveTheme.primaryGreen.withValues(alpha: 0.12),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: JiveTheme.primaryGreen.withValues(alpha: 0.10),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.account_balance_outlined,
+                  color: JiveTheme.primaryGreen,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.name,
+                      style: GoogleFonts.lato(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      '${group.accounts.length} 个子账户 · $currencyLabel',
+                      style: GoogleFonts.lato(
+                        color: Colors.grey.shade500,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final account in group.accounts) _buildAccountItem(account),
+        ],
+      ),
     );
   }
 
@@ -1447,9 +1597,16 @@ class _AccountsScreenState extends State<AccountsScreen> {
         AccountService.parseColorHex(account.colorHex) ??
         JiveTheme.primaryGreen;
     final option = AccountTypeCatalog.optionFor(account.subType);
+    final accountPath = const AccountGroupService().displayPath(account);
     final detailText = AccountService.isCreditAccount(account)
         ? _creditMeta(account, balance)
-        : (option?.label ?? AccountService.displayGroupName(account));
+        : (accountPath == account.name
+              ? option?.label ?? AccountService.displayGroupName(account)
+              : accountPath);
+    final sharePolicy = const ObjectSharePolicyService().evaluate(
+      book: _currentBook,
+      objectLabel: '账户',
+    );
     final currencySymbol = CurrencyDefaults.getSymbol(account.currency);
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -1490,12 +1647,24 @@ class _AccountsScreenState extends State<AccountsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    account.name,
-                    style: GoogleFonts.lato(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          account.name,
+                          style: GoogleFonts.lato(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (sharePolicy.visibility !=
+                          ObjectShareVisibility.private) ...[
+                        const SizedBox(width: 6),
+                        _buildShareBadge(sharePolicy.label),
+                      ],
+                    ],
                   ),
                   const SizedBox(height: 2),
                   Text(
@@ -1512,7 +1681,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  NumberFormat.currency(symbol: currencySymbol).format(displayBalance),
+                  NumberFormat.currency(
+                    symbol: currencySymbol,
+                  ).format(displayBalance),
                   style: GoogleFonts.rubik(
                     color: amountColor,
                     fontSize: 14,
@@ -1520,7 +1691,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
                   ),
                 ),
                 // 显示折算金额（当账户币种与基础货币不同时）
-                if (account.currency != _baseCurrency && _convertedBalances.containsKey(account.id)) ...[
+                if (account.currency != _baseCurrency &&
+                    _convertedBalances.containsKey(account.id)) ...[
                   const SizedBox(height: 2),
                   Text(
                     '≈ ${NumberFormat.currency(symbol: CurrencyDefaults.getSymbol(_baseCurrency)).format(_convertedBalances[account.id]!.abs())}',
@@ -1611,11 +1783,19 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
       if (accountCurrency != baseCurrency && _currencyService != null) {
         convertedLimit =
-            await _currencyService!.convert(accountLimit, accountCurrency, baseCurrency) ??
-                accountLimit;
+            await _currencyService!.convert(
+              accountLimit,
+              accountCurrency,
+              baseCurrency,
+            ) ??
+            accountLimit;
         convertedUsed =
-            await _currencyService!.convert(usedForAccount, accountCurrency, baseCurrency) ??
-                usedForAccount;
+            await _currencyService!.convert(
+              usedForAccount,
+              accountCurrency,
+              baseCurrency,
+            ) ??
+            usedForAccount;
       }
 
       limit += convertedLimit;
@@ -1628,7 +1808,6 @@ class _AccountsScreenState extends State<AccountsScreen> {
 
     return _CreditSummary(limit: limit, used: used, available: available);
   }
-
 }
 
 class _AccountDraft {

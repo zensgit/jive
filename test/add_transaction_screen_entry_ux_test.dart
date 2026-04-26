@@ -293,6 +293,77 @@ void main() {
   );
 
   testWidgets(
+    'add transaction entry saves three-level category as top and leaf keys',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      JiveTransaction? savedTransaction;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => ElevatedButton(
+              onPressed: () async {
+                await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => AddTransactionScreen(
+                      isar: harness.isar,
+                      bootstrapDefaults: false,
+                      initialParentCategories: [harness.parent],
+                      initialSubCategories: [harness.child, harness.grandchild],
+                      initialAccounts: [harness.account],
+                      initialAccountBalances: {harness.account.id: 0},
+                      initialTags: const [],
+                      initialProjects: const [],
+                      smartTagResolver: (_) async => const [],
+                      transactionSaver: (tx) async {
+                        savedTransaction = tx;
+                      },
+                    ),
+                  ),
+                );
+              },
+              child: const Text('open add transaction'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open add transaction'));
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      });
+      await _pumpUntilFound(
+        tester,
+        find.byKey(AddTransactionScreenKeys.amountKey('1')),
+      );
+
+      await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('1')));
+      await tester.tap(
+        find.byKey(AddTransactionScreenKeys.subCategory('custom_pourover')),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(AddTransactionScreenKeys.saveButton));
+      await tester.pump();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      });
+
+      expect(savedTransaction, isNotNull);
+      expect(savedTransaction!.categoryKey, 'custom_food');
+      expect(savedTransaction!.subCategoryKey, 'custom_pourover');
+      expect(savedTransaction!.category, '自定义餐饮');
+      expect(savedTransaction!.subCategory, '手冲');
+      expect(savedTransaction!.rawText, '自定义餐饮 / 自制咖啡 / 手冲');
+    },
+  );
+
+  testWidgets(
     'continuous entry save resets operator toggle state for next transaction',
     (tester) async {
       tester.view.physicalSize = const Size(430, 932);
@@ -412,6 +483,7 @@ class _AddTransactionHarness {
   late JiveAccount account;
   late JiveCategory parent;
   late JiveCategory child;
+  late JiveCategory grandchild;
 
   _AddTransactionHarness({required this.dir, required this.isar});
 
@@ -469,10 +541,20 @@ class _AddTransactionHarness {
       ..isHidden = false
       ..isIncome = false
       ..updatedAt = now;
+    grandchild = JiveCategory()
+      ..key = 'custom_pourover'
+      ..name = '手冲'
+      ..iconName = 'local_drink'
+      ..parentKey = child.key
+      ..order = 0
+      ..isSystem = false
+      ..isHidden = false
+      ..isIncome = false
+      ..updatedAt = now;
 
     await isar.writeTxn(() async {
       account.id = await isar.jiveAccounts.put(account);
-      await isar.jiveCategorys.putAll([parent, child]);
+      await isar.jiveCategorys.putAll([parent, child, grandchild]);
     });
   }
 

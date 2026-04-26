@@ -3,9 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
 
 import '../../core/database/template_model.dart';
+import '../../core/service/quick_action_service.dart';
 import '../../core/service/template_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/design_system/theme.dart';
+import '../quick_entry/quick_action_executor.dart';
 
 class TemplateListScreen extends StatefulWidget {
   const TemplateListScreen({super.key});
@@ -58,8 +60,8 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _groupedTemplates.isEmpty
-              ? _buildEmptyState()
-              : _buildTemplateList(),
+          ? _buildEmptyState()
+          : _buildTemplateList(),
     );
   }
 
@@ -120,13 +122,13 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     final typeIcon = template.type == 'income'
         ? Icons.arrow_downward
         : template.type == 'transfer'
-            ? Icons.swap_horiz
-            : Icons.arrow_upward;
+        ? Icons.swap_horiz
+        : Icons.arrow_upward;
     final typeColor = template.type == 'income'
         ? Colors.green
         : template.type == 'transfer'
-            ? Colors.blueGrey
-            : Colors.redAccent;
+        ? Colors.blueGrey
+        : Colors.redAccent;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -202,8 +204,16 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     );
   }
 
-  void _useTemplate(JiveTemplate template) {
-    Navigator.pop(context, template);
+  Future<void> _useTemplate(JiveTemplate template) async {
+    await QuickActionExecutor.execute(
+      context,
+      QuickActionService.toQuickAction(template),
+      onCompleted: () {
+        if (!mounted) return;
+        _loadTemplates();
+        Navigator.maybePop(context, true);
+      },
+    );
   }
 
   void _showTemplateOptions(JiveTemplate template) {
@@ -241,7 +251,9 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(context, true),
-                        style: TextButton.styleFrom(foregroundColor: Colors.red),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
                         child: const Text('删除'),
                       ),
                     ],

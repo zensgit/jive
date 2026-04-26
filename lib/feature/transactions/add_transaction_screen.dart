@@ -20,6 +20,7 @@ import '../../core/database/project_model.dart';
 import '../../core/service/book_service.dart';
 import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
+import '../../core/service/category_path_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/budget_pref_service.dart';
 import '../../core/service/budget_service.dart';
@@ -898,15 +899,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     String? selectKey,
     String? selectName,
   }) async {
-    var subs = await _isar
-        .collection<JiveCategory>()
-        .filter()
-        .parentKeyEqualTo(parentKey)
-        .isHiddenEqualTo(false)
-        .sortByOrder()
-        .findAll();
-
-    subs.sort(_compareCategoryForDisplay);
+    var subs = await _loadVisibleDescendantCategories(parentKey);
 
     // FALLBACK
     if (_isFallbackMode && subs.isEmpty) {
@@ -961,6 +954,47 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         }
       });
     }
+  }
+
+  Future<List<JiveCategory>> _loadVisibleDescendantCategories(
+    String parentKey,
+  ) async {
+    final all = await _isar.collection<JiveCategory>().where().findAll();
+    final showIncome = _txType == TransactionType.income;
+    final childrenByParent = <String, List<JiveCategory>>{};
+    for (final category in all) {
+      final key = category.parentKey;
+      if (key == null || category.isHidden || category.isIncome != showIncome) {
+        continue;
+      }
+      childrenByParent.putIfAbsent(key, () => <JiveCategory>[]).add(category);
+    }
+    for (final list in childrenByParent.values) {
+      list.sort(_compareCategoryForDisplay);
+    }
+
+    final result = <JiveCategory>[];
+    void visit(String key) {
+      final children = childrenByParent[key] ?? const <JiveCategory>[];
+      for (final child in children) {
+        result.add(child);
+        visit(child.key);
+      }
+    }
+
+    visit(parentKey);
+    return result;
+  }
+
+  List<JiveCategory> get _currentCategoryUniverse {
+    final byKey = <String, JiveCategory>{};
+    for (final category in _parentCategories) {
+      byKey[category.key] = category;
+    }
+    for (final category in _subCategories) {
+      byKey[category.key] = category;
+    }
+    return byKey.values.toList(growable: false);
   }
 
   Future<void> _refreshCategories() async {
@@ -1029,30 +1063,24 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (all.isEmpty) return [];
 
     final showIncome = _txType == TransactionType.income;
-    var parents = all
-        .where(
-          (c) => c.parentKey == null && !c.isHidden && c.isIncome == showIncome,
-        )
-        .toList();
-    parents.sort(_compareCategoryForDisplay);
-    final parentByKey = {for (final p in parents) p.key: p};
+    final paths = const CategoryPathService().visiblePaths(
+      all,
+      isIncome: showIncome,
+    );
     final items = <CategorySearchResult>[];
-    for (final parent in parents) {
-      items.add(CategorySearchResult(parent: parent));
-    }
-    var children = all
-        .where(
-          (c) => c.parentKey != null && !c.isHidden && c.isIncome == showIncome,
-        )
-        .toList();
-    // 过滤掉不属于已选父分类的子分类
-    children =
-        children.where((c) => parentByKey.containsKey(c.parentKey)).toList()
-          ..sort(_compareCategoryForDisplay);
-    for (final child in children) {
-      final parent = parentByKey[child.parentKey];
-      if (parent == null) continue;
-      items.add(CategorySearchResult(parent: parent, sub: child));
+    final seen = <String>{};
+    for (final path in paths) {
+      final parent = path.primary;
+      final leaf = path.leaf;
+      if (parent == null || leaf == null) continue;
+      if (!seen.add(leaf.key)) continue;
+      items.add(
+        CategorySearchResult(
+          parent: parent,
+          sub: leaf.key == parent.key ? null : leaf,
+          path: path.segments,
+        ),
+      );
     }
     return items;
   }
@@ -1473,15 +1501,21 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     }
 
     final typeValue = _typeValue(_txType);
+    final categoryKeys = _txType == TransactionType.transfer
+        ? null
+        : const CategoryPathService().toTransactionKeys(
+            _currentCategoryUniverse,
+            _selectedSub ?? _selectedParent,
+          );
     final parentName = _txType == TransactionType.transfer
         ? "转账"
-        : _selectedParent!.name;
+        : categoryKeys?.categoryName ?? _selectedParent!.name;
     final subName = _txType == TransactionType.transfer
         ? ""
-        : (_selectedSub?.name ?? "");
+        : (categoryKeys?.subCategoryName ?? "");
     final rawText = _txType == TransactionType.transfer
         ? "转账"
-        : "${_selectedParent!.name} - ${_selectedSub?.name ?? ''}";
+        : categoryKeys?.displayName ?? _selectedParent!.name;
 
     if (_selectedProjectId != null) {
       final project = _projects
@@ -1532,8 +1566,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         ..source = 'Manual'
         ..timestamp = _selectedTime
         ..type = 'expense'
-        ..categoryKey = _selectedParent!.key
-        ..subCategoryKey = _selectedSub?.key
+        ..categoryKey = categoryKeys?.categoryKey ?? _selectedParent!.key
+        ..subCategoryKey = categoryKeys?.subCategoryKey ?? _selectedSub?.key
         ..excludeFromBudget = false;
 
       JiveTransaction? oldTx;
@@ -1571,10 +1605,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       ..type = typeValue
       ..categoryKey = _txType == TransactionType.transfer
           ? null
-          : _selectedParent!.key
+          : categoryKeys?.categoryKey ?? _selectedParent!.key
       ..subCategoryKey = _txType == TransactionType.transfer
           ? null
-          : _selectedSub?.key
+          : categoryKeys?.subCategoryKey ?? _selectedSub?.key
       ..category = parentName
       ..subCategory = subName
       ..rawText = useRawText ? existingRawText : rawText
@@ -3445,6 +3479,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       selectedSub: _selectedSub,
       categoryKeyBuilder: (cat) =>
           AddTransactionScreenKeys.subCategory(cat.key),
+      labelBuilder: _categoryGridLabel,
+      subtitleBuilder: _categoryGridSubtitle,
       aspectRatio: subGridAspectRatio,
       mainAxisSpacing: subGridMainAxisSpacing,
       onSelect: (cat) => setState(() => _selectedSub = cat),
@@ -3456,6 +3492,24 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         }
       },
     );
+  }
+
+  String _categoryGridLabel(JiveCategory category) {
+    final path = const CategoryPathService().resolve(
+      _currentCategoryUniverse,
+      categoryKey: category.key,
+    );
+    if (path.segments.length <= 2) return category.name;
+    return path.segments.skip(1).map((segment) => segment.name).join(' / ');
+  }
+
+  String? _categoryGridSubtitle(JiveCategory category) {
+    final path = const CategoryPathService().resolve(
+      _currentCategoryUniverse,
+      categoryKey: category.key,
+    );
+    if (path.segments.length <= 2) return null;
+    return '三级分类';
   }
 
   List<SystemSuggestion> _systemSuggestionsForQuery(String query) {
@@ -3630,9 +3684,9 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final q = _normalizeSearch(query ?? _searchQuery);
     if (q.isEmpty) return _searchItems;
     return _searchItems.where((item) {
-      if (_matches(item.parent, q)) return true;
-      final sub = item.sub;
-      return sub != null && _matches(sub, q);
+      return item.searchableCategories.any((category) {
+        return _matches(category, q);
+      });
     }).toList();
   }
 
@@ -3707,16 +3761,19 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   bool _isExactMatch(CategorySearchResult item, String query) {
-    final tokens = _tokensForCategory(item.sub ?? item.parent);
-    return tokens.contains(query);
+    return item.searchableCategories.any((category) {
+      return _tokensForCategory(category).contains(query);
+    });
   }
 
   bool _isPrefixMatch(CategorySearchResult item, String query) {
-    final tokens = _tokensForCategory(item.sub ?? item.parent);
-    for (final token in tokens) {
-      if (token.startsWith(query)) return true;
-    }
-    return false;
+    return item.searchableCategories.any((category) {
+      final tokens = _tokensForCategory(category);
+      for (final token in tokens) {
+        if (token.startsWith(query)) return true;
+      }
+      return false;
+    });
   }
 
   Future<void> _loadNoteTagUsage() async {
