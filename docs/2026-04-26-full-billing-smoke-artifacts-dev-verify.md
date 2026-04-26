@@ -109,7 +109,37 @@ PR CI:
 - `saas_wave0_smoke`: skipped as expected for this workflow/docs-only change
 - `android_integration_test`: skipped as expected
 
-Post-merge main validation should rerun the same workflow on `main` to confirm the artifact path after merge.
+Post-merge main validation:
+
+```bash
+gh workflow run saas_full_billing_staging_smoke.yml \
+  --repo zensgit/jive \
+  --ref main \
+  -f sync_domestic_payment_secret=true \
+  -f deploy_payment_smoke_functions=true \
+  -f run_domestic_payment_e2e=false
+```
+
+Result:
+
+- Run ID: `24958762851`
+- URL: `https://github.com/zensgit/jive/actions/runs/24958762851`
+- Head SHA: `d69e9611de4e41185fe896c5d2afa6255edc8f4d`
+- Conclusion: `success`
+- Step Summary generation: passed
+- Artifact guard: passed
+- Artifact upload: passed
+- Artifact name: `saas-full-billing-smoke-24958762851`
+
+Downloaded artifact contents:
+
+```text
+metadata.md
+smoke.log
+summary.md
+```
+
+`summary.md` recorded `status: PASS`, `smokeOutcome: success`, and the same full-profile non-writing function smoke pass set as the branch run.
 
 ## Deferred
 
