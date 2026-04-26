@@ -5,6 +5,7 @@ class ImportCsvColumnMapping {
     this.accountBookColumnIndex,
     this.assetColumnIndex,
     this.toAssetColumnIndex,
+    this.categoryPathColumnIndex,
     this.parentCategoryColumnIndex,
     this.childCategoryColumnIndex,
     this.tagColumnIndex,
@@ -18,6 +19,7 @@ class ImportCsvColumnMapping {
   final int? accountBookColumnIndex;
   final int? assetColumnIndex;
   final int? toAssetColumnIndex;
+  final int? categoryPathColumnIndex;
   final int? parentCategoryColumnIndex;
   final int? childCategoryColumnIndex;
   final int? tagColumnIndex;
@@ -34,6 +36,8 @@ class ImportCsvColumnMapping {
     bool clearAssetColumnIndex = false,
     int? toAssetColumnIndex,
     bool clearToAssetColumnIndex = false,
+    int? categoryPathColumnIndex,
+    bool clearCategoryPathColumnIndex = false,
     int? parentCategoryColumnIndex,
     bool clearParentCategoryColumnIndex = false,
     int? childCategoryColumnIndex,
@@ -61,6 +65,9 @@ class ImportCsvColumnMapping {
       toAssetColumnIndex: clearToAssetColumnIndex
           ? null
           : (toAssetColumnIndex ?? this.toAssetColumnIndex),
+      categoryPathColumnIndex: clearCategoryPathColumnIndex
+          ? null
+          : (categoryPathColumnIndex ?? this.categoryPathColumnIndex),
       parentCategoryColumnIndex: clearParentCategoryColumnIndex
           ? null
           : (parentCategoryColumnIndex ?? this.parentCategoryColumnIndex),
@@ -193,14 +200,28 @@ class ImportCsvMappingService {
       );
       final accountName = _pickByIndex(cells, mapping.assetColumnIndex);
       final toAccountName = _pickByIndex(cells, mapping.toAssetColumnIndex);
-      final parentCategoryName = _pickByIndex(
+      final categoryPathText = _pickByIndex(
+        cells,
+        mapping.categoryPathColumnIndex,
+      );
+      final categoryPath = _splitCategoryPath(categoryPathText);
+      final rawParentCategoryName = _pickByIndex(
         cells,
         mapping.parentCategoryColumnIndex,
       );
-      final childCategoryName = _pickByIndex(
+      final rawChildCategoryName = _pickByIndex(
         cells,
         mapping.childCategoryColumnIndex,
       );
+      final parentCategoryName =
+          _preferExplicitCategoryName(
+            rawParentCategoryName,
+            categoryPathText,
+          ) ??
+          categoryPath.parentName;
+      final childCategoryName =
+          _preferExplicitCategoryName(rawChildCategoryName, categoryPathText) ??
+          categoryPath.childName;
       final tagNames = _splitTagNames(
         _pickByIndex(cells, mapping.tagColumnIndex),
       );
@@ -275,6 +296,10 @@ class ImportCsvMappingService {
         ..._sourceAliases,
       }),
       toAssetColumnIndex: _pickHeaderIndex(headerMap, _toAssetAliases),
+      categoryPathColumnIndex: _pickHeaderIndex(
+        headerMap,
+        _categoryPathAliases,
+      ),
       parentCategoryColumnIndex: _pickHeaderIndex(
         headerMap,
         _parentCategoryAliases,
@@ -363,6 +388,7 @@ class ImportCsvMappingService {
           _accountBookAliases.contains(cell) ||
           _assetAliases.contains(cell) ||
           _toAssetAliases.contains(cell) ||
+          _categoryPathAliases.contains(cell) ||
           _parentCategoryAliases.contains(cell) ||
           _childCategoryAliases.contains(cell) ||
           _tagAliases.contains(cell) ||
@@ -616,6 +642,16 @@ class ImportCsvMappingService {
     '对方账户',
   };
 
+  static const Set<String> _categoryPathAliases = {
+    'categorypath',
+    'fullcategory',
+    '分类路径',
+    '完整分类',
+    '分类全路径',
+    '大类/中类/小类',
+    '三级分类',
+  };
+
   static const Set<String> _parentCategoryAliases = {
     '一级分类',
     'parentcategory',
@@ -701,6 +737,26 @@ class ImportCsvMappingService {
         .toList(growable: false);
   }
 
+  _CategoryPathNames _splitCategoryPath(String? raw) {
+    final text = raw?.trim();
+    if (text == null || text.isEmpty) return const _CategoryPathNames();
+    final parts = text
+        .split(RegExp(r'\s*(?:/|／|>|＞|\\|、)\s*'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) return const _CategoryPathNames();
+    if (parts.length == 1) return _CategoryPathNames(parentName: parts.first);
+    return _CategoryPathNames(parentName: parts.first, childName: parts.last);
+  }
+
+  String? _preferExplicitCategoryName(String? explicit, String? pathText) {
+    final text = explicit?.trim();
+    if (text == null || text.isEmpty) return null;
+    if (pathText != null && text == pathText.trim()) return null;
+    return text;
+  }
+
   String? _inferTypeFromCategoryHints({
     required String? parentCategoryName,
     required String? childCategoryName,
@@ -718,4 +774,11 @@ class ImportCsvMappingService {
     }
     return null;
   }
+}
+
+class _CategoryPathNames {
+  const _CategoryPathNames({this.parentName, this.childName});
+
+  final String? parentName;
+  final String? childName;
 }

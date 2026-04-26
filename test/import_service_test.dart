@@ -101,6 +101,21 @@ void main() {
     },
   );
 
+  test('parseText accepts three-level category path csv fields', () {
+    const text =
+        '账本,账户,分类路径,date,amount,type,note,tags\n'
+        '旅行账本,招商银行,出行 / 私家车 / 加油,2026-02-14 09:30,58.00,expense,周末加油,汽车';
+
+    final records = service.parseText(text, sourceType: ImportSourceType.csv);
+
+    expect(records, hasLength(1));
+    expect(records.first.accountBookName, '旅行账本');
+    expect(records.first.accountName, '招商银行');
+    expect(records.first.parentCategoryName, '出行');
+    expect(records.first.childCategoryName, '加油');
+    expect(records.first.tagNames, ['汽车']);
+  });
+
   test('parseText keeps transfer csv fields for target account and fee', () {
     const text =
         '账户,转入账户,date,amount,手续费,note\n'
