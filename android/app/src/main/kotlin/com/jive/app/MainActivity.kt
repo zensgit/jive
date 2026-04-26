@@ -187,6 +187,7 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        maybeNormalizeShareIntent(intent)
         super.onCreate(savedInstanceState)
         val filter = IntentFilter("com.jive.app.NEW_TRANSACTION")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -204,6 +205,7 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun onNewIntent(intent: Intent) {
+        maybeNormalizeShareIntent(intent)
         super.onNewIntent(intent)
         setIntent(intent)
         maybeHandleAutoDeepLink(intent)
@@ -270,6 +272,36 @@ class MainActivity: FlutterActivity() {
             "timestamp" to ts
         )
         sendEvent(payload)
+    }
+
+    private fun maybeNormalizeShareIntent(intent: Intent?) {
+        if (intent == null) return
+        if (intent.action != Intent.ACTION_SEND) return
+        val mimeType = intent.type ?: return
+        if (!mimeType.startsWith("text/")) return
+
+        val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)?.trim().orEmpty()
+        if (sharedText.isEmpty()) return
+
+        val subject = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.trim().orEmpty()
+        val sourceLabel = if (subject.isNotEmpty()) {
+            "来自系统分享：$subject"
+        } else {
+            "来自系统分享"
+        }
+        val uri = Uri.Builder()
+            .scheme("jive")
+            .authority("transaction")
+            .appendPath("new")
+            .appendQueryParameter("entrySource", "shareReceive")
+            .appendQueryParameter("sourceLabel", sourceLabel)
+            .appendQueryParameter("rawText", sharedText)
+            .appendQueryParameter("note", sharedText)
+            .build()
+
+        Log.i("JiveShare", "Normalized ACTION_SEND text into transaction deep link: $uri")
+        intent.action = Intent.ACTION_VIEW
+        intent.data = uri
     }
 
     private fun sendEvent(payload: Map<String, Any?>) {

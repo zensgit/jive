@@ -1,3 +1,5 @@
+import '../../core/service/speech_intent_parser.dart';
+import '../transactions/speech_entry_params_builder.dart';
 import '../transactions/transaction_entry_params.dart';
 
 class QuickActionDeepLinkRequest {
@@ -70,10 +72,31 @@ class QuickActionDeepLinkService {
     );
     final tagKeys = _splitCsv(_firstNonEmpty(query['tagKeys'], query['tags']));
     final date = _parseDate(_firstNonEmpty(query['date'], query['time']));
+    final rawText = _firstNonEmpty(query['rawText'], query['raw']);
+    final source = _entrySource(query['entrySource']);
+    final sourceLabel = _firstNonEmpty(query['sourceLabel'], query['source']);
+
+    if (source == TransactionEntrySource.shareReceive &&
+        amount == null &&
+        rawText != null) {
+      final intent = SpeechIntentParser().parse(rawText);
+      if (intent != null && intent.isValid) {
+        return const SpeechEntryParamsBuilder()
+            .build(intent, source: source, sourceLabel: sourceLabel)
+            .copyWith(
+              prefillBookId: bookId,
+              prefillDate: date,
+              prefillNote:
+                  _firstNonEmpty(query['note'], query['memo']) ??
+                  intent.cleanedText ??
+                  rawText,
+            );
+      }
+    }
 
     return TransactionEntryParams(
-      source: TransactionEntrySource.deepLink,
-      sourceLabel: _firstNonEmpty(query['sourceLabel'], query['source']),
+      source: source,
+      sourceLabel: sourceLabel,
       prefillAmount: amount,
       prefillType: type,
       prefillCategoryKey: categoryKey,
@@ -84,7 +107,7 @@ class QuickActionDeepLinkService {
       prefillNote: _firstNonEmpty(query['note'], query['memo']),
       prefillDate: date,
       prefillTagKeys: tagKeys.isEmpty ? null : tagKeys,
-      prefillRawText: _firstNonEmpty(query['rawText'], query['raw']),
+      prefillRawText: rawText,
       highlightFields: _missingFields(
         type: type,
         amount: amount,
@@ -94,6 +117,19 @@ class QuickActionDeepLinkService {
         subCategoryKey: subCategoryKey,
       ),
     );
+  }
+
+  static TransactionEntrySource _entrySource(String? raw) {
+    switch (raw?.trim()) {
+      case 'shareReceive':
+      case 'share_receive':
+        return TransactionEntrySource.shareReceive;
+      case 'ocrScreenshot':
+      case 'ocr_screenshot':
+        return TransactionEntrySource.ocrScreenshot;
+      default:
+        return TransactionEntrySource.deepLink;
+    }
   }
 
   static String _normalizedType(String? raw) {
