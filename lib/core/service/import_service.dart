@@ -791,11 +791,13 @@ class ImportService {
         : sourceType;
 
     // Try specialized parsers first
-    if (effectiveSource == ImportSourceType.wechat || WechatCsvParser.isWechatFormat(normalized)) {
+    if (effectiveSource == ImportSourceType.wechat ||
+        WechatCsvParser.isWechatFormat(normalized)) {
       final records = WechatCsvParser.parse(normalized);
       if (records.isNotEmpty) return records;
     }
-    if (effectiveSource == ImportSourceType.alipay || AlipayCsvParser.isAlipayFormat(normalized)) {
+    if (effectiveSource == ImportSourceType.alipay ||
+        AlipayCsvParser.isAlipayFormat(normalized)) {
       final records = AlipayCsvParser.parse(normalized);
       if (records.isNotEmpty) return records;
     }
@@ -871,16 +873,31 @@ class ImportService {
       final accountBookName = _pickValue(cells, headerMap, _accountBookAliases);
       final accountName = _pickValue(cells, headerMap, _assetAliases);
       final toAccountName = _pickValue(cells, headerMap, _toAssetAliases);
-      final parentCategoryName = _pickValue(
+      final categoryPathText = _pickValue(
+        cells,
+        headerMap,
+        _categoryPathAliases,
+      );
+      final categoryPath = _splitCategoryPath(categoryPathText);
+      final rawParentCategoryName = _pickValue(
         cells,
         headerMap,
         _parentCategoryAliases,
       );
-      final childCategoryName = _pickValue(
+      final rawChildCategoryName = _pickValue(
         cells,
         headerMap,
         _childCategoryAliases,
       );
+      final parentCategoryName =
+          _preferExplicitCategoryName(
+            rawParentCategoryName,
+            categoryPathText,
+          ) ??
+          categoryPath.parentName;
+      final childCategoryName =
+          _preferExplicitCategoryName(rawChildCategoryName, categoryPathText) ??
+          categoryPath.childName;
       final tagNames = _splitTagNames(
         _pickValue(cells, headerMap, _tagAliases),
       );
@@ -1330,6 +1347,7 @@ class ImportService {
           _accountBookAliases.contains(cell) ||
           _assetAliases.contains(cell) ||
           _toAssetAliases.contains(cell) ||
+          _categoryPathAliases.contains(cell) ||
           _parentCategoryAliases.contains(cell) ||
           _childCategoryAliases.contains(cell) ||
           _tagAliases.contains(cell) ||
@@ -1430,6 +1448,16 @@ class ImportService {
     '对方账户',
   };
 
+  static const Set<String> _categoryPathAliases = {
+    'categorypath',
+    'fullcategory',
+    '分类路径',
+    '完整分类',
+    '分类全路径',
+    '大类/中类/小类',
+    '三级分类',
+  };
+
   static const Set<String> _parentCategoryAliases = {
     '一级分类',
     'parentcategory',
@@ -1485,6 +1513,26 @@ class ImportService {
         .map((item) => item.trim())
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
+  }
+
+  _CategoryPathNames _splitCategoryPath(String? raw) {
+    final text = raw?.trim();
+    if (text == null || text.isEmpty) return const _CategoryPathNames();
+    final parts = text
+        .split(RegExp(r'\s*(?:/|／|>|＞|\\|、)\s*'))
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) return const _CategoryPathNames();
+    if (parts.length == 1) return _CategoryPathNames(parentName: parts.first);
+    return _CategoryPathNames(parentName: parts.first, childName: parts.last);
+  }
+
+  String? _preferExplicitCategoryName(String? explicit, String? pathText) {
+    final text = explicit?.trim();
+    if (text == null || text.isEmpty) return null;
+    if (pathText != null && text == pathText.trim()) return null;
+    return text;
   }
 
   String? _inferTypeFromCategoryHints({
@@ -1771,4 +1819,11 @@ class ImportService {
         return ImportDuplicatePolicy.keepLatest;
     }
   }
+}
+
+class _CategoryPathNames {
+  const _CategoryPathNames({this.parentName, this.childName});
+
+  final String? parentName;
+  final String? childName;
 }

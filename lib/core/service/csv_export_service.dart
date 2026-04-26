@@ -8,6 +8,7 @@ import '../database/account_model.dart';
 import '../database/category_model.dart';
 import '../database/tag_model.dart';
 import '../database/transaction_model.dart';
+import 'category_path_service.dart';
 
 enum CsvExportTransactionType {
   all('all', '全部'),
@@ -97,7 +98,7 @@ class CsvExportService {
     final tagByKey = {for (final tag in tags) tag.key: tag};
 
     final rows = <List<String>>[
-      ['日期', '类型(收入/支出/转账)', '金额', '分类', '子分类', '备注', '账户', '标签'],
+      ['日期', '类型(收入/支出/转账)', '金额', '分类', '子分类', '分类路径', '备注', '账户', '标签'],
     ];
 
     for (final transaction in transactions) {
@@ -107,6 +108,7 @@ class CsvExportService {
         transaction.amount.toStringAsFixed(2),
         _categoryLabel(transaction, categoryByKey),
         _subCategoryLabel(transaction, categoryByKey),
+        _categoryPathLabel(transaction, categories),
         transaction.note?.trim() ?? '',
         _accountLabel(transaction, accountById),
         _tagLabel(transaction, tagByKey),
@@ -130,11 +132,12 @@ class CsvExportService {
       categoryKey: categoryKey,
       type: type,
     );
+    final categories = await _isar.collection<JiveCategory>().where().findAll();
     final directory = await _resolveExportDirectory();
     final file = File(
       '${directory.path}/${_buildFileName(start, end, categoryKey: categoryKey, type: type)}',
     );
-    await file.writeAsString(_buildCsv(transactions), flush: true);
+    await file.writeAsString(_buildCsv(transactions, categories), flush: true);
     return file;
   }
 
@@ -279,7 +282,10 @@ class CsvExportService {
     return '${segments.join('_')}.csv';
   }
 
-  String _buildCsv(List<JiveTransaction> transactions) {
+  String _buildCsv(
+    List<JiveTransaction> transactions,
+    List<JiveCategory> categories,
+  ) {
     final buffer = StringBuffer()..write('\uFEFF');
     buffer.writeln(
       [
@@ -290,6 +296,7 @@ class CsvExportService {
         '来源',
         '一级分类',
         '二级分类',
+        '分类路径',
         '一级分类Key',
         '二级分类Key',
         '账户ID',
@@ -322,6 +329,7 @@ class CsvExportService {
           tx.source,
           tx.category,
           tx.subCategory,
+          _categoryPathLabel(tx, categories),
           tx.categoryKey,
           tx.subCategoryKey,
           tx.accountId,
@@ -393,6 +401,27 @@ class CsvExportService {
     return subCategory?.name ?? transaction.subCategory ?? '';
   }
 
+  String _categoryPathLabel(
+    JiveTransaction transaction,
+    Iterable<JiveCategory> categories,
+  ) {
+    if (transaction.type == 'transfer') {
+      return '';
+    }
+    final path = const CategoryPathService().resolve(
+      categories,
+      categoryKey: transaction.categoryKey,
+      subCategoryKey: transaction.subCategoryKey,
+    );
+    if (!path.isEmpty) return path.displayName;
+    final fallback = [transaction.category, transaction.subCategory]
+        .whereType<String>()
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    return fallback.join(' / ');
+  }
+
   String _accountLabel(
     JiveTransaction transaction,
     Map<int, JiveAccount> accountById,
@@ -450,10 +479,9 @@ class CsvExportService {
 
   String _sanitizeFileSegment(String value) {
     final sanitized = value.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
-    final normalized = sanitized.replaceAll(RegExp(r'_+'), '_').replaceAll(
-      RegExp(r'^_|_$'),
-      '',
-    );
+    final normalized = sanitized
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
     return normalized.isEmpty ? 'category' : normalized;
   }
 
