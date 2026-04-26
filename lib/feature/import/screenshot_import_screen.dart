@@ -3,17 +3,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import '../../core/database/transaction_model.dart';
-import '../../core/service/database_service.dart';
 import '../../core/service/screenshot_ocr_service.dart';
-import '../../core/service/transaction_service.dart';
+import '../transactions/transaction_entry_params.dart';
+import '../transactions/transaction_form_screen.dart';
 
 class ScreenshotImportScreen extends StatefulWidget {
   const ScreenshotImportScreen({super.key});
 
   @override
-  State<ScreenshotImportScreen> createState() =>
-      _ScreenshotImportScreenState();
+  State<ScreenshotImportScreen> createState() => _ScreenshotImportScreenState();
 }
 
 class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
@@ -73,7 +71,9 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
       _amountController.text = result.amount.toStringAsFixed(2);
       _merchantController.text = result.merchant ?? '';
       _parsedDate = result.timestamp ?? DateTime.now();
-      _dateController.text = DateFormat('yyyy-MM-dd HH:mm').format(_parsedDate!);
+      _dateController.text = DateFormat(
+        'yyyy-MM-dd HH:mm',
+      ).format(_parsedDate!);
       _selectedSource = result.source;
 
       setState(() => _isProcessing = false);
@@ -85,37 +85,45 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
     }
   }
 
-  Future<void> _saveTransaction() async {
+  Future<void> _openTransactionEditor() async {
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
       _showSnackBar('请输入有效金额');
       return;
     }
 
-    final isar = await DatabaseService.getInstance();
-    final tx = JiveTransaction()
-      ..amount = amount
-      ..source = _sourceLabel(_selectedSource)
-      ..timestamp = _parsedDate ?? DateTime.now()
-      ..rawText = _result?.rawText
-      ..note = _merchantController.text.isNotEmpty ? _merchantController.text : null
-      ..type = 'expense';
-
-    TransactionService.touchSyncMetadata(tx);
-
-    await isar.writeTxn(() async {
-      await isar.jiveTransactions.put(tx);
-    });
-
+    final merchant = _merchantController.text.trim();
+    final source = _sourceLabel(_selectedSource);
+    final note = [
+      if (merchant.isNotEmpty) merchant,
+      if (_selectedSource != PaymentSource.unknown) source,
+    ].join(' · ');
+    final params = TransactionEntryParams(
+      source: TransactionEntrySource.ocrScreenshot,
+      sourceLabel: '来自截图识别（$source）',
+      prefillAmount: amount,
+      prefillType: 'expense',
+      prefillNote: note.isEmpty ? null : note,
+      prefillDate: _parsedDate ?? DateTime.now(),
+      prefillRawText: _result?.rawText,
+      highlightFields: const [
+        TransactionHighlightField.account,
+        TransactionHighlightField.category,
+      ],
+    );
     if (!mounted) return;
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => TransactionFormScreen(params: params)),
+    );
+    if (!mounted || saved != true) return;
     _showSnackBar('已记录');
-    Navigator.of(context).pop();
+    Navigator.of(context).pop(true);
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   String _sourceLabel(PaymentSource source) {
@@ -146,8 +154,16 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
     if (time == null || !mounted) return;
 
     setState(() {
-      _parsedDate = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-      _dateController.text = DateFormat('yyyy-MM-dd HH:mm').format(_parsedDate!);
+      _parsedDate = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+      _dateController.text = DateFormat(
+        'yyyy-MM-dd HH:mm',
+      ).format(_parsedDate!);
     });
   }
 
@@ -183,7 +199,11 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.image_outlined, size: 48, color: theme.colorScheme.outline),
+                      Icon(
+                        Icons.image_outlined,
+                        size: 48,
+                        color: theme.colorScheme.outline,
+                      ),
                       const SizedBox(height: 8),
                       Text('选择支付截图', style: theme.textTheme.bodyLarge),
                     ],
@@ -221,9 +241,7 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
               const SizedBox(height: 24),
               const Center(child: CircularProgressIndicator()),
               const SizedBox(height: 8),
-              Center(
-                child: Text('正在识别...', style: theme.textTheme.bodyMedium),
-              ),
+              Center(child: Text('正在识别...', style: theme.textTheme.bodyMedium)),
             ],
 
             // Error
@@ -261,7 +279,9 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
                           prefixText: '¥ ',
                           border: OutlineInputBorder(),
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                       ),
                       const SizedBox(height: 12),
 
@@ -311,9 +331,9 @@ class _ScreenshotImportScreenState extends State<ScreenshotImportScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
-                          onPressed: _saveTransaction,
+                          onPressed: _openTransactionEditor,
                           icon: const Icon(Icons.check),
-                          label: const Text('记录'),
+                          label: const Text('去确认入账'),
                         ),
                       ),
                     ],

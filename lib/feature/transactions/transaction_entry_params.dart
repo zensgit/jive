@@ -53,9 +53,11 @@ class TransactionEntryParams {
   final String? prefillSubCategoryKey;
   final int? prefillAccountId;
   final int? prefillToAccountId;
+  final int? prefillBookId;
   final String? prefillNote;
   final DateTime? prefillDate;
   final List<String>? prefillTagKeys;
+  final String? prefillRawText;
 
   /// Fields that should be visually called out because the external source
   /// did not provide enough information to save safely.
@@ -77,9 +79,11 @@ class TransactionEntryParams {
     this.prefillSubCategoryKey,
     this.prefillAccountId,
     this.prefillToAccountId,
+    this.prefillBookId,
     this.prefillNote,
     this.prefillDate,
     this.prefillTagKeys,
+    this.prefillRawText,
     this.highlightFields = const [],
     this.editingTransaction,
   });
@@ -166,9 +170,11 @@ class TransactionEntryParams {
     String? prefillSubCategoryKey,
     int? prefillAccountId,
     int? prefillToAccountId,
+    int? prefillBookId,
     String? prefillNote,
     DateTime? prefillDate,
     List<String>? prefillTagKeys,
+    String? prefillRawText,
     List<String>? highlightFields,
     JiveTransaction? editingTransaction,
   }) {
@@ -184,9 +190,11 @@ class TransactionEntryParams {
           prefillSubCategoryKey ?? this.prefillSubCategoryKey,
       prefillAccountId: prefillAccountId ?? this.prefillAccountId,
       prefillToAccountId: prefillToAccountId ?? this.prefillToAccountId,
+      prefillBookId: prefillBookId ?? this.prefillBookId,
       prefillNote: prefillNote ?? this.prefillNote,
       prefillDate: prefillDate ?? this.prefillDate,
       prefillTagKeys: prefillTagKeys ?? this.prefillTagKeys,
+      prefillRawText: prefillRawText ?? this.prefillRawText,
       highlightFields: highlightFields ?? this.highlightFields,
       editingTransaction: editingTransaction ?? this.editingTransaction,
     );

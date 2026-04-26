@@ -62,6 +62,7 @@ class QuickActionDeepLinkService {
     final toAccountId = int.tryParse(
       query['toAccountId'] ?? query['transferAccountId'] ?? '',
     );
+    final bookId = int.tryParse(query['bookId'] ?? '');
     final categoryKey = _firstNonEmpty(query['categoryKey'], query['category']);
     final subCategoryKey = _firstNonEmpty(
       query['subCategoryKey'],
@@ -79,9 +80,11 @@ class QuickActionDeepLinkService {
       prefillSubCategoryKey: subCategoryKey,
       prefillAccountId: accountId,
       prefillToAccountId: toAccountId,
+      prefillBookId: bookId,
       prefillNote: _firstNonEmpty(query['note'], query['memo']),
       prefillDate: date,
       prefillTagKeys: tagKeys.isEmpty ? null : tagKeys,
+      prefillRawText: _firstNonEmpty(query['rawText'], query['raw']),
       highlightFields: _missingFields(
         type: type,
         amount: amount,
