@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:isar/isar.dart';
 
-import '../../core/database/transaction_model.dart';
 import '../../core/service/conversational_parser.dart';
-import '../../core/service/data_reload_bus.dart';
+import '../transactions/transaction_entry_params.dart';
+import '../transactions/transaction_form_screen.dart';
 
 /// Chat-style conversational input screen for natural language bookkeeping.
 class ConversationalInputScreen extends StatefulWidget {
@@ -62,35 +61,21 @@ class _ConversationalInputScreenState extends State<ConversationalInputScreen> {
     _focusNode.requestFocus();
   }
 
-  Future<void> _saveTransaction(_EditableTransaction et) async {
-    final isar = Isar.getInstance()!;
-    final tx = JiveTransaction()
-      ..amount = et.amount
-      ..type = et.type
-      ..category = et.category
-      ..note = et.note
-      ..timestamp = et.date
-      ..source = 'conversational'
-      ..bookId = widget.bookId;
-
-    await isar.writeTxn(() async {
-      await isar.jiveTransactions.put(tx);
-    });
-    DataReloadBus.notify();
-  }
-
   Future<void> _saveAll() async {
-    for (final et in _results) {
-      if (!et.saved) {
-        await _saveTransaction(et);
-        et.saved = true;
+    var confirmed = 0;
+    for (var i = 0; i < _results.length; i += 1) {
+      if (_results[i].saved) continue;
+      final saved = await _confirmSingle(i);
+      if (saved) {
+        confirmed += 1;
+      } else {
+        break;
       }
     }
-    if (mounted) {
-      setState(() {});
+    if (mounted && confirmed > 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('已记录 ${_results.length} 笔交易'),
+          content: Text('已确认 $confirmed 笔交易'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -98,11 +83,9 @@ class _ConversationalInputScreenState extends State<ConversationalInputScreen> {
   }
 
   Future<void> _saveSingle(int index) async {
-    final et = _results[index];
-    if (et.saved) return;
-    await _saveTransaction(et);
-    if (mounted) {
-      setState(() => et.saved = true);
+    if (_results[index].saved) return;
+    final saved = await _confirmSingle(index);
+    if (mounted && saved) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('已记录'),
@@ -111,6 +94,48 @@ class _ConversationalInputScreenState extends State<ConversationalInputScreen> {
         ),
       );
     }
+  }
+
+  Future<bool> _confirmSingle(int index) async {
+    final et = _results[index];
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => TransactionFormScreen(params: _paramsFor(et)),
+      ),
+    );
+    if (!mounted || saved != true) return false;
+    setState(() => et.saved = true);
+    return true;
+  }
+
+  TransactionEntryParams _paramsFor(_EditableTransaction et) {
+    return TransactionEntryParams(
+      source: TransactionEntrySource.conversation,
+      sourceLabel: '来自对话记账',
+      prefillAmount: et.amount,
+      prefillType: et.type,
+      prefillCategoryKey: et.category,
+      prefillSubCategoryKey: et.subCategory,
+      prefillBookId: widget.bookId,
+      prefillNote: et.note,
+      prefillDate: et.date,
+      prefillRawText: _controller.text.trim(),
+      highlightFields: _missingFieldsFor(et),
+    );
+  }
+
+  List<String> _missingFieldsFor(_EditableTransaction et) {
+    final fields = <String>[];
+    if (et.amount <= 0) {
+      fields.add(TransactionHighlightField.amount);
+    }
+    fields.add(TransactionHighlightField.account);
+    if (et.type == 'transfer') {
+      fields.add(TransactionHighlightField.transferAccount);
+    } else {
+      fields.add(TransactionHighlightField.category);
+    }
+    return fields;
   }
 
   @override
@@ -155,10 +180,7 @@ class _ConversationalInputScreenState extends State<ConversationalInputScreen> {
                   filled: true,
                   fillColor: colorScheme.surfaceContainerHighest.withAlpha(51),
                   suffixIcon: IconButton(
-                    icon: Icon(
-                      Icons.send_rounded,
-                      color: colorScheme.primary,
-                    ),
+                    icon: Icon(Icons.send_rounded, color: colorScheme.primary),
                     onPressed: _parse,
                   ),
                 ),
@@ -179,11 +201,10 @@ class _ConversationalInputScreenState extends State<ConversationalInputScreen> {
                 child: SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed:
-                        _results.every((e) => e.saved) ? null : _saveAll,
+                    onPressed: _results.every((e) => e.saved) ? null : _saveAll,
                     icon: const Icon(Icons.check_circle_outline),
                     label: Text(
-                      _results.every((e) => e.saved) ? '全部已记录' : '全部记录',
+                      _results.every((e) => e.saved) ? '全部已确认' : '逐笔确认',
                     ),
                   ),
                 ),
@@ -207,17 +228,19 @@ class _ConversationalInputScreenState extends State<ConversationalInputScreen> {
             ),
           ),
         ),
-        ..._examples.map((example) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: ActionChip(
-                label: Text(example),
-                avatar: const Icon(Icons.lightbulb_outline, size: 18),
-                onPressed: () {
-                  _controller.text = example;
-                  _parse();
-                },
-              ),
-            )),
+        ..._examples.map(
+          (example) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: ActionChip(
+              label: Text(example),
+              avatar: const Icon(Icons.lightbulb_outline, size: 18),
+              onPressed: () {
+                _controller.text = example;
+                _parse();
+              },
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -263,6 +286,7 @@ class _EditableTransaction {
   double amount;
   String type;
   String? category;
+  String? subCategory;
   DateTime date;
   String? note;
   String? accountHint;
@@ -273,6 +297,7 @@ class _EditableTransaction {
     required this.amount,
     required this.type,
     this.category,
+    this.subCategory,
     required this.date,
     this.note,
     this.accountHint,
@@ -284,11 +309,21 @@ class _EditableTransaction {
       amount: pt.amount,
       type: pt.type,
       category: pt.category,
+      subCategory: pt.subCategory,
       date: pt.date,
       note: pt.note,
       accountHint: pt.accountHint,
       splitCount: pt.splitCount,
     );
+  }
+
+  String? get categoryPath {
+    final parent = category?.trim() ?? '';
+    final child = subCategory?.trim() ?? '';
+    if (parent.isEmpty && child.isEmpty) return null;
+    if (parent.isEmpty) return child;
+    if (child.isEmpty || child == parent) return parent;
+    return '$parent / $child';
   }
 }
 
@@ -356,8 +391,10 @@ class _TransactionCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: _typeColor(tx.type, cs).withAlpha(26),
                     borderRadius: BorderRadius.circular(4),
@@ -372,8 +409,10 @@ class _TransactionCard extends StatelessWidget {
                 if (tx.splitCount != null) ...[
                   const SizedBox(width: 8),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.orange.withAlpha(26),
                       borderRadius: BorderRadius.circular(4),
@@ -390,10 +429,7 @@ class _TransactionCard extends StatelessWidget {
                 if (tx.saved)
                   Icon(Icons.check_circle, color: cs.primary, size: 20)
                 else
-                  TextButton(
-                    onPressed: onSave,
-                    child: const Text('记录'),
-                  ),
+                  TextButton(onPressed: onSave, child: const Text('确认')),
               ],
             ),
             const SizedBox(height: 8),
@@ -403,20 +439,20 @@ class _TransactionCard extends StatelessWidget {
               runSpacing: 4,
               children: [
                 _infoChip(Icons.calendar_today, dateStr, theme),
-                if (tx.category != null)
-                  _infoChip(Icons.category, tx.category!, theme),
+                if (tx.categoryPath != null)
+                  _infoChip(Icons.category, tx.categoryPath!, theme),
                 if (tx.note != null && tx.note!.isNotEmpty)
                   _infoChip(Icons.notes, tx.note!, theme),
                 if (tx.accountHint != null)
-                  _infoChip(Icons.account_balance_wallet, tx.accountHint!,
-                      theme),
+                  _infoChip(
+                    Icons.account_balance_wallet,
+                    tx.accountHint!,
+                    theme,
+                  ),
               ],
             ),
             // Editable fields.
-            if (!tx.saved) ...[
-              const Divider(height: 20),
-              _editRow(context),
-            ],
+            if (!tx.saved) ...[const Divider(height: 20), _editRow(context)],
           ],
         ),
       ),
@@ -470,6 +506,7 @@ class _TransactionCard extends StatelessWidget {
             value: transaction.category ?? '',
             onChanged: (v) {
               transaction.category = v.isEmpty ? null : v;
+              transaction.subCategory = null;
               onChanged();
             },
           ),

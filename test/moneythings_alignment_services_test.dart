@@ -117,7 +117,7 @@ void main() {
     test('parses transaction links and highlights missing fields', () {
       final request = QuickActionDeepLinkService.parse(
         Uri.parse(
-          'jive://transaction/new?type=expense&amount=12.5&note=Coffee',
+          'jive://transaction/new?type=expense&amount=12.5&note=Coffee&bookId=7&raw=Coffee%20receipt',
         ),
       );
 
@@ -125,6 +125,8 @@ void main() {
       expect(params?.source, TransactionEntrySource.deepLink);
       expect(params?.prefillAmount, 12.5);
       expect(params?.prefillNote, 'Coffee');
+      expect(params?.prefillBookId, 7);
+      expect(params?.prefillRawText, 'Coffee receipt');
       expect(
         params?.highlightFields,
         contains(TransactionHighlightField.account),
