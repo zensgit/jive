@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:jive/core/database/account_model.dart';
+import 'package:jive/core/database/auto_draft_model.dart';
 import 'package:jive/core/database/book_model.dart';
 import 'package:jive/core/database/category_model.dart';
 import 'package:jive/core/database/template_model.dart';
@@ -9,6 +12,7 @@ import 'package:jive/core/service/account_group_service.dart';
 import 'package:jive/core/service/category_path_service.dart';
 import 'package:jive/core/service/object_share_policy_service.dart';
 import 'package:jive/core/service/quick_action_service.dart';
+import 'package:jive/feature/auto/auto_draft_entry_params_builder.dart';
 import 'package:jive/feature/quick_entry/quick_action_deep_link_service.dart';
 import 'package:jive/feature/transactions/transaction_entry_params.dart';
 
@@ -65,6 +69,64 @@ void main() {
         params.shouldHighlight(TransactionHighlightField.account),
         isFalse,
       );
+    });
+  });
+
+  group('AutoDraftEntryParamsBuilder', () {
+    test('maps transfer drafts to editor params and preserves service fee', () {
+      final draft = JiveAutoDraft()
+        ..amount = 188.8
+        ..source = 'WeChat'
+        ..timestamp = DateTime(2026, 4, 26, 9)
+        ..rawText = '微信零钱转到招商银行'
+        ..type = 'transfer'
+        ..category = '转账'
+        ..subCategory = '转账'
+        ..accountId = 1
+        ..metadataJson = jsonEncode({'transferServiceCharge': 1.5})
+        ..createdAt = DateTime(2026, 4, 26, 9, 1);
+
+      final params = const AutoDraftEntryParamsBuilder().build(draft);
+
+      expect(params.source, TransactionEntrySource.autoDraft);
+      expect(params.sourceBannerText, '来自自动识别「WeChat」');
+      expect(params.prefillType, 'transfer');
+      expect(params.prefillAmount, 188.8);
+      expect(params.prefillAccountId, 1);
+      expect(params.prefillRawText, '微信零钱转到招商银行');
+      expect(params.prefillExchangeFee, 1.5);
+      expect(params.prefillExchangeFeeType, 'fixed');
+      expect(
+        params.highlightFields,
+        contains(TransactionHighlightField.transferAccount),
+      );
+      expect(
+        params.highlightFields,
+        isNot(contains(TransactionHighlightField.category)),
+      );
+    });
+
+    test('maps category names as fallback when category keys are missing', () {
+      final draft = JiveAutoDraft()
+        ..amount = 15
+        ..source = 'Alipay'
+        ..timestamp = DateTime(2026, 4, 26, 12)
+        ..rawText = '午餐 15 元'
+        ..type = 'expense'
+        ..category = '餐饮'
+        ..subCategory = '午餐'
+        ..accountId = 2
+        ..tagKeys = ['tag_lunch']
+        ..createdAt = DateTime(2026, 4, 26, 12, 1);
+
+      final params = const AutoDraftEntryParamsBuilder().build(draft);
+
+      expect(params.prefillType, 'expense');
+      expect(params.prefillCategoryKey, '餐饮');
+      expect(params.prefillSubCategoryKey, '午餐');
+      expect(params.prefillAccountId, 2);
+      expect(params.prefillTagKeys, ['tag_lunch']);
+      expect(params.highlightFields, isEmpty);
     });
   });
 
