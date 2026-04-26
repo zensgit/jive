@@ -8,12 +8,14 @@ import 'package:jive/core/database/book_model.dart';
 import 'package:jive/core/database/category_model.dart';
 import 'package:jive/core/database/template_model.dart';
 import 'package:jive/core/model/quick_action.dart';
+import 'package:jive/core/service/speech_intent_parser.dart';
 import 'package:jive/core/service/account_group_service.dart';
 import 'package:jive/core/service/category_path_service.dart';
 import 'package:jive/core/service/object_share_policy_service.dart';
 import 'package:jive/core/service/quick_action_service.dart';
 import 'package:jive/feature/auto/auto_draft_entry_params_builder.dart';
 import 'package:jive/feature/quick_entry/quick_action_deep_link_service.dart';
+import 'package:jive/feature/transactions/speech_entry_params_builder.dart';
 import 'package:jive/feature/transactions/transaction_entry_params.dart';
 
 void main() {
@@ -127,6 +129,72 @@ void main() {
       expect(params.prefillAccountId, 2);
       expect(params.prefillTagKeys, ['tag_lunch']);
       expect(params.highlightFields, isEmpty);
+    });
+  });
+
+  group('SpeechEntryParamsBuilder', () {
+    test('maps valid voice expense into editor params', () {
+      final intent = SpeechIntent(
+        rawText: '今天午餐花了 35 元 微信',
+        cleanedText: '午餐 微信',
+        amount: 35,
+        timestamp: DateTime(2026, 4, 26, 12),
+        type: 'expense',
+        accountHint: '微信',
+        toAccountHint: null,
+      );
+
+      final params = const SpeechEntryParamsBuilder().build(
+        intent,
+        accounts: [_account(id: 8, name: '微信零钱')],
+      );
+
+      expect(params.source, TransactionEntrySource.voice);
+      expect(params.prefillAmount, 35);
+      expect(params.prefillType, 'expense');
+      expect(params.prefillAccountId, 8);
+      expect(params.prefillNote, '午餐 微信');
+      expect(params.prefillRawText, '今天午餐花了 35 元 微信');
+      expect(
+        params.highlightFields,
+        contains(TransactionHighlightField.category),
+      );
+      expect(
+        params.highlightFields,
+        isNot(contains(TransactionHighlightField.account)),
+      );
+    });
+
+    test('maps voice transfer target account highlight', () {
+      final intent = SpeechIntent(
+        rawText: '从微信零钱转到招商银行 500 元',
+        cleanedText: '从微信零钱转到招商银行',
+        amount: 500,
+        timestamp: DateTime(2026, 4, 26, 12),
+        type: 'transfer',
+        accountHint: '微信',
+        toAccountHint: '招商',
+      );
+
+      final params = const SpeechEntryParamsBuilder().build(
+        intent,
+        accounts: [
+          _account(id: 1, name: '微信零钱'),
+          _account(id: 2, name: '招商银行'),
+        ],
+      );
+
+      expect(params.prefillType, 'transfer');
+      expect(params.prefillAccountId, 1);
+      expect(params.prefillToAccountId, 2);
+      expect(
+        params.highlightFields,
+        isNot(contains(TransactionHighlightField.transferAccount)),
+      );
+      expect(
+        params.highlightFields,
+        isNot(contains(TransactionHighlightField.category)),
+      );
     });
   });
 
