@@ -38,6 +38,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Prepare full billing smoke reports
+        run: |
+          set -euo pipefail
+          report_dir="$RUNNER_TEMP/saas-full-billing-staging-smoke"
+          rm -rf "$report_dir"
+          mkdir -p "$report_dir"
+          echo "FULL_BILLING_SMOKE_REPORT_DIR=$report_dir" >> "$GITHUB_ENV"
+          {
+            printf '# SaaS Full Billing Staging Smoke\n\n'
+            printf -- '- repository: %s\n' "${{ github.repository }}"
+            printf -- '- runId: %s\n' "${{ github.run_id }}"
+            printf -- '- runAttempt: %s\n' "${{ github.run_attempt }}"
+            printf -- '- ref: %s\n' "${{ github.ref_name }}"
+            printf -- '- sha: %s\n' "${{ github.sha }}"
+            printf -- '- syncDomesticPaymentSecret: %s\n' "${{ inputs.sync_domestic_payment_secret }}"
+            printf -- '- deployPaymentSmokeFunctions: %s\n' "${{ inputs.deploy_payment_smoke_functions }}"
+            printf -- '- runDomesticPaymentE2e: %s\n' "${{ inputs.run_domestic_payment_e2e }}"
+          } > "$report_dir/metadata.md"
+
       - name: Guard full billing smoke secrets
         env:
           STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
@@ -186,11 +205,15 @@ jobs:
           echo "STAGING_ENV_FILE=$env_file" >> "$GITHUB_ENV"
 
       - name: Run full billing function smoke
+        id: run_full_billing_smoke
         env:
           SUPABASE_FUNCTIONS_URL: ${{ secrets.STAGING_SUPABASE_FUNCTIONS_URL }}
         run: |
           set -euo pipefail
           args=(--profile full --env-file "$STAGING_ENV_FILE")
+          report_dir="${FULL_BILLING_SMOKE_REPORT_DIR:-$RUNNER_TEMP/saas-full-billing-staging-smoke}"
+          mkdir -p "$report_dir"
+          log_file="$report_dir/smoke.log"
 
           if [[ -n "${SUPABASE_FUNCTIONS_URL:-}" ]]; then
             args+=(--functions-url "$SUPABASE_FUNCTIONS_URL")
@@ -200,4 +223,118 @@ jobs:
             args+=(--run-domestic-payment-e2e)
           fi
 
-          bash scripts/run_saas_staging_function_smoke.sh "${args[@]}"
+          set -o pipefail
+          bash scripts/run_saas_staging_function_smoke.sh "${args[@]}" 2>&1 | tee "$log_file"
+
+      - name: Publish full billing smoke summary
+        if: always()
+        env:
+          SMOKE_OUTCOME: ${{ steps.run_full_billing_smoke.outcome }}
+        run: |
+          set -euo pipefail
+          report_dir="${FULL_BILLING_SMOKE_REPORT_DIR:-$RUNNER_TEMP/saas-full-billing-staging-smoke}"
+          mkdir -p "$report_dir"
+          metadata_file="$report_dir/metadata.md"
+          log_file="$report_dir/smoke.log"
+          summary_file="$report_dir/summary.md"
+          status="FAIL"
+          if [[ "$SMOKE_OUTCOME" == "success" ]]; then
+            status="PASS"
+          elif [[ "$SMOKE_OUTCOME" == "skipped" ]]; then
+            status="SKIPPED"
+          fi
+
+          {
+            if [[ -f "$metadata_file" ]]; then
+              cat "$metadata_file"
+            else
+              printf '# SaaS Full Billing Staging Smoke\n'
+            fi
+            printf '\n## Result\n\n'
+            printf -- '- status: %s\n' "$status"
+            printf -- '- smokeOutcome: %s\n' "$SMOKE_OUTCOME"
+            printf -- '- reportDirectory: %s\n' "$report_dir"
+            printf '\n## Smoke Log Tail\n\n'
+            printf '```text\n'
+            if [[ -f "$log_file" ]]; then
+              tail -n 120 "$log_file"
+            else
+              printf 'smoke log was not created\n'
+            fi
+            printf '\n```\n'
+          } > "$summary_file"
+
+          cat "$summary_file" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Guard full billing smoke artifacts
+        id: guard_full_billing_smoke_artifacts
+        if: always()
+        env:
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_PUBSUB_BEARER_TOKEN: ${{ secrets.STAGING_PUBSUB_BEARER_TOKEN }}
+          STAGING_ADMIN_API_TOKEN: ${{ secrets.STAGING_ADMIN_API_TOKEN }}
+          STAGING_ANALYTICS_ADMIN_TOKEN: ${{ secrets.STAGING_ANALYTICS_ADMIN_TOKEN }}
+          STAGING_NOTIFICATION_ADMIN_TOKEN: ${{ secrets.STAGING_NOTIFICATION_ADMIN_TOKEN }}
+          STAGING_DOMESTIC_PAYMENT_WEBHOOK_TOKEN: ${{ secrets.STAGING_DOMESTIC_PAYMENT_WEBHOOK_TOKEN }}
+        run: |
+          set -euo pipefail
+          report_dir="${FULL_BILLING_SMOKE_REPORT_DIR:-$RUNNER_TEMP/saas-full-billing-staging-smoke}"
+          [[ -d "$report_dir" ]] || exit 0
+
+          blocked_file="$(mktemp)"
+          leaked_file="$(mktemp)"
+          trap 'rm -f "$blocked_file" "$leaked_file"' EXIT
+
+          find "$report_dir" -type f \
+              \( \
+                -name '*.env' -o \
+                -name '*.pem' -o \
+                -name '*.key' -o \
+                -iname '*secret*' -o \
+                -iname '*secrets*' -o \
+                -iname '*credential*' -o \
+                -iname '*credentials*' -o \
+                -iname '*dart-defines*' \
+              \) | sort > "$blocked_file"
+
+          if [[ -s "$blocked_file" ]]; then
+            printf 'SaaS full billing artifact guard blocked sensitive-looking files:\n' >&2
+            sed 's/^/ - /' "$blocked_file" >&2
+            exit 1
+          fi
+
+          keys=(
+            STAGING_SUPABASE_ANON_KEY
+            STAGING_SUPABASE_ACCESS_TOKEN
+            STAGING_SUPABASE_SERVICE_ROLE_KEY
+            STAGING_PUBSUB_BEARER_TOKEN
+            STAGING_ADMIN_API_TOKEN
+            STAGING_ANALYTICS_ADMIN_TOKEN
+            STAGING_NOTIFICATION_ADMIN_TOKEN
+            STAGING_DOMESTIC_PAYMENT_WEBHOOK_TOKEN
+          )
+
+          for key in "${keys[@]}"; do
+            value="${!key:-}"
+            if [[ -n "$value" && "${#value}" -ge 8 ]] &&
+              grep -R -F -q -- "$value" "$report_dir"; then
+              printf '%s\n' "$key" >> "$leaked_file"
+            fi
+          done
+
+          if [[ -s "$leaked_file" ]]; then
+            printf 'SaaS full billing artifact guard found secret values in reports:\n' >&2
+            sort -u "$leaked_file" | sed 's/^/ - /' >&2
+            exit 1
+          fi
+
+      - name: Upload full billing smoke reports
+        if: always() && steps.guard_full_billing_smoke_artifacts.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: saas-full-billing-smoke-${{ github.run_id }}
+          path: ${{ runner.temp }}/saas-full-billing-staging-smoke
+          if-no-files-found: warn
