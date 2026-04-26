@@ -41,6 +41,7 @@ type DomesticWebhookSingleResult = {
 };
 
 type DomesticWebhookQuery = {
+  insert(payload: Record<string, unknown>): DomesticWebhookQuery;
   upsert(
     payload: Record<string, unknown>,
     options?: Record<string, unknown>,
@@ -200,10 +201,18 @@ export async function handleDomesticWebhookRequest(
         updated_at: now,
       };
 
-      const { data, error } = await adminClient.from("user_subscriptions")
-        .upsert(payload, {
-          onConflict: "platform,purchase_token",
-        }).select().single();
+      const { data: existingSubscription } = await adminClient.from(
+        "user_subscriptions",
+      ).select("id").eq("source_order_no", parsedBody.order_no).single();
+
+      const subscriptionQuery = existingSubscription == null
+        ? adminClient.from("user_subscriptions").insert(payload)
+        : adminClient.from("user_subscriptions").update(payload).eq(
+          "id",
+          existingSubscription.id,
+        );
+
+      const { data, error } = await subscriptionQuery.select().single();
       if (error != null) {
         logError(
           "domestic-payment-webhook subscription upsert failed",

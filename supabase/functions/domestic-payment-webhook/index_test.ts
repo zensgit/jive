@@ -174,19 +174,55 @@ Deno.test("handleDomesticWebhookRequest projects paid orders to subscriptions", 
   assertEquals(orderUpdate?.payload.provider_trade_no, "ali_trade_paid");
   assertEquals(orderUpdate?.payload.paid_at, "2026-04-26T01:00:00.000Z");
 
-  const subscriptionUpsert = db.calls.find((call) =>
-    call.table === "user_subscriptions" && call.operation === "upsert"
+  const subscriptionInsert = db.calls.find((call) =>
+    call.table === "user_subscriptions" && call.operation === "insert"
   );
-  assertEquals(subscriptionUpsert?.payload.user_id, "user-paid");
-  assertEquals(subscriptionUpsert?.payload.plan, "subscriber");
-  assertEquals(subscriptionUpsert?.payload.entitlement_tier, "subscriber");
-  assertEquals(subscriptionUpsert?.payload.status, "active");
-  assertEquals(subscriptionUpsert?.payload.platform, "alipay");
-  assertEquals(subscriptionUpsert?.payload.purchase_token, "ali_trade_paid");
+  assertEquals(subscriptionInsert?.payload.user_id, "user-paid");
+  assertEquals(subscriptionInsert?.payload.plan, "subscriber");
+  assertEquals(subscriptionInsert?.payload.entitlement_tier, "subscriber");
+  assertEquals(subscriptionInsert?.payload.status, "active");
+  assertEquals(subscriptionInsert?.payload.platform, "alipay");
+  assertEquals(subscriptionInsert?.payload.purchase_token, "ali_trade_paid");
   assertEquals(
-    subscriptionUpsert?.payload.expires_at,
+    subscriptionInsert?.payload.expires_at,
     "2026-05-26T01:00:00.000Z",
   );
+});
+
+Deno.test("handleDomesticWebhookRequest updates existing domestic subscription projection", async () => {
+  const db = new FakeDomesticWebhookDb({
+    order: pendingOrder({
+      order_no: "jive_existing",
+      user_id: "user-existing",
+      plan_code: "pro_lifetime",
+      product_id: "jive_paid_unlock",
+    }),
+    existingSubscription: { id: 42 },
+  });
+
+  const response = await handleDomesticWebhookRequest(
+    jsonRequest({
+      provider: "wechat_pay",
+      event_id: "evt_existing_paid",
+      event_type: "payment.succeeded",
+      order_no: "jive_existing",
+      provider_trade_no: "wx_trade_existing",
+      status: "paid",
+      paid_at: "2026-04-26T01:00:00.000Z",
+      payload: { amount_cents: 2800 },
+    }, { token: "domestic-token" }),
+    testRuntime({ db }),
+  );
+
+  assertEquals(response.status, 200);
+  const subscriptionUpdate = db.calls.find((call) =>
+    call.table === "user_subscriptions" && call.operation === "update"
+  );
+  assertEquals(subscriptionUpdate?.filters, [{ column: "id", value: 42 }]);
+  assertEquals(subscriptionUpdate?.payload.user_id, "user-existing");
+  assertEquals(subscriptionUpdate?.payload.plan, "paid");
+  assertEquals(subscriptionUpdate?.payload.entitlement_tier, "paid");
+  assertEquals(subscriptionUpdate?.payload.source_order_no, "jive_existing");
 });
 
 function jsonRequest(
@@ -251,22 +287,26 @@ type FakeCall = {
 class FakeDomesticWebhookDb {
   calls: FakeCall[] = [];
   order: Record<string, unknown> | null;
+  existingSubscription: Record<string, unknown> | null;
   eventUpsertError: unknown | null;
   orderUpdateError: unknown | null;
   subscriptionUpsertError: unknown | null;
 
   constructor({
     order = pendingOrder(),
+    existingSubscription = null,
     eventUpsertError = null,
     orderUpdateError = null,
     subscriptionUpsertError = null,
   }: {
     order?: Record<string, unknown> | null;
+    existingSubscription?: Record<string, unknown> | null;
     eventUpsertError?: unknown | null;
     orderUpdateError?: unknown | null;
     subscriptionUpsertError?: unknown | null;
   } = {}) {
     this.order = order;
+    this.existingSubscription = existingSubscription;
     this.eventUpsertError = eventUpsertError;
     this.orderUpdateError = orderUpdateError;
     this.subscriptionUpsertError = subscriptionUpsertError;
@@ -300,6 +340,12 @@ class FakeQuery {
     return this;
   }
 
+  insert(payload: Record<string, unknown>): FakeQuery {
+    this.operation = "insert";
+    this.payload = payload;
+    return this;
+  }
+
   update(payload: Record<string, unknown>): FakeQuery {
     this.operation = "update";
     this.payload = payload;
@@ -328,6 +374,14 @@ class FakeQuery {
     }
 
     if (this.table === "user_subscriptions") {
+      if (this.operation === "select") {
+        return Promise.resolve({
+          data: this.db.existingSubscription,
+          error: this.db.existingSubscription == null
+            ? { message: "not found" }
+            : null,
+        });
+      }
       if (this.db.subscriptionUpsertError != null) {
         return Promise.resolve({
           data: null,
