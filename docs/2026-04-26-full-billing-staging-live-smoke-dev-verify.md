@@ -201,6 +201,49 @@ Key log lines:
 [saas-function-smoke] function smoke passed
 ```
 
+## Post-Merge Main Domestic Payment E2E Run
+
+Command:
+
+```bash
+gh workflow run saas_full_billing_staging_smoke.yml \
+  --repo zensgit/jive \
+  --ref main \
+  -f sync_domestic_payment_secret=true \
+  -f deploy_payment_smoke_functions=true \
+  -f run_domestic_payment_e2e=true
+```
+
+Result:
+
+- Run ID: `24958349070`
+- URL: `https://github.com/zensgit/jive/actions/runs/24958349070`
+- Head SHA: `7c073af3ac2b00ab2105f6a2e931c5a12f2ebd21`
+- Conclusion: `success`
+- Passed: secret guard
+- Passed: domestic webhook runtime secret sync
+- Passed: payment smoke function deploy
+- Passed: full billing function smoke
+- Passed: temporary auth user creation
+- Passed: temporary auth user sign-in
+- Passed: payment order creation
+- Passed: paid webhook
+- Passed: projected subscription readback
+- Passed: subscription projection matched the temporary order
+- Cleanup: payment event `204`
+- Cleanup: subscription projection `204`
+- Cleanup: payment order `204`
+- Cleanup: auth user `200`
+
+Key log lines:
+
+```text
+[saas-function-smoke] PASS: domestic E2E posts paid webhook -> HTTP 200
+[saas-function-smoke] PASS: domestic E2E reads projected subscription -> HTTP 200
+[saas-function-smoke] PASS: domestic E2E subscription projection matches temporary order
+[saas-function-smoke] function smoke passed
+```
+
 ## Validation
 
 ```bash
