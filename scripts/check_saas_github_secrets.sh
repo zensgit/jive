@@ -4,6 +4,7 @@ set -euo pipefail
 PROFILE="${JIVE_SAAS_STAGING_PROFILE:-core}"
 REPO="${GITHUB_REPOSITORY:-}"
 PRINT_TEMPLATE=0
+INCLUDE_SIGNING=0
 
 CORE_SECRETS=(
   STAGING_SUPABASE_ACCESS_TOKEN
@@ -35,6 +36,25 @@ OPTIONAL_SECRETS=(
   STAGING_SUPABASE_FUNCTIONS_URL
 )
 
+PRODUCTION_RELEASE_SECRETS=(
+  PRODUCTION_SUPABASE_URL
+  PRODUCTION_SUPABASE_ANON_KEY
+  PRODUCTION_ADMOB_APP_ID
+  PRODUCTION_ADMOB_BANNER_ID
+)
+
+PRODUCTION_RELEASE_OPTIONAL_SECRETS=(
+  PRODUCTION_ADMIN_API_ALLOWED_ORIGINS
+  PRODUCTION_PAYMENT_CHANNEL
+)
+
+ANDROID_RELEASE_SIGNING_SECRETS=(
+  ANDROID_RELEASE_KEYSTORE_BASE64
+  ANDROID_RELEASE_STORE_PASSWORD
+  ANDROID_RELEASE_KEY_ALIAS
+  ANDROID_RELEASE_KEY_PASSWORD
+)
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -42,13 +62,15 @@ Usage:
 
 Options:
   --repo <owner/repo>  GitHub repository. Defaults to GITHUB_REPOSITORY or the current gh repo.
-  --profile <name>    core or full. Defaults to JIVE_SAAS_STAGING_PROFILE or core.
+  --profile <name>    core, full, or production-release. Defaults to JIVE_SAAS_STAGING_PROFILE or core.
+  --include-signing   For production-release, require Android release signing secrets too.
   --print-template    Print safe gh secret set command templates instead of checking.
   --help              Show this help.
 
 Examples:
   scripts/check_saas_github_secrets.sh --profile core
   scripts/check_saas_github_secrets.sh --profile full --repo zensgit/jive
+  scripts/check_saas_github_secrets.sh --profile production-release --include-signing
   scripts/check_saas_github_secrets.sh --profile core --print-template
 
 Notes:
@@ -77,6 +99,10 @@ parse_args() {
         PROFILE="${2:-}"
         shift 2
         ;;
+      --include-signing)
+        INCLUDE_SIGNING=1
+        shift
+        ;;
       --print-template)
         PRINT_TEMPLATE=1
         shift
@@ -92,7 +118,7 @@ parse_args() {
   done
 
   case "$PROFILE" in
-    core|full)
+    core|full|production-release)
       ;;
     *)
       die "unknown profile: $PROFILE"
@@ -110,9 +136,31 @@ resolve_repo() {
 }
 
 required_secrets() {
-  printf '%s\n' "${CORE_SECRETS[@]}"
-  if [[ "$PROFILE" == "full" ]]; then
-    printf '%s\n' "${STORE_PROVIDER_SECRETS[@]}"
+  case "$PROFILE" in
+    core)
+      printf '%s\n' "${CORE_SECRETS[@]}"
+      ;;
+    full)
+      printf '%s\n' "${CORE_SECRETS[@]}"
+      printf '%s\n' "${STORE_PROVIDER_SECRETS[@]}"
+      ;;
+    production-release)
+      printf '%s\n' "${PRODUCTION_RELEASE_SECRETS[@]}"
+      if [[ "$INCLUDE_SIGNING" -eq 1 ]]; then
+        printf '%s\n' "${ANDROID_RELEASE_SIGNING_SECRETS[@]}"
+      fi
+      ;;
+  esac
+}
+
+optional_secrets() {
+  if [[ "$PROFILE" == "production-release" ]]; then
+    printf '%s\n' "${PRODUCTION_RELEASE_OPTIONAL_SECRETS[@]}"
+    if [[ "$INCLUDE_SIGNING" -ne 1 ]]; then
+      printf '%s\n' "${ANDROID_RELEASE_SIGNING_SECRETS[@]}"
+    fi
+  else
+    printf '%s\n' "${OPTIONAL_SECRETS[@]}"
   fi
 }
 
@@ -132,9 +180,10 @@ print_template() {
 
   printf '\n'
   log "optional"
-  for secret in "${OPTIONAL_SECRETS[@]}"; do
+  while IFS= read -r secret; do
+    [[ -n "$secret" ]] || continue
     printf 'gh secret set %s --repo %s\n' "$secret" "$repo"
-  done
+  done < <(optional_secrets)
 }
 
 load_existing_secrets() {
@@ -189,13 +238,14 @@ main() {
     fi
   done < <(required_secrets)
 
-  for secret in "${OPTIONAL_SECRETS[@]}"; do
+  while IFS= read -r secret; do
+    [[ -n "$secret" ]] || continue
     if contains_secret "$secret"; then
       log "PASS: optional secret exists: $secret"
     else
       log "WARN: optional secret is not set: $secret"
     fi
-  done
+  done < <(optional_secrets)
 
   if [[ "$missing" -gt 0 ]]; then
     die "$missing required GitHub Actions secret(s) missing"

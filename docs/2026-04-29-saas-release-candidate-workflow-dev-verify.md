@@ -29,7 +29,15 @@ Updated `docs/saas-ops-checklist.md` with:
 - Required production secrets.
 - Strict signing secrets.
 - Recommended dry-run to signed-build sequence.
+- Production release secret check/upload commands.
 - Artifact expectations and sensitivity guard behavior.
+
+Updated secret helper scripts:
+
+- `scripts/check_saas_github_secrets.sh --profile production-release`
+- `scripts/check_saas_github_secrets.sh --profile production-release --include-signing`
+- `scripts/push_saas_github_secrets.sh --profile production-release`
+- `scripts/push_saas_github_secrets.sh --profile production-release --include-optional --include-signing`
 
 ## Secrets
 
@@ -77,10 +85,22 @@ Result: passed.
 Command:
 
 ```bash
-bash -n scripts/build_release_candidate.sh scripts/check_saas_production_readiness.sh
+bash -n scripts/build_release_candidate.sh scripts/check_saas_production_readiness.sh scripts/check_saas_github_secrets.sh scripts/push_saas_github_secrets.sh
 ```
 
 Result: passed.
+
+### Production Secret Helpers
+
+Commands:
+
+```bash
+scripts/check_saas_github_secrets.sh --profile production-release --print-template --repo zensgit/jive
+scripts/check_saas_github_secrets.sh --profile production-release --include-signing --print-template --repo zensgit/jive
+scripts/push_saas_github_secrets.sh --profile production-release --env-file /tmp/<temp-prod-env>
+```
+
+Result: passed. The push helper dry-run reported values present without writing GitHub secrets.
 
 ### Release Candidate Dry Run
 

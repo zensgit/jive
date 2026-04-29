@@ -182,6 +182,32 @@ Banner ID: ca-app-pub-3940256099942544/6300978111
 2. `build_appbundle=false`、`strict_signing=true`：确认签名 secrets 可用。
 3. `build_appbundle=true`、`strict_signing=true`：生成可用于内部测试/商店上传的 prod AAB。
 
+### Secrets 检查与上传
+
+仅检查生产 release candidate 最小 secrets：
+
+```bash
+scripts/check_saas_github_secrets.sh --profile production-release --repo zensgit/jive
+```
+
+检查包含 Android 签名的完整 release secrets：
+
+```bash
+scripts/check_saas_github_secrets.sh --profile production-release --include-signing --repo zensgit/jive
+```
+
+从 `/tmp/jive-saas-production.env` 上传最小 release secrets：
+
+```bash
+scripts/push_saas_github_secrets.sh --profile production-release --repo zensgit/jive --env-file /tmp/jive-saas-production.env --apply
+```
+
+如果要同时上传可选 admin/payment 和 Android 签名 secrets：
+
+```bash
+scripts/push_saas_github_secrets.sh --profile production-release --include-optional --include-signing --repo zensgit/jive --env-file /tmp/jive-saas-production.env --apply
+```
+
 产物：
 
 - `build/reports/release-candidate/latest.md`
