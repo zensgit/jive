@@ -118,6 +118,15 @@ GitHub CI status for the final external-entry stack:
 - PR #206: `analyze_and_test` passed, `detect_saas_wave0_smoke` passed.
 - PR #207: `analyze_and_test` passed, `detect_saas_wave0_smoke` passed.
 
+Latest Android validation:
+
+- `docs/2026-04-29-moneythings-entry-system-android-validation.md` records the final docs-branch automated validation pass.
+- Targeted entry-system tests passed.
+- `flutter analyze --no-fatal-infos` passed with info-level findings only.
+- `flutter build apk --debug --flavor dev --no-pub` passed.
+- APK manifest inspection confirmed `jive://transaction`, `ACTION_SEND text/plain`, and `JiveTodayWidget`.
+- Device smoke is pending because the connected phone has an older `com.jivemoney.app.dev` build signed with a different key; the validation pass intentionally did not uninstall it to avoid clearing local dev data.
+
 Android build note:
 
 - `flutter build apk --debug --no-pub` produced flavor APKs under `build/app/outputs/flutter-apk/`.
