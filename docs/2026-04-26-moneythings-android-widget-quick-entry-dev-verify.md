@@ -38,15 +38,15 @@ The quick-entry action intentionally provides no amount/account/category. The ed
 Commands run:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos
-/Users/chauhua/development/flutter/bin/flutter build apk --debug --no-pub
+flutter analyze --no-fatal-infos
+flutter build apk --debug --flavor dev --no-pub
 ```
 
 Results:
 
 - `flutter analyze --no-fatal-infos` completed successfully with existing info-level lints only.
-- `flutter build apk --debug --no-pub` completed Gradle/Kotlin/resource compilation and produced flavor APKs under `build/app/outputs/flutter-apk/`.
-- The Flutter wrapper exited non-zero because it expected a single default debug APK, while this project generated `app-dev-debug.apk`, `app-auto-debug.apk`, and `app-prod-debug.apk`.
+- `flutter build apk --debug --flavor dev --no-pub` completed Gradle/Kotlin/resource compilation and produced `build/app/outputs/flutter-apk/app-dev-debug.apk`.
+- The `+ 记一笔` widget action uses a 48dp touch target.
 - `git diff --check` passed.
 - Restricted directories were checked separately: no `supabase/migrations`, `lib/core/sync`, `.github/workflows`, SaaS entitlement, payment, or sync logic changes.
 
