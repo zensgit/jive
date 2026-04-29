@@ -128,6 +128,26 @@ void main() {
       expect(params.prefillTagKeys, ['tag_lunch']);
       expect(params.highlightFields, isEmpty);
     });
+
+    test('infers income drafts from shared auto draft type hints', () {
+      final draft = JiveAutoDraft()
+        ..amount = 88
+        ..source = 'WeChat'
+        ..timestamp = DateTime(2026, 4, 26, 18)
+        ..rawText = '微信已收款 88 元'
+        ..category = '收入'
+        ..subCategory = '收款'
+        ..accountId = 3
+        ..createdAt = DateTime(2026, 4, 26, 18, 1);
+
+      final params = const AutoDraftEntryParamsBuilder().build(draft);
+
+      expect(params.prefillType, 'income');
+      expect(params.prefillCategoryKey, '收入');
+      expect(params.prefillSubCategoryKey, '收款');
+      expect(params.prefillAccountId, 3);
+      expect(params.highlightFields, isEmpty);
+    });
   });
 
   group('CategoryPathService', () {

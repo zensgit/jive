@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../core/database/auto_draft_model.dart';
+import '../../core/service/auto_draft_type_hints.dart';
 import '../transactions/transaction_entry_params.dart';
 
 /// Converts an automatic capture draft into the unified transaction editor
@@ -9,17 +10,6 @@ class AutoDraftEntryParamsBuilder {
   const AutoDraftEntryParamsBuilder();
 
   static const _transferServiceChargeMetadataKey = 'transferServiceCharge';
-  static const _transferKeywords = [
-    '转账',
-    '转入',
-    '转出',
-    '提现',
-    '还款',
-    '余额转入',
-    '余额转出',
-    '转到',
-    '转至',
-  ];
 
   TransactionEntryParams build(JiveAutoDraft draft) {
     final type = _normalizedType(draft);
@@ -63,15 +53,9 @@ class AutoDraftEntryParamsBuilder {
   }
 
   String _normalizedType(JiveAutoDraft draft) {
-    final explicit = draft.type?.trim().toLowerCase();
-    if (explicit == 'income' ||
-        explicit == 'expense' ||
-        explicit == 'transfer') {
-      return explicit!;
-    }
-    final rawText = draft.rawText ?? '';
-    if (_transferKeywords.any(rawText.contains)) return 'transfer';
-    return 'expense';
+    final explicit = AutoDraftTypeHints.normalizeType(draft.type);
+    final inferred = AutoDraftTypeHints.inferFromText(draft.rawText);
+    return AutoDraftTypeHints.preferType(explicit, inferred) ?? 'expense';
   }
 
   List<String> _highlightFields(JiveAutoDraft draft, String type) {

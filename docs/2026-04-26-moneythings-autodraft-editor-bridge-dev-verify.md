@@ -30,6 +30,8 @@ It maps:
 - missing-field highlights for amount, account, category, and transfer target
 - transfer service charge from `metadataJson.transferServiceCharge`
 
+Type inference now uses shared `AutoDraftTypeHints`, so the editor path follows the same income/transfer keyword rules as the existing confirm path.
+
 The builder does not write data and does not replace `AutoDraftService`.
 
 ### Auto Draft Screen
@@ -76,8 +78,8 @@ Still deferred to later slices:
 Commands run:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos
-/Users/chauhua/development/flutter/bin/flutter test test/moneythings_alignment_services_test.dart test/auto_draft_service_test.dart test/add_transaction_screen_entry_ux_test.dart test/category_picker_user_categories_test.dart test/transaction_entry_widget_regression_test.dart
+flutter analyze --no-fatal-infos
+flutter test test/moneythings_alignment_services_test.dart test/auto_draft_service_test.dart test/add_transaction_screen_entry_ux_test.dart test/category_picker_user_categories_test.dart test/transaction_entry_widget_regression_test.dart
 ```
 
 Results:
