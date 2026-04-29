@@ -7,6 +7,7 @@ import 'package:jive/core/database/template_model.dart';
 import 'package:jive/core/model/quick_action.dart';
 import 'package:jive/core/service/account_group_service.dart';
 import 'package:jive/core/service/category_path_service.dart';
+import 'package:jive/core/service/conversational_parser.dart';
 import 'package:jive/core/service/object_share_policy_service.dart';
 import 'package:jive/core/service/quick_action_service.dart';
 import 'package:jive/feature/quick_entry/quick_action_deep_link_service.dart';
@@ -139,6 +140,21 @@ void main() {
         params?.highlightFields,
         isNot(contains(TransactionHighlightField.amount)),
       );
+    });
+  });
+
+  group('ConversationalParser', () {
+    test('keeps item-level raw text for multi-transaction input', () {
+      final result = ConversationalParser().parseConversation(
+        '买了咖啡30和面包15',
+        now: DateTime(2026, 4, 26, 12),
+      );
+
+      expect(result.transactions, hasLength(2));
+      expect(result.transactions[0].rawText, contains('咖啡30'));
+      expect(result.transactions[1].rawText, contains('面包15'));
+      expect(result.transactions[0].rawText, isNot(result.rawText));
+      expect(result.transactions[1].rawText, isNot(result.rawText));
     });
   });
 

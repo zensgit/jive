@@ -90,10 +90,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     if (p.prefillTagKeys != null) _selectedTagKeys = List.of(p.prefillTagKeys!);
 
     if (p.prefillCategoryKey != null || p.prefillSubCategoryKey != null) {
-      final key = p.prefillSubCategoryKey ?? p.prefillCategoryKey;
-      _selectedCategory = categories
-          .where((c) => c.key == key || c.name == key)
-          .firstOrNull;
+      _selectedCategory = _resolvePrefillCategory(categories, p);
     }
     if (p.prefillAccountId != null) {
       _selectedAccount = accounts
@@ -134,6 +131,33 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _projects = projects;
       _isLoading = false;
     });
+  }
+
+  JiveCategory? _resolvePrefillCategory(
+    List<JiveCategory> categories,
+    TransactionEntryParams params,
+  ) {
+    final leafHint = (params.prefillSubCategoryKey ?? params.prefillCategoryKey)
+        ?.trim();
+    if (leafHint == null || leafHint.isEmpty) return null;
+
+    final exactLeaf = categories.where((c) => c.key == leafHint).firstOrNull;
+    if (exactLeaf != null) return exactLeaf;
+
+    final parentHint = params.prefillCategoryKey?.trim();
+    final parent = parentHint == null || parentHint.isEmpty
+        ? null
+        : categories
+              .where((c) => c.key == parentHint || c.name == parentHint)
+              .firstOrNull;
+
+    final namedLeaves = categories.where((c) => c.name == leafHint).toList();
+    if (parent != null) {
+      return namedLeaves.where((c) => c.parentKey == parent.key).firstOrNull ??
+          (parent.name == leafHint || parent.key == leafHint ? parent : null);
+    }
+
+    return namedLeaves.firstOrNull;
   }
 
   List<String> get _selectedTagNames {

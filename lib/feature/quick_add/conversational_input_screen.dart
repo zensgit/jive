@@ -119,7 +119,7 @@ class _ConversationalInputScreenState extends State<ConversationalInputScreen> {
       prefillBookId: widget.bookId,
       prefillNote: et.note,
       prefillDate: et.date,
-      prefillRawText: _controller.text.trim(),
+      prefillRawText: et.rawText ?? _controller.text.trim(),
       highlightFields: _missingFieldsFor(et),
     );
   }
@@ -289,6 +289,7 @@ class _EditableTransaction {
   String? subCategory;
   DateTime date;
   String? note;
+  String? rawText;
   String? accountHint;
   int? splitCount;
   bool saved = false;
@@ -300,6 +301,7 @@ class _EditableTransaction {
     this.subCategory,
     required this.date,
     this.note,
+    this.rawText,
     this.accountHint,
     this.splitCount,
   });
@@ -312,6 +314,7 @@ class _EditableTransaction {
       subCategory: pt.subCategory,
       date: pt.date,
       note: pt.note,
+      rawText: pt.rawText,
       accountHint: pt.accountHint,
       splitCount: pt.splitCount,
     );

@@ -52,6 +52,7 @@ New behavior:
 - Parsed results are treated as drafts that must be confirmed.
 - Single confirmation opens `TransactionFormScreen` for that parsed item.
 - Batch confirmation now walks through unsaved parsed items one by one.
+- Multi-transaction input keeps each parsed item segment as its own raw text, avoiding repeated full-input raw text on every saved item.
 - The editor receives:
   - `source = conversation`
   - amount/type/date/category/subcategory/note/bookId prefilled where available
@@ -84,6 +85,8 @@ The form now stores source values according to entry origin:
 
 Edit mode preserves the existing transaction source when available.
 
+Category prefills resolve exact keys first, then use parent plus leaf-name matching as a display-name fallback. This avoids choosing the wrong duplicate category name when parser output is name-based.
+
 ## Preserved Boundaries
 
 - No `supabase/migrations` changes.
@@ -109,8 +112,8 @@ Still intentionally deferred to later slices:
 Commands run:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos
-/Users/chauhua/development/flutter/bin/flutter test test/moneythings_alignment_services_test.dart test/add_transaction_screen_entry_ux_test.dart test/category_picker_user_categories_test.dart test/transaction_entry_widget_regression_test.dart test/speech_intent_parser_test.dart
+flutter analyze --no-fatal-infos
+flutter test test/moneythings_alignment_services_test.dart test/add_transaction_screen_entry_ux_test.dart test/category_picker_user_categories_test.dart test/transaction_entry_widget_regression_test.dart test/speech_intent_parser_test.dart
 ```
 
 Results:
