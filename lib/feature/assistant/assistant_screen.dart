@@ -3,16 +3,18 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 
+import '../../core/database/account_model.dart';
 import '../../core/service/ai_assistant_service.dart';
 import '../../core/service/smart_input_service.dart';
+import '../../core/service/speech_intent_parser.dart';
 import '../../core/utils/logger_util.dart';
 import '../transactions/add_transaction_screen.dart';
+import '../transactions/speech_entry_params_builder.dart';
+import '../transactions/transaction_entry_params.dart';
+import '../transactions/transaction_form_screen.dart';
 
 class AssistantScreen extends StatefulWidget {
-  const AssistantScreen({
-    super.key,
-    required this.isar,
-  });
+  const AssistantScreen({super.key, required this.isar});
 
   final Isar isar;
 
@@ -53,7 +55,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
     }
   }
 
-  Future<bool?> _showAutoCategorizePreview(List<AutoCategorizeSuggestion> suggestions) async {
+  Future<bool?> _showAutoCategorizePreview(
+    List<AutoCategorizeSuggestion> suggestions,
+  ) async {
     final formatter = DateFormat('MM-dd HH:mm');
     return showModalBottomSheet<bool>(
       context: context,
@@ -83,7 +87,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 const SizedBox(height: 12),
                 Text(
                   "智能分类预览",
-                  style: GoogleFonts.lato(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.lato(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -105,17 +112,26 @@ class _AssistantScreenState extends State<AssistantScreen> {
                         contentPadding: EdgeInsets.zero,
                         title: Text(
                           categoryLabel,
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         subtitle: Text(
                           item.rawText ?? "金额 ${item.amount}",
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontSize: 12,
+                          ),
                         ),
                         trailing: Text(
                           formatter.format(item.timestamp),
-                          style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 11,
+                          ),
                         ),
                       );
                     },
@@ -126,7 +142,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       "仅展示前 6 条，剩余 ${suggestions.length - 6} 条将一并应用",
-                      style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 11,
+                      ),
                     ),
                   ),
                 const SizedBox(height: 12),
@@ -160,11 +179,29 @@ class _AssistantScreenState extends State<AssistantScreen> {
       _showMessage("剪贴板未识别到可用信息");
       return;
     }
-    final text = result.toSpeechText().isNotEmpty ? result.toSpeechText() : result.rawText;
-    final changed = await Navigator.push(
+    final text = result.toSpeechText().isNotEmpty
+        ? result.toSpeechText()
+        : result.rawText;
+    final accounts = await _loadAccounts();
+    if (!mounted) return;
+    final intent = SpeechIntentParser().parse(
+      text,
+      accountNames: accounts.map((account) => account.name).toList(),
+    );
+    if (intent == null || !intent.isValid) {
+      _showMessage("剪贴板内容缺少可确认的金额");
+      return;
+    }
+    final params = const SpeechEntryParamsBuilder().build(
+      intent,
+      accounts: accounts,
+      source: TransactionEntrySource.shareReceive,
+      sourceLabel: '来自剪贴板识别',
+    );
+    final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (context) => AddTransactionScreen(initialSpeechText: text),
+        builder: (context) => TransactionFormScreen(params: params),
       ),
     );
     if (changed == true && mounted) {
@@ -176,7 +213,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
     final changed = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const AddTransactionScreen(startWithSpeech: true),
+        builder: (context) => const AddTransactionScreen(
+          startWithSpeech: true,
+          openSpeechResultInEditor: true,
+        ),
       ),
     );
     if (changed == true && mounted) {
@@ -184,10 +224,14 @@ class _AssistantScreenState extends State<AssistantScreen> {
     }
   }
 
+  Future<List<JiveAccount>> _loadAccounts() async {
+    return widget.isar.collection<JiveAccount>().where().findAll();
+  }
+
   void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -266,7 +310,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
