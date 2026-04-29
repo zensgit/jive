@@ -62,6 +62,9 @@ import 'widgets/transaction_field_chips.dart';
 import 'widgets/transaction_misc_widgets.dart';
 import 'widgets/transaction_panels.dart';
 import 'widgets/transaction_type_selector.dart';
+import 'speech_entry_params_builder.dart';
+import 'transaction_entry_params.dart';
+import 'transaction_form_screen.dart';
 
 enum TransactionType { expense, income, transfer }
 
@@ -92,6 +95,7 @@ class AddTransactionScreen extends StatefulWidget {
   final TransactionType? initialType;
   final bool startWithSpeech;
   final String? initialSpeechText;
+  final bool openSpeechResultInEditor;
   final int? bookId;
   @visibleForTesting
   final Isar? isar;
@@ -121,6 +125,7 @@ class AddTransactionScreen extends StatefulWidget {
     this.initialType,
     this.startWithSpeech = false,
     this.initialSpeechText,
+    this.openSpeechResultInEditor = false,
     this.bookId,
     this.isar,
     this.bootstrapDefaults = true,
@@ -2259,6 +2264,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     if (trimmed.isEmpty || !mounted) return;
     final intent = await _showSpeechPreview(trimmed);
     if (!mounted || intent == null) return;
+    if (await _openSpeechIntentInEditorIfNeeded(intent)) return;
     await _applySpeechIntent(intent);
   }
 
@@ -2455,6 +2461,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       if (trimmed == null || trimmed.isEmpty) return;
       final intent = await _showSpeechPreview(trimmed);
       if (intent == null) return;
+      if (await _openSpeechIntentInEditorIfNeeded(intent)) return;
       await _applySpeechIntent(intent);
     } finally {
       _speechUiActive = false;
@@ -2684,6 +2691,26 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
     _speechApplyAccountHints(intent);
     await _speechApplyCategorySuggestion(intent);
+  }
+
+  Future<bool> _openSpeechIntentInEditorIfNeeded(SpeechIntent intent) async {
+    if (!widget.openSpeechResultInEditor) return false;
+    final params = const SpeechEntryParamsBuilder().build(
+      intent,
+      accounts: _accounts,
+      source: TransactionEntrySource.voice,
+      sourceLabel: '来自语音输入',
+    );
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TransactionFormScreen(params: params),
+      ),
+    );
+    if (saved == true && mounted) {
+      Navigator.pop(context, true);
+    }
+    return true;
   }
 
   void _speechApplyAccountHints(SpeechIntent intent) {

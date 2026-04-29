@@ -58,6 +58,8 @@ class TransactionEntryParams {
   final DateTime? prefillDate;
   final List<String>? prefillTagKeys;
   final String? prefillRawText;
+  final double? prefillExchangeFee;
+  final String? prefillExchangeFeeType;
 
   /// Fields that should be visually called out because the external source
   /// did not provide enough information to save safely.
@@ -84,6 +86,8 @@ class TransactionEntryParams {
     this.prefillDate,
     this.prefillTagKeys,
     this.prefillRawText,
+    this.prefillExchangeFee,
+    this.prefillExchangeFeeType,
     this.highlightFields = const [],
     this.editingTransaction,
   });
@@ -143,17 +147,17 @@ class TransactionEntryParams {
       case TransactionEntrySource.quickAction:
         return sourceLabel ?? '来自快速动作';
       case TransactionEntrySource.voice:
-        return '来自语音输入';
+        return sourceLabel ?? '来自语音输入';
       case TransactionEntrySource.conversation:
-        return '来自对话记账';
+        return sourceLabel ?? '来自对话记账';
       case TransactionEntrySource.autoDraft:
-        return '来自自动识别';
+        return sourceLabel ?? '来自自动识别';
       case TransactionEntrySource.ocrScreenshot:
-        return '来自截图识别';
+        return sourceLabel ?? '来自截图识别';
       case TransactionEntrySource.shareReceive:
-        return '来自分享接收';
+        return sourceLabel ?? '来自分享接收';
       case TransactionEntrySource.deepLink:
-        return '来自外部链接';
+        return sourceLabel ?? '来自外部链接';
     }
   }
 
@@ -175,6 +179,8 @@ class TransactionEntryParams {
     DateTime? prefillDate,
     List<String>? prefillTagKeys,
     String? prefillRawText,
+    double? prefillExchangeFee,
+    String? prefillExchangeFeeType,
     List<String>? highlightFields,
     JiveTransaction? editingTransaction,
   }) {
@@ -195,6 +201,9 @@ class TransactionEntryParams {
       prefillDate: prefillDate ?? this.prefillDate,
       prefillTagKeys: prefillTagKeys ?? this.prefillTagKeys,
       prefillRawText: prefillRawText ?? this.prefillRawText,
+      prefillExchangeFee: prefillExchangeFee ?? this.prefillExchangeFee,
+      prefillExchangeFeeType:
+          prefillExchangeFeeType ?? this.prefillExchangeFeeType,
       highlightFields: highlightFields ?? this.highlightFields,
       editingTransaction: editingTransaction ?? this.editingTransaction,
     );

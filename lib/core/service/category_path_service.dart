@@ -32,20 +32,32 @@ class CategoryPathService {
     String? subCategoryKey,
   }) {
     final byKey = {for (final category in categories) category.key: category};
+    return resolveFromMap(
+      byKey,
+      categoryKey: categoryKey,
+      subCategoryKey: subCategoryKey,
+    );
+  }
+
+  CategoryPath resolveFromMap(
+    Map<String, JiveCategory> categoriesByKey, {
+    String? categoryKey,
+    String? subCategoryKey,
+  }) {
     final leafKey = _firstNonEmpty(subCategoryKey, categoryKey);
-    if (leafKey == null || !byKey.containsKey(leafKey)) {
+    if (leafKey == null || !categoriesByKey.containsKey(leafKey)) {
       return const CategoryPath([]);
     }
 
     final reversed = <JiveCategory>[];
     final seen = <String>{};
-    var current = byKey[leafKey];
+    var current = categoriesByKey[leafKey];
     while (current != null && seen.add(current.key)) {
       reversed.add(current);
       final parentKey = current.parentKey;
       current = parentKey == null || parentKey.isEmpty
           ? null
-          : byKey[parentKey];
+          : categoriesByKey[parentKey];
     }
 
     return CategoryPath(reversed.reversed.toList(growable: false));
@@ -118,4 +130,40 @@ class TransactionCategoryKeys {
     this.subCategoryName,
     required this.displayName,
   });
+}
+
+class CategoryPathNames {
+  const CategoryPathNames({this.parentName, this.childName});
+
+  final String? parentName;
+  final String? childName;
+}
+
+class CategoryPathImportParser {
+  CategoryPathImportParser._();
+
+  static final RegExp _pathSeparator = RegExp(r'\s*(?:/|／|>|＞|\\|、)\s*');
+
+  static CategoryPathNames split(String? raw) {
+    final text = raw?.trim();
+    if (text == null || text.isEmpty) return const CategoryPathNames();
+    final parts = text
+        .split(_pathSeparator)
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.isEmpty) return const CategoryPathNames();
+    if (parts.length == 1) return CategoryPathNames(parentName: parts.first);
+    return CategoryPathNames(parentName: parts.first, childName: parts.last);
+  }
+
+  static String? preferExplicitCategoryName(
+    String? explicit,
+    String? pathText,
+  ) {
+    final text = explicit?.trim();
+    if (text == null || text.isEmpty) return null;
+    if (pathText != null && text == pathText.trim()) return null;
+    return text;
+  }
 }

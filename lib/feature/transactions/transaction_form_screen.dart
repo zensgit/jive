@@ -225,6 +225,14 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         : categoryKeys.subCategoryName;
     tx.accountId = _selectedAccount?.id;
     tx.toAccountId = _txType == 'transfer' ? _selectedToAccount?.id : null;
+    tx.exchangeFee = _txType == 'transfer'
+        ? (widget.params.prefillExchangeFee ?? tx.exchangeFee)
+        : null;
+    tx.exchangeFeeType = _txType == 'transfer' && tx.exchangeFee != null
+        ? (widget.params.prefillExchangeFeeType ??
+              tx.exchangeFeeType ??
+              'fixed')
+        : null;
     tx.excludeFromBudget = _excludeFromBudget;
     tx.tagKeys = _selectedTagKeys;
     tx.projectId = _selectedProjectId;
