@@ -13,11 +13,33 @@ DEFAULT_BUILD_NUMBER="${VERSION_LINE##*+}"
 FLAVOR="${JIVE_RELEASE_CANDIDATE_FLAVOR:-prod}"
 BUILD_NAME="${JIVE_RELEASE_CANDIDATE_BUILD_NAME:-$DEFAULT_BUILD_NAME}"
 BUILD_NUMBER="${JIVE_RELEASE_CANDIDATE_BUILD_NUMBER:-$DEFAULT_BUILD_NUMBER}"
+ENV_FILE="${PRODUCTION_ENV_FILE:-/tmp/jive-saas-production.env}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 STRICT_SIGNING="${JIVE_RELEASE_CANDIDATE_STRICT_SIGNING:-false}"
 STRICT_SIGNING="$(echo "$STRICT_SIGNING" | tr '[:upper:]' '[:lower:]')"
+RUN_PROD_READINESS="${JIVE_RELEASE_CANDIDATE_RUN_PROD_READINESS:-true}"
+RUN_PROD_READINESS="$(echo "$RUN_PROD_READINESS" | tr '[:upper:]' '[:lower:]')"
+DRY_RUN="${JIVE_RELEASE_CANDIDATE_DRY_RUN:-false}"
+DRY_RUN="$(echo "$DRY_RUN" | tr '[:upper:]' '[:lower:]')"
 SIGNING_MODE="debug"
 signing_details=()
+TEMP_FILES=()
+DART_DEFINE_FILE=""
+DART_DEFINES_CONFIGURED="false"
+
+cleanup_temp_files() {
+  if [[ "${#TEMP_FILES[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  local path
+  for path in "${TEMP_FILES[@]}"; do
+    [[ -n "$path" ]] || continue
+    rm -rf -- "$path"
+  done
+}
+
+trap cleanup_temp_files EXIT INT TERM
 
 KEY_PROPERTIES_FILE=""
 if [[ -f "$APP_DIR/key.properties" ]]; then
@@ -73,15 +95,141 @@ ARTIFACT_ROOT="${JIVE_RELEASE_CANDIDATE_ARTIFACT_DIR:-$APP_DIR/build/release-can
 REPORT_DIR="$APP_DIR/build/reports/release-candidate"
 mkdir -p "$ARTIFACT_ROOT" "$REPORT_DIR"
 
+value_from_env_file() {
+  local key="$1"
+  local file="$2"
+  [[ -f "$file" ]] || return 0
+
+  awk -F '=' -v key="$key" '
+    $0 ~ "^[[:space:]]*" key "=" {
+      sub(/^[[:space:]]*/, "", $0)
+      value = substr($0, length(key) + 2)
+    }
+    END { if (value != "") print value }
+  ' "$file"
+}
+
+value_for_key() {
+  local key="$1"
+  local value="${!key:-}"
+
+  if [[ -n "$value" ]]; then
+    printf '%s\n' "$value"
+    return 0
+  fi
+
+  value_from_env_file "$key" "$ENV_FILE"
+}
+
+export_if_present() {
+  local key="$1"
+  local value
+
+  value="$(value_for_key "$key")"
+  if [[ -n "$value" ]]; then
+    export "$key=$value"
+  fi
+}
+
+build_dart_define_file() {
+  local output_dir
+  local output_file
+
+  output_dir="$(mktemp -d "${TMPDIR:-/tmp}/jive-release-dart-defines.XXXXXX")"
+  chmod 700 "$output_dir"
+  TEMP_FILES+=("$output_dir")
+
+  output_file="$output_dir/dart-defines.json"
+  : > "$output_file"
+  chmod 600 "$output_file"
+
+  python3 - "$output_file" \
+    "$(value_for_key SUPABASE_URL)" \
+    "$(value_for_key SUPABASE_ANON_KEY)" \
+    "$(value_for_key PAYMENT_CHANNEL)" \
+    "$(value_for_key ENABLE_STORE_BILLING)" \
+    "$(value_for_key ENABLE_WECHAT_PAY)" \
+    "$(value_for_key ENABLE_ALIPAY)" \
+    "$(value_for_key ADMOB_BANNER_ID)" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+(
+    output_file,
+    supabase_url,
+    supabase_anon_key,
+    payment_channel,
+    enable_store_billing,
+    enable_wechat_pay,
+    enable_alipay,
+    admob_banner_id,
+) = sys.argv[1:]
+
+values = {
+    "SUPABASE_URL": supabase_url,
+    "SUPABASE_ANON_KEY": supabase_anon_key,
+    "PAYMENT_CHANNEL": payment_channel,
+    "ENABLE_STORE_BILLING": enable_store_billing,
+    "ENABLE_WECHAT_PAY": enable_wechat_pay,
+    "ENABLE_ALIPAY": enable_alipay,
+    "ADMOB_BANNER_ID": admob_banner_id,
+}
+
+Path(output_file).write_text(
+    json.dumps(
+        {key: value for key, value in values.items() if value},
+        ensure_ascii=False,
+        indent=2,
+    ),
+    encoding="utf-8",
+)
+PY
+
+  DART_DEFINE_FILE="$output_file"
+  DART_DEFINES_CONFIGURED="true"
+}
+
+run_production_readiness_gate() {
+  if [[ "$FLAVOR" != "prod" || "$RUN_PROD_READINESS" != "true" ]]; then
+    return 0
+  fi
+
+  local args=(
+    --profile app
+    --store android
+    --env-file "$ENV_FILE"
+  )
+
+  if [[ "$STRICT_SIGNING" == "true" ]]; then
+    args+=(--require-release-signing)
+  fi
+
+  if [[ "${JIVE_RELEASE_CANDIDATE_ALLOW_ADMOB_TEST_IDS:-false}" == "true" ]]; then
+    args+=(--allow-admob-test-ids)
+  fi
+
+  if [[ "${JIVE_RELEASE_CANDIDATE_ALLOW_STAGING_SUPABASE:-false}" == "true" ]]; then
+    args+=(--allow-staging-supabase)
+  fi
+
+  if [[ "${JIVE_RELEASE_CANDIDATE_ALLOW_DOMESTIC_SHARED_TOKEN:-false}" == "true" ]]; then
+    args+=(--allow-domestic-shared-token)
+  fi
+
+  log "running SaaS production readiness gate"
+  bash "$APP_DIR/scripts/check_saas_production_readiness.sh" "${args[@]}"
+}
+
 write_report() {
-  python3 - "$REPORT_DIR" "$STAMP" "$FLAVOR" "$BUILD_NAME" "$BUILD_NUMBER" "$SIGNING_MODE" "$PRE_FLIGHT" "$STRICT_SIGNING" "$PRE_FLIGHT_STATUS" "$PRE_FLIGHT_MESSAGE" "${1:-}" "${2:-}" "${3:-}" "${4:-}" "${5:-}" <<'PY'
+  python3 - "$REPORT_DIR" "$STAMP" "$FLAVOR" "$BUILD_NAME" "$BUILD_NUMBER" "$SIGNING_MODE" "$PRE_FLIGHT" "$STRICT_SIGNING" "$RUN_PROD_READINESS" "$DRY_RUN" "$DART_DEFINES_CONFIGURED" "$PRE_FLIGHT_STATUS" "$PRE_FLIGHT_MESSAGE" "${1:-}" "${2:-}" "${3:-}" "${4:-}" "${5:-}" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 (report_dir, stamp, flavor, build_name, build_number, signing_mode, signing_preflight,
- strict_signing, status, message, artifact_path, artifact_bytes, sha256, git_branch,
- git_commit) = sys.argv[1:]
+ strict_signing, run_prod_readiness, dry_run, dart_defines_configured, status, message,
+ artifact_path, artifact_bytes, sha256, git_branch, git_commit) = sys.argv[1:]
 
 report_root = Path(report_dir)
 report_root.mkdir(parents=True, exist_ok=True)
@@ -93,6 +241,9 @@ payload = {
     "signingMode": signing_mode,
     "signingPreflight": signing_preflight,
     "strictSigning": strict_signing == "true",
+    "productionReadinessGate": run_prod_readiness == "true",
+    "dryRun": dry_run == "true",
+    "dartDefinesConfigured": dart_defines_configured == "true",
     "status": status,
     "message": message,
 }
@@ -128,6 +279,9 @@ lines = [
     f"- signingMode: {signing_mode}",
     f"- signingPreflight: {signing_preflight}",
     f"- strictSigning: {strict_signing}",
+    f"- productionReadinessGate: {run_prod_readiness}",
+    f"- dryRun: {dry_run}",
+    f"- dartDefinesConfigured: {dart_defines_configured}",
 ]
 if artifact_path:
     lines.extend(
@@ -153,6 +307,12 @@ log() {
 
 log "flavor=$FLAVOR buildName=$BUILD_NAME buildNumber=$BUILD_NUMBER signing=$SIGNING_MODE"
 log "signingPreflight=$PRE_FLIGHT strict=$STRICT_SIGNING"
+log "envFile=$ENV_FILE productionReadinessGate=$RUN_PROD_READINESS dryRun=$DRY_RUN"
+
+if [[ "$FLAVOR" == "prod" ]]; then
+  build_dart_define_file
+  export_if_present ADMOB_APP_ID
+fi
 
 write_report
 
@@ -162,12 +322,28 @@ if [[ "$PRE_FLIGHT_STATUS" == "block" ]]; then
   exit 1
 fi
 
+run_production_readiness_gate
+
+if [[ "$DRY_RUN" == "true" ]]; then
+  log "dry run requested; skipping Flutter build"
+  exit 0
+fi
+
 flutter pub get
-flutter build appbundle \
-  --release \
-  --flavor "$FLAVOR" \
-  --build-name "$BUILD_NAME" \
+
+build_args=(
+  build
+  appbundle
+  --release
+  --flavor "$FLAVOR"
+  --build-name "$BUILD_NAME"
   --build-number "$BUILD_NUMBER"
+)
+if [[ -n "$DART_DEFINE_FILE" ]]; then
+  build_args+=(--dart-define-from-file="$DART_DEFINE_FILE")
+fi
+
+flutter "${build_args[@]}"
 
 EXPECTED_AAB="$APP_DIR/build/app/outputs/bundle/${FLAVOR}Release/app-${FLAVOR}-release.aab"
 if [[ -f "$EXPECTED_AAB" ]]; then
