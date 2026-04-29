@@ -1,3 +1,5 @@
+import '../../core/service/speech_intent_parser.dart';
+import '../transactions/speech_entry_params_builder.dart';
 import '../transactions/transaction_entry_params.dart';
 
 class QuickActionDeepLinkRequest {
@@ -62,6 +64,7 @@ class QuickActionDeepLinkService {
     final toAccountId = int.tryParse(
       query['toAccountId'] ?? query['transferAccountId'] ?? '',
     );
+    final bookId = int.tryParse(query['bookId'] ?? '');
     final categoryKey = _firstNonEmpty(query['categoryKey'], query['category']);
     final subCategoryKey = _firstNonEmpty(
       query['subCategoryKey'],
@@ -69,19 +72,42 @@ class QuickActionDeepLinkService {
     );
     final tagKeys = _splitCsv(_firstNonEmpty(query['tagKeys'], query['tags']));
     final date = _parseDate(_firstNonEmpty(query['date'], query['time']));
+    final rawText = _firstNonEmpty(query['rawText'], query['raw']);
+    final explicitNote = _firstNonEmpty(query['note'], query['memo']);
+    final source = _entrySource(query['entrySource']);
+    final sourceLabel = _firstNonEmpty(query['sourceLabel'], query['source']);
+
+    if (source == TransactionEntrySource.shareReceive &&
+        amount == null &&
+        rawText != null) {
+      final intent = SpeechIntentParser().parse(rawText);
+      if (intent != null && intent.isValid) {
+        return const SpeechEntryParamsBuilder()
+            .build(intent, source: source, sourceLabel: sourceLabel)
+            .copyWith(
+              prefillBookId: bookId,
+              prefillDate: date,
+              prefillNote: explicitNote ?? intent.cleanedText ?? rawText,
+            );
+      }
+    }
 
     return TransactionEntryParams(
-      source: TransactionEntrySource.deepLink,
-      sourceLabel: _firstNonEmpty(query['sourceLabel'], query['source']),
+      source: source,
+      sourceLabel: sourceLabel,
       prefillAmount: amount,
       prefillType: type,
       prefillCategoryKey: categoryKey,
       prefillSubCategoryKey: subCategoryKey,
       prefillAccountId: accountId,
       prefillToAccountId: toAccountId,
-      prefillNote: _firstNonEmpty(query['note'], query['memo']),
+      prefillBookId: bookId,
+      prefillNote: source == TransactionEntrySource.shareReceive
+          ? explicitNote ?? rawText
+          : explicitNote,
       prefillDate: date,
       prefillTagKeys: tagKeys.isEmpty ? null : tagKeys,
+      prefillRawText: rawText,
       highlightFields: _missingFields(
         type: type,
         amount: amount,
@@ -91,6 +117,19 @@ class QuickActionDeepLinkService {
         subCategoryKey: subCategoryKey,
       ),
     );
+  }
+
+  static TransactionEntrySource _entrySource(String? raw) {
+    switch (raw?.trim()) {
+      case 'shareReceive':
+      case 'share_receive':
+        return TransactionEntrySource.shareReceive;
+      case 'ocrScreenshot':
+      case 'ocr_screenshot':
+        return TransactionEntrySource.ocrScreenshot;
+      default:
+        return TransactionEntrySource.deepLink;
+    }
   }
 
   static String _normalizedType(String? raw) {
