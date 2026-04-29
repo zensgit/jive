@@ -17,6 +17,8 @@ Completed:
   - `childCategoryName = 加油`
 - CSV export now includes a `分类路径` column.
 - Full transaction CSV export also includes `分类路径`.
+- Export resolves category paths from a prebuilt category-key map, avoiding repeated map reconstruction for every transaction.
+- Import and manual CSV mapping now share one `CategoryPathImportParser` helper for path splitting and explicit-column precedence.
 
 ## Design
 
@@ -47,11 +49,15 @@ The import parser recognizes these path headers:
 
 Existing `一级分类` and `二级分类` columns continue to work. If both explicit columns and a path column are present, explicit parent/child columns win.
 
+The path parsing helper is shared by `ImportService` and `ImportCsvMappingService`, keeping automatic import and manual mapping behavior consistent when separators or precedence rules evolve.
+
 ### Export
 
 CSV export adds a `分类路径` column next to the existing `分类` and `子分类` columns.
 
 When category keys resolve to a tree, export uses `CategoryPathService` to render the full path. If categories are unavailable, it falls back to the stored transaction names.
+
+`CsvExportService` builds the category lookup map once per export and uses `CategoryPathService.resolveFromMap(...)` inside the transaction loop, keeping large exports linear in transaction count.
 
 ## Preserved Boundaries
 
@@ -67,8 +73,8 @@ When category keys resolve to a tree, export uses `CategoryPathService` to rende
 Commands run:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos
-/Users/chauhua/development/flutter/bin/flutter test test/import_csv_mapping_service_test.dart test/import_service_test.dart test/moneythings_alignment_services_test.dart
+flutter analyze --no-fatal-infos
+flutter test test/import_csv_mapping_service_test.dart test/import_service_test.dart test/moneythings_alignment_services_test.dart
 ```
 
 Results:

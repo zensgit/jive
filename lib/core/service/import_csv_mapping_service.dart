@@ -1,4 +1,5 @@
 import 'package:jive/core/service/import_service.dart';
+import 'package:jive/core/service/category_path_service.dart';
 
 class ImportCsvColumnMapping {
   const ImportCsvColumnMapping({
@@ -204,7 +205,7 @@ class ImportCsvMappingService {
         cells,
         mapping.categoryPathColumnIndex,
       );
-      final categoryPath = _splitCategoryPath(categoryPathText);
+      final categoryPath = CategoryPathImportParser.split(categoryPathText);
       final rawParentCategoryName = _pickByIndex(
         cells,
         mapping.parentCategoryColumnIndex,
@@ -214,13 +215,16 @@ class ImportCsvMappingService {
         mapping.childCategoryColumnIndex,
       );
       final parentCategoryName =
-          _preferExplicitCategoryName(
+          CategoryPathImportParser.preferExplicitCategoryName(
             rawParentCategoryName,
             categoryPathText,
           ) ??
           categoryPath.parentName;
       final childCategoryName =
-          _preferExplicitCategoryName(rawChildCategoryName, categoryPathText) ??
+          CategoryPathImportParser.preferExplicitCategoryName(
+            rawChildCategoryName,
+            categoryPathText,
+          ) ??
           categoryPath.childName;
       final tagNames = _splitTagNames(
         _pickByIndex(cells, mapping.tagColumnIndex),
@@ -737,26 +741,6 @@ class ImportCsvMappingService {
         .toList(growable: false);
   }
 
-  _CategoryPathNames _splitCategoryPath(String? raw) {
-    final text = raw?.trim();
-    if (text == null || text.isEmpty) return const _CategoryPathNames();
-    final parts = text
-        .split(RegExp(r'\s*(?:/|／|>|＞|\\|、)\s*'))
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList(growable: false);
-    if (parts.isEmpty) return const _CategoryPathNames();
-    if (parts.length == 1) return _CategoryPathNames(parentName: parts.first);
-    return _CategoryPathNames(parentName: parts.first, childName: parts.last);
-  }
-
-  String? _preferExplicitCategoryName(String? explicit, String? pathText) {
-    final text = explicit?.trim();
-    if (text == null || text.isEmpty) return null;
-    if (pathText != null && text == pathText.trim()) return null;
-    return text;
-  }
-
   String? _inferTypeFromCategoryHints({
     required String? parentCategoryName,
     required String? childCategoryName,
@@ -774,11 +758,4 @@ class ImportCsvMappingService {
     }
     return null;
   }
-}
-
-class _CategoryPathNames {
-  const _CategoryPathNames({this.parentName, this.childName});
-
-  final String? parentName;
-  final String? childName;
 }

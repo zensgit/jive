@@ -108,7 +108,7 @@ class CsvExportService {
         transaction.amount.toStringAsFixed(2),
         _categoryLabel(transaction, categoryByKey),
         _subCategoryLabel(transaction, categoryByKey),
-        _categoryPathLabel(transaction, categories),
+        _categoryPathLabel(transaction, categoryByKey),
         transaction.note?.trim() ?? '',
         _accountLabel(transaction, accountById),
         _tagLabel(transaction, tagByKey),
@@ -286,6 +286,9 @@ class CsvExportService {
     List<JiveTransaction> transactions,
     List<JiveCategory> categories,
   ) {
+    final categoryByKey = {
+      for (final category in categories) category.key: category,
+    };
     final buffer = StringBuffer()..write('\uFEFF');
     buffer.writeln(
       [
@@ -329,7 +332,7 @@ class CsvExportService {
           tx.source,
           tx.category,
           tx.subCategory,
-          _categoryPathLabel(tx, categories),
+          _categoryPathLabel(tx, categoryByKey),
           tx.categoryKey,
           tx.subCategoryKey,
           tx.accountId,
@@ -403,13 +406,13 @@ class CsvExportService {
 
   String _categoryPathLabel(
     JiveTransaction transaction,
-    Iterable<JiveCategory> categories,
+    Map<String, JiveCategory> categoryByKey,
   ) {
     if (transaction.type == 'transfer') {
       return '';
     }
-    final path = const CategoryPathService().resolve(
-      categories,
+    final path = const CategoryPathService().resolveFromMap(
+      categoryByKey,
       categoryKey: transaction.categoryKey,
       subCategoryKey: transaction.subCategoryKey,
     );

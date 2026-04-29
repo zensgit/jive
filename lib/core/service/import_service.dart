@@ -12,6 +12,7 @@ import '../repository/import_job_history_repository.dart';
 import 'alipay_csv_parser.dart';
 import 'auto_draft_service.dart';
 import 'auto_settings.dart';
+import 'category_path_service.dart';
 import 'data_reload_bus.dart';
 import 'ocr_service.dart';
 import 'wechat_csv_parser.dart';
@@ -878,7 +879,7 @@ class ImportService {
         headerMap,
         _categoryPathAliases,
       );
-      final categoryPath = _splitCategoryPath(categoryPathText);
+      final categoryPath = CategoryPathImportParser.split(categoryPathText);
       final rawParentCategoryName = _pickValue(
         cells,
         headerMap,
@@ -890,13 +891,16 @@ class ImportService {
         _childCategoryAliases,
       );
       final parentCategoryName =
-          _preferExplicitCategoryName(
+          CategoryPathImportParser.preferExplicitCategoryName(
             rawParentCategoryName,
             categoryPathText,
           ) ??
           categoryPath.parentName;
       final childCategoryName =
-          _preferExplicitCategoryName(rawChildCategoryName, categoryPathText) ??
+          CategoryPathImportParser.preferExplicitCategoryName(
+            rawChildCategoryName,
+            categoryPathText,
+          ) ??
           categoryPath.childName;
       final tagNames = _splitTagNames(
         _pickValue(cells, headerMap, _tagAliases),
@@ -1515,26 +1519,6 @@ class ImportService {
         .toList(growable: false);
   }
 
-  _CategoryPathNames _splitCategoryPath(String? raw) {
-    final text = raw?.trim();
-    if (text == null || text.isEmpty) return const _CategoryPathNames();
-    final parts = text
-        .split(RegExp(r'\s*(?:/|／|>|＞|\\|、)\s*'))
-        .map((part) => part.trim())
-        .where((part) => part.isNotEmpty)
-        .toList(growable: false);
-    if (parts.isEmpty) return const _CategoryPathNames();
-    if (parts.length == 1) return _CategoryPathNames(parentName: parts.first);
-    return _CategoryPathNames(parentName: parts.first, childName: parts.last);
-  }
-
-  String? _preferExplicitCategoryName(String? explicit, String? pathText) {
-    final text = explicit?.trim();
-    if (text == null || text.isEmpty) return null;
-    if (pathText != null && text == pathText.trim()) return null;
-    return text;
-  }
-
   String? _inferTypeFromCategoryHints({
     required String? parentCategoryName,
     required String? childCategoryName,
@@ -1819,11 +1803,4 @@ class ImportService {
         return ImportDuplicatePolicy.keepLatest;
     }
   }
-}
-
-class _CategoryPathNames {
-  const _CategoryPathNames({this.parentName, this.childName});
-
-  final String? parentName;
-  final String? childName;
 }
