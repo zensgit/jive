@@ -63,6 +63,18 @@ Updated `scripts/build_saas_staging_apk.sh`:
 
 This prevents staging artifacts from being confused with release-candidate artifacts.
 
+### CI Self-Check
+
+Updated `.github/workflows/flutter_ci.yml` with `saas_production_readiness_self_check`.
+
+The job uses fake non-secret env files to verify:
+
+- Script syntax.
+- Bad production config fails.
+- Production-shaped app config passes.
+- Release-candidate dry-run runs the readiness gate.
+- Staging build lane rejects `prod` flavor by default.
+
 ## Validation
 
 ### Script Syntax
@@ -74,6 +86,29 @@ bash -n scripts/check_saas_production_readiness.sh scripts/build_saas_staging_ap
 ```
 
 Result: passed.
+
+### Workflow Syntax Parse
+
+Command:
+
+```bash
+ruby -e "require 'psych'; Psych.parse_file('.github/workflows/flutter_ci.yml')"
+```
+
+Result: passed.
+
+### CI Self-Check Logic
+
+The new `saas_production_readiness_self_check` job logic was also run locally with temporary fake env files.
+
+Result: passed.
+
+Covered:
+
+- Bad production env failed as expected.
+- Production-shaped app env passed with the expected Android signing warning.
+- Release-candidate dry-run passed.
+- Staging build lane rejected `prod` flavor before Flutter build.
 
 ### Diff Whitespace
 
@@ -171,4 +206,3 @@ scripts/check_saas_production_readiness.sh --profile full --store android --stri
 - Configure Android release signing before publishing.
 - Keep domestic payment disabled in production until provider signature verification is implemented.
 - Clean pre-existing analyzer info items in a separate lint hygiene pass.
-
