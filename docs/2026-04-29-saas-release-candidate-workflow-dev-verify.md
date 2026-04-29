@@ -23,6 +23,15 @@ The workflow is manual-only through `workflow_dispatch` and defaults to dry-run 
 - `strict_signing=true` requires Android release signing secrets and passes strict signing into the release lane.
 - `flavor` is locked to `prod` for this first production SaaS workflow.
 
+The workflow explicitly maps GitHub-facing production secret names to the script-facing runtime names:
+
+- `PRODUCTION_SUPABASE_URL` -> `SUPABASE_URL`
+- `PRODUCTION_SUPABASE_ANON_KEY` -> `SUPABASE_ANON_KEY`
+- `PRODUCTION_ADMOB_APP_ID` -> `ADMOB_APP_ID`
+- `PRODUCTION_ADMOB_BANNER_ID` -> `ADMOB_BANNER_ID`
+- `ANDROID_RELEASE_*` -> `JIVE_ANDROID_*` when `strict_signing=true`
+- `build_appbundle=false` -> `JIVE_RELEASE_CANDIDATE_DRY_RUN=true`
+
 Updated `docs/saas-ops-checklist.md` with:
 
 - Release candidate workflow entrypoint.
@@ -66,7 +75,7 @@ Required only when `strict_signing=true`:
 
 ## Safety
 
-- The workflow writes production client values into `$RUNNER_TEMP/jive-saas-production.env`, not into the repository.
+- The workflow writes production client values into `$RUNNER_TEMP/jive-saas-production.env`, not into the repository, and exports `PRODUCTION_ENV_FILE` so the release/readiness scripts read that exact file instead of their local `/tmp/jive-saas-production.env` default.
 - Secret values are masked before the release lane runs.
 - Android signing material is restored only when strict signing is enabled.
 - Artifact upload is guarded against env, key, credential, secret, and dart-define filenames.
@@ -135,6 +144,18 @@ bash scripts/build_release_candidate.sh
 ```
 
 Result: passed. The production readiness gate ran and the release lane stopped before Flutter build as expected.
+
+### Linux Artifact Size Compatibility
+
+Review follow-up: `scripts/build_release_candidate.sh` now uses a cross-platform `file_size_bytes` helper. It tries GNU/Linux `stat -c%s`, falls back to BSD/macOS `stat -f%z`, then falls back to `wc -c`.
+
+Static check:
+
+```bash
+grep -n "file_size_bytes\\|stat -c%s\\|stat -f%z" scripts/build_release_candidate.sh
+```
+
+Result: the release candidate lane now matches the existing staging APK helper pattern. The helper is covered indirectly by script syntax validation and by the production dry-run path. The production dry-run intentionally does not create an AAB, so the final artifact-size branch is exercised by release builds.
 
 ### Diff Whitespace
 
