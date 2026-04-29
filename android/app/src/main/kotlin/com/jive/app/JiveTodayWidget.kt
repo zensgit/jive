@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.RemoteViews
 import java.text.DecimalFormat
 
@@ -60,6 +61,23 @@ class JiveTodayWidget : AppWidgetProvider() {
                 )
                 views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
             }
+            val quickEntryUri = Uri.Builder()
+                .scheme("jive")
+                .authority("transaction")
+                .appendPath("new")
+                .appendQueryParameter("sourceLabel", "来自桌面小组件")
+                .build()
+            val quickEntryIntent = Intent(Intent.ACTION_VIEW, quickEntryUri).apply {
+                setPackage(context.packageName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+            val quickEntryPendingIntent = PendingIntent.getActivity(
+                context,
+                1000 + widgetId,
+                quickEntryIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_quick_add, quickEntryPendingIntent)
 
             appWidgetManager.updateAppWidget(widgetId, views)
         }

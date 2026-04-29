@@ -64,6 +64,12 @@
                 <data android:scheme="jive" android:host="quick-action"/>
                 <data android:scheme="jive" android:host="transaction"/>
             </intent-filter>
+            <!-- Android system share entry for receipt/payment text. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="text/plain"/>
+            </intent-filter>
         </activity>
         <!-- Jive: Today Summary Home Screen Widget -->
         <receiver android:name=".JiveTodayWidget" android:exported="true">
