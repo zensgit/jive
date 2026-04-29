@@ -69,10 +69,12 @@ flutter build apk --release --flavor prod \
 
 ### 签名 AAB 构建
 ```bash
-flutter build appbundle --release --flavor prod \
-  --dart-define=SUPABASE_URL=xxx \
-  --dart-define=SUPABASE_ANON_KEY=xxx
+scripts/build_release_candidate.sh
 ```
+
+GitHub Actions 推荐入口：`SaaS Release Candidate` workflow。
+
+首次建议先用 `build_appbundle=false` 跑 dry-run，确认生产 Supabase、AdMob、支付 runtime flag 与签名策略都能通过门禁；准备上传商店时再使用 `build_appbundle=true` + `strict_signing=true`。
 
 ---
 
@@ -86,10 +88,10 @@ flutter build appbundle --release --flavor prod \
 - [ ] **创建广告单元**
   - Banner 广告单元 → 拿到真实 ad unit ID
 - [ ] **替换测试 ID**
-  - 文件: `lib/core/ads/ad_config.dart`
-  - 替换 `bannerUnitId` 为真实 ID
-  - 文件: `android/app/src/main/AndroidManifest.xml`
-  - 替换 `com.google.android.gms.ads.APPLICATION_ID` 为真实 App ID
+  - GitHub Actions Secret: `PRODUCTION_ADMOB_APP_ID`
+  - GitHub Actions Secret: `PRODUCTION_ADMOB_BANNER_ID`
+  - 本地 release candidate：写入 `/tmp/jive-saas-production.env`
+  - debug/dev 构建默认保留 Google 测试 ID
 - [ ] **验证**
   - debug 模式使用测试 ID（当前默认就是）
   - release 模式使用真实 ID
@@ -125,7 +127,10 @@ Banner ID: ca-app-pub-3940256099942544/6300978111
 
 ## 五、上线前检查清单
 
-- [ ] 所有测试 ID 替换为真实 ID（AdMob, Supabase）
+- [ ] `SaaS Release Candidate` workflow dry-run 通过
+- [ ] `scripts/check_saas_production_readiness.sh --profile full --store android --strict --require-release-signing --env-file /tmp/jive-saas-production.env` 通过
+- [ ] GitHub Actions production secrets 已配置：Supabase、AdMob、Android 签名
+- [ ] 所有测试 ID 替换为真实配置（AdMob 通过 production secrets / env 注入，Supabase 使用生产项目）
 - [ ] 隐私政策页面上线（URL 填入 Play Console）
 - [ ] 用户协议页面上线
 - [ ] `flutter analyze` 0 errors
@@ -140,7 +145,54 @@ Banner ID: ca-app-pub-3940256099942544/6300978111
 
 ---
 
-## 六、SaaS 代码架构速查
+## 六、生产 Release Candidate Workflow
+
+入口：GitHub Actions → `SaaS Release Candidate` → `Run workflow`
+
+### 必需 Secrets
+
+| Secret | 用途 |
+|---|---|
+| `PRODUCTION_SUPABASE_URL` | 生产 Supabase 客户端 URL |
+| `PRODUCTION_SUPABASE_ANON_KEY` | 生产 Supabase anon key |
+| `PRODUCTION_ADMOB_APP_ID` | Android Manifest AdMob App ID |
+| `PRODUCTION_ADMOB_BANNER_ID` | Dart AdMob Banner unit ID |
+
+### 可选 Secrets
+
+| Secret | 用途 |
+|---|---|
+| `PRODUCTION_ADMIN_API_ALLOWED_ORIGINS` | full readiness / 管理端 origin 约束 |
+| `PRODUCTION_PAYMENT_CHANNEL` | 默认可留空，workflow 会使用 `google_play` |
+
+### 严格签名 Secrets
+
+`strict_signing=true` 或准备上传商店时必须配置：
+
+| Secret | 用途 |
+|---|---|
+| `ANDROID_RELEASE_KEYSTORE_BASE64` | release keystore 的 base64 内容 |
+| `ANDROID_RELEASE_STORE_PASSWORD` | keystore password |
+| `ANDROID_RELEASE_KEY_ALIAS` | key alias |
+| `ANDROID_RELEASE_KEY_PASSWORD` | key password |
+
+### 推荐执行顺序
+
+1. `build_appbundle=false`、`strict_signing=false`：只跑生产配置门禁和 release report。
+2. `build_appbundle=false`、`strict_signing=true`：确认签名 secrets 可用。
+3. `build_appbundle=true`、`strict_signing=true`：生成可用于内部测试/商店上传的 prod AAB。
+
+产物：
+
+- `build/reports/release-candidate/latest.md`
+- `build/reports/release-candidate/release-candidate.json`
+- `build/release-candidate/.../*.aab`（仅 `build_appbundle=true`）
+
+artifact guard 会阻止 `.env`、`.key`、credential、secret、dart-defines 等敏感文件进入上传产物。
+
+---
+
+## 七、SaaS 代码架构速查
 
 ```
 lib/core/auth/          # 认证（GuestAuthService → 未来真实 provider）

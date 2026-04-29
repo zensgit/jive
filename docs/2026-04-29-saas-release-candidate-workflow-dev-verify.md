@@ -23,6 +23,14 @@ The workflow is manual-only through `workflow_dispatch` and defaults to dry-run 
 - `strict_signing=true` requires Android release signing secrets and passes strict signing into the release lane.
 - `flavor` is locked to `prod` for this first production SaaS workflow.
 
+Updated `docs/saas-ops-checklist.md` with:
+
+- Release candidate workflow entrypoint.
+- Required production secrets.
+- Strict signing secrets.
+- Recommended dry-run to signed-build sequence.
+- Artifact expectations and sensitivity guard behavior.
+
 ## Secrets
 
 Required for dry-run:
@@ -101,4 +109,3 @@ Result: passed.
 - After PR `#212` merges, rebase this branch onto `main` and open/retarget the final PR to `main`.
 - Add real production secrets in GitHub Actions before running the workflow.
 - Use `strict_signing=true` for any release candidate intended for store upload.
-
