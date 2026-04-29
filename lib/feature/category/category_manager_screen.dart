@@ -29,12 +29,14 @@ class _UserCategorySeed {
 
 class CategoryManagerScreen extends StatefulWidget {
   final Isar? isar;
+  final int? currentBookId;
   final bool onlyUserCategories;
   final bool initialShowIncome;
 
   const CategoryManagerScreen({
     super.key,
     this.isar,
+    this.currentBookId,
     this.onlyUserCategories = false,
     this.initialShowIncome = false,
   });
@@ -105,7 +107,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         _isar = await DatabaseService.getInstance();
       }
       _service = CategoryService(_isar);
-      _currentBook = await BookService(_isar).getDefaultBook();
+      _currentBook = await _loadCurrentBook(BookService(_isar));
       await _service.initDefaultCategories();
       await _loadCategories();
     } catch (e, s) {
@@ -114,6 +116,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<JiveBook?> _loadCurrentBook(BookService service) async {
+    final id = widget.currentBookId;
+    if (id != null) {
+      final book = await _isar.jiveBooks.get(id);
+      if (book != null) return book;
+    }
+    return service.getDefaultBook();
   }
 
   Future<void> _loadCategories() async {

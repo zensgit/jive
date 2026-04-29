@@ -35,8 +35,9 @@ import 'smart_tag_opt_out_screen.dart';
 
 class TagManagementScreen extends StatefulWidget {
   final Isar? isar;
+  final int? currentBookId;
 
-  const TagManagementScreen({super.key, this.isar});
+  const TagManagementScreen({super.key, this.isar, this.currentBookId});
 
   @override
   State<TagManagementScreen> createState() => _TagManagementScreenState();
@@ -114,7 +115,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   Future<void> _init() async {
     try {
       _isar = widget.isar ?? await DatabaseService.getInstance();
-      _currentBook = await BookService(_isar).getDefaultBook();
+      _currentBook = await _loadCurrentBook(BookService(_isar));
       await TagService(_isar).initDefaultGroups();
       await _loadData();
       DataReloadBus.notifier.addListener(_handleReload);
@@ -125,6 +126,15 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<JiveBook?> _loadCurrentBook(BookService service) async {
+    final id = widget.currentBookId;
+    if (id != null) {
+      final book = await _isar.jiveBooks.get(id);
+      if (book != null) return book;
+    }
+    return service.getDefaultBook();
   }
 
   Future<void> _loadCleanupPref() async {

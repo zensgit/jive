@@ -12,8 +12,10 @@ Completed in this slice:
 
 - SmartList can now be saved directly from the current transaction list search/filter state.
 - Search keyword is preserved when a current view is saved as a SmartList.
+- Fixed category/subcategory views are merged into the saved SmartList snapshot, so a category page can be saved even without extra filters.
+- Unsupported budget-only filters are not persisted as SmartLists yet, preventing a saved view from restoring different results.
 - Scene/book UI now shows first-stage sharing visibility badges.
-- Category and tag management now surface inherited shared-scene status and stronger delete-impact warnings.
+- Category and tag management now use the active scene/book context when available, and surface inherited shared-scene status plus stronger delete-impact warnings.
 - Object sharing deletion-warning behavior is covered by a unit test.
 
 ## Development Details
@@ -21,9 +23,9 @@ Completed in this slice:
 ### SmartList Current View Save
 
 - Added a `transaction_save_smart_list_button` action in the transaction list floating toolbar.
-- The button is enabled only when the list has a search keyword or active filters.
-- Saving prompts for a view name, persists the current `TransactionListFilterState`, and preserves the current search keyword.
-- After saving, the snackbar provides a management shortcut into `SmartListScreen`.
+- The button is enabled only when the list has a search keyword, supported active filters, or a fixed category/subcategory scope.
+- Saving prompts for a view name, captures the current supported filter snapshot, merges fixed category/subcategory scope, and preserves the current search keyword.
+- After saving, the snackbar provides a management shortcut into `SmartListScreen` using the captured snapshot and a mounted check.
 - `SmartListScreen` now accepts `currentKeyword` so its existing “保存当前筛选” flow does not lose keyword-only views.
 
 Preserved behavior:
@@ -31,13 +33,14 @@ Preserved behavior:
 - Existing default SmartList restore remains in `CategoryTransactionsScreen`.
 - Existing SmartList pin/default/delete behavior remains in `SmartListScreen`.
 - No SmartList schema change was introduced.
+- Budget inclusion filters remain intentionally excluded from saved SmartLists until the model can restore them losslessly.
 
 ### Object Sharing Visibility
 
 - `HomeTopBar` scene switcher shows a sharing badge for shared scenes.
 - `BookManagerScreen` shows the same sharing badge in the scene/book list.
-- `CategoryManagerScreen` loads the current default book context and shows inherited shared-scene badges on category cards and compact category chips.
-- `TagManagementScreen` loads the current default book context and shows compact shared badges on tag chips.
+- `CategoryManagerScreen` accepts `currentBookId`, falls back to the default book, and shows inherited shared-scene badges on category cards and compact category chips.
+- `TagManagementScreen` accepts `currentBookId`, falls back to the default book, and shows compact shared badges on tag chips.
 
 Preserved boundary:
 
@@ -67,8 +70,8 @@ Still intentionally deferred for later TODO slices:
 Commands run:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos
-/Users/chauhua/development/flutter/bin/flutter test test/moneythings_alignment_services_test.dart test/add_transaction_screen_entry_ux_test.dart test/category_picker_user_categories_test.dart test/transaction_entry_widget_regression_test.dart
+flutter analyze --no-fatal-infos
+flutter test test/moneythings_alignment_services_test.dart test/add_transaction_screen_entry_ux_test.dart test/category_picker_user_categories_test.dart test/transaction_entry_widget_regression_test.dart
 ```
 
 Results:
@@ -86,6 +89,7 @@ Known residual risk:
 Recommended before merging:
 
 - Open transaction list, search or apply a filter, tap the bookmark button, save a view, then reopen it from “我的视图”.
+- Open a category/subcategory transaction page without extra filters, save it as a SmartList, then reopen it and confirm the category scope is preserved.
 - Long-press the saved SmartList and set it as default; reopen transaction list and confirm it restores.
 - In a shared scene, open scene switcher and book manager; confirm sharing badge is visible.
 - In a shared scene, open category and tag management; confirm inherited sharing badge is visible.

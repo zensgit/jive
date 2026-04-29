@@ -661,12 +661,12 @@ class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
               padding: const EdgeInsets.only(right: 2),
               child: IconButton(
                 key: const Key('transaction_save_smart_list_button'),
-                onPressed: hasSearch ? _saveCurrentSmartList : null,
-                tooltip: hasSearch ? '保存为视图' : '筛选或搜索后可保存为视图',
+                onPressed: _canSaveSmartList ? _saveCurrentSmartList : null,
+                tooltip: _canSaveSmartList ? '保存为视图' : '筛选或搜索后可保存为视图',
                 icon: Icon(
                   Icons.bookmark_add_outlined,
                   size: 20,
-                  color: hasSearch
+                  color: _canSaveSmartList
                       ? Colors.grey.shade700
                       : Colors.grey.shade300,
                 ),
@@ -688,7 +688,8 @@ class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
 
   Future<void> _saveCurrentSmartList() async {
     final keyword = _searchQuery.trim();
-    if (!_filterState.hasAnyFilter && keyword.isEmpty) return;
+    final filterSnapshot = _smartListFilterSnapshot();
+    if (!filterSnapshot.hasAnyFilter && keyword.isEmpty) return;
 
     final name = await _promptSmartListName();
     if (name == null || name.isEmpty) return;
@@ -696,7 +697,7 @@ class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
     final service = SmartListService(_isar);
     final draft = service.fromFilterState(
       name: name,
-      filterState: _filterState,
+      filterState: filterSnapshot,
       keyword: keyword.isEmpty ? null : keyword,
     );
     await service.create(
@@ -717,7 +718,11 @@ class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('已保存视图「$name」'),
-        action: SnackBarAction(label: '管理', onPressed: _openSmartListManager),
+        action: SnackBarAction(
+          label: '管理',
+          onPressed: () =>
+              _openSmartListManager(filter: filterSnapshot, keyword: keyword),
+        ),
       ),
     );
   }
@@ -754,27 +759,52 @@ class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
   String _suggestSmartListName() {
     final keyword = _searchQuery.trim();
     if (keyword.isNotEmpty) return keyword;
-    if (_filterState.normalizedTag != null) {
-      return '#${_filterState.normalizedTag}';
+    final filter = _smartListFilterSnapshot();
+    if (filter.normalizedTag != null) {
+      return '#${filter.normalizedTag}';
     }
-    if (_filterState.categoryKey != null) {
-      return _categoryByKey[_filterState.categoryKey]?.name ?? '分类视图';
+    if (filter.categoryKey != null) {
+      return _categoryByKey[filter.categoryKey]?.name ?? '分类视图';
     }
-    if (_filterState.accountId != null) {
-      return _accountById[_filterState.accountId]?.name ?? '账户视图';
+    if (filter.accountId != null) {
+      return _accountById[filter.accountId]?.name ?? '账户视图';
     }
-    if (_filterState.dateRange != null) return '日期视图';
+    if (filter.dateRange != null) return '日期视图';
     return '我的视图';
   }
 
-  void _openSmartListManager() {
+  void _openSmartListManager({
+    TransactionListFilterState? filter,
+    String? keyword,
+  }) {
+    if (!mounted) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SmartListScreen(
-          currentFilter: _filterState,
-          currentKeyword: _searchQuery,
+          currentFilter: filter ?? _smartListFilterSnapshot(),
+          currentKeyword: keyword ?? _searchQuery,
         ),
       ),
+    );
+  }
+
+  bool get _canSaveSmartList {
+    final keyword = _searchQuery.trim();
+    return keyword.isNotEmpty || _smartListFilterSnapshot().hasAnyFilter;
+  }
+
+  TransactionListFilterState _smartListFilterSnapshot() {
+    final fixedSub = widget.filterSubCategoryKey?.trim();
+    final fixedCategory = widget.filterCategoryKey?.trim();
+    final fixedCategoryKey = (fixedSub?.isNotEmpty ?? false)
+        ? fixedSub
+        : ((fixedCategory?.isNotEmpty ?? false) ? fixedCategory : null);
+    final mergedCategory = fixedCategoryKey ?? _filterState.categoryKey;
+
+    return _filterState.copyWith(
+      categoryKey: mergedCategory,
+      clearCategoryKey: mergedCategory == null,
+      budgetFilter: BudgetInclusionFilter.all,
     );
   }
 

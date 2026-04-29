@@ -9,7 +9,7 @@ import '../category/category_transactions_screen.dart';
 
 /// 保存视图列表页 — 展示所有 SmartList，点击可打开已筛选的交易列表。
 class SmartListScreen extends StatefulWidget {
-  /// 如果提供，则在页面显示「保存当前筛选」入口。
+  /// 如果提供筛选或搜索关键词，则在页面显示「保存当前视图」入口。
   final TransactionListFilterState? currentFilter;
   final String? currentKeyword;
 

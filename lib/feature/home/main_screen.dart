@@ -262,6 +262,7 @@ class _MainScreenState extends State<MainScreen>
           autoSettings: autoSettings,
           autoAppEnabledCount: autoAppEnabledCount,
           pendingDraftCount: pendingDraftCount,
+          currentBookId: currentBookId,
           isar: isar,
           actions: HomeMenuActions(
             setDemoSeedEnabled: setDemoSeedEnabled,
