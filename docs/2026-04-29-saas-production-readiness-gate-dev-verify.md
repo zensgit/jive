@@ -75,6 +75,13 @@ The job uses fake non-secret env files to verify:
 - Release-candidate dry-run runs the readiness gate.
 - Staging build lane rejects `prod` flavor by default.
 
+### Deployment Readiness Inventory
+
+Updated `scripts/check_saas_deployment_readiness.sh` so the general SaaS deployment preflight now also requires:
+
+- `docs/jive-saas-production.env.example`
+- `scripts/check_saas_production_readiness.sh`
+
 ## Validation
 
 ### Script Syntax
@@ -82,7 +89,7 @@ The job uses fake non-secret env files to verify:
 Command:
 
 ```bash
-bash -n scripts/check_saas_production_readiness.sh scripts/build_saas_staging_apk.sh scripts/build_release_candidate.sh
+bash -n scripts/check_saas_production_readiness.sh scripts/build_saas_staging_apk.sh scripts/build_release_candidate.sh scripts/check_saas_deployment_readiness.sh
 ```
 
 Result: passed.
@@ -109,6 +116,16 @@ Covered:
 - Production-shaped app env passed with the expected Android signing warning.
 - Release-candidate dry-run passed.
 - Staging build lane rejected `prod` flavor before Flutter build.
+
+### Deployment Readiness Preflight
+
+Command:
+
+```bash
+scripts/check_saas_deployment_readiness.sh --profile core --skip-github
+```
+
+Result: passed for repository-file inventory and local tooling. Missing local staging env remains a warning in non-strict mode, as expected.
 
 ### Diff Whitespace
 

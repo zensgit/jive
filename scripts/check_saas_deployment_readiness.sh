@@ -15,10 +15,12 @@ WARNINGS=0
 
 REQUIRED_REPO_FILES=(
   docs/jive-saas-staging.env.example
+  docs/jive-saas-production.env.example
   docs/2026-04-10-saas-fast-track-checklist.md
   docs/2026-04-10-saas-staging-apply-runbook.md
   docs/2026-04-10-saas-staging-troubleshooting.md
   scripts/build_saas_staging_apk.sh
+  scripts/check_saas_production_readiness.sh
   scripts/check_saas_github_secrets.sh
   scripts/init_saas_staging_env.sh
   scripts/push_saas_github_secrets.sh
