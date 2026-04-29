@@ -10,6 +10,9 @@ import 'transaction_entry_params.dart';
 class SpeechEntryParamsBuilder {
   const SpeechEntryParamsBuilder();
 
+  static final RegExp _accountTailPattern = RegExp(r'(\d{3,4})');
+  static final RegExp _normalizePattern = RegExp(r'[\s_\-·•]+');
+
   TransactionEntryParams build(
     SpeechIntent intent, {
     Iterable<JiveAccount> accounts = const [],
@@ -17,11 +20,12 @@ class SpeechEntryParamsBuilder {
     String? sourceLabel,
   }) {
     final type = _normalizeType(intent.type);
-    final fromAccount = _resolveAccount(intent.accountHint, accounts);
+    final accountAliases = _normalizedAccountAliases(accounts);
+    final fromAccount = _resolveAccount(intent.accountHint, accountAliases);
     final toAccount = type == 'transfer'
         ? _resolveAccount(
             intent.toAccountHint,
-            accounts,
+            accountAliases,
             excludeId: fromAccount?.id,
           )
         : null;
@@ -83,15 +87,17 @@ class SpeechEntryParamsBuilder {
 
   JiveAccount? _resolveAccount(
     String? hint,
-    Iterable<JiveAccount> accounts, {
+    List<_AccountAlias> accounts, {
     int? excludeId,
   }) {
     final normalizedHint = _normalize(hint);
     if (normalizedHint.isEmpty) return null;
-    for (final account in accounts) {
-      if (account.id == excludeId) continue;
-      for (final alias in _accountAliases(account)) {
-        final normalizedAlias = _normalize(alias);
+    for (final entry in accounts) {
+      final account = entry.account;
+      if (account.id == excludeId) {
+        continue;
+      }
+      for (final normalizedAlias in entry.normalizedAliases) {
         if (normalizedAlias.isEmpty) continue;
         if (normalizedAlias.contains(normalizedHint) ||
             normalizedHint.contains(normalizedAlias)) {
@@ -102,10 +108,24 @@ class SpeechEntryParamsBuilder {
     return null;
   }
 
+  List<_AccountAlias> _normalizedAccountAliases(Iterable<JiveAccount> accounts) {
+    return accounts
+        .map(
+          (account) => _AccountAlias(
+            account,
+            _accountAliases(account)
+                .map(_normalize)
+                .where((alias) => alias.isNotEmpty)
+                .toList(growable: false),
+          ),
+        )
+        .toList(growable: false);
+  }
+
   List<String> _accountAliases(JiveAccount account) {
     final values = <String>[account.name, account.type, account.currency];
     if (account.subType != null) values.add(account.subType!);
-    final tailMatch = RegExp(r'(\d{3,4})').firstMatch(account.name);
+    final tailMatch = _accountTailPattern.firstMatch(account.name);
     if (tailMatch != null) values.add(tailMatch.group(1)!);
     return values;
   }
@@ -113,7 +133,14 @@ class SpeechEntryParamsBuilder {
   String _normalize(String? value) {
     return (value ?? '')
         .toLowerCase()
-        .replaceAll(RegExp(r'[\s_\-·•]+'), '')
+        .replaceAll(_normalizePattern, '')
         .trim();
   }
+}
+
+class _AccountAlias {
+  final JiveAccount account;
+  final List<String> normalizedAliases;
+
+  const _AccountAlias(this.account, this.normalizedAliases);
 }

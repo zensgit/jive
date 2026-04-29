@@ -33,6 +33,8 @@ It maps:
 - account hints to concrete `JiveAccount.id` when possible
 - missing-field highlights for amount, account, category, and transfer target
 
+Account matching precomputes normalized aliases once per build call and reuses static regex patterns for account-tail and whitespace normalization.
+
 The builder does not save transactions. It only prepares the editor contract.
 
 ### Assistant Voice
@@ -63,8 +65,8 @@ This prevents clipboard-derived entries from silently filling the calculator scr
 Commands run:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos
-/Users/chauhua/development/flutter/bin/flutter test test/moneythings_alignment_services_test.dart test/speech_intent_parser_test.dart test/add_transaction_screen_entry_ux_test.dart test/transaction_entry_widget_regression_test.dart
+flutter analyze --no-fatal-infos
+flutter test test/moneythings_alignment_services_test.dart test/speech_intent_parser_test.dart test/add_transaction_screen_entry_ux_test.dart test/transaction_entry_widget_regression_test.dart
 ```
 
 Results:
