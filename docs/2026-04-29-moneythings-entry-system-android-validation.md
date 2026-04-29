@@ -34,7 +34,7 @@ Out of scope for this pass:
 Command:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter test test/moneythings_alignment_services_test.dart test/speech_intent_parser_test.dart test/add_transaction_screen_entry_ux_test.dart test/transaction_entry_widget_regression_test.dart
+flutter test test/moneythings_alignment_services_test.dart test/speech_intent_parser_test.dart test/add_transaction_screen_entry_ux_test.dart test/transaction_entry_widget_regression_test.dart
 ```
 
 Result: passed.
@@ -52,7 +52,7 @@ Coverage confirmed:
 Command:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos
+flutter analyze --no-fatal-infos
 ```
 
 Result: passed with info-level findings only.
@@ -67,7 +67,7 @@ Notes:
 Command:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter build apk --debug --flavor dev --no-pub
+flutter build apk --debug --flavor dev --no-pub
 ```
 
 Result: passed.
@@ -96,7 +96,7 @@ package="com.jivemoney.app.dev"
 Command:
 
 ```bash
-/Users/chauhua/Library/Android/sdk/cmdline-tools/latest/bin/apkanalyzer manifest print build/app/outputs/flutter-apk/app-dev-debug.apk
+apkanalyzer manifest print build/app/outputs/flutter-apk/app-dev-debug.apk
 ```
 
 Result: passed.
@@ -139,7 +139,7 @@ EP0110MZ0BC110087W    device
 Install command:
 
 ```bash
-/Users/chauhua/Library/Android/sdk/platform-tools/adb -s EP0110MZ0BC110087W install -r build/app/outputs/flutter-apk/app-dev-debug.apk
+adb -s EP0110MZ0BC110087W install -r build/app/outputs/flutter-apk/app-dev-debug.apk
 ```
 
 Result: blocked.
@@ -189,8 +189,8 @@ Option A: clear the existing dev app on the phone.
 Use only if losing local dev app data is acceptable:
 
 ```bash
-/Users/chauhua/Library/Android/sdk/platform-tools/adb -s EP0110MZ0BC110087W uninstall com.jivemoney.app.dev
-/Users/chauhua/Library/Android/sdk/platform-tools/adb -s EP0110MZ0BC110087W install build/app/outputs/flutter-apk/app-dev-debug.apk
+adb -s EP0110MZ0BC110087W uninstall com.jivemoney.app.dev
+adb -s EP0110MZ0BC110087W install build/app/outputs/flutter-apk/app-dev-debug.apk
 ```
 
 Option B: preserve the current phone state.

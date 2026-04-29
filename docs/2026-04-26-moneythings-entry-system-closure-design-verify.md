@@ -104,9 +104,9 @@ No object-level RLS or second permission truth is introduced in this wave.
 
 ## Verification Matrix
 
-Local validation used across the stack:
+Local validation used across the stack. Commands are written in portable form; local runs used the developer machine's Flutter and Android SDK installations.
 
-- `/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos`
+- `flutter analyze --no-fatal-infos`
 - targeted Flutter tests for MoneyThings services, entry UX, category picker, transaction widgets, speech parser, import/export
 - `git diff --check`
 - restricted directory checks for `supabase/migrations`, `lib/core/sync`, `.github/workflows`, SaaS entitlement/payment/sync logic
