@@ -124,6 +124,24 @@ git diff --check
 
 Result: passed.
 
+### SaaS Wave0 Smoke
+
+Command:
+
+```bash
+bash scripts/run_saas_wave0_smoke.sh
+```
+
+Result: passed.
+
+Covered:
+
+- Sync book scope and tombstone tests.
+- Subscription webhook, verify-subscription, Google Play / App Store trusted entitlement client tests.
+- Domestic payment order and webhook smoke tests.
+- Auth service and auth screen smoke tests.
+- Analytics, notification, and admin Edge Function smoke tests.
+
 ## Residual Work
 
 - After PR `#212` merges, rebase this branch onto `main` and open/retarget the final PR to `main`.
