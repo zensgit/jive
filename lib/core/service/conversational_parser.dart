@@ -8,6 +8,7 @@ class ParsedTransaction {
   String? subCategory;
   DateTime date;
   String? note;
+  String? rawText;
   String? accountHint;
   int? splitCount;
   List<String> participants;
@@ -19,6 +20,7 @@ class ParsedTransaction {
     this.subCategory,
     required this.date,
     this.note,
+    this.rawText,
     this.accountHint,
     this.splitCount,
     this.participants = const [],
@@ -31,6 +33,7 @@ class ParsedTransaction {
     String? subCategory,
     DateTime? date,
     String? note,
+    String? rawText,
     String? accountHint,
     int? splitCount,
     List<String>? participants,
@@ -42,6 +45,7 @@ class ParsedTransaction {
       subCategory: subCategory ?? this.subCategory,
       date: date ?? this.date,
       note: note ?? this.note,
+      rawText: rawText ?? this.rawText,
       accountHint: accountHint ?? this.accountHint,
       splitCount: splitCount ?? this.splitCount,
       participants: participants ?? this.participants,
@@ -54,10 +58,7 @@ class ConversationResult {
   final List<ParsedTransaction> transactions;
   final String rawText;
 
-  const ConversationResult({
-    required this.transactions,
-    required this.rawText,
-  });
+  const ConversationResult({required this.transactions, required this.rawText});
 
   bool get isEmpty => transactions.isEmpty;
   bool get isNotEmpty => transactions.isNotEmpty;
@@ -210,20 +211,14 @@ class ConversationalParser {
         }
       }
       if (transactions.isNotEmpty) {
-        return ConversationResult(
-          transactions: transactions,
-          rawText: trimmed,
-        );
+        return ConversationResult(transactions: transactions, rawText: trimmed);
       }
     }
 
     // Parse as a single sentence (may still produce split via AA).
     final result = _parseSingle(trimmed, baseTime);
     if (result != null) {
-      return ConversationResult(
-        transactions: [result],
-        rawText: trimmed,
-      );
+      return ConversationResult(transactions: [result], rawText: trimmed);
     }
 
     return ConversationResult(transactions: [], rawText: trimmed);
@@ -242,12 +237,8 @@ class ConversationalParser {
       // Propagate shared context (date, account) to second segment.
       final dateContext = _extractDateString(text);
       final accountContext = _extractAccountString(text);
-      final prefix =
-          '${dateContext ?? ''}${accountContext ?? ''}';
-      return [
-        part1,
-        if (prefix.isNotEmpty) '$prefix$part2' else part2,
-      ];
+      final prefix = '${dateContext ?? ''}${accountContext ?? ''}';
+      return [part1, if (prefix.isNotEmpty) '$prefix$part2' else part2];
     }
     return [text];
   }
@@ -319,6 +310,7 @@ class ConversationalParser {
       subCategory: categoryInfo?.sub,
       date: date,
       note: note,
+      rawText: text,
       accountHint: accountHint,
       splitCount: splitCount,
       participants: participants,
@@ -350,8 +342,7 @@ class ConversationalParser {
       final targetWeekday = _weekdayMap[dayChar] ?? 1;
       final weeksBack = prefix == '上上' ? 2 : 1;
       final currentWeekday = now.weekday;
-      final daysBack =
-          (currentWeekday - targetWeekday) + (weeksBack * 7);
+      final daysBack = (currentWeekday - targetWeekday) + (weeksBack * 7);
       return DateTime(
         now.year,
         now.month,
@@ -405,7 +396,9 @@ class ConversationalParser {
     }
 
     // "和两个朋友" → 2 friends + me = 3 people.
-    final friendPattern = RegExp(r'和\s*([两二三四五六七八九十]|\d+)\s*个?\s*(朋友|同事|同学|人|好友|室友)');
+    final friendPattern = RegExp(
+      r'和\s*([两二三四五六七八九十]|\d+)\s*个?\s*(朋友|同事|同学|人|好友|室友)',
+    );
     final friendMatch = friendPattern.firstMatch(text);
     if (friendMatch != null && countMatch == null) {
       final numStr = friendMatch.group(1)!;
@@ -415,13 +408,17 @@ class ConversationalParser {
 
     // "和朋友AA" → default 2.
     final simplePattern = RegExp(r'和\s*(朋友|同事|同学|好友|室友)\s*.*[Aa]{2}');
-    if (simplePattern.hasMatch(text) && countMatch == null && friendMatch == null) {
+    if (simplePattern.hasMatch(text) &&
+        countMatch == null &&
+        friendMatch == null) {
       count = 2;
     }
 
     // Extract participant names if present.
     final participants = <String>[];
-    final namePattern = RegExp(r'和\s*([^\d\s,，、]{1,4}(?:[,，、][^\d\s,，、]{1,4})*)');
+    final namePattern = RegExp(
+      r'和\s*([^\d\s,，、]{1,4}(?:[,，、][^\d\s,，、]{1,4})*)',
+    );
     final nameMatch = namePattern.firstMatch(text);
     if (nameMatch != null) {
       final names = nameMatch.group(1)!.split(RegExp(r'[,，、]'));
@@ -441,8 +438,17 @@ class ConversationalParser {
 
   bool _isCommonWord(String word) {
     const common = {
-      '朋友', '同事', '同学', '好友', '室友', '个人', '个',
-      '一起', '一块', '人', '大家',
+      '朋友',
+      '同事',
+      '同学',
+      '好友',
+      '室友',
+      '个人',
+      '个',
+      '一起',
+      '一块',
+      '人',
+      '大家',
     };
     return common.contains(word);
   }
@@ -451,8 +457,16 @@ class ConversationalParser {
     final digit = int.tryParse(s);
     if (digit != null) return digit;
     const map = {
-      '两': 2, '二': 2, '三': 3, '四': 4, '五': 5,
-      '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+      '两': 2,
+      '二': 2,
+      '三': 3,
+      '四': 4,
+      '五': 5,
+      '六': 6,
+      '七': 7,
+      '八': 8,
+      '九': 9,
+      '十': 10,
     };
     return map[s];
   }
@@ -515,7 +529,20 @@ class ConversationalParser {
     // Remove account hints.
     note = note.replaceAll(RegExp(r'用(信用卡|花呗|微信|支付宝|现金|银行卡|储蓄卡|借记卡)'), '');
     // Remove filler words.
-    const fillers = ['记账', '记一笔', '记录', '帮我', '帮忙', '请帮我', '请帮忙', '一下', '花了', '买了', '付了', '了'];
+    const fillers = [
+      '记账',
+      '记一笔',
+      '记录',
+      '帮我',
+      '帮忙',
+      '请帮我',
+      '请帮忙',
+      '一下',
+      '花了',
+      '买了',
+      '付了',
+      '了',
+    ];
     for (final f in fillers) {
       note = note.replaceAll(f, '');
     }

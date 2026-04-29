@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/database/book_model.dart';
+import '../../../core/service/object_share_policy_service.dart';
 
 class HomeTopBar extends StatelessWidget {
   final bool compact;
@@ -80,7 +81,9 @@ class HomeTopBar extends StatelessWidget {
               onPressed: onSearch,
               icon: CircleAvatar(
                 radius: avatarRadius,
-                backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                backgroundColor: isDark
+                    ? Colors.grey.shade800
+                    : Colors.grey.shade200,
                 child: Icon(
                   Icons.search,
                   color: isDark ? Colors.white70 : Colors.black54,
@@ -94,7 +97,9 @@ class HomeTopBar extends StatelessWidget {
               onPressed: onCalendar,
               icon: CircleAvatar(
                 radius: avatarRadius,
-                backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                backgroundColor: isDark
+                    ? Colors.grey.shade800
+                    : Colors.grey.shade200,
                 child: Icon(
                   Icons.calendar_month_outlined,
                   color: isDark ? Colors.white70 : Colors.black54,
@@ -107,7 +112,9 @@ class HomeTopBar extends StatelessWidget {
               onTap: onGearMenu,
               child: CircleAvatar(
                 radius: avatarRadius,
-                backgroundColor: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+                backgroundColor: isDark
+                    ? Colors.grey.shade800
+                    : Colors.grey.shade200,
                 child: Icon(
                   Icons.settings,
                   color: isDark ? Colors.white70 : Colors.black54,
@@ -123,7 +130,7 @@ class HomeTopBar extends StatelessWidget {
 
   Widget _buildBookSwitcher(BuildContext context) {
     final currentBook = books.where((b) => b.id == currentBookId).firstOrNull;
-    final label = currentBook?.name ?? '全部账本';
+    final label = currentBook?.name ?? '全部场景';
     final fontSize = compact ? 11.0 : 12.0;
     return GestureDetector(
       onTap: () {
@@ -139,13 +146,17 @@ class HomeTopBar extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text('切换账本',
-                      style: GoogleFonts.lato(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    '切换场景',
+                    style: GoogleFonts.lato(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 ListTile(
                   leading: const Icon(Icons.all_inclusive, size: 20),
-                  title: const Text('全部账本'),
+                  title: const Text('全部场景'),
                   trailing: currentBookId == null
                       ? const Icon(Icons.check, color: Color(0xFF2E7D32))
                       : null,
@@ -154,28 +165,45 @@ class HomeTopBar extends StatelessWidget {
                     onBookSwitch(null);
                   },
                 ),
-                ...books.map((book) => ListTile(
-                      leading: Icon(
-                        book.isDefault ? Icons.book : Icons.book_outlined,
-                        size: 20,
-                        color: book.isDefault
-                            ? const Color(0xFF2E7D32)
-                            : null,
-                      ),
-                      title: Text(book.name),
-                      subtitle: book.isDefault
-                          ? const Text('默认',
-                              style: TextStyle(
-                                  fontSize: 11, color: Color(0xFF2E7D32)))
-                          : null,
-                      trailing: currentBookId == book.id
-                          ? const Icon(Icons.check, color: Color(0xFF2E7D32))
-                          : null,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        onBookSwitch(book.id);
-                      },
-                    )),
+                ...books.map((book) {
+                  final sharePolicy = const ObjectSharePolicyService().evaluate(
+                    book: book,
+                    objectLabel: '场景',
+                  );
+                  return ListTile(
+                    leading: Icon(
+                      book.isDefault
+                          ? Icons.auto_awesome_mosaic
+                          : Icons.auto_awesome_mosaic_outlined,
+                      size: 20,
+                      color: book.isDefault ? const Color(0xFF2E7D32) : null,
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(child: Text(book.name)),
+                        if (sharePolicy.visibility !=
+                            ObjectShareVisibility.private)
+                          _buildShareBadge(sharePolicy.label),
+                      ],
+                    ),
+                    subtitle: book.isDefault
+                        ? const Text(
+                            '默认场景',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          )
+                        : null,
+                    trailing: currentBookId == book.id
+                        ? const Icon(Icons.check, color: Color(0xFF2E7D32))
+                        : null,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      onBookSwitch(book.id);
+                    },
+                  );
+                }),
                 const SizedBox(height: 8),
               ],
             ),
@@ -191,18 +219,46 @@ class HomeTopBar extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.book_outlined,
-                size: fontSize + 2, color: const Color(0xFF2E7D32)),
+            Icon(
+              Icons.auto_awesome_mosaic_outlined,
+              size: fontSize + 2,
+              color: const Color(0xFF2E7D32),
+            ),
             const SizedBox(width: 4),
-            Text(label,
-                style: GoogleFonts.lato(
-                    fontSize: fontSize,
-                    color: const Color(0xFF2E7D32),
-                    fontWeight: FontWeight.w600)),
+            Text(
+              label,
+              style: GoogleFonts.lato(
+                fontSize: fontSize,
+                color: const Color(0xFF2E7D32),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(width: 2),
-            Icon(Icons.keyboard_arrow_down,
-                size: fontSize + 2, color: const Color(0xFF2E7D32)),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: fontSize + 2,
+              color: const Color(0xFF2E7D32),
+            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShareBadge(String label) {
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E7D32).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: GoogleFonts.lato(
+          fontSize: 9,
+          color: const Color(0xFF2E7D32),
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

@@ -1,3 +1,4 @@
+import '../data/account_constants.dart';
 import '../database/account_model.dart';
 
 class AccountGroupSummary {
@@ -54,7 +55,10 @@ class AccountGroupService {
 
   String displayPath(JiveAccount account) {
     final groupName = account.groupName?.trim();
-    if (groupName == null || groupName.isEmpty || groupName == account.name) {
+    if (groupName == null ||
+        groupName.isEmpty ||
+        groupName == account.name ||
+        accountGroupOrder.contains(groupName)) {
       return account.name;
     }
     final subtype = account.subType?.trim();
@@ -66,6 +70,12 @@ class AccountGroupService {
 
   static String _groupNameFor(JiveAccount account) {
     final groupName = account.groupName?.trim();
-    return groupName == null || groupName.isEmpty ? account.name : groupName;
+    if (groupName == null ||
+        groupName.isEmpty ||
+        groupName == account.name ||
+        accountGroupOrder.contains(groupName)) {
+      return account.name;
+    }
+    return groupName;
   }
 }

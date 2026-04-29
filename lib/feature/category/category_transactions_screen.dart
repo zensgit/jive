@@ -16,8 +16,10 @@ import '../../core/service/transaction_query_service.dart';
 import '../../core/widgets/transaction_filter_sheet.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/smart_list_service.dart';
 import '../../core/service/ui_pref_service.dart';
 import '../transactions/transaction_detail_screen.dart';
+import '../smart_list/smart_list_screen.dart';
 
 class CategoryTransactionsScreen extends StatefulWidget {
   final String title;
@@ -44,8 +46,7 @@ class CategoryTransactionsScreen extends StatefulWidget {
       _CategoryTransactionsScreenState();
 }
 
-class _CategoryTransactionsScreenState
-    extends State<CategoryTransactionsScreen>
+class _CategoryTransactionsScreenState extends State<CategoryTransactionsScreen>
     with TickerProviderStateMixin {
   late Isar _isar;
   bool _isLoading = true;
@@ -79,6 +80,7 @@ class _CategoryTransactionsScreenState
   bool _groupByDate = false;
   bool _showDateHeadersWhenNotDate = false;
   bool _showSmartTagBadge = true;
+  String? _appliedDefaultSmartListName;
   late bool _includeSubCategories;
 
   static const double _floatingBarHeight = 60;
@@ -120,7 +122,10 @@ class _CategoryTransactionsScreenState
       _isar = await DatabaseService.getInstance();
       _transactionQueryService = TransactionQueryService(_isar);
       if (!_hasInitialOverrides) {
-        await _loadPersistedFilterState();
+        final appliedDefault = await _loadDefaultSmartListState();
+        if (!appliedDefault) {
+          await _loadPersistedFilterState();
+        }
       }
 
       final showBadge = await UiPrefService.getShowSmartTagBadge();
@@ -135,9 +140,7 @@ class _CategoryTransactionsScreenState
       final tagMap = {for (final t in tags) t.key: t};
 
       // Pre-sort for filter sheet (avoid sorting on UI thread when opening menu)
-      final sortedCats = categoryMap.values
-          .where((c) => !c.isHidden)
-          .toList()
+      final sortedCats = categoryMap.values.where((c) => !c.isHidden).toList()
         ..sort((a, b) => a.name.compareTo(b.name));
       final sortedAccts = accountMap.values.toList()
         ..sort((a, b) => a.name.compareTo(b.name));
@@ -183,6 +186,19 @@ class _CategoryTransactionsScreenState
     }
   }
 
+  Future<bool> _loadDefaultSmartListState() async {
+    if (!_shouldPersistFilterState) return false;
+    final service = SmartListService(_isar);
+    final view = await service.getDefaultView();
+    if (view == null) return false;
+    final keyword = view.keyword?.trim() ?? '';
+    _filterState = service.buildFilterState(view);
+    _searchQuery = keyword;
+    _searchController.text = keyword;
+    _appliedDefaultSmartListName = view.name;
+    return true;
+  }
+
   Future<void> _persistFilterState() async {
     if (!_shouldPersistFilterState) return;
     final prefs = await SharedPreferences.getInstance();
@@ -204,9 +220,19 @@ class _CategoryTransactionsScreenState
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: Text(
-          widget.title,
-          style: const TextStyle(fontWeight: FontWeight.w600),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.title,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            if (_appliedDefaultSmartListName != null)
+              Text(
+                '默认视图: $_appliedDefaultSmartListName',
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+              ),
+          ],
         ),
         backgroundColor: Colors.grey.shade100,
         elevation: 0,
@@ -225,7 +251,12 @@ class _CategoryTransactionsScreenState
       );
     }
     final visible = _transactions;
-    final hash = Object.hashAll([visible.length, _sortField, _sortDirection, _shouldShowDateHeaders()]);
+    final hash = Object.hashAll([
+      visible.length,
+      _sortField,
+      _sortDirection,
+      _shouldShowDateHeaders(),
+    ]);
     if (_cachedListItems == null || _cachedListItemsHash != hash) {
       _cachedListItems = _buildListItems(visible);
       _cachedListItemsHash = hash;
@@ -627,6 +658,21 @@ class _CategoryTransactionsScreenState
               ),
             ),
             Padding(
+              padding: const EdgeInsets.only(right: 2),
+              child: IconButton(
+                key: const Key('transaction_save_smart_list_button'),
+                onPressed: _canSaveSmartList ? _saveCurrentSmartList : null,
+                tooltip: _canSaveSmartList ? '保存为视图' : '筛选或搜索后可保存为视图',
+                icon: Icon(
+                  Icons.bookmark_add_outlined,
+                  size: 20,
+                  color: _canSaveSmartList
+                      ? Colors.grey.shade700
+                      : Colors.grey.shade300,
+                ),
+              ),
+            ),
+            Padding(
               padding: const EdgeInsets.only(right: 6),
               child: IconButton(
                 onPressed: _openSortSheet,
@@ -637,6 +683,128 @@ class _CategoryTransactionsScreenState
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _saveCurrentSmartList() async {
+    final keyword = _searchQuery.trim();
+    final filterSnapshot = _smartListFilterSnapshot();
+    if (!filterSnapshot.hasAnyFilter && keyword.isEmpty) return;
+
+    final name = await _promptSmartListName();
+    if (name == null || name.isEmpty) return;
+
+    final service = SmartListService(_isar);
+    final draft = service.fromFilterState(
+      name: name,
+      filterState: filterSnapshot,
+      keyword: keyword.isEmpty ? null : keyword,
+    );
+    await service.create(
+      name: draft.name,
+      categoryKeys: draft.categoryKeys,
+      tagKeys: draft.tagKeys,
+      accountId: draft.accountId,
+      bookId: draft.bookId,
+      transactionType: draft.transactionType,
+      minAmount: draft.minAmount,
+      maxAmount: draft.maxAmount,
+      dateRangeType: draft.dateRangeType,
+      customStartDate: draft.customStartDate,
+      customEndDate: draft.customEndDate,
+      keyword: draft.keyword,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已保存视图「$name」'),
+        action: SnackBarAction(
+          label: '管理',
+          onPressed: () =>
+              _openSmartListManager(filter: filterSnapshot, keyword: keyword),
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _promptSmartListName() async {
+    final controller = TextEditingController(text: _suggestSmartListName());
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('保存当前视图'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '例如：本月餐饮超过 50 元'),
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) => Navigator.pop(ctx, value.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return name?.trim();
+  }
+
+  String _suggestSmartListName() {
+    final keyword = _searchQuery.trim();
+    if (keyword.isNotEmpty) return keyword;
+    final filter = _smartListFilterSnapshot();
+    if (filter.normalizedTag != null) {
+      return '#${filter.normalizedTag}';
+    }
+    if (filter.categoryKey != null) {
+      return _categoryByKey[filter.categoryKey]?.name ?? '分类视图';
+    }
+    if (filter.accountId != null) {
+      return _accountById[filter.accountId]?.name ?? '账户视图';
+    }
+    if (filter.dateRange != null) return '日期视图';
+    return '我的视图';
+  }
+
+  void _openSmartListManager({
+    TransactionListFilterState? filter,
+    String? keyword,
+  }) {
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => SmartListScreen(
+          currentFilter: filter ?? _smartListFilterSnapshot(),
+          currentKeyword: keyword ?? _searchQuery,
+        ),
+      ),
+    );
+  }
+
+  bool get _canSaveSmartList {
+    final keyword = _searchQuery.trim();
+    return keyword.isNotEmpty || _smartListFilterSnapshot().hasAnyFilter;
+  }
+
+  TransactionListFilterState _smartListFilterSnapshot() {
+    final fixedSub = widget.filterSubCategoryKey?.trim();
+    final fixedCategory = widget.filterCategoryKey?.trim();
+    final fixedCategoryKey = (fixedSub?.isNotEmpty ?? false)
+        ? fixedSub
+        : ((fixedCategory?.isNotEmpty ?? false) ? fixedCategory : null);
+    final mergedCategory = fixedCategoryKey ?? _filterState.categoryKey;
+
+    return _filterState.copyWith(
+      categoryKey: mergedCategory,
+      clearCategoryKey: mergedCategory == null,
+      budgetFilter: BudgetInclusionFilter.all,
     );
   }
 
@@ -784,10 +952,12 @@ class _CategoryTransactionsScreenState
 
   Future<void> _openSearchSheet() async {
     FocusScope.of(context).unfocus();
-    final categories = _sortedVisibleCategories ??
+    final categories =
+        _sortedVisibleCategories ??
         (_categoryByKey.values.where((c) => !c.isHidden).toList()
           ..sort((a, b) => a.name.compareTo(b.name)));
-    final accounts = _sortedAccounts ??
+    final accounts =
+        _sortedAccounts ??
         (_accountById.values.toList()
           ..sort((a, b) => a.name.compareTo(b.name)));
 

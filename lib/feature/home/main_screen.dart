@@ -1,14 +1,21 @@
 import 'dart:async';
 
+import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/ads/banner_ad_widget.dart';
 import '../../core/auth/auth_service.dart';
+import '../../core/database/template_model.dart';
+import '../../core/service/database_service.dart';
+import '../../core/service/quick_action_service.dart';
 import '../../core/sync/sync_engine.dart';
 import '../accounts/accounts_screen.dart';
 import '../category/category_transactions_screen.dart';
+import '../quick_entry/quick_action_deep_link_service.dart';
+import '../quick_entry/quick_action_executor.dart';
 import '../stats/stats_home_screen.dart';
 import '../transactions/transaction_detail_screen.dart';
+import '../transactions/transaction_form_screen.dart';
 import 'main_screen_controller.dart';
 import 'mixins/auto_capture_mixin.dart';
 import 'mixins/debug_seed_mixin.dart';
@@ -29,8 +36,14 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen>
-    with WidgetsBindingObserver, MainScreenController, AutoCaptureMixin, DebugSeedMixin, HomeNavigationMixin {
+    with
+        WidgetsBindingObserver,
+        MainScreenController,
+        AutoCaptureMixin,
+        DebugSeedMixin,
+        HomeNavigationMixin {
   int _currentIndex = 0;
+  StreamSubscription<Uri>? _deepLinkSubscription;
 
   @override
   void initState() {
@@ -40,11 +53,13 @@ class _MainScreenState extends State<MainScreen>
     onDataChanged = () => context.read<SyncEngine>().scheduleSync();
     initDatabase();
     startListening();
+    unawaited(_initDeepLinks());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _deepLinkSubscription?.cancel();
     dataReloadSignal.dispose();
     super.dispose();
   }
@@ -65,7 +80,10 @@ class _MainScreenState extends State<MainScreen>
         index: _currentIndex,
         children: [
           _buildHomeContent(),
-          StatsHomeScreen(reloadSignal: dataReloadSignal, bookId: currentBookId),
+          StatsHomeScreen(
+            reloadSignal: dataReloadSignal,
+            bookId: currentBookId,
+          ),
           AccountsScreen(
             reloadSignal: dataReloadSignal,
             onDataChanged: notifyDataChanged,
@@ -114,6 +132,73 @@ class _MainScreenState extends State<MainScreen>
     );
   }
 
+  Future<void> _initDeepLinks() async {
+    try {
+      final appLinks = AppLinks();
+      final initialLink = await appLinks.getInitialLink();
+      if (initialLink != null) {
+        await _handleDeepLink(initialLink);
+      }
+      _deepLinkSubscription = appLinks.uriLinkStream.listen((uri) {
+        unawaited(_handleDeepLink(uri));
+      });
+    } catch (error) {
+      debugPrint('Deep link initialization skipped: $error');
+    }
+  }
+
+  Future<void> _handleDeepLink(Uri uri) async {
+    final request = QuickActionDeepLinkService.parse(uri);
+    if (request == null || !mounted) return;
+
+    if (request.isQuickAction) {
+      await _executeQuickActionLink(request.quickActionId!);
+      return;
+    }
+
+    final params = request.transactionParams;
+    if (params == null) return;
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => TransactionFormScreen(params: params)),
+    );
+    if (saved == true) {
+      await loadTransactions();
+      notifyDataChanged();
+    }
+  }
+
+  Future<void> _executeQuickActionLink(String quickActionId) async {
+    final templateId = QuickActionDeepLinkService.legacyTemplateId(
+      quickActionId,
+    );
+    if (templateId == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂不支持该快速动作链接')));
+      return;
+    }
+
+    final isar = await DatabaseService.getInstance();
+    final template = await isar.jiveTemplates.get(templateId);
+    if (template == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('快速动作不存在或已删除')));
+      return;
+    }
+
+    if (!mounted) return;
+    await QuickActionExecutor.execute(
+      context,
+      QuickActionService.toQuickAction(template),
+      onCompleted: () {
+        unawaited(loadTransactions().then((_) => notifyDataChanged()));
+      },
+    );
+  }
+
   Widget _buildHomeContent() {
     final mediaQuery = MediaQuery.of(context);
     final isLandscape = mediaQuery.orientation == Orientation.landscape;
@@ -159,7 +244,9 @@ class _MainScreenState extends State<MainScreen>
 
   Widget _buildTopBar({bool compact = false}) {
     final auth = context.watch<AuthService>();
-    final displayName = auth.currentUser?.displayName ?? auth.currentUser?.email?.split('@').first;
+    final displayName =
+        auth.currentUser?.displayName ??
+        auth.currentUser?.email?.split('@').first;
     return HomeTopBar(
       compact: compact,
       displayName: displayName,
@@ -175,6 +262,7 @@ class _MainScreenState extends State<MainScreen>
           autoSettings: autoSettings,
           autoAppEnabledCount: autoAppEnabledCount,
           pendingDraftCount: pendingDraftCount,
+          currentBookId: currentBookId,
           isar: isar,
           actions: HomeMenuActions(
             setDemoSeedEnabled: setDemoSeedEnabled,
@@ -247,7 +335,10 @@ class _MainScreenState extends State<MainScreen>
           const SizedBox(height: 16),
           section.buildTitle(),
           const SizedBox(height: 16),
-          section.buildTransactionListBody(shrinkWrap: true, physics: const NeverScrollableScrollPhysics()),
+          section.buildTransactionListBody(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+          ),
         ],
       ),
     );

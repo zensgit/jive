@@ -89,6 +89,7 @@ void showHomeMenuSheet({
   required AutoSettings autoSettings,
   required int autoAppEnabledCount,
   required int pendingDraftCount,
+  required int? currentBookId,
   required Isar isar,
   required HomeMenuActions actions,
 }) {
@@ -125,11 +126,7 @@ void showHomeMenuSheet({
                   ListTile(
                     leading: const Icon(Icons.auto_awesome),
                     title: const Text("注入测试数据"),
-                    subtitle: Text(
-                      demoSeedEnabled
-                          ? "写入一批示例数据"
-                          : "请先开启测试数据开关",
-                    ),
+                    subtitle: Text(demoSeedEnabled ? "写入一批示例数据" : "请先开启测试数据开关"),
                     onTap: () async {
                       if (!demoSeedEnabled) {
                         actions.showMessage("请先开启测试数据开关");
@@ -147,14 +144,10 @@ void showHomeMenuSheet({
                     },
                   ),
                   ListTile(
-                    leading: const Icon(
-                      Icons.auto_awesome_motion,
-                    ),
+                    leading: const Icon(Icons.auto_awesome_motion),
                     title: const Text("生成随机测试数据"),
                     subtitle: Text(
-                      demoSeedEnabled
-                          ? "随机生成账户/标签/交易"
-                          : "请先开启测试数据开关",
+                      demoSeedEnabled ? "随机生成账户/标签/交易" : "请先开启测试数据开关",
                     ),
                     onTap: () async {
                       if (!demoSeedEnabled) {
@@ -169,14 +162,10 @@ void showHomeMenuSheet({
                     },
                   ),
                   ListTile(
-                    leading: const Icon(
-                      Icons.folder_special_outlined,
-                    ),
+                    leading: const Icon(Icons.folder_special_outlined),
                     title: const Text("生成项目测试数据（大量）"),
                     subtitle: Text(
-                      demoSeedEnabled
-                          ? "生成一年以上交易并关联到项目"
-                          : "请先开启测试数据开关",
+                      demoSeedEnabled ? "生成一年以上交易并关联到项目" : "请先开启测试数据开关",
                     ),
                     onTap: () async {
                       if (!demoSeedEnabled) {
@@ -238,7 +227,9 @@ void showHomeMenuSheet({
                       Navigator.pop(context);
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AnnualReportScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AnnualReportScreen(),
+                        ),
                       );
                     },
                   ),
@@ -251,8 +242,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const SettingsScreen(),
+                          builder: (context) => const SettingsScreen(),
                         ),
                       );
                     },
@@ -266,8 +256,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const WidgetGalleryScreen(),
+                          builder: (context) => const WidgetGalleryScreen(),
                         ),
                       );
                     },
@@ -304,9 +293,7 @@ void showHomeMenuSheet({
                     },
                   ),
                   ListTile(
-                    leading: const Icon(
-                      Icons.account_balance_wallet_outlined,
-                    ),
+                    leading: const Icon(Icons.account_balance_wallet_outlined),
                     title: const Text("预算管理"),
                     subtitle: const Text("设置和追踪预算"),
                     onTap: () async {
@@ -314,8 +301,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const BudgetManagerScreen(),
+                          builder: (context) => const BudgetManagerScreen(),
                         ),
                       );
                     },
@@ -346,8 +332,10 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              TagManagementScreen(isar: isar),
+                          builder: (context) => TagManagementScreen(
+                            isar: isar,
+                            currentBookId: currentBookId,
+                          ),
                         ),
                       );
                       await actions.loadTransactions();
@@ -377,8 +365,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              AssistantScreen(isar: isar),
+                          builder: (context) => AssistantScreen(isar: isar),
                         ),
                       );
                       await actions.loadTransactions();
@@ -394,8 +381,7 @@ void showHomeMenuSheet({
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const SpendingInsightsScreen(),
+                          builder: (context) => const SpendingInsightsScreen(),
                         ),
                       );
                     },
@@ -424,8 +410,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const BookManagerScreen(),
+                          builder: (context) => const BookManagerScreen(),
                         ),
                       );
                     },
@@ -438,7 +423,9 @@ void showHomeMenuSheet({
                       Navigator.pop(context);
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const SharedLedgerScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const SharedLedgerScreen(),
+                        ),
                       );
                     },
                   ),
@@ -452,8 +439,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const InstallmentListScreen(),
+                          builder: (context) => const InstallmentListScreen(),
                         ),
                       );
                     },
@@ -468,8 +454,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const BillSplitScreen(),
+                          builder: (context) => const BillSplitScreen(),
                         ),
                       );
                     },
@@ -484,8 +469,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const SavingsGoalScreen(),
+                          builder: (context) => const SavingsGoalScreen(),
                         ),
                       );
                     },
@@ -514,8 +498,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const BillRelationScreen(),
+                          builder: (context) => const BillRelationScreen(),
                         ),
                       );
                     },
@@ -529,8 +512,7 @@ void showHomeMenuSheet({
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const ActivityLogScreen(),
+                          builder: (context) => const ActivityLogScreen(),
                         ),
                       );
                     },
@@ -545,8 +527,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const DebtListScreen(),
+                          builder: (context) => const DebtListScreen(),
                         ),
                       );
                     },
@@ -561,8 +542,7 @@ void showHomeMenuSheet({
                       await Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) =>
-                              const InvestmentScreen(),
+                          builder: (context) => const InvestmentScreen(),
                         ),
                       );
                     },
@@ -592,9 +572,7 @@ void showHomeMenuSheet({
                       ),
                       title: const Text(
                         "重置系统分类",
-                        style: TextStyle(
-                          color: Colors.orangeAccent,
-                        ),
+                        style: TextStyle(color: Colors.orangeAccent),
                       ),
                       subtitle: const Text("清空分类并重新载入系统分类"),
                       onTap: () async {
@@ -603,31 +581,23 @@ void showHomeMenuSheet({
                           context: context,
                           builder: (dialogContext) => AlertDialog(
                             title: const Text("重置系统分类"),
-                            content: const Text(
-                              "将清空所有分类并重新载入系统分类，是否继续？",
-                            ),
+                            content: const Text("将清空所有分类并重新载入系统分类，是否继续？"),
                             actions: [
                               TextButton(
-                                onPressed: () => Navigator.pop(
-                                  dialogContext,
-                                  false,
-                                ),
+                                onPressed: () =>
+                                    Navigator.pop(dialogContext, false),
                                 child: const Text("取消"),
                               ),
                               TextButton(
-                                onPressed: () => Navigator.pop(
-                                  dialogContext,
-                                  true,
-                                ),
+                                onPressed: () =>
+                                    Navigator.pop(dialogContext, true),
                                 child: const Text("重置"),
                               ),
                             ],
                           ),
                         );
                         if (confirmed != true) return;
-                        await CategoryService(
-                          isar,
-                        ).resetCategories();
+                        await CategoryService(isar).resetCategories();
                         await TransactionService(
                           isar,
                         ).migrateTransactionCategoryKeys();
@@ -650,22 +620,16 @@ void showHomeMenuSheet({
                         context: context,
                         builder: (dialogContext) => AlertDialog(
                           title: const Text("清空数据"),
-                          content: const Text(
-                            "将删除全部交易、账户和分类数据，是否继续？",
-                          ),
+                          content: const Text("将删除全部交易、账户和分类数据，是否继续？"),
                           actions: [
                             TextButton(
-                              onPressed: () => Navigator.pop(
-                                dialogContext,
-                                false,
-                              ),
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, false),
                               child: const Text("取消"),
                             ),
                             TextButton(
-                              onPressed: () => Navigator.pop(
-                                dialogContext,
-                                true,
-                              ),
+                              onPressed: () =>
+                                  Navigator.pop(dialogContext, true),
                               child: const Text("清空"),
                             ),
                           ],
@@ -677,9 +641,7 @@ void showHomeMenuSheet({
                     },
                   ),
                   ListTile(
-                    leading: const Icon(
-                      Icons.file_download_outlined,
-                    ),
+                    leading: const Icon(Icons.file_download_outlined),
                     title: const Text("导出数据"),
                     subtitle: const Text("导出为备份文件"),
                     onTap: () async {
@@ -688,9 +650,7 @@ void showHomeMenuSheet({
                     },
                   ),
                   ListTile(
-                    leading: const Icon(
-                      Icons.file_upload_outlined,
-                    ),
+                    leading: const Icon(Icons.file_upload_outlined),
                     title: const Text("导入数据"),
                     subtitle: const Text("导入将覆盖当前数据"),
                     onTap: () async {
@@ -714,14 +674,10 @@ void showHomeMenuSheet({
                     feature: FeatureId.autoBookkeeping,
                     secondary: const Icon(Icons.auto_awesome),
                     title: const Text("自动记账"),
-                    subtitle: Text(
-                      autoSettings.enabled ? "已开启" : "已关闭",
-                    ),
+                    subtitle: Text(autoSettings.enabled ? "已开启" : "已关闭"),
                     value: autoSettings.enabled,
                     onChanged: (value) async {
-                      final updated = autoSettings.copyWith(
-                        enabled: value,
-                      );
+                      final updated = autoSettings.copyWith(enabled: value);
                       setSheetState(() {
                         autoSettings = updated;
                       });
@@ -729,9 +685,7 @@ void showHomeMenuSheet({
                     },
                   ),
                   SwitchListTile(
-                    secondary: const Icon(
-                      Icons.playlist_add_check,
-                    ),
+                    secondary: const Icon(Icons.playlist_add_check),
                     title: const Text("自动入账"),
                     subtitle: const Text("关闭则进入待确认"),
                     value: autoSettings.directCommit,
@@ -780,7 +734,9 @@ void showHomeMenuSheet({
                       Navigator.pop(context);
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const AutoRuleEditorScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const AutoRuleEditorScreen(),
+                        ),
                       );
                     },
                   ),
@@ -800,7 +756,10 @@ void showHomeMenuSheet({
                       Navigator.pop(context);
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const ScreenshotCaptureSettingsScreen()),
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const ScreenshotCaptureSettingsScreen(),
+                        ),
                       );
                     },
                   ),

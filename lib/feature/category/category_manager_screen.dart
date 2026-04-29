@@ -5,10 +5,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
 import 'package:lpinyin/lpinyin.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/database/book_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/service/book_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/object_share_policy_service.dart';
 import '../../core/service/transaction_service.dart';
 import '../../core/utils/logger_util.dart';
 import '../stats/stats_screen.dart';
@@ -26,12 +29,14 @@ class _UserCategorySeed {
 
 class CategoryManagerScreen extends StatefulWidget {
   final Isar? isar;
+  final int? currentBookId;
   final bool onlyUserCategories;
   final bool initialShowIncome;
 
   const CategoryManagerScreen({
     super.key,
     this.isar,
+    this.currentBookId,
     this.onlyUserCategories = false,
     this.initialShowIncome = false,
   });
@@ -53,6 +58,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   final Set<String> _collapsedParents = {};
   final Set<String> _knownParentKeys = {};
   Map<String, double> _parentTotals = {};
+  JiveBook? _currentBook;
   List<_RecommendationGroup> _recommendationGroups = [];
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
@@ -101,6 +107,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         _isar = await DatabaseService.getInstance();
       }
       _service = CategoryService(_isar);
+      _currentBook = await _loadCurrentBook(BookService(_isar));
       await _service.initDefaultCategories();
       await _loadCategories();
     } catch (e, s) {
@@ -109,6 +116,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<JiveBook?> _loadCurrentBook(BookService service) async {
+    final id = widget.currentBookId;
+    if (id != null) {
+      final book = await _isar.jiveBooks.get(id);
+      if (book != null) return book;
+    }
+    return service.getDefaultBook();
   }
 
   Future<void> _loadCategories() async {
@@ -1440,14 +1456,21 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     }
 
     if (!mounted) return;
+    final sharePolicy = _categorySharePolicy;
+    final shared = sharePolicy.visibility != ObjectShareVisibility.private;
+    final warning = const ObjectSharePolicyService().deletionWarning(
+      objectLabel: category.name,
+      affectedTransactionCount: totalTxCount,
+      shared: shared,
+    );
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(children.isEmpty ? "删除分类？" : "删除分类及子类？"),
         content: Text(
           children.isEmpty
-              ? "删除后分类将无法恢复，相关账单会保留原名称。"
-              : "删除后分类与子类将无法恢复，相关账单会保留原名称。",
+              ? "$warning\n\n删除后分类将无法恢复，相关账单会保留原名称。"
+              : "$warning\n\n删除后分类与子类将无法恢复，相关账单会保留原名称。",
         ),
         actions: [
           TextButton(
@@ -1811,6 +1834,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
               onTap: () async {
                 Navigator.pop(context);
                 await _editCategory(sub);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.add_circle_outline),
+              title: const Text("添加下级分类"),
+              subtitle: const Text("用于出行 / 私家车 / 加油这类三层路径"),
+              onTap: () async {
+                Navigator.pop(context);
+                await _promptAddSubCategory(sub);
               },
             ),
             if (!sub.isSystem)
@@ -2249,7 +2281,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     bool showAddChip = true,
     String? highlightQuery,
   }) {
-    final children = childrenOverride ?? _childrenByParentKey[parent.key] ?? [];
+    final children = childrenOverride ?? _descendantsForParent(parent.key);
     final isCollapsed = allowCollapse && _collapsedParents.contains(parent.key);
     final isHidden = parent.isHidden;
     final parentIconColor = isHidden
@@ -2258,6 +2290,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             parent,
             fallback: JiveTheme.categoryIconInactive,
           );
+    final sharePolicy = _categorySharePolicy;
 
     return DragTarget<JiveCategory>(
       onWillAcceptWithDetails: (details) =>
@@ -2345,6 +2378,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                             const SizedBox(width: 6),
                             _buildHiddenBadge(),
                           ],
+                          if (sharePolicy.visibility !=
+                              ObjectShareVisibility.private) ...[
+                            const SizedBox(width: 6),
+                            _buildShareBadge(sharePolicy.label),
+                          ],
                         ],
                       ),
                     ),
@@ -2391,6 +2429,20 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         );
       },
     );
+  }
+
+  List<JiveCategory> _descendantsForParent(String parentKey) {
+    final result = <JiveCategory>[];
+    void visit(String key) {
+      final children = _childrenByParentKey[key] ?? const <JiveCategory>[];
+      for (final child in children) {
+        result.add(child);
+        visit(child.key);
+      }
+    }
+
+    visit(parentKey);
+    return result;
   }
 
   Widget _buildSubCategoryGrid(
@@ -2523,6 +2575,8 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         ? Colors.grey.shade400
         : _resolveCategoryColor(sub, fallback: Colors.grey.shade700);
     final labelColor = isHidden ? Colors.grey.shade400 : Colors.grey.shade600;
+    final label = _descendantLabel(sub);
+    final sharePolicy = _categorySharePolicy;
     return Opacity(
       opacity: isHidden ? 0.6 : 1,
       child: Container(
@@ -2550,7 +2604,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                   ),
                   const SizedBox(height: 4),
                   _buildHighlightedText(
-                    sub.name,
+                    label,
                     TextStyle(
                       fontSize: 10,
                       height: 1.0,
@@ -2569,10 +2623,61 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
                 right: 1,
                 child: _buildForceTintedBadge(compact: true),
               ),
+            if (sharePolicy.visibility != ObjectShareVisibility.private)
+              Positioned(
+                left: 0,
+                top: 0,
+                child: _buildShareBadge(sharePolicy.label, compact: true),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  ObjectSharePolicy get _categorySharePolicy {
+    return const ObjectSharePolicyService().evaluate(
+      book: _currentBook,
+      objectLabel: '分类',
+    );
+  }
+
+  Widget _buildShareBadge(String label, {bool compact = false}) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 4 : 6,
+        vertical: compact ? 1 : 2,
+      ),
+      decoration: BoxDecoration(
+        color: JiveTheme.primaryGreen.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(compact ? 6 : 8),
+      ),
+      child: Text(
+        compact ? '共享' : label,
+        style: TextStyle(
+          fontSize: compact ? 8 : 9,
+          color: JiveTheme.primaryGreen,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  String _descendantLabel(JiveCategory category) {
+    final names = <String>[category.name];
+    var parentKey = category.parentKey;
+    final byKey = <String, JiveCategory>{
+      for (final parent in _parents) parent.key: parent,
+      for (final list in _childrenByParentKey.values)
+        for (final child in list) child.key: child,
+    };
+    while (parentKey != null) {
+      final parent = byKey[parentKey];
+      if (parent == null || parent.parentKey == null) break;
+      names.insert(0, parent.name);
+      parentKey = parent.parentKey;
+    }
+    return names.join(' / ');
   }
 
   Widget _buildAddSubChip(JiveCategory parent) {
