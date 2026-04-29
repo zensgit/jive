@@ -270,6 +270,47 @@ void main() {
         isNot(contains(TransactionHighlightField.amount)),
       );
     });
+
+    test('parses Android share text links into share receive params', () {
+      final request = QuickActionDeepLinkService.parse(
+        Uri.parse(
+          'jive://transaction/new?entrySource=shareReceive&rawText=%E4%BB%8A%E5%A4%A9%E5%8D%88%E9%A4%90%E8%8A%B1%E4%BA%86%2035%20%E5%85%83&sourceLabel=%E6%9D%A5%E8%87%AA%E7%B3%BB%E7%BB%9F%E5%88%86%E4%BA%AB',
+        ),
+      );
+
+      final params = request?.transactionParams;
+      expect(params?.source, TransactionEntrySource.shareReceive);
+      expect(params?.sourceLabel, '来自系统分享');
+      expect(params?.prefillAmount, 35);
+      expect(params?.prefillType, 'expense');
+      expect(params?.prefillRawText, '今天午餐花了 35 元');
+      expect(
+        params?.highlightFields,
+        contains(TransactionHighlightField.account),
+      );
+      expect(
+        params?.highlightFields,
+        contains(TransactionHighlightField.category),
+      );
+    });
+
+    test('keeps raw shared text as note when parsing is incomplete', () {
+      final request = QuickActionDeepLinkService.parse(
+        Uri.parse(
+          'jive://transaction/new?entrySource=shareReceive&rawText=%E5%8D%88%E9%A4%90%E5%BE%85%E8%A1%A5%E5%85%85',
+        ),
+      );
+
+      final params = request?.transactionParams;
+      expect(params?.source, TransactionEntrySource.shareReceive);
+      expect(params?.prefillAmount, isNull);
+      expect(params?.prefillNote, '午餐待补充');
+      expect(params?.prefillRawText, '午餐待补充');
+      expect(
+        params?.highlightFields,
+        contains(TransactionHighlightField.amount),
+      );
+    });
   });
 
   group('AccountGroupService', () {
