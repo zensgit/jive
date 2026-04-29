@@ -1,15 +1,22 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:jive/core/database/account_model.dart';
+import 'package:jive/core/database/auto_draft_model.dart';
 import 'package:jive/core/database/book_model.dart';
 import 'package:jive/core/database/category_model.dart';
 import 'package:jive/core/database/template_model.dart';
 import 'package:jive/core/model/quick_action.dart';
+import 'package:jive/core/service/speech_intent_parser.dart';
 import 'package:jive/core/service/account_group_service.dart';
 import 'package:jive/core/service/category_path_service.dart';
+import 'package:jive/core/service/conversational_parser.dart';
 import 'package:jive/core/service/object_share_policy_service.dart';
 import 'package:jive/core/service/quick_action_service.dart';
+import 'package:jive/feature/auto/auto_draft_entry_params_builder.dart';
 import 'package:jive/feature/quick_entry/quick_action_deep_link_service.dart';
+import 'package:jive/feature/transactions/speech_entry_params_builder.dart';
 import 'package:jive/feature/transactions/transaction_entry_params.dart';
 
 void main() {
@@ -68,6 +75,150 @@ void main() {
     });
   });
 
+  group('AutoDraftEntryParamsBuilder', () {
+    test('maps transfer drafts to editor params and preserves service fee', () {
+      final draft = JiveAutoDraft()
+        ..amount = 188.8
+        ..source = 'WeChat'
+        ..timestamp = DateTime(2026, 4, 26, 9)
+        ..rawText = '微信零钱转到招商银行'
+        ..type = 'transfer'
+        ..category = '转账'
+        ..subCategory = '转账'
+        ..accountId = 1
+        ..metadataJson = jsonEncode({'transferServiceCharge': 1.5})
+        ..createdAt = DateTime(2026, 4, 26, 9, 1);
+
+      final params = const AutoDraftEntryParamsBuilder().build(draft);
+
+      expect(params.source, TransactionEntrySource.autoDraft);
+      expect(params.sourceBannerText, '来自自动识别「WeChat」');
+      expect(params.prefillType, 'transfer');
+      expect(params.prefillAmount, 188.8);
+      expect(params.prefillAccountId, 1);
+      expect(params.prefillRawText, '微信零钱转到招商银行');
+      expect(params.prefillExchangeFee, 1.5);
+      expect(params.prefillExchangeFeeType, 'fixed');
+      expect(
+        params.highlightFields,
+        contains(TransactionHighlightField.transferAccount),
+      );
+      expect(
+        params.highlightFields,
+        isNot(contains(TransactionHighlightField.category)),
+      );
+    });
+
+    test('maps category names as fallback when category keys are missing', () {
+      final draft = JiveAutoDraft()
+        ..amount = 15
+        ..source = 'Alipay'
+        ..timestamp = DateTime(2026, 4, 26, 12)
+        ..rawText = '午餐 15 元'
+        ..type = 'expense'
+        ..category = '餐饮'
+        ..subCategory = '午餐'
+        ..accountId = 2
+        ..tagKeys = ['tag_lunch']
+        ..createdAt = DateTime(2026, 4, 26, 12, 1);
+
+      final params = const AutoDraftEntryParamsBuilder().build(draft);
+
+      expect(params.prefillType, 'expense');
+      expect(params.prefillCategoryKey, '餐饮');
+      expect(params.prefillSubCategoryKey, '午餐');
+      expect(params.prefillAccountId, 2);
+      expect(params.prefillTagKeys, ['tag_lunch']);
+      expect(params.highlightFields, isEmpty);
+    });
+
+    test('infers income drafts from shared auto draft type hints', () {
+      final draft = JiveAutoDraft()
+        ..amount = 88
+        ..source = 'WeChat'
+        ..timestamp = DateTime(2026, 4, 26, 18)
+        ..rawText = '微信已收款 88 元'
+        ..category = '收入'
+        ..subCategory = '收款'
+        ..accountId = 3
+        ..createdAt = DateTime(2026, 4, 26, 18, 1);
+
+      final params = const AutoDraftEntryParamsBuilder().build(draft);
+
+      expect(params.prefillType, 'income');
+      expect(params.prefillCategoryKey, '收入');
+      expect(params.prefillSubCategoryKey, '收款');
+      expect(params.prefillAccountId, 3);
+      expect(params.highlightFields, isEmpty);
+    });
+  });
+
+  group('SpeechEntryParamsBuilder', () {
+    test('maps valid voice expense into editor params', () {
+      final intent = SpeechIntent(
+        rawText: '今天午餐花了 35 元 微信',
+        cleanedText: '午餐 微信',
+        amount: 35,
+        timestamp: DateTime(2026, 4, 26, 12),
+        type: 'expense',
+        accountHint: '微信',
+        toAccountHint: null,
+      );
+
+      final params = const SpeechEntryParamsBuilder().build(
+        intent,
+        accounts: [_account(id: 8, name: '微信零钱')],
+      );
+
+      expect(params.source, TransactionEntrySource.voice);
+      expect(params.prefillAmount, 35);
+      expect(params.prefillType, 'expense');
+      expect(params.prefillAccountId, 8);
+      expect(params.prefillNote, '午餐 微信');
+      expect(params.prefillRawText, '今天午餐花了 35 元 微信');
+      expect(
+        params.highlightFields,
+        contains(TransactionHighlightField.category),
+      );
+      expect(
+        params.highlightFields,
+        isNot(contains(TransactionHighlightField.account)),
+      );
+    });
+
+    test('maps voice transfer target account highlight', () {
+      final intent = SpeechIntent(
+        rawText: '从微信零钱转到招商银行 500 元',
+        cleanedText: '从微信零钱转到招商银行',
+        amount: 500,
+        timestamp: DateTime(2026, 4, 26, 12),
+        type: 'transfer',
+        accountHint: '微信',
+        toAccountHint: '招商',
+      );
+
+      final params = const SpeechEntryParamsBuilder().build(
+        intent,
+        accounts: [
+          _account(id: 1, name: '微信零钱'),
+          _account(id: 2, name: '招商银行'),
+        ],
+      );
+
+      expect(params.prefillType, 'transfer');
+      expect(params.prefillAccountId, 1);
+      expect(params.prefillToAccountId, 2);
+      expect(
+        params.highlightFields,
+        isNot(contains(TransactionHighlightField.transferAccount)),
+      );
+      expect(
+        params.highlightFields,
+        isNot(contains(TransactionHighlightField.category)),
+      );
+    });
+  });
+
   group('CategoryPathService', () {
     test('resolves three-level category paths and compatible tx keys', () {
       final categories = [
@@ -117,7 +268,7 @@ void main() {
     test('parses transaction links and highlights missing fields', () {
       final request = QuickActionDeepLinkService.parse(
         Uri.parse(
-          'jive://transaction/new?type=expense&amount=12.5&note=Coffee',
+          'jive://transaction/new?type=expense&amount=12.5&note=Coffee&bookId=7&raw=Coffee%20receipt',
         ),
       );
 
@@ -125,6 +276,8 @@ void main() {
       expect(params?.source, TransactionEntrySource.deepLink);
       expect(params?.prefillAmount, 12.5);
       expect(params?.prefillNote, 'Coffee');
+      expect(params?.prefillBookId, 7);
+      expect(params?.prefillRawText, 'Coffee receipt');
       expect(
         params?.highlightFields,
         contains(TransactionHighlightField.account),
@@ -137,6 +290,62 @@ void main() {
         params?.highlightFields,
         isNot(contains(TransactionHighlightField.amount)),
       );
+    });
+
+    test('parses Android share text links into share receive params', () {
+      final request = QuickActionDeepLinkService.parse(
+        Uri.parse(
+          'jive://transaction/new?entrySource=shareReceive&rawText=%E4%BB%8A%E5%A4%A9%E5%8D%88%E9%A4%90%E8%8A%B1%E4%BA%86%2035%20%E5%85%83&sourceLabel=%E6%9D%A5%E8%87%AA%E7%B3%BB%E7%BB%9F%E5%88%86%E4%BA%AB',
+        ),
+      );
+
+      final params = request?.transactionParams;
+      expect(params?.source, TransactionEntrySource.shareReceive);
+      expect(params?.sourceLabel, '来自系统分享');
+      expect(params?.prefillAmount, 35);
+      expect(params?.prefillType, 'expense');
+      expect(params?.prefillRawText, '今天午餐花了 35 元');
+      expect(
+        params?.highlightFields,
+        contains(TransactionHighlightField.account),
+      );
+      expect(
+        params?.highlightFields,
+        contains(TransactionHighlightField.category),
+      );
+    });
+
+    test('keeps raw shared text as note when parsing is incomplete', () {
+      final request = QuickActionDeepLinkService.parse(
+        Uri.parse(
+          'jive://transaction/new?entrySource=shareReceive&rawText=%E5%8D%88%E9%A4%90%E5%BE%85%E8%A1%A5%E5%85%85',
+        ),
+      );
+
+      final params = request?.transactionParams;
+      expect(params?.source, TransactionEntrySource.shareReceive);
+      expect(params?.prefillAmount, isNull);
+      expect(params?.prefillNote, '午餐待补充');
+      expect(params?.prefillRawText, '午餐待补充');
+      expect(
+        params?.highlightFields,
+        contains(TransactionHighlightField.amount),
+      );
+    });
+  });
+
+  group('ConversationalParser', () {
+    test('keeps item-level raw text for multi-transaction input', () {
+      final result = ConversationalParser().parseConversation(
+        '买了咖啡30和面包15',
+        now: DateTime(2026, 4, 26, 12),
+      );
+
+      expect(result.transactions, hasLength(2));
+      expect(result.transactions[0].rawText, contains('咖啡30'));
+      expect(result.transactions[1].rawText, contains('面包15'));
+      expect(result.transactions[0].rawText, isNot(result.rawText));
+      expect(result.transactions[1].rawText, isNot(result.rawText));
     });
   });
 
@@ -193,6 +402,17 @@ void main() {
       expect(policy.visibility, ObjectShareVisibility.inheritedFromScene);
       expect(policy.label, '继承场景共享');
       expect(policy.warning, contains('同步给场景成员'));
+    });
+
+    test('uses shared scope in deletion warnings', () {
+      final warning = const ObjectSharePolicyService().deletionWarning(
+        objectLabel: '加油',
+        affectedTransactionCount: 3,
+        shared: true,
+      );
+
+      expect(warning, contains('共享成员'));
+      expect(warning, contains('3 笔交易'));
     });
   });
 }

@@ -7,14 +7,17 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
 import 'package:intl/intl.dart';
 import '../../core/database/tag_model.dart';
+import '../../core/database/book_model.dart';
 import '../../core/database/tag_conversion_log.dart';
 import '../../core/database/tag_rule_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/account_model.dart';
 import '../../core/service/account_service.dart';
+import '../../core/service/book_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/object_share_policy_service.dart';
 import '../../core/service/tag_service.dart';
 import '../../core/service/tag_rule_service.dart';
 import '../../core/service/smart_tag_log_service.dart';
@@ -32,8 +35,9 @@ import 'smart_tag_opt_out_screen.dart';
 
 class TagManagementScreen extends StatefulWidget {
   final Isar? isar;
+  final int? currentBookId;
 
-  const TagManagementScreen({super.key, this.isar});
+  const TagManagementScreen({super.key, this.isar, this.currentBookId});
 
   @override
   State<TagManagementScreen> createState() => _TagManagementScreenState();
@@ -59,6 +63,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   bool _showArchived = false;
   List<JiveTag> _tags = [];
   List<JiveTagGroup> _groups = [];
+  JiveBook? _currentBook;
   Map<String, List<JiveTagRule>> _rulesByTagKey = {};
   Map<String, JiveCategory> _categoryByKey = {};
   Map<int, JiveAccount> _accountById = {};
@@ -77,7 +82,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   bool _showSmartTagBadge = true;
   bool _cleanupRemoveTagTooDefault = false;
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _smartTagSearchController = TextEditingController();
+  final TextEditingController _smartTagSearchController =
+      TextEditingController();
   String _query = '';
   Timer? _queryDebounce;
   int _dataVersion = 0;
@@ -109,6 +115,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   Future<void> _init() async {
     try {
       _isar = widget.isar ?? await DatabaseService.getInstance();
+      _currentBook = await _loadCurrentBook(BookService(_isar));
       await TagService(_isar).initDefaultGroups();
       await _loadData();
       DataReloadBus.notifier.addListener(_handleReload);
@@ -119,6 +126,15 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  Future<JiveBook?> _loadCurrentBook(BookService service) async {
+    final id = widget.currentBookId;
+    if (id != null) {
+      final book = await _isar.jiveBooks.get(id);
+      if (book != null) return book;
+    }
+    return service.getDefaultBook();
   }
 
   Future<void> _loadCleanupPref() async {
@@ -189,7 +205,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text('标签管理', style: GoogleFonts.lato(fontWeight: FontWeight.bold)),
+        title: Text(
+          '标签管理',
+          style: GoogleFonts.lato(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         actions: [
@@ -216,48 +235,59 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!, style: const TextStyle(color: Colors.redAccent)))
-              : Column(
-                  children: [
-                    _buildModeTabs(filteredTags.length),
-                    if (!_showArchived) _buildInfoBanner(),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: '搜索标签',
-                          prefixIcon: const Icon(Icons.search),
-                                suffixIcon: _query.isEmpty
-                                    ? null
-                                    : IconButton(
-                                        icon: const Icon(Icons.clear),
-                                        onPressed: () {
-                                          _searchController.clear();
-                                          _queryDebounce?.cancel();
-                                          setState(() => _query = '');
-                                        },
-                                      ),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          isDense: true,
-                        ),
-                        onChanged: _onQueryChanged,
-                      ),
-                    ),
-                    Expanded(
-                      child: groupCards.isEmpty
-                          ? _buildEmptyState()
-                          : ListView(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                              children: groupCards,
+          ? Center(
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+            )
+          : Column(
+              children: [
+                _buildModeTabs(filteredTags.length),
+                if (!_showArchived) _buildInfoBanner(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: '搜索标签',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _query.isEmpty
+                          ? null
+                          : IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                                _queryDebounce?.cancel();
+                                setState(() => _query = '');
+                              },
                             ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      isDense: true,
                     ),
-                  ],
+                    onChanged: _onQueryChanged,
+                  ),
                 ),
+                Expanded(
+                  child: groupCards.isEmpty
+                      ? _buildEmptyState()
+                      : ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          children: groupCards,
+                        ),
+                ),
+              ],
+            ),
     );
   }
 
-  List<JiveTag> _filterTags(List<JiveTag> tags, String query, bool showArchived) {
+  List<JiveTag> _filterTags(
+    List<JiveTag> tags,
+    String query,
+    bool showArchived,
+  ) {
     final queryLower = query.toLowerCase();
     final filtered = tags.where((tag) {
       if (showArchived) {
@@ -265,7 +295,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       } else {
         if (tag.isArchived) return false;
       }
-      if (queryLower.isNotEmpty && !tagDisplayName(tag).toLowerCase().contains(queryLower)) {
+      if (queryLower.isNotEmpty &&
+          !tagDisplayName(tag).toLowerCase().contains(queryLower)) {
         return false;
       }
       return true;
@@ -296,20 +327,20 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     final groupCards = <Widget>[];
     final ungroupedTags = tagsByGroup[null] ?? [];
     if (ungroupedTags.isNotEmpty) {
-      groupCards.add(_buildGroupCard(
-        title: '未分组',
-        tags: ungroupedTags,
-        group: null,
-      ));
+      groupCards.add(
+        _buildGroupCard(title: '未分组', tags: ungroupedTags, group: null),
+      );
     }
     for (final group in _groups) {
       final tags = tagsByGroup[group.key] ?? [];
       if (tags.isNotEmpty || (showEmptyGroups && !group.isArchived)) {
-        groupCards.add(_buildGroupCard(
-          title: groupDisplayName(group),
-          tags: tags,
-          group: group,
-        ));
+        groupCards.add(
+          _buildGroupCard(
+            title: groupDisplayName(group),
+            tags: tags,
+            group: group,
+          ),
+        );
       }
     }
 
@@ -346,7 +377,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
             onTap: () => setState(() => _showArchived = true),
           ),
           const Spacer(),
-          Text('共 $tagCount 个标签', style: TextStyle(color: Colors.grey.shade600)),
+          Text(
+            '共 $tagCount 个标签',
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
         ],
       ),
     );
@@ -368,7 +402,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
             bottom: BorderSide(color: color, width: selected ? 2 : 1),
           ),
         ),
-        child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+        child: Text(
+          label,
+          style: TextStyle(color: color, fontWeight: FontWeight.w600),
+        ),
       ),
     );
   }
@@ -413,7 +450,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     final groupId = group?.key ?? _ungroupedGroupKey;
     final limitTags = _query.isEmpty;
     final isExpanded = !limitTags || _expandedGroups.contains(groupId);
-    final groupColor = AccountService.parseColorHex(group?.colorHex) ?? Colors.grey.shade600;
+    final groupColor =
+        AccountService.parseColorHex(group?.colorHex) ?? Colors.grey.shade600;
     final headerStyle = TextStyle(
       fontWeight: FontWeight.w600,
       color: group?.isArchived == true ? Colors.grey.shade500 : Colors.black87,
@@ -441,15 +479,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final fallbackWidth = MediaQuery.of(context).size.width;
-              final maxWidth =
-                  constraints.hasBoundedWidth ? constraints.maxWidth : fallbackWidth;
+              final maxWidth = constraints.hasBoundedWidth
+                  ? constraints.maxWidth
+                  : fallbackWidth;
               final maxLabelWidth = _maxLabelWidthForChip(maxWidth);
               final collapsedVisible = limitTags
-                  ? _computeCollapsedVisibleTags(
-                      tags,
-                      maxWidth,
-                      maxLabelWidth,
-                    )
+                  ? _computeCollapsedVisibleTags(tags, maxWidth, maxLabelWidth)
                   : tags;
               final hiddenCount = tags.length - collapsedVisible.length;
               final showToggle = limitTags && hiddenCount > 0;
@@ -458,7 +493,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                 spacing: _chipSpacing,
                 runSpacing: _chipSpacing,
                 children: [
-                  for (final tag in visibleTags) _buildTagChip(tag, maxLabelWidth),
+                  for (final tag in visibleTags)
+                    _buildTagChip(tag, maxLabelWidth),
                   if (showToggle)
                     _buildGroupToggleChip(
                       groupId: groupId,
@@ -523,7 +559,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     double maxLabelWidth,
   ) {
     if (tags.isEmpty) return tags;
-    final widths = tags.map((tag) => _measureTagChipWidth(tag, maxLabelWidth)).toList();
+    final widths = tags
+        .map((tag) => _measureTagChipWidth(tag, maxLabelWidth))
+        .toList();
     var layout = _layoutTagWidths(widths, maxWidth, _groupPreviewMaxLines);
     var visibleCount = layout.count;
     if (visibleCount >= tags.length) {
@@ -532,9 +570,14 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     while (visibleCount > 0) {
       final hiddenCount = tags.length - visibleCount;
       final toggleWidth = _measureToggleChipWidth('展开 +$hiddenCount');
-      layout = _layoutTagWidths(widths.sublist(0, visibleCount), maxWidth, _groupPreviewMaxLines);
-      final lastLineWidth =
-          layout.lineWidths.isEmpty ? 0 : layout.lineWidths.last;
+      layout = _layoutTagWidths(
+        widths.sublist(0, visibleCount),
+        maxWidth,
+        _groupPreviewMaxLines,
+      );
+      final lastLineWidth = layout.lineWidths.isEmpty
+          ? 0
+          : layout.lineWidths.last;
       final spacing = lastLineWidth == 0 ? 0 : _chipSpacing;
       if (lastLineWidth + spacing + toggleWidth <= maxWidth) {
         break;
@@ -545,19 +588,16 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   }
 
   double _measureTagChipWidth(JiveTag tag, double maxLabelWidth) {
-    final labelStyle = TextStyle(
-      fontWeight: FontWeight.w600,
-      fontSize: 11,
-    );
-    final countStyle = TextStyle(
-      fontWeight: FontWeight.w600,
-      fontSize: 10,
-    );
+    final labelStyle = TextStyle(fontWeight: FontWeight.w600, fontSize: 11);
+    final countStyle = TextStyle(fontWeight: FontWeight.w600, fontSize: 10);
     final label = tagDisplayName(tag);
-    final labelWidth =
-        _measureTextWidth(label, labelStyle).clamp(0, maxLabelWidth);
+    final labelWidth = _measureTextWidth(
+      label,
+      labelStyle,
+    ).clamp(0, maxLabelWidth);
     final countWidth =
-        _measureTextWidth('${tag.usageCount}', countStyle) + _countPaddingHorizontal * 2;
+        _measureTextWidth('${tag.usageCount}', countStyle) +
+        _countPaddingHorizontal * 2;
     final showIcon = hasTagIcon(tag);
     final hasSmartRules = _hasEnabledRule(tag);
     var width = _chipHorizontalPadding * 2 + labelWidth;
@@ -621,7 +661,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   }
 
   Widget _buildTagChip(JiveTag tag, double maxLabelWidth) {
-    final baseColor = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+    final baseColor =
+        AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
     final color = tag.isArchived ? Colors.grey.shade500 : baseColor;
     final hasSmartRules = _hasEnabledRule(tag);
     final textStyle = TextStyle(
@@ -636,6 +677,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       fontSize: 10,
     );
     final showIcon = hasTagIcon(tag);
+    final sharePolicy = _tagSharePolicy;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -682,7 +724,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                   decoration: BoxDecoration(
                     color: _accentColor.withValues(alpha: 0.12),
                     shape: BoxShape.circle,
-                    border: Border.all(color: _accentColor.withValues(alpha: 0.4)),
+                    border: Border.all(
+                      color: _accentColor.withValues(alpha: 0.4),
+                    ),
                   ),
                   child: const Icon(
                     Icons.auto_awesome,
@@ -690,6 +734,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                     color: _accentColor,
                   ),
                 ),
+              ],
+              if (sharePolicy.visibility != ObjectShareVisibility.private) ...[
+                const SizedBox(width: 4),
+                _buildShareBadge(sharePolicy.label),
               ],
             ],
           ),
@@ -768,22 +816,25 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   }
 
   String _amountRange(double? min, double? max) {
-    if (min != null && max != null) return '¥${min.toStringAsFixed(0)}-¥${max.toStringAsFixed(0)}';
+    if (min != null && max != null) {
+      return '¥${min.toStringAsFixed(0)}-¥${max.toStringAsFixed(0)}';
+    }
     if (min != null) return '≥¥${min.toStringAsFixed(0)}';
     if (max != null) return '≤¥${max.toStringAsFixed(0)}';
     return '不限';
   }
 
   Future<void> _openSmartOverviewSheet() async {
-    final tags = _tags
-        .where((tag) => (_rulesByTagKey[tag.key]?.isNotEmpty ?? false))
-        .toList()
-      ..sort((a, b) {
-        final aEnabled = _hasEnabledRule(a);
-        final bEnabled = _hasEnabledRule(b);
-        if (aEnabled != bEnabled) return aEnabled ? -1 : 1;
-        return tagDisplayName(a).compareTo(tagDisplayName(b));
-      });
+    final tags =
+        _tags
+            .where((tag) => (_rulesByTagKey[tag.key]?.isNotEmpty ?? false))
+            .toList()
+          ..sort((a, b) {
+            final aEnabled = _hasEnabledRule(a);
+            final bEnabled = _hasEnabledRule(b);
+            if (aEnabled != bEnabled) return aEnabled ? -1 : 1;
+            return tagDisplayName(a).compareTo(tagDisplayName(b));
+          });
     if (tags.isEmpty) {
       _showToast('暂无智能标签规则');
       return;
@@ -820,7 +871,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           builder: (context, scrollController) {
             return Material(
               color: Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(20),
+              ),
               child: StatefulBuilder(
                 builder: (context, setSheetState) {
                   void showSheetMessage(String message) {
@@ -839,7 +892,11 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                     });
                   }
 
-                  void updateProgress(int processed, int total, {String label = '补标中'}) {
+                  void updateProgress(
+                    int processed,
+                    int total, {
+                    String label = '补标中',
+                  }) {
                     setSheetState(() {
                       sheetBackfilling = true;
                       sheetProcessed = processed;
@@ -876,17 +933,18 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                       : tags.where((tag) {
                           final name = tagDisplayName(tag).toLowerCase();
                           if (name.contains(queryLower)) return true;
-                          final summaries = _allRules(tag)
-                              .map(_ruleSummaryLine)
-                              .join(' ')
-                              .toLowerCase();
+                          final summaries = _allRules(
+                            tag,
+                          ).map(_ruleSummaryLine).join(' ').toLowerCase();
                           return summaries.contains(queryLower);
                         }).toList();
-                  final enabledTags =
-                      tags.where((tag) => enabledByTag[tag.key] ?? false).toList();
+                  final enabledTags = tags
+                      .where((tag) => enabledByTag[tag.key] ?? false)
+                      .toList();
                   final busy = _backfilling || _cleaning;
-                  final sliverChildCount =
-                      filteredTags.isEmpty ? 0 : filteredTags.length * 2 - 1;
+                  final sliverChildCount = filteredTags.isEmpty
+                      ? 0
+                      : filteredTags.length * 2 - 1;
 
                   return SafeArea(
                     top: false,
@@ -906,22 +964,38 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  10,
+                                  16,
+                                  6,
+                                ),
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.auto_awesome, color: _accentColor),
+                                    const Icon(
+                                      Icons.auto_awesome,
+                                      color: _accentColor,
+                                    ),
                                     const SizedBox(width: 8),
                                     const Text(
                                       '智能标签管理',
-                                      style: TextStyle(fontWeight: FontWeight.w600),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                     const Spacer(),
                                     IconButton(
                                       tooltip: '停用管理',
                                       onPressed: () {
-                                        Navigator.of(context, rootNavigator: true).push(
+                                        Navigator.of(
+                                          context,
+                                          rootNavigator: true,
+                                        ).push(
                                           MaterialPageRoute(
-                                            builder: (_) => SmartTagOptOutScreen(isar: _isar),
+                                            builder: (_) =>
+                                                SmartTagOptOutScreen(
+                                                  isar: _isar,
+                                                ),
                                           ),
                                         );
                                       },
@@ -930,9 +1004,13 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                     IconButton(
                                       tooltip: '补标记录',
                                       onPressed: () {
-                                        Navigator.of(context, rootNavigator: true).push(
+                                        Navigator.of(
+                                          context,
+                                          rootNavigator: true,
+                                        ).push(
                                           MaterialPageRoute(
-                                            builder: (_) => const SmartTagLogScreen(),
+                                            builder: (_) =>
+                                                const SmartTagLogScreen(),
                                           ),
                                         );
                                       },
@@ -942,7 +1020,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  4,
+                                ),
                                 child: Row(
                                   children: [
                                     Expanded(
@@ -950,17 +1033,24 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                         onPressed: busy || enabledTags.isEmpty
                                             ? null
                                             : () => _batchBackfillTags(
-                                                  enabledTags,
-                                                  onMessage: showSheetMessage,
-                                                  onProgress: updateProgress,
-                                                  showProgressDialog: false,
-                                                ),
-                                        icon: const Icon(Icons.auto_fix_high, size: 16),
+                                                enabledTags,
+                                                onMessage: showSheetMessage,
+                                                onProgress: updateProgress,
+                                                showProgressDialog: false,
+                                              ),
+                                        icon: const Icon(
+                                          Icons.auto_fix_high,
+                                          size: 16,
+                                        ),
                                         label: const Text('批量补标'),
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: _accentColor,
-                                          side: const BorderSide(color: _accentColor),
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          side: const BorderSide(
+                                            color: _accentColor,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 8,
+                                          ),
                                           textStyle: const TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
@@ -974,22 +1064,30 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                         onPressed: busy || enabledTags.isEmpty
                                             ? null
                                             : () => _batchCleanupTags(
-                                                  enabledTags,
-                                                  onMessage: showSheetMessage,
-                                                  onProgress: (processed, total) =>
-                                                      updateProgress(
-                                                    processed,
-                                                    total,
-                                                    label: '清理中',
-                                                  ),
-                                                  showProgressDialog: false,
-                                                ),
-                                        icon: const Icon(Icons.cleaning_services_outlined, size: 16),
+                                                enabledTags,
+                                                onMessage: showSheetMessage,
+                                                onProgress:
+                                                    (processed, total) =>
+                                                        updateProgress(
+                                                          processed,
+                                                          total,
+                                                          label: '清理中',
+                                                        ),
+                                                showProgressDialog: false,
+                                              ),
+                                        icon: const Icon(
+                                          Icons.cleaning_services_outlined,
+                                          size: 16,
+                                        ),
                                         label: const Text('批量清理'),
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: _accentColor,
-                                          side: const BorderSide(color: _accentColor),
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          side: const BorderSide(
+                                            color: _accentColor,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 8,
+                                          ),
                                           textStyle: const TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
@@ -1005,8 +1103,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                             : () => setAll(true),
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: _accentColor,
-                                          side: const BorderSide(color: _accentColor),
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          side: const BorderSide(
+                                            color: _accentColor,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 8,
+                                          ),
                                           textStyle: const TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
@@ -1023,8 +1125,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                             : () => setAll(false),
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: Colors.redAccent,
-                                          side: const BorderSide(color: Colors.redAccent),
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                          side: const BorderSide(
+                                            color: Colors.redAccent,
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 8,
+                                          ),
                                           textStyle: const TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
@@ -1038,7 +1144,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                               ),
                               if (sheetBackfilling)
                                 Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    4,
+                                    16,
+                                    4,
+                                  ),
                                   child: Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
@@ -1046,7 +1157,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                       borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           sheetTotal == 0
@@ -1072,7 +1184,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                 )
                               else if (sheetMessage != null)
                                 Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    4,
+                                    16,
+                                    4,
+                                  ),
                                   child: Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
@@ -1081,7 +1198,11 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                     ),
                                     child: Row(
                                       children: [
-                                        const Icon(Icons.info_outline, color: _accentColor, size: 18),
+                                        const Icon(
+                                          Icons.info_outline,
+                                          color: _accentColor,
+                                          size: 18,
+                                        ),
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
@@ -1097,25 +1218,43 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                   ),
                                 ),
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  4,
+                                  16,
+                                  4,
+                                ),
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: _accentSoft,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Theme(
-                                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                    data: Theme.of(context).copyWith(
+                                      dividerColor: Colors.transparent,
+                                    ),
                                     child: ExpansionTile(
-                                      key: const PageStorageKey<String>('smart_tag_settings'),
+                                      key: const PageStorageKey<String>(
+                                        'smart_tag_settings',
+                                      ),
                                       initiallyExpanded: settingsExpanded,
                                       onExpansionChanged: (value) {
-                                        setSheetState(() => settingsExpanded = value);
+                                        setSheetState(
+                                          () => settingsExpanded = value,
+                                        );
                                       },
-                                      tilePadding: const EdgeInsets.symmetric(horizontal: 8),
-                                      leading: const Icon(Icons.tune, color: _accentColor),
+                                      tilePadding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
+                                      leading: const Icon(
+                                        Icons.tune,
+                                        color: _accentColor,
+                                      ),
                                       title: const Text(
                                         '显示与清理设置',
-                                        style: TextStyle(fontWeight: FontWeight.w600),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                       subtitle: settingsExpanded
                                           ? null
@@ -1130,7 +1269,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                         SwitchListTile(
                                           dense: true,
                                           contentPadding:
-                                              const EdgeInsets.symmetric(horizontal: 8),
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                              ),
                                           secondary: const Icon(
                                             Icons.auto_awesome_outlined,
                                             color: _accentColor,
@@ -1141,30 +1282,46 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                           onChanged: busy
                                               ? null
                                               : (value) async {
-                                                  setSheetState(() => _showSmartTagBadge = value);
-                                                  await _setShowSmartTagBadge(value);
+                                                  setSheetState(
+                                                    () => _showSmartTagBadge =
+                                                        value,
+                                                  );
+                                                  await _setShowSmartTagBadge(
+                                                    value,
+                                                  );
                                                 },
                                           activeThumbColor: _accentColor,
                                         ),
-                                        Divider(height: 1, color: Colors.green.shade100),
+                                        Divider(
+                                          height: 1,
+                                          color: Colors.green.shade100,
+                                        ),
                                         SwitchListTile(
                                           dense: true,
                                           contentPadding:
-                                              const EdgeInsets.symmetric(horizontal: 8),
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                              ),
                                           secondary: const Icon(
                                             Icons.cleaning_services_outlined,
                                             color: _accentColor,
                                           ),
                                           title: const Text('清理历史默认同时移除标签'),
-                                          subtitle: const Text('影响清理历史/批量清理的默认选项'),
+                                          subtitle: const Text(
+                                            '影响清理历史/批量清理的默认选项',
+                                          ),
                                           value: _cleanupRemoveTagTooDefault,
                                           onChanged: busy
                                               ? null
                                               : (value) async {
                                                   setSheetState(
-                                                    () => _cleanupRemoveTagTooDefault = value,
+                                                    () =>
+                                                        _cleanupRemoveTagTooDefault =
+                                                            value,
                                                   );
-                                                  await _setCleanupRemoveTagTooDefault(value);
+                                                  await _setCleanupRemoveTagTooDefault(
+                                                    value,
+                                                  );
                                                 },
                                           activeThumbColor: _accentColor,
                                         ),
@@ -1174,7 +1331,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  4,
+                                  16,
+                                  8,
+                                ),
                                 child: Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
@@ -1183,7 +1345,11 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.info_outline, color: _accentColor, size: 18),
+                                      const Icon(
+                                        Icons.info_outline,
+                                        color: _accentColor,
+                                        size: 18,
+                                      ),
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
@@ -1199,7 +1365,12 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  8,
+                                ),
                                 child: TextField(
                                   controller: _smartTagSearchController,
                                   decoration: InputDecoration(
@@ -1242,156 +1413,190 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                           )
                         else
                           SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, sliverIndex) {
-                                if (sliverIndex.isOdd) {
-                                  return const Divider(height: 1);
-                                }
-                                final index = sliverIndex ~/ 2;
-                                final tag = filteredTags[index];
-                                final enabled = enabledByTag[tag.key] ?? false;
-                                final ruleCount = ruleCountByTag[tag.key] ?? 0;
-                                final enabledCount = enabledCountByTag[tag.key] ?? 0;
-                                final rules = _allRules(tag);
-                                final summaries = rules
-                                    .map(_ruleSummaryLine)
-                                    .where((line) => line.isNotEmpty)
-                                    .toList();
-                                return ListTile(
-                                  title: Text(tagDisplayName(tag)),
-                                  subtitle: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('规则 $ruleCount 条 · 启用 $enabledCount 条'),
-                                      if (summaries.isNotEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.only(top: 2),
-                                          child: Text(
-                                            summaries.take(2).join(' / '),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: Colors.grey.shade600,
-                                            ),
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              sliverIndex,
+                            ) {
+                              if (sliverIndex.isOdd) {
+                                return const Divider(height: 1);
+                              }
+                              final index = sliverIndex ~/ 2;
+                              final tag = filteredTags[index];
+                              final enabled = enabledByTag[tag.key] ?? false;
+                              final ruleCount = ruleCountByTag[tag.key] ?? 0;
+                              final enabledCount =
+                                  enabledCountByTag[tag.key] ?? 0;
+                              final rules = _allRules(tag);
+                              final summaries = rules
+                                  .map(_ruleSummaryLine)
+                                  .where((line) => line.isNotEmpty)
+                                  .toList();
+                              return ListTile(
+                                title: Text(tagDisplayName(tag)),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '规则 $ruleCount 条 · 启用 $enabledCount 条',
+                                    ),
+                                    if (summaries.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Text(
+                                          summaries.take(2).join(' / '),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey.shade600,
                                           ),
                                         ),
-                                      const SizedBox(height: 4),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 4,
-                                        children: [
-                                          if (enabled)
-                                            TextButton.icon(
-                                              onPressed: busy
-                                                  ? null
-                                                  : () => _backfillTagHistory(
-                                                        tag,
-                                                        onMessage: showSheetMessage,
-                                                        onProgress: updateProgress,
-                                                        showProgressDialog: false,
-                                                      ),
-                                              icon: const Icon(Icons.auto_fix_high, size: 16),
-                                              label: const Text('补充历史'),
-                                              style: TextButton.styleFrom(
-                                                foregroundColor: _accentColor,
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 4,
-                                                ),
-                                                textStyle: const TextStyle(fontSize: 12),
-                                              ),
-                                            ),
+                                      ),
+                                    const SizedBox(height: 4),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      children: [
+                                        if (enabled)
                                           TextButton.icon(
                                             onPressed: busy
                                                 ? null
-                                                : () => _cleanupTagHistory(
-                                                      tag,
-                                                      onMessage: showSheetMessage,
-                                                      onProgress: (processed, total) =>
-                                                          updateProgress(
-                                                        processed,
-                                                        total,
-                                                        label: '清理中',
-                                                      ),
-                                                      showProgressDialog: false,
-                                                    ),
-                                            icon:
-                                                const Icon(Icons.cleaning_services_outlined, size: 16),
-                                            label: const Text('清理历史'),
+                                                : () => _backfillTagHistory(
+                                                    tag,
+                                                    onMessage: showSheetMessage,
+                                                    onProgress: updateProgress,
+                                                    showProgressDialog: false,
+                                                  ),
+                                            icon: const Icon(
+                                              Icons.auto_fix_high,
+                                              size: 16,
+                                            ),
+                                            label: const Text('补充历史'),
                                             style: TextButton.styleFrom(
                                               foregroundColor: _accentColor,
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              textStyle: const TextStyle(
+                                                fontSize: 12,
                                               ),
-                                              textStyle: const TextStyle(fontSize: 12),
                                             ),
                                           ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  trailing: Switch(
-                                    value: enabled,
-                                    onChanged: (value) async {
-                                      if (!value) {
-                                        if (busy) {
-                                          _showToast('正在处理，请稍候');
-                                          return;
-                                        }
-                                        final action = await _confirmDisableSmartTag(tag);
-                                        if (action == _SmartDisableAction.cancel) return;
-                                        await service.setEnabledForTag(tag.key, false);
-                                        enabledByTag[tag.key] = false;
-                                        resortTags();
-                                        setSheetState(() {});
-                                        await _loadData();
-                                        if (action == _SmartDisableAction.disableAndCleanup) {
-                                          await _cleanupTagHistory(
-                                            tag,
-                                            onMessage: showSheetMessage,
-                                            onProgress: (processed, total) => updateProgress(
-                                              processed,
-                                              total,
-                                              label: '清理中',
+                                        TextButton.icon(
+                                          onPressed: busy
+                                              ? null
+                                              : () => _cleanupTagHistory(
+                                                  tag,
+                                                  onMessage: showSheetMessage,
+                                                  onProgress:
+                                                      (processed, total) =>
+                                                          updateProgress(
+                                                            processed,
+                                                            total,
+                                                            label: '清理中',
+                                                          ),
+                                                  showProgressDialog: false,
+                                                ),
+                                          icon: const Icon(
+                                            Icons.cleaning_services_outlined,
+                                            size: 16,
+                                          ),
+                                          label: const Text('清理历史'),
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: _accentColor,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 4,
                                             ),
-                                            showProgressDialog: false,
-                                          );
-                                        }
+                                            textStyle: const TextStyle(
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                trailing: Switch(
+                                  value: enabled,
+                                  onChanged: (value) async {
+                                    if (!value) {
+                                      if (busy) {
+                                        _showToast('正在处理，请稍候');
                                         return;
                                       }
-                                      await service.setEnabledForTag(tag.key, true);
-                                      enabledByTag[tag.key] = true;
+                                      final action =
+                                          await _confirmDisableSmartTag(tag);
+                                      if (action ==
+                                          _SmartDisableAction.cancel) {
+                                        return;
+                                      }
+                                      await service.setEnabledForTag(
+                                        tag.key,
+                                        false,
+                                      );
+                                      enabledByTag[tag.key] = false;
                                       resortTags();
                                       setSheetState(() {});
                                       await _loadData();
-                                    },
-                                    activeThumbColor: _accentColor,
-                                  ),
-                                  onTap: () async {
-                                    await _openTagRules(tag);
-                                    final latestRules = await service.getRules(tag.key);
-                                    _rulesByTagKey[tag.key] = latestRules;
-                                    final latestEnabledCount =
-                                        latestRules.where((rule) => rule.isEnabled).length;
-                                    ruleCountByTag[tag.key] = latestRules.length;
-                                    enabledCountByTag[tag.key] = latestEnabledCount;
-                                    enabledByTag[tag.key] = latestEnabledCount > 0;
-                                    if (latestRules.isEmpty) {
-                                      tags.removeWhere((item) => item.key == tag.key);
-                                      enabledByTag.remove(tag.key);
-                                      ruleCountByTag.remove(tag.key);
-                                      enabledCountByTag.remove(tag.key);
+                                      if (action ==
+                                          _SmartDisableAction
+                                              .disableAndCleanup) {
+                                        await _cleanupTagHistory(
+                                          tag,
+                                          onMessage: showSheetMessage,
+                                          onProgress: (processed, total) =>
+                                              updateProgress(
+                                                processed,
+                                                total,
+                                                label: '清理中',
+                                              ),
+                                          showProgressDialog: false,
+                                        );
+                                      }
+                                      return;
                                     }
+                                    await service.setEnabledForTag(
+                                      tag.key,
+                                      true,
+                                    );
+                                    enabledByTag[tag.key] = true;
                                     resortTags();
-                                    await _loadData();
                                     setSheetState(() {});
+                                    await _loadData();
                                   },
-                                );
-                              },
-                              childCount: sliverChildCount,
-                            ),
+                                  activeThumbColor: _accentColor,
+                                ),
+                                onTap: () async {
+                                  await _openTagRules(tag);
+                                  final latestRules = await service.getRules(
+                                    tag.key,
+                                  );
+                                  _rulesByTagKey[tag.key] = latestRules;
+                                  final latestEnabledCount = latestRules
+                                      .where((rule) => rule.isEnabled)
+                                      .length;
+                                  ruleCountByTag[tag.key] = latestRules.length;
+                                  enabledCountByTag[tag.key] =
+                                      latestEnabledCount;
+                                  enabledByTag[tag.key] =
+                                      latestEnabledCount > 0;
+                                  if (latestRules.isEmpty) {
+                                    tags.removeWhere(
+                                      (item) => item.key == tag.key,
+                                    );
+                                    enabledByTag.remove(tag.key);
+                                    ruleCountByTag.remove(tag.key);
+                                    enabledCountByTag.remove(tag.key);
+                                  }
+                                  resortTags();
+                                  await _loadData();
+                                  setSheetState(() {});
+                                },
+                              );
+                            }, childCount: sliverChildCount),
                           ),
                       ],
                     ),
@@ -1413,15 +1618,20 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         content: Text('停用后标签「${tagDisplayName(tag)}」不会再自动打标。是否同时清理历史智能标签？'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, _SmartDisableAction.cancel),
+            onPressed: () =>
+                Navigator.pop(dialogContext, _SmartDisableAction.cancel),
             child: const Text('取消'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, _SmartDisableAction.disableOnly),
+            onPressed: () =>
+                Navigator.pop(dialogContext, _SmartDisableAction.disableOnly),
             child: const Text('仅停用'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, _SmartDisableAction.disableAndCleanup),
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              _SmartDisableAction.disableAndCleanup,
+            ),
             child: const Text('停用并清理'),
           ),
         ],
@@ -1505,8 +1715,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           final tagMessage = result.cancelled
               ? '补标已取消'
               : result.updatedCount == 0
-                  ? '没有需要补标的交易'
-                  : '已补标 ${result.updatedCount} 笔交易';
+              ? '没有需要补标的交易'
+              : '已补标 ${result.updatedCount} 笔交易';
           await SmartTagLogService().addLog(
             SmartTagLogEntry(
               tagKey: tag.key,
@@ -1548,8 +1758,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       final summary = cancelled
           ? '已取消批量补标（已更新 $totalUpdated 笔）'
           : totalUpdated == 0
-              ? '批量补标完成：没有需要补标的交易'
-              : '批量补标完成：更新 $totalUpdated 笔（标签 $processedTags/${targetTags.length}）';
+          ? '批量补标完成：没有需要补标的交易'
+          : '批量补标完成：更新 $totalUpdated 笔（标签 $processedTags/${targetTags.length}）';
       final suffix = errorCount > 0 ? '，失败 $errorCount 个标签' : '';
       (onMessage ?? _showTopMessage).call('$summary$suffix');
       await _loadData();
@@ -1586,7 +1796,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     String? estimateError;
     var estimateRunning = false;
 
-    Future<void> runEstimate(void Function(void Function()) setDialogState) async {
+    Future<void> runEstimate(
+      void Function(void Function()) setDialogState,
+    ) async {
       if (estimateRunning) return;
       estimateRunning = true;
       setDialogState(() {
@@ -1632,7 +1844,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            if (!estimateRunning && estimating && estimate == null && estimateError == null) {
+            if (!estimateRunning &&
+                estimating &&
+                estimate == null &&
+                estimateError == null) {
               runEstimate(setDialogState);
             }
             final canConfirm = !estimating && estimateError == null;
@@ -1656,7 +1871,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                         : (value) async {
                             removeTagToo = value;
                             _cleanupRemoveTagTooDefault = value;
-                            await UiPrefService.setSmartCleanupRemoveTagToo(value);
+                            await UiPrefService.setSmartCleanupRemoveTagToo(
+                              value,
+                            );
                             runEstimate(setDialogState);
                           },
                   ),
@@ -1666,7 +1883,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                   else if (estimateError != null)
                     Text(
                       estimateError!,
-                      style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 12,
+                      ),
                     )
                   else if (estimate != null) ...[
                     Text(
@@ -1698,7 +1918,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                   child: const Text('取消'),
                 ),
                 TextButton(
-                  onPressed: canConfirm ? () => Navigator.pop(dialogContext, true) : null,
+                  onPressed: canConfirm
+                      ? () => Navigator.pop(dialogContext, true)
+                      : null,
                   child: const Text('执行清理'),
                 ),
               ],
@@ -1752,10 +1974,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           final tagMessage = result.cancelled
               ? '清理已取消'
               : result.updatedCount == 0
-                  ? '没有需要清理的智能标签'
-                  : removeTagToo
-                      ? '已清理智能标签 ${result.updatedCount} 笔，移除标签 ${result.removedTagCount} 笔'
-                      : '已清理智能标签 ${result.updatedCount} 笔';
+              ? '没有需要清理的智能标签'
+              : removeTagToo
+              ? '已清理智能标签 ${result.updatedCount} 笔，移除标签 ${result.removedTagCount} 笔'
+              : '已清理智能标签 ${result.updatedCount} 笔';
           await SmartTagLogService().addLog(
             SmartTagLogEntry(
               tagKey: tag.key,
@@ -1797,10 +2019,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       final summary = cancelled
           ? '已取消批量清理（已清理 $totalUpdated 笔）'
           : totalUpdated == 0
-              ? '批量清理完成：没有需要清理的智能标签'
-              : removeTagToo
-                  ? '批量清理完成：清理 $totalUpdated 笔，移除标签 $totalRemovedTag 笔（标签 $processedTags/${targetTags.length}）'
-                  : '批量清理完成：清理 $totalUpdated 笔（标签 $processedTags/${targetTags.length}）';
+          ? '批量清理完成：没有需要清理的智能标签'
+          : removeTagToo
+          ? '批量清理完成：清理 $totalUpdated 笔，移除标签 $totalRemovedTag 笔（标签 $processedTags/${targetTags.length}）'
+          : '批量清理完成：清理 $totalUpdated 笔（标签 $processedTags/${targetTags.length}）';
       final suffix = errorCount > 0 ? '，失败 $errorCount 个标签' : '';
       (onMessage ?? _showTopMessage).call('$summary$suffix');
       await _loadData();
@@ -1875,8 +2097,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       final message = result.cancelled
           ? '已取消补标（已处理 ${result.scannedCount} 笔）'
           : result.updatedCount == 0
-              ? '没有需要补标的交易'
-              : '已补标 ${result.updatedCount} 笔交易（匹配 ${result.matchedCount}/${result.scannedCount}）';
+          ? '没有需要补标的交易'
+          : '已补标 ${result.updatedCount} 笔交易（匹配 ${result.matchedCount}/${result.scannedCount}）';
       if (onMessage != null) {
         onMessage(message);
       } else {
@@ -2010,7 +2232,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                         ? null
                         : (value) async {
                             _cleanupRemoveTagTooDefault = value;
-                            await UiPrefService.setSmartCleanupRemoveTagToo(value);
+                            await UiPrefService.setSmartCleanupRemoveTagToo(
+                              value,
+                            );
                             setDialogState(() => removeTagToo = value);
                             await refreshEstimate();
                           },
@@ -2021,7 +2245,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                   else if (estimateError != null)
                     Text(
                       estimateError!,
-                      style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontSize: 12,
+                      ),
                     )
                   else if (estimate != null) ...[
                     Text(
@@ -2053,7 +2280,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                   child: const Text('取消'),
                 ),
                 TextButton(
-                  onPressed: canConfirm ? () => Navigator.pop(dialogContext, true) : null,
+                  onPressed: canConfirm
+                      ? () => Navigator.pop(dialogContext, true)
+                      : null,
                   child: const Text('执行清理'),
                 ),
               ],
@@ -2094,17 +2323,18 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       final message = result.cancelled
           ? '已取消清理（已处理 ${result.scannedCount} 笔）'
           : result.updatedCount == 0
-              ? '没有需要清理的智能标签'
-              : removeTagToo
-                  ? '已清理智能标签 ${result.updatedCount} 笔，移除标签 ${result.removedTagCount} 笔'
-                  : '已清理智能标签 ${result.updatedCount} 笔';
+          ? '没有需要清理的智能标签'
+          : removeTagToo
+          ? '已清理智能标签 ${result.updatedCount} 笔，移除标签 ${result.removedTagCount} 笔'
+          : '已清理智能标签 ${result.updatedCount} 笔';
       if (onMessage != null) {
         onMessage(message);
       } else {
         _showTopMessage(message);
       }
-      final skippedCount =
-          result.smartTaggedCount > result.updatedCount ? result.smartTaggedCount - result.updatedCount : 0;
+      final skippedCount = result.smartTaggedCount > result.updatedCount
+          ? result.smartTaggedCount - result.updatedCount
+          : 0;
       await SmartTagLogService().addLog(
         SmartTagLogEntry(
           tagKey: tag.key,
@@ -2331,9 +2561,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
 
   void _showToast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showTopMessage(String message) {
@@ -2375,7 +2605,11 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
           ),
           child: const Text(
             '+ 添加',
-            style: TextStyle(color: Colors.black87, fontWeight: FontWeight.w600, fontSize: 11),
+            style: TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
           ),
         ),
       ),
@@ -2419,7 +2653,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                 onTap: () => Navigator.pop(context, _TagAction.stats),
               ),
               ListTile(
-                title: const Text('删除标签', style: TextStyle(color: Colors.redAccent)),
+                title: const Text(
+                  '删除标签',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
                 onTap: () => Navigator.pop(context, _TagAction.delete),
               ),
             ],
@@ -2492,31 +2729,29 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         if (action == _GroupAction.edit) {
           await _editGroup(group);
         } else if (action == _GroupAction.archive) {
-          await TagService(_isar).setGroupArchived(group.key, !group.isArchived);
+          await TagService(
+            _isar,
+          ).setGroupArchived(group.key, !group.isArchived);
           await _loadData();
         } else if (action == _GroupAction.delete) {
           await _deleteGroup(group);
         }
       },
       itemBuilder: (context) => [
-        const PopupMenuItem(
-          value: _GroupAction.edit,
-          child: Text('编辑分组'),
-        ),
+        const PopupMenuItem(value: _GroupAction.edit, child: Text('编辑分组')),
         PopupMenuItem(
           value: _GroupAction.archive,
           child: Text(group.isArchived ? '恢复分组' : '归档分组'),
         ),
-        const PopupMenuItem(
-          value: _GroupAction.delete,
-          child: Text('删除分组'),
-        ),
+        const PopupMenuItem(value: _GroupAction.delete, child: Text('删除分组')),
       ],
     );
   }
 
   Future<bool?> _openTagSheet({JiveTag? tag, String? groupKey}) async {
-    final groupCount = (await TagService(_isar).getGroups(includeArchived: false)).length;
+    final groupCount = (await TagService(
+      _isar,
+    ).getGroups(includeArchived: false)).length;
     final initialSize = _tagSheetInitialSize(groupCount);
     if (!mounted) return null;
     return showModalBottomSheet<bool>(
@@ -2565,7 +2800,6 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     );
   }
 
-
   Future<void> _createTag({String? groupKey}) async {
     final result = await _openTagSheet(groupKey: groupKey);
     if (result == true) await _loadData();
@@ -2602,8 +2836,14 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         title: const Text('删除分组'),
         content: Text('确定删除分组 "${group.name}" 吗？分组内标签将移出分组。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('删除')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
         ],
       ),
     );
@@ -2613,14 +2853,27 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   }
 
   Future<void> _deleteTag(JiveTag tag) async {
+    final sharePolicy = _tagSharePolicy;
+    final shared = sharePolicy.visibility != ObjectShareVisibility.private;
+    final warning = const ObjectSharePolicyService().deletionWarning(
+      objectLabel: tag.name,
+      affectedTransactionCount: tag.usageCount,
+      shared: shared,
+    );
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除标签'),
-        content: Text('确定删除标签 "${tag.name}" 吗？已使用 ${tag.usageCount} 次。'),
+        content: Text('$warning\n\n确定删除标签 "${tag.name}" 吗？'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('删除')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
         ],
       ),
     );
@@ -2629,8 +2882,35 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     await _loadData();
   }
 
+  ObjectSharePolicy get _tagSharePolicy {
+    return const ObjectSharePolicyService().evaluate(
+      book: _currentBook,
+      objectLabel: '标签',
+    );
+  }
+
+  Widget _buildShareBadge(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: _accentColor.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label == '私有' ? label : '共享',
+        style: const TextStyle(
+          color: _accentColor,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
   Future<void> _mergeTag(JiveTag source) async {
-    final candidates = _tags.where((tag) => tag.key != source.key && !tag.isArchived).toList();
+    final candidates = _tags
+        .where((tag) => tag.key != source.key && !tag.isArchived)
+        .toList();
     if (candidates.isEmpty) {
       _showMessage('没有可合并的标签');
       return;
@@ -2647,7 +2927,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
             itemCount: candidates.length,
             itemBuilder: (context, index) {
               final tag = candidates[index];
-              final color = AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
+              final color =
+                  AccountService.parseColorHex(tag.colorHex) ?? Colors.blueGrey;
               return ListTile(
                 leading: CircleAvatar(
                   radius: 12,
@@ -2662,15 +2943,21 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       },
     );
     if (target == null) return;
-    await TagService(_isar).mergeTags(targetKey: target.key, sourceKeys: [source.key]);
+    await TagService(
+      _isar,
+    ).mergeTags(targetKey: target.key, sourceKeys: [source.key]);
     await _loadData();
     _showMessage('已合并 "${source.name}" -> "${target.name}"');
   }
 
   Future<void> _convertTag(JiveTag tag) async {
     final categories = await _isar.collection<JiveCategory>().where().findAll();
-    final parentsExpense = categories.where((c) => c.parentKey == null && !c.isIncome).toList();
-    final parentsIncome = categories.where((c) => c.parentKey == null && c.isIncome).toList();
+    final parentsExpense = categories
+        .where((c) => c.parentKey == null && !c.isIncome)
+        .toList();
+    final parentsIncome = categories
+        .where((c) => c.parentKey == null && c.isIncome)
+        .toList();
     final tagTxs = await _isar.jiveTransactions
         .filter()
         .tagKeysElementEqualTo(tag.key)
@@ -2704,7 +2991,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       if (log == null) {
         _showMessage('已转换为分类 "${result.name}"');
       } else {
-        _showMessage('已转换为分类 "${result.name}"，更新 ${log.updatedTransactionCount}/${log.taggedTransactionCount} 笔交易');
+        _showMessage(
+          '已转换为分类 "${result.name}"，更新 ${log.updatedTransactionCount}/${log.taggedTransactionCount} 笔交易',
+        );
       }
     } else {
       _showMessage('转换失败');
@@ -2724,7 +3013,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     bool asSub = false;
     String? parentKey;
     bool useExistingCategory = true;
-    final categoryNameByKey = {for (final item in allCategories) item.key: item.name};
+    final categoryNameByKey = {
+      for (final item in allCategories) item.key: item.name,
+    };
     final renameController = TextEditingController(text: tag.name);
     final result = await showModalBottomSheet<_TagConvertRequest>(
       context: context,
@@ -2791,7 +3082,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                     const SizedBox(height: 4),
                     Text(
                       '该标签已关联 ${tag.usageCount} 笔交易',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
@@ -2807,7 +3101,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                     if (hasExisting) ...[
                       const SizedBox(height: 10),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         decoration: BoxDecoration(
                           color: const Color(0xFFF3F6FF),
                           borderRadius: BorderRadius.circular(12),
@@ -2817,14 +3114,19 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                           children: [
                             Text(
                               '已存在分类：${existing.name}',
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             if (parentName != null && parentName.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
                                   '父级：$parentName',
-                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                             const SizedBox(height: 8),
@@ -2852,7 +3154,10 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                 padding: const EdgeInsets.only(top: 6),
                                 child: Text(
                                   '改名后将创建新分类',
-                                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                  style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ),
                           ],
@@ -2911,12 +3216,19 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                         ),
                         items: [
                           for (final parent in parents)
-                            DropdownMenuItem(value: parent.key, child: Text(parent.name)),
+                            DropdownMenuItem(
+                              value: parent.key,
+                              child: Text(parent.name),
+                            ),
                         ],
-                        onChanged: (value) => setSheetState(() => parentKey = value),
+                        onChanged: (value) =>
+                            setSheetState(() => parentKey = value),
                       ),
                     const SizedBox(height: 12),
-                    Text('交易处理方式', style: TextStyle(color: Colors.grey.shade700)),
+                    Text(
+                      '交易处理方式',
+                      style: TextStyle(color: Colors.grey.shade700),
+                    ),
                     const SizedBox(height: 8),
                     _buildEstimateBanner(estimate),
                     const SizedBox(height: 8),
@@ -2954,7 +3266,8 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                       contentPadding: EdgeInsets.zero,
                       value: keepTagActive,
                       title: const Text('保留标签'),
-                      onChanged: (value) => setSheetState(() => keepTagActive = value),
+                      onChanged: (value) =>
+                          setSheetState(() => keepTagActive = value),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -2967,23 +3280,23 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          final name = renameController.text.trim();
-                          if (name.isEmpty) {
-                            _showMessage('请输入分类名称');
-                            return;
-                          }
-                          if (hasExisting && !useExistingCategory) {
-                            if (name == existing.name) {
-                              _showMessage('已存在同名分类，请修改名称或选择使用已有分类');
-                              return;
-                            }
-                          }
-                          if (asSub && parentKey == null) {
-                            _showMessage('请选择父分类');
-                            return;
-                          }
+                          child: ElevatedButton(
+                            onPressed: () {
+                              final name = renameController.text.trim();
+                              if (name.isEmpty) {
+                                _showMessage('请输入分类名称');
+                                return;
+                              }
+                              if (hasExisting && !useExistingCategory) {
+                                if (name == existing.name) {
+                                  _showMessage('已存在同名分类，请修改名称或选择使用已有分类');
+                                  return;
+                                }
+                              }
+                              if (asSub && parentKey == null) {
+                                _showMessage('请选择父分类');
+                                return;
+                              }
                               Navigator.pop(
                                 context,
                                 _TagConvertRequest(
@@ -2994,8 +3307,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
                                   policy: policy,
                                   keepTagActive: keepTagActive,
                                   useExistingCategory: useExistingCategory,
-                                  existingCategoryKey:
-                                      useExistingCategory ? existing?.key : null,
+                                  existingCategoryKey: useExistingCategory
+                                      ? existing?.key
+                                      : null,
                                 ),
                               );
                             },
@@ -3049,7 +3363,9 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Widget _buildEstimateBanner(_TagConversionEstimate estimate) {
@@ -3209,10 +3525,7 @@ class _TagConversionEstimate {
 }
 
 class _TagLineLayout {
-  const _TagLineLayout({
-    required this.count,
-    required this.lineWidths,
-  });
+  const _TagLineLayout({required this.count, required this.lineWidths});
 
   final int count;
   final List<double> lineWidths;

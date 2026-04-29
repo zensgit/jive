@@ -12,6 +12,7 @@ import '../service/auto_settings.dart';
 import '../service/tag_service.dart';
 import '../service/tag_rule_service.dart';
 import '../service/data_reload_bus.dart';
+import 'auto_draft_type_hints.dart';
 import 'transaction_service.dart';
 
 class AutoCapture {
@@ -27,20 +28,6 @@ class AutoCapture {
   final String? childCategoryName;
   final double? serviceCharge;
   final List<String> tagNames;
-
-  static const _incomeKeywords = ['已收款', '已收到', '到账', '退款', '赔付'];
-
-  static const _transferKeywords = [
-    '转账',
-    '转入',
-    '转出',
-    '提现',
-    '还款',
-    '余额转入',
-    '余额转出',
-    '转到',
-    '转至',
-  ];
 
   AutoCapture({
     required this.amount,
@@ -100,32 +87,15 @@ class AutoCapture {
   }
 
   static String? _normalizeType(String? rawType) {
-    if (rawType == null) return null;
-    final normalized = rawType.trim().toLowerCase();
-    if (normalized == 'expense' ||
-        normalized == 'income' ||
-        normalized == 'transfer') {
-      return normalized;
-    }
-    return null;
+    return AutoDraftTypeHints.normalizeType(rawType);
   }
 
   static String? _inferTypeFromText(String? rawText) {
-    if (rawText == null || rawText.trim().isEmpty) return null;
-    for (final keyword in _incomeKeywords) {
-      if (rawText.contains(keyword)) return 'income';
-    }
-    for (final keyword in _transferKeywords) {
-      if (rawText.contains(keyword)) return 'transfer';
-    }
-    return null;
+    return AutoDraftTypeHints.inferFromText(rawText);
   }
 
   static String? _preferType(String? normalizedType, String? inferredType) {
-    if (inferredType == 'transfer' && normalizedType != 'transfer') {
-      return 'transfer';
-    }
-    return normalizedType ?? inferredType;
+    return AutoDraftTypeHints.preferType(normalizedType, inferredType);
   }
 }
 
@@ -178,18 +148,6 @@ class AutoDraftService {
   final Isar isar;
   static const _transferToAccountMetadataKey = 'transferToAccountName';
   static const _transferServiceChargeMetadataKey = 'transferServiceCharge';
-
-  static const _transferKeywords = [
-    '转账',
-    '转入',
-    '转出',
-    '提现',
-    '还款',
-    '余额转入',
-    '余额转出',
-    '转到',
-    '转至',
-  ];
 
   Future<AutoCaptureResult> ingestCapture(
     AutoCapture capture, {
@@ -852,7 +810,7 @@ class AutoDraftService {
   bool _looksLikeTransfer(JiveAutoDraft draft) {
     final text = draft.rawText ?? '';
     if (text.isEmpty) return false;
-    for (final keyword in _transferKeywords) {
+    for (final keyword in AutoDraftTypeHints.transferKeywords) {
       if (text.contains(keyword)) return true;
     }
     return false;
@@ -877,11 +835,7 @@ class AutoDraftService {
   }
 
   bool _looksLikeTransferText(String? rawText) {
-    if (rawText == null || rawText.trim().isEmpty) return false;
-    for (final keyword in _transferKeywords) {
-      if (rawText.contains(keyword)) return true;
-    }
-    return false;
+    return AutoDraftTypeHints.looksLikeTransferText(rawText);
   }
 
   _AccountHint? _extractToAccountHint(String? rawText) {

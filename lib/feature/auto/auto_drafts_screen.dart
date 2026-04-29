@@ -11,8 +11,10 @@ import '../../core/service/account_service.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/tag_service.dart';
+import '../transactions/transaction_form_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
+import 'auto_draft_entry_params_builder.dart';
 
 class AutoDraftsScreen extends StatefulWidget {
   const AutoDraftsScreen({super.key});
@@ -89,6 +91,22 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
     await AutoDraftService(_isar).discardDraft(draft);
     _hasChanges = true;
     await _loadDrafts();
+  }
+
+  Future<void> _editDraftInTransactionEditor(JiveAutoDraft draft) async {
+    final params = const AutoDraftEntryParamsBuilder().build(draft);
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TransactionFormScreen(params: params),
+      ),
+    );
+    if (saved != true) return;
+    await AutoDraftService(_isar).discardDraft(draft);
+    _hasChanges = true;
+    await _loadDrafts();
+    if (!mounted) return;
+    _showDraftConfirmMessage('已通过交易编辑器确认入账');
   }
 
   Future<void> _confirmAll() async {
@@ -819,19 +837,27 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
             ),
           ],
           const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () => _discardDraft(draft),
-                child: const Text("删除"),
-              ),
-              const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () => _confirmDraft(draft),
-                child: const Text("确认"),
-              ),
-            ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TextButton(
+                  onPressed: () => _discardDraft(draft),
+                  child: const Text("删除"),
+                ),
+                OutlinedButton(
+                  onPressed: () => _editDraftInTransactionEditor(draft),
+                  child: const Text("编辑确认"),
+                ),
+                ElevatedButton(
+                  onPressed: () => _confirmDraft(draft),
+                  child: const Text("确认"),
+                ),
+              ],
+            ),
           ),
         ],
       ),

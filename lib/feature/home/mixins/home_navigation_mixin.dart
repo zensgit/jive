@@ -78,9 +78,7 @@ mixin HomeNavigationMixin on MainScreenController {
   Future<void> openAutoRuleTester() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => AutoRuleTesterScreen(isar: isar),
-      ),
+      MaterialPageRoute(builder: (context) => AutoRuleTesterScreen(isar: isar)),
     );
   }
 
@@ -100,8 +98,11 @@ mixin HomeNavigationMixin on MainScreenController {
     final changed = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            CategoryManagerScreen(isar: isar, onlyUserCategories: true),
+        builder: (context) => CategoryManagerScreen(
+          isar: isar,
+          currentBookId: currentBookId,
+          onlyUserCategories: true,
+        ),
       ),
     );
     if (changed == true) {
@@ -132,7 +133,8 @@ mixin HomeNavigationMixin on MainScreenController {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => AddTransactionScreen(initialType: txType, bookId: currentBookId),
+        builder: (context) =>
+            AddTransactionScreen(initialType: txType, bookId: currentBookId),
       ),
     );
     if (result == true) {

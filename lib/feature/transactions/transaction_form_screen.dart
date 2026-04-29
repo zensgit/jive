@@ -89,9 +89,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     if (p.prefillNote != null) _note = p.prefillNote!;
     if (p.prefillTagKeys != null) _selectedTagKeys = List.of(p.prefillTagKeys!);
 
-    if (p.prefillCategoryKey != null) {
-      final key = p.prefillSubCategoryKey ?? p.prefillCategoryKey;
-      _selectedCategory = categories.where((c) => c.key == key).firstOrNull;
+    if (p.prefillCategoryKey != null || p.prefillSubCategoryKey != null) {
+      _selectedCategory = _resolvePrefillCategory(categories, p);
     }
     if (p.prefillAccountId != null) {
       _selectedAccount = accounts
@@ -132,6 +131,33 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _projects = projects;
       _isLoading = false;
     });
+  }
+
+  JiveCategory? _resolvePrefillCategory(
+    List<JiveCategory> categories,
+    TransactionEntryParams params,
+  ) {
+    final leafHint = (params.prefillSubCategoryKey ?? params.prefillCategoryKey)
+        ?.trim();
+    if (leafHint == null || leafHint.isEmpty) return null;
+
+    final exactLeaf = categories.where((c) => c.key == leafHint).firstOrNull;
+    if (exactLeaf != null) return exactLeaf;
+
+    final parentHint = params.prefillCategoryKey?.trim();
+    final parent = parentHint == null || parentHint.isEmpty
+        ? null
+        : categories
+              .where((c) => c.key == parentHint || c.name == parentHint)
+              .firstOrNull;
+
+    final namedLeaves = categories.where((c) => c.name == leafHint).toList();
+    if (parent != null) {
+      return namedLeaves.where((c) => c.parentKey == parent.key).firstOrNull ??
+          (parent.name == leafHint || parent.key == leafHint ? parent : null);
+    }
+
+    return namedLeaves.firstOrNull;
   }
 
   List<String> get _selectedTagNames {
@@ -186,10 +212,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     final tx = widget.params.editingTransaction ?? JiveTransaction();
     tx.amount = _amount;
     tx.timestamp = _selectedDate;
-    tx.source = widget.params.source == TransactionEntrySource.quickAction
-        ? 'quick_action'
-        : 'manual';
+    tx.source = _sourceStorageValue(widget.params.source, existing: tx.source);
     tx.note = _note.isEmpty ? null : _note;
+    tx.rawText = widget.params.prefillRawText ?? tx.rawText;
     tx.categoryKey = _txType == 'transfer' ? null : categoryKeys.categoryKey;
     tx.subCategoryKey = _txType == 'transfer'
         ? null
@@ -200,9 +225,18 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         : categoryKeys.subCategoryName;
     tx.accountId = _selectedAccount?.id;
     tx.toAccountId = _txType == 'transfer' ? _selectedToAccount?.id : null;
+    tx.exchangeFee = _txType == 'transfer'
+        ? (widget.params.prefillExchangeFee ?? tx.exchangeFee)
+        : null;
+    tx.exchangeFeeType = _txType == 'transfer' && tx.exchangeFee != null
+        ? (widget.params.prefillExchangeFeeType ??
+              tx.exchangeFeeType ??
+              'fixed')
+        : null;
     tx.excludeFromBudget = _excludeFromBudget;
     tx.tagKeys = _selectedTagKeys;
     tx.projectId = _selectedProjectId;
+    tx.bookId = widget.params.prefillBookId ?? tx.bookId;
     tx.type = _txType;
     tx.quickActionId = _parseQuickActionLegacyId(widget.params.quickActionId);
     tx.updatedAt = DateTime.now();
@@ -423,6 +457,33 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       return int.tryParse(id.substring('template:'.length));
     }
     return int.tryParse(id);
+  }
+
+  static String _sourceStorageValue(
+    TransactionEntrySource source, {
+    String? existing,
+  }) {
+    switch (source) {
+      case TransactionEntrySource.manual:
+        return 'manual';
+      case TransactionEntrySource.quickAction:
+        return 'quick_action';
+      case TransactionEntrySource.voice:
+        return 'voice';
+      case TransactionEntrySource.conversation:
+        return 'conversation';
+      case TransactionEntrySource.autoDraft:
+        return 'auto_draft';
+      case TransactionEntrySource.ocrScreenshot:
+        return 'ocr_screenshot';
+      case TransactionEntrySource.shareReceive:
+        return 'share_receive';
+      case TransactionEntrySource.deepLink:
+        return 'deep_link';
+      case TransactionEntrySource.edit:
+        final value = existing?.trim() ?? '';
+        return value.isEmpty ? 'manual' : value;
+    }
   }
 
   void _showAccountPicker() async {
@@ -675,6 +736,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     tagNames: _selectedTagNames,
                     projectName: _selectedProjectName,
                     isExcludedFromBudget: _excludeFromBudget,
+                    highlightTags:
+                        params.shouldHighlight(
+                          TransactionHighlightField.tags,
+                        ) &&
+                        _selectedTagKeys.isEmpty,
                     onTagsTap: _showTagPicker,
                     onProjectTap: _showProjectPicker,
                     onBudgetExclusionChanged: (v) =>

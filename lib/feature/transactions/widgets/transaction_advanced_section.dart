@@ -28,6 +28,9 @@ class TransactionAdvancedSection extends StatelessWidget {
   /// Whether an attachment is present.
   final bool hasAttachment;
 
+  /// Whether the tags row should be visually called out as missing.
+  final bool highlightTags;
+
   /// Called when the tags row is tapped.
   final VoidCallback? onTagsTap;
 
@@ -48,6 +51,7 @@ class TransactionAdvancedSection extends StatelessWidget {
     this.projectName,
     this.isExcludedFromBudget = false,
     this.hasAttachment = false,
+    this.highlightTags = false,
     this.onTagsTap,
     this.onProjectTap,
     this.onBudgetExclusionChanged,
@@ -69,8 +73,7 @@ class TransactionAdvancedSection extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final cardColor = isDark ? JiveTheme.darkCard : JiveTheme.cardWhite;
-    final dividerColor =
-        isDark ? JiveTheme.darkDivider : Colors.grey.shade200;
+    final dividerColor = isDark ? JiveTheme.darkDivider : Colors.grey.shade200;
     final filledCount = _filledCount;
 
     return Container(
@@ -89,15 +92,10 @@ class TransactionAdvancedSection extends StatelessWidget {
             onTap: onToggle,
             borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.tune,
-                    size: 20,
-                    color: theme.colorScheme.primary,
-                  ),
+                  Icon(Icons.tune, size: 20, color: theme.colorScheme.primary),
                   const SizedBox(width: 12),
                   Text(
                     '高级选项',
@@ -113,8 +111,9 @@ class TransactionAdvancedSection extends StatelessWidget {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary
-                            .withValues(alpha: 0.12),
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.12,
+                        ),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
@@ -152,11 +151,9 @@ class TransactionAdvancedSection extends StatelessWidget {
                 _AdvancedRow(
                   icon: Icons.label_outline,
                   label: '标签',
-                  value: tagNames.isNotEmpty
-                      ? tagNames.join(', ')
-                      : '添加标签',
-                  valueColor:
-                      tagNames.isNotEmpty ? null : Colors.grey,
+                  value: tagNames.isNotEmpty ? tagNames.join(', ') : '添加标签',
+                  valueColor: tagNames.isNotEmpty ? null : Colors.grey,
+                  highlighted: highlightTags,
                   onTap: onTagsTap,
                 ),
                 _divider(dividerColor),
@@ -164,8 +161,7 @@ class TransactionAdvancedSection extends StatelessWidget {
                   icon: Icons.folder_outlined,
                   label: '项目',
                   value: projectName ?? '关联项目',
-                  valueColor:
-                      projectName != null ? null : Colors.grey,
+                  valueColor: projectName != null ? null : Colors.grey,
                   onTap: onProjectTap,
                 ),
                 _divider(dividerColor),
@@ -208,6 +204,7 @@ class _AdvancedRow extends StatelessWidget {
   final String label;
   final String value;
   final Color? valueColor;
+  final bool highlighted;
   final VoidCallback? onTap;
 
   const _AdvancedRow({
@@ -215,6 +212,7 @@ class _AdvancedRow extends StatelessWidget {
     required this.label,
     required this.value,
     this.valueColor,
+    this.highlighted = false,
     this.onTap,
   });
 
@@ -225,35 +223,64 @@ class _AdvancedRow extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, size: 20, color: theme.colorScheme.primary),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const Spacer(),
-            Flexible(
-              child: Text(
-                value,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: valueColor ?? theme.colorScheme.onSurface,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: highlighted
+                ? theme.colorScheme.errorContainer.withValues(alpha: 0.35)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Padding(
+            padding: highlighted
+                ? const EdgeInsets.symmetric(horizontal: 8, vertical: 6)
+                : EdgeInsets.zero,
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: highlighted
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.end,
-              ),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                if (highlighted) ...[
+                  Text(
+                    '待补全',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Flexible(
+                  child: Text(
+                    value,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: valueColor ?? theme.colorScheme.onSurface,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: Colors.grey.shade400,
+                ),
+              ],
             ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.chevron_right,
-              size: 18,
-              color: Colors.grey.shade400,
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -265,10 +292,7 @@ class _BudgetExclusionRow extends StatelessWidget {
   final bool isExcluded;
   final ValueChanged<bool>? onChanged;
 
-  const _BudgetExclusionRow({
-    required this.isExcluded,
-    this.onChanged,
-  });
+  const _BudgetExclusionRow({required this.isExcluded, this.onChanged});
 
   @override
   Widget build(BuildContext context) {
