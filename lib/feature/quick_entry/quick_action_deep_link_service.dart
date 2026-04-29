@@ -73,6 +73,7 @@ class QuickActionDeepLinkService {
     final tagKeys = _splitCsv(_firstNonEmpty(query['tagKeys'], query['tags']));
     final date = _parseDate(_firstNonEmpty(query['date'], query['time']));
     final rawText = _firstNonEmpty(query['rawText'], query['raw']);
+    final explicitNote = _firstNonEmpty(query['note'], query['memo']);
     final source = _entrySource(query['entrySource']);
     final sourceLabel = _firstNonEmpty(query['sourceLabel'], query['source']);
 
@@ -86,10 +87,7 @@ class QuickActionDeepLinkService {
             .copyWith(
               prefillBookId: bookId,
               prefillDate: date,
-              prefillNote:
-                  _firstNonEmpty(query['note'], query['memo']) ??
-                  intent.cleanedText ??
-                  rawText,
+              prefillNote: explicitNote ?? intent.cleanedText ?? rawText,
             );
       }
     }
@@ -104,7 +102,9 @@ class QuickActionDeepLinkService {
       prefillAccountId: accountId,
       prefillToAccountId: toAccountId,
       prefillBookId: bookId,
-      prefillNote: _firstNonEmpty(query['note'], query['memo']),
+      prefillNote: source == TransactionEntrySource.shareReceive
+          ? explicitNote ?? rawText
+          : explicitNote,
       prefillDate: date,
       prefillTagKeys: tagKeys.isEmpty ? null : tagKeys,
       prefillRawText: rawText,

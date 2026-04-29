@@ -29,7 +29,6 @@ It only converts system share text into a normal Jive transaction deep link:
 - `entrySource=shareReceive`
 - `sourceLabel=来自系统分享`
 - `rawText=<shared text>`
-- `note=<shared text>`
 
 This keeps platform handling thin and lets Flutter own parsing, validation, highlighting, and saving.
 
@@ -44,6 +43,8 @@ For `entrySource=shareReceive` links with raw text and no explicit amount, it us
 - date
 - note
 - missing-field highlights
+
+If the shared text cannot be parsed into a valid amount, the parser keeps the raw shared text as `prefillNote` so the editor does not lose user context.
 
 Account/category still remain highlighted unless a future route supplies trusted IDs.
 
@@ -61,17 +62,16 @@ Account/category still remain highlighted unless a future route supplies trusted
 Commands run:
 
 ```bash
-/Users/chauhua/development/flutter/bin/flutter analyze --no-fatal-infos
-/Users/chauhua/development/flutter/bin/flutter test test/moneythings_alignment_services_test.dart test/speech_intent_parser_test.dart
-/Users/chauhua/development/flutter/bin/flutter build apk --debug --no-pub
+flutter analyze --no-fatal-infos
+flutter test test/moneythings_alignment_services_test.dart test/speech_intent_parser_test.dart
+flutter build apk --debug --flavor dev --no-pub
 ```
 
 Results:
 
 - `flutter test` passed for MoneyThings protocol and speech parser coverage, including Android share text parsing.
 - `flutter analyze --no-fatal-infos` completed successfully with existing info-level lints only.
-- `flutter build apk --debug --no-pub` completed Gradle/Kotlin compilation and produced flavor APKs under `build/app/outputs/flutter-apk/`.
-- The Flutter wrapper exited non-zero because it expected a single default debug APK, while this project generated `app-dev-debug.apk`, `app-auto-debug.apk`, and `app-prod-debug.apk`.
+- `flutter build apk --debug --flavor dev --no-pub` completed Gradle/Kotlin compilation and produced `build/app/outputs/flutter-apk/app-dev-debug.apk`.
 - `git diff --check` passed.
 - Restricted directories were checked separately: no `supabase/migrations`, `lib/core/sync`, `.github/workflows`, SaaS entitlement, payment, or sync logic changes.
 

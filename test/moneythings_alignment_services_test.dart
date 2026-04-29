@@ -293,6 +293,24 @@ void main() {
         contains(TransactionHighlightField.category),
       );
     });
+
+    test('keeps raw shared text as note when parsing is incomplete', () {
+      final request = QuickActionDeepLinkService.parse(
+        Uri.parse(
+          'jive://transaction/new?entrySource=shareReceive&rawText=%E5%8D%88%E9%A4%90%E5%BE%85%E8%A1%A5%E5%85%85',
+        ),
+      );
+
+      final params = request?.transactionParams;
+      expect(params?.source, TransactionEntrySource.shareReceive);
+      expect(params?.prefillAmount, isNull);
+      expect(params?.prefillNote, '午餐待补充');
+      expect(params?.prefillRawText, '午餐待补充');
+      expect(
+        params?.highlightFields,
+        contains(TransactionHighlightField.amount),
+      );
+    });
   });
 
   group('AccountGroupService', () {

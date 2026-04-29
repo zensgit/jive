@@ -296,7 +296,6 @@ class MainActivity: FlutterActivity() {
             .appendQueryParameter("entrySource", "shareReceive")
             .appendQueryParameter("sourceLabel", sourceLabel)
             .appendQueryParameter("rawText", sharedText)
-            .appendQueryParameter("note", sharedText)
             .build()
 
         Log.i("JiveShare", "Normalized ACTION_SEND text into transaction deep link: $uri")
