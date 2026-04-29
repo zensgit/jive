@@ -142,6 +142,37 @@ Covered:
 - Auth service and auth screen smoke tests.
 - Analytics, notification, and admin Edge Function smoke tests.
 
+### GitHub Production Secret Inventory
+
+Commands:
+
+```bash
+scripts/check_saas_github_secrets.sh --profile production-release --repo zensgit/jive
+scripts/check_saas_github_secrets.sh --profile production-release --include-signing --repo zensgit/jive
+```
+
+Result: failed as expected because production release secrets have not been configured yet.
+
+Missing minimum dry-run secrets:
+
+- `PRODUCTION_SUPABASE_URL`
+- `PRODUCTION_SUPABASE_ANON_KEY`
+- `PRODUCTION_ADMOB_APP_ID`
+- `PRODUCTION_ADMOB_BANNER_ID`
+
+Missing strict signing secrets:
+
+- `ANDROID_RELEASE_KEYSTORE_BASE64`
+- `ANDROID_RELEASE_STORE_PASSWORD`
+- `ANDROID_RELEASE_KEY_ALIAS`
+- `ANDROID_RELEASE_KEY_PASSWORD`
+
+Current GitHub workflow visibility check:
+
+- `SaaS Core Staging`: active.
+- `SaaS Full Billing Staging Smoke`: active.
+- `SaaS Release Candidate`: not listed yet because this workflow is still in this stacked PR and has not been merged to the default branch.
+
 ## Residual Work
 
 - After PR `#212` merges, rebase this branch onto `main` and open/retarget the final PR to `main`.
