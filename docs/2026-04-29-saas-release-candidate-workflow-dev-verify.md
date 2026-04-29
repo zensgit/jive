@@ -39,6 +39,10 @@ Updated secret helper scripts:
 - `scripts/push_saas_github_secrets.sh --profile production-release`
 - `scripts/push_saas_github_secrets.sh --profile production-release --include-optional --include-signing`
 
+Added `scripts/init_saas_production_env.sh`.
+
+The initializer creates or updates `/tmp/jive-saas-production.env` from `docs/jive-saas-production.env.example`, preserves existing values by default, generates missing server-side operation tokens, and leaves production Supabase / AdMob / signing values for explicit operator input.
+
 ## Secrets
 
 Required for dry-run:
@@ -90,6 +94,14 @@ bash -n scripts/build_release_candidate.sh scripts/check_saas_production_readine
 
 Result: passed.
 
+Additional command after adding the production env initializer:
+
+```bash
+bash -n scripts/init_saas_production_env.sh
+```
+
+Result: passed.
+
 ### Production Secret Helpers
 
 Commands:
@@ -98,9 +110,19 @@ Commands:
 scripts/check_saas_github_secrets.sh --profile production-release --print-template --repo zensgit/jive
 scripts/check_saas_github_secrets.sh --profile production-release --include-signing --print-template --repo zensgit/jive
 scripts/push_saas_github_secrets.sh --profile production-release --env-file /tmp/<temp-prod-env>
+scripts/init_saas_production_env.sh --env-file /tmp/<temp-prod-env>
 ```
 
-Result: passed. The push helper dry-run reported values present without writing GitHub secrets.
+Result: passed. The push helper dry-run reported values present without writing GitHub secrets, and the init helper created a chmod `600` env file without printing secret values.
+
+The generated temporary env file was also passed through:
+
+```bash
+bash scripts/check_saas_production_readiness.sh --env-file /tmp/<temp-prod-env> --profile app --store android
+bash scripts/push_saas_github_secrets.sh --profile production-release --repo zensgit/jive --env-file /tmp/<temp-prod-env>
+```
+
+Result: passed with the expected non-strict warning that Android release signing was not configured.
 
 ### Release Candidate Dry Run
 

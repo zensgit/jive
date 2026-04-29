@@ -184,6 +184,14 @@ Banner ID: ca-app-pub-3940256099942544/6300978111
 
 ### Secrets 检查与上传
 
+初始化本地生产 release env 文件：
+
+```bash
+scripts/init_saas_production_env.sh --env-file /tmp/jive-saas-production.env
+```
+
+可通过环境变量或参数填入生产 Supabase 与 AdMob 值；脚本会生成缺失的服务端运维 token，但不会打印 secret 值。
+
 仅检查生产 release candidate 最小 secrets：
 
 ```bash
