@@ -10,6 +10,7 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 DEVICE="${JIVE_ANDROID_LOCAL_FEATURE_SMOKE_DEVICE:-${JIVE_LOCAL_ANDROID_SMOKE_DEVICE:-emulator-5554}}"
 EMULATOR_ID="${JIVE_ANDROID_LOCAL_FEATURE_SMOKE_EMULATOR:-${JIVE_LOCAL_ANDROID_SMOKE_EMULATOR:-Jive_Staging_API35}}"
 FLAVOR="${JIVE_ANDROID_LOCAL_FEATURE_SMOKE_FLAVOR:-${JIVE_LOCAL_ANDROID_SMOKE_FLAVOR:-dev}}"
+SCENARIO="${JIVE_ANDROID_LOCAL_FEATURE_SMOKE_SCENARIO:-guest-home}"
 BUILD_APK=1
 INSTALL_APK=1
 LAUNCH_EMULATOR=1
@@ -35,6 +36,7 @@ Options:
   --device <serial>            adb device serial. Defaults to JIVE_ANDROID_LOCAL_FEATURE_SMOKE_DEVICE or emulator-5554.
   --emulator <id>              Emulator id to launch when the device is offline. Defaults to Jive_Staging_API35.
   --flavor <name>              Flutter flavor. Defaults to dev.
+  --scenario <name>            guest-home, transaction-entry, or all. Defaults to guest-home.
   --package <id>               Android package id. Defaults from flavor.
   --activity <name>            Launcher activity class. Defaults to com.jive.app.MainActivity.
   --artifact-dir <path>        Artifact output directory.
@@ -86,6 +88,10 @@ parse_args() {
         ;;
       --flavor)
         FLAVOR="${2:-}"
+        shift 2
+        ;;
+      --scenario)
+        SCENARIO="${2:-}"
         shift 2
         ;;
       --package)
@@ -155,6 +161,19 @@ parse_args() {
         ;;
     esac
   done
+
+  case "$SCENARIO" in
+    guest-home|transaction-entry|all)
+      ;;
+    home)
+      SCENARIO="guest-home"
+      ;;
+    *)
+      printf '[local-android-smoke] unknown scenario: %s\n' "$SCENARIO" >&2
+      usage
+      exit 2
+      ;;
+  esac
 }
 
 package_default_for_flavor() {
@@ -204,7 +223,30 @@ resolve_tool() {
 ui_contains() {
   local xml_file="$1"
   local needle="$2"
-  grep -F -q "$needle" "$xml_file"
+
+  python3 - "$xml_file" "$needle" <<'PY'
+import html
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+xml_file, needle = sys.argv[1:]
+try:
+    root = ET.parse(xml_file).getroot()
+except ET.ParseError:
+    sys.exit(1)
+normalized_needle = " ".join(needle.split())
+
+for node in root.iter("node"):
+    text = html.unescape(node.attrib.get("text", ""))
+    desc = html.unescape(node.attrib.get("content-desc", ""))
+    haystack = "\n".join(value for value in [text, desc] if value)
+    normalized_haystack = re.sub(r"\s+", " ", haystack).strip()
+    if needle in haystack or normalized_needle in normalized_haystack:
+        sys.exit(0)
+
+sys.exit(1)
+PY
 }
 
 sanitize_uiautomator_xml() {
@@ -237,14 +279,19 @@ import sys
 import xml.etree.ElementTree as ET
 
 xml_file, needle = sys.argv[1:]
-root = ET.parse(xml_file).getroot()
+try:
+    root = ET.parse(xml_file).getroot()
+except ET.ParseError:
+    sys.exit(1)
 matches = []
 
 for node in root.iter("node"):
     text = html.unescape(node.attrib.get("text", ""))
     desc = html.unescape(node.attrib.get("content-desc", ""))
     haystack = "\n".join(value for value in [text, desc] if value)
-    if needle not in haystack:
+    normalized_needle = " ".join(needle.split())
+    normalized_haystack = re.sub(r"\s+", " ", haystack).strip()
+    if needle not in haystack and normalized_needle not in normalized_haystack:
         continue
     bounds = node.attrib.get("bounds", "")
     match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
@@ -253,14 +300,20 @@ for node in root.iter("node"):
     x1, y1, x2, y2 = map(int, match.groups())
     clickable = node.attrib.get("clickable") == "true"
     focusable = node.attrib.get("focusable") == "true"
+    exact = (
+        text == needle
+        or desc == needle
+        or haystack == needle
+        or normalized_haystack == normalized_needle
+    )
     area = max(1, (x2 - x1) * (y2 - y1))
-    matches.append((not clickable, not focusable, area, (x1 + x2) // 2, (y1 + y2) // 2))
+    matches.append((not exact, not clickable, not focusable, area, (x1 + x2) // 2, (y1 + y2) // 2))
 
 if not matches:
     sys.exit(1)
 
 matches.sort()
-print(matches[0][3], matches[0][4])
+print(matches[0][4], matches[0][5])
 PY
 }
 
@@ -316,6 +369,24 @@ tap_label() {
   "$ADB_BIN" -s "$DEVICE" shell input tap $coords
 }
 
+long_tap_label() {
+  local xml_file="$1"
+  local label="$2"
+  local coords
+
+  coords="$(pick_node_center "$xml_file" "$label")" || return 1
+  # shellcheck disable=SC2086
+  "$ADB_BIN" -s "$DEVICE" shell input swipe $coords $coords 900
+}
+
+assert_ui_contains() {
+  local xml_file="$1"
+  local needle="$2"
+  local message="${3:-missing UI text: $needle}"
+
+  ui_contains "$xml_file" "$needle" || fail "$message"
+}
+
 swipe_up() {
   "$ADB_BIN" -s "$DEVICE" shell input swipe 540 2100 540 900 500
 }
@@ -324,17 +395,22 @@ capture_step() {
   local name="$1"
   local xml_file="$ARTIFACT_DIR/$name.xml"
   local summary_file="$ARTIFACT_DIR/$name.summary.txt"
+  local attempt
 
   "$ADB_BIN" -s "$DEVICE" exec-out screencap -p > "$ARTIFACT_DIR/$name.png" || true
-  "$ADB_BIN" -s "$DEVICE" exec-out uiautomator dump /dev/tty > "$xml_file" || true
   "$ADB_BIN" -s "$DEVICE" logcat -b crash -d > "$ARTIFACT_DIR/$name.crash.log" || true
   "$ADB_BIN" -s "$DEVICE" logcat -d \
     | grep -Ei 'FATAL EXCEPTION|FlutterError|Unhandled Exception' \
     > "$ARTIFACT_DIR/$name.alerts.log" || true
 
-  if [[ -s "$xml_file" ]] && sanitize_uiautomator_xml "$xml_file"; then
-    summarize_ui "$xml_file" "$summary_file" || true
-  fi
+  for attempt in 1 2 3 4; do
+    "$ADB_BIN" -s "$DEVICE" exec-out uiautomator dump /dev/tty > "$xml_file" || true
+    if [[ -s "$xml_file" ]] && sanitize_uiautomator_xml "$xml_file"; then
+      summarize_ui "$xml_file" "$summary_file" || true
+      return 0
+    fi
+    sleep 1
+  done
 }
 
 file_size_bytes() {
@@ -381,6 +457,7 @@ write_summary() {
 - device: $DEVICE
 - emulator: $EMULATOR_ID
 - flavor: $FLAVOR
+- scenario: $SCENARIO
 - package: $PACKAGE_NAME
 - activity: $ACTIVITY_NAME
 - artifactDir: $ARTIFACT_DIR
@@ -400,6 +477,8 @@ write_summary() {
 - Skip remaining onboarding steps.
 - Continue as guest and confirm guest mode.
 - Verify the home screen contains guest and net-worth content.
+- When scenario is transaction-entry or all, open the add-transaction page,
+  verify keypad/category/account controls, and calculate 1+2×3 = 7.00.
 
 ## Artifacts
 
@@ -407,6 +486,7 @@ write_summary() {
 - onboarding screenshots/xml/logs: $ARTIFACT_DIR/onboarding_*.*
 - auth screenshots/xml/logs: $ARTIFACT_DIR/auth*.*
 - final home screenshot/xml/logs: $ARTIFACT_DIR/final_home.*
+- transaction-entry scenario artifacts: $ARTIFACT_DIR/transaction_entry*.*
 EOF
 }
 
@@ -589,6 +669,73 @@ drive_onboarding() {
   fi
 }
 
+drive_transaction_entry() {
+  local xml="$ARTIFACT_DIR/final_home.xml"
+
+  if [[ ! -f "$xml" ]]; then
+    xml="$ARTIFACT_DIR/launch.xml"
+  fi
+
+  if ui_contains "$xml" "支出" && ui_contains "$xml" "再记"; then
+    log "transaction entry is already visible"
+    capture_step "transaction_entry"
+    xml="$ARTIFACT_DIR/transaction_entry.xml"
+  else
+    if tap_label "$xml" "记一笔"; then
+      log "opened transaction entry from home add button"
+    elif tap_label "$xml" "支出"; then
+      log "opened transaction entry from home expense shortcut"
+    else
+      fail "cannot tap home add transaction entry"
+    fi
+    sleep 4
+    capture_step "transaction_entry"
+    xml="$ARTIFACT_DIR/transaction_entry.xml"
+  fi
+
+  assert_ui_contains "$xml" "支出" "transaction entry missing expense tab"
+  assert_ui_contains "$xml" "收入" "transaction entry missing income tab"
+  assert_ui_contains "$xml" "转账" "transaction entry missing transfer tab"
+  assert_ui_contains "$xml" "餐饮" "transaction entry missing category grid"
+  assert_ui_contains "$xml" "现金" "transaction entry missing cash account"
+  assert_ui_contains "$xml" "再记" "transaction entry missing save-and-new action"
+  assert_ui_contains "$xml" "+ 长按×" "transaction entry missing plus long-press hint"
+  assert_ui_contains "$xml" "- 长按÷" "transaction entry missing minus long-press hint"
+  assert_ui_contains "$xml" "展开备注" "transaction entry missing inline note toggle"
+
+  tap_label "$xml" "1" || fail "cannot tap amount key 1"
+  sleep 0.2
+  tap_label "$xml" "+ 长按×" || fail "cannot tap plus key"
+  sleep 0.2
+  tap_label "$xml" "2" || fail "cannot tap amount key 2"
+  sleep 0.2
+  long_tap_label "$xml" "+ 长按×" || fail "cannot long press plus key"
+  sleep 0.4
+  capture_step "transaction_entry_operator_toggle"
+  xml="$ARTIFACT_DIR/transaction_entry_operator_toggle.xml"
+
+  assert_ui_contains "$xml" "当前×" "transaction entry plus key did not toggle to multiplication"
+  tap_label "$xml" "× 当前×" || fail "cannot tap multiplication key"
+  sleep 0.2
+  tap_label "$xml" "3" || fail "cannot tap amount key 3"
+  sleep 1
+  capture_step "transaction_entry_expression"
+  xml="$ARTIFACT_DIR/transaction_entry_expression.xml"
+
+  assert_ui_contains "$xml" "1+2×3" "transaction entry formula did not show 1+2×3"
+  assert_ui_contains "$xml" "7.00" "transaction entry result did not show 7.00"
+}
+
+run_selected_scenario() {
+  case "$SCENARIO" in
+    guest-home)
+      ;;
+    transaction-entry|all)
+      drive_transaction_entry
+      ;;
+  esac
+}
+
 main() {
   parse_args "$@"
   if [[ -z "$PACKAGE_NAME" ]]; then
@@ -621,6 +768,7 @@ main() {
   install_apk
   launch_app
   drive_onboarding
+  run_selected_scenario
   write_summary "passed" "Local Android feature smoke completed"
   log "summary: $ARTIFACT_DIR/summary.md"
 }

@@ -27,10 +27,20 @@ Reuse an existing APK:
 
 ```bash
 scripts/run_android_local_feature_smoke.sh \
+  --scenario transaction-entry \
   --skip-build \
   --fresh-install \
   --allow-uninstall-on-signature-mismatch \
   --artifact-dir /tmp/jive-android-local-feature-smoke
+```
+
+Run every local scenario:
+
+```bash
+scripts/run_android_local_feature_smoke.sh \
+  --scenario all \
+  --fresh-install \
+  --allow-uninstall-on-signature-mismatch
 ```
 
 Launch/capture only, without driving onboarding:
@@ -65,12 +75,22 @@ Each run emits:
 - `auth*.*`
 - `guest_confirm.*`
 - `final_home.*`
+- `transaction_entry*.*` when `--scenario transaction-entry` or `--scenario all` is used
 - `install.log`
 - `flutter-build.log` when building
 
-## Current Scenario
+## Scenarios
 
-The MVP scenario covers:
+The `--scenario` option accepts:
+
+- `guest-home`, the default scenario.
+- `transaction-entry`, which runs guest-home first and then verifies the add-transaction screen.
+- `all`, currently equivalent to guest-home plus transaction-entry.
+- `home`, a compatibility alias for `guest-home`.
+
+### Guest Home
+
+The default scenario covers:
 
 1. Welcome screen opens.
 2. User skips welcome.
@@ -81,6 +101,28 @@ The MVP scenario covers:
 7. Login page guest entry can be reached by scrolling.
 8. Guest mode confirmation appears.
 9. Guest home renders with `访客` and `净资产`.
+
+### Transaction Entry
+
+The transaction-entry scenario starts from the guest home and opens the add-transaction flow. It prefers the `记一笔` entry when present and falls back to the home asset-card `支出` shortcut on the current compact home layout.
+
+It validates:
+
+- Type tabs: `支出`, `收入`, `转账`.
+- Category and account anchors: `餐饮`, `现金`.
+- Keypad anchors: `再记`, `+ 长按×`, `- 长按÷`.
+- Inline note affordance: `展开备注`.
+- Long-press operator toggle: long pressing `+ 长按×` shows `当前×`.
+- Calculator behavior: entering `1+2×3` shows the result `7.00`.
+
+The scenario intentionally does not tap the save action, so it does not create a real transaction record.
+
+## Implementation Notes
+
+- UI matching parses sanitized `uiautomator` XML and checks decoded `text` and `content-desc` values.
+- Matching normalizes whitespace because Flutter semantics may expose `+ 长按×` as `content-desc="+\n长按×"`.
+- UI capture retries transient `ERROR: null root node returned by UiTestAutomationBridge` dumps during cold startup.
+- Tap coordinates are derived from UI XML bounds rather than screenshots.
 
 ## Known Limits
 
