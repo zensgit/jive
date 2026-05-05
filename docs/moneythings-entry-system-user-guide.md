@@ -38,6 +38,7 @@ Covered sources:
 - AI Assistant clipboard text.
 - Android system text share.
 - Android Today widget `+ 记一笔`.
+- iOS Shortcuts / Siri App Intent entry.
 
 Expected behavior:
 
@@ -108,13 +109,14 @@ Expected behavior:
 - Use AI Assistant voice or clipboard recognition and confirm it opens the editor.
 - Share payment text into Jive on Android and confirm amount/note parsing.
 - Tap Android widget card background to open the app, then tap `+ 记一笔` to open the editor.
+- Run the iOS Shortcut `记一笔` and confirm Jive opens the structured editor.
+- Run the iOS Shortcut action `运行 Jive 快速动作` with `template:<id>` and confirm it follows the same One Touch behavior as the app.
 - Create or choose `出行 / 私家车 / 加油`, save a transaction, and confirm the detail/export path.
 - Create grouped accounts and confirm transactions still save to the child account.
 - In a shared scene, check shared badges and delete warning copy.
 
 ## Explicitly Deferred
 
-- iOS App Intent / Shortcut native bridge.
 - iOS system share extension.
 - Dedicated `JiveQuickAction` collection.
 - True parent-child account migration with `parentAccountKey`.

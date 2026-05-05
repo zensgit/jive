@@ -74,6 +74,7 @@ Covered sources:
 - clipboard/share-like text
 - Android system share
 - Android widget quick entry
+- iOS Shortcuts / Siri App Intent entry
 
 The editor owns final validation and saving. Native/platform code is not allowed to create transactions directly.
 
@@ -160,6 +161,14 @@ Android build note:
 - Flutter exited non-zero after Gradle because this project generates `app-dev-debug.apk`, `app-auto-debug.apk`, and `app-prod-debug.apk` instead of one default debug APK.
 - No Kotlin/resource compile error was reported.
 
+Latest iOS Shortcuts validation:
+
+- `docs/2026-05-05-moneythings-ios-shortcuts-dev-verify.md` records the App Intent bridge implementation and validation.
+- `xcrun swiftc -typecheck` passed for `ios/Runner/JiveShortcutIntents.swift`.
+- `flutter analyze --no-fatal-infos` passed with existing info-level findings only.
+- `flutter test test/moneythings_alignment_services_test.dart` passed.
+- Full iOS simulator packaging is still blocked by existing local iOS build environment issues unrelated to this bridge: first a Flutter.framework extended-attribute signing error, then `Library 'isar' not found` while linking.
+
 ## Manual Smoke Checklist
 
 - Quick action: run a complete quick action and confirm direct/confirm/edit behavior is preserved.
@@ -170,6 +179,8 @@ Android build note:
 - Clipboard: use AI Assistant clipboard recognition and confirm it opens the editor.
 - Android share: share payment text into Jive and confirm amount is parsed, with account/category highlighted.
 - Android widget: tap widget card background to open app, then tap `+ 记一笔` to open editor.
+- iOS Shortcuts: run `记一笔` and confirm Jive opens `jive://transaction/new` into the structured editor.
+- iOS Shortcuts: run `运行 Jive 快速动作` with `template:<id>` and confirm it follows One Touch direct/confirm/edit behavior.
 - Three-level category: save `出行 / 私家车 / 加油` and confirm details/export show the path.
 - Account group: confirm grouped accounts display as group/subaccount while transactions still save to child account.
 - Shared scene: confirm shared badges and delete warning copy appear on scene/category/tag/account surfaces.
@@ -178,7 +189,6 @@ Android build note:
 
 These remain intentionally outside the current non-migration wave:
 
-- iOS App Intent / Shortcut native bridge.
 - iOS system share extension.
 - Dedicated `JiveQuickAction` collection replacing template compatibility persistence.
 - `parentAccountKey` migration for true parent-child accounts.
