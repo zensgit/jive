@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/ads/banner_ad_widget.dart';
 import '../../core/auth/auth_service.dart';
-import '../../core/database/template_model.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/quick_action_service.dart';
 import '../../core/sync/sync_engine.dart';
@@ -168,20 +167,9 @@ class _MainScreenState extends State<MainScreen>
   }
 
   Future<void> _executeQuickActionLink(String quickActionId) async {
-    final templateId = QuickActionDeepLinkService.legacyTemplateId(
-      quickActionId,
-    );
-    if (templateId == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('暂不支持该快速动作链接')));
-      return;
-    }
-
     final isar = await DatabaseService.getInstance();
-    final template = await isar.jiveTemplates.get(templateId);
-    if (template == null) {
+    final action = await QuickActionService(isar).findActionById(quickActionId);
+    if (action == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -192,7 +180,7 @@ class _MainScreenState extends State<MainScreen>
     if (!mounted) return;
     await QuickActionExecutor.execute(
       context,
-      QuickActionService.toQuickAction(template),
+      action,
       onCompleted: () {
         unawaited(loadTransactions().then((_) => notifyDataChanged()));
       },

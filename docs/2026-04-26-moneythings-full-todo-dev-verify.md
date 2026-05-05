@@ -37,6 +37,7 @@
 - PR #209 已补齐入口体系 closure 与 Android 验证文档。
 - 2026-05-05：`codex/moneythings-ios-shortcuts-entry` 补齐 iOS App Intent / Shortcuts 原生入口，继续复用 `jive://transaction/new` 与 `jive://quick-action` 协议。
 - 2026-05-05：`codex/moneythings-ios-share-extension` 补齐 iOS 系统分享入口，`text/url` 分享统一进入 `jive://transaction/new`。
+- 2026-05-05：`codex/moneythings-quick-action-store` 新增本地 `JiveQuickAction` shadow collection，模板自动回填为稳定 quick action，首页/快记中心/Deep Link 统一读取 `QuickActionService`。
 
 ## 保持不变
 
@@ -60,7 +61,7 @@
 
 ## Post-Beta / 迁移型待评估
 
-- 独立 `JiveQuickAction` collection 与跨端排序/图标/同步。
+- 跨端 quick action 同步、独立图标/排序 UI、从模板兼容源迁到独立云端 quick action 源。
 - `parentAccountKey` migration，用于真实父子账户。
 - 对象级 sharing table、RLS、离线冲突处理和审计日志。
 - E2EE / 密钥管理。
@@ -80,4 +81,5 @@
 - `docs/2026-05-05-moneythings-postmerge-closure-dev-verify.md`
 - `docs/2026-05-05-moneythings-ios-shortcuts-dev-verify.md`
 - `docs/2026-05-05-moneythings-ios-share-extension-dev-verify.md`
+- `docs/2026-05-05-moneythings-quick-action-store-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`

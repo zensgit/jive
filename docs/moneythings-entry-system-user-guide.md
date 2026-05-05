@@ -22,6 +22,7 @@ Expected behavior:
 - An action such as `午餐` can ask for amount and then save.
 - Complex actions such as transfer or repayment should open the full editor.
 - Deep links with `jive://quick-action?id=template:<id>` use the same executor as in-app quick actions.
+- Existing templates are now mirrored into local quick action records, so home, quick entry, deep link, widget, shortcut, and share entry points can converge on the same stable action protocol.
 
 ## Structured Transaction Editor
 
@@ -119,7 +120,7 @@ Expected behavior:
 
 ## Explicitly Deferred
 
-- Dedicated `JiveQuickAction` collection.
+- Cross-device quick action sync, custom icon/color/order management, and migration from template compatibility source to independent cloud quick action source.
 - True parent-child account migration with `parentAccountKey`.
 - Full object-level sharing table, RLS, offline conflict handling, and audit log.
 - E2EE/key-management work.

@@ -3,6 +3,7 @@ import 'package:isar/isar.dart';
 import '../database/template_model.dart';
 import '../database/transaction_model.dart';
 import '../model/quick_action.dart';
+import 'quick_action_store_service.dart';
 import 'template_service.dart';
 import 'transaction_service.dart';
 
@@ -20,10 +21,33 @@ class QuickActionService {
 
   final Isar _isar;
   late final TemplateService _templateService = TemplateService(_isar);
+  late final QuickActionStoreService _storeService = QuickActionStoreService(
+    _isar,
+  );
 
   QuickActionService(this._isar);
 
   Future<List<QuickAction>> getActions({int limit = 0}) async {
+    final actions = await _storeService.getActions(limit: limit);
+    if (actions.isNotEmpty) return actions;
+
+    final templates = await _templateService.getTemplates();
+    final fallbackActions = templates.map(toQuickAction).toList();
+    if (limit <= 0 || fallbackActions.length <= limit) return fallbackActions;
+    return fallbackActions.take(limit).toList();
+  }
+
+  Future<QuickAction?> findActionById(String id) async {
+    final action = await _storeService.findAction(id);
+    if (action != null) return action;
+
+    final legacyId = _legacyTemplateId(id);
+    if (legacyId == null) return null;
+    final template = await _isar.jiveTemplates.get(legacyId);
+    return template == null ? null : toQuickAction(template);
+  }
+
+  Future<List<QuickAction>> getTemplateFallbackActions({int limit = 0}) async {
     final templates = await _templateService.getTemplates();
     final actions = templates.map(toQuickAction).toList();
     if (limit <= 0 || actions.length <= limit) return actions;
@@ -138,6 +162,7 @@ class QuickActionService {
   }
 
   Future<void> markUsed(QuickAction action) async {
+    await _storeService.markUsed(action);
     final templateId = action.legacyTemplateId;
     if (templateId == null) return;
     final template = await _isar.jiveTemplates.get(templateId);
@@ -150,5 +175,12 @@ class QuickActionService {
     if (override != null && override.isNotEmpty) return override;
     final fallback = defaultNote?.trim();
     return fallback == null || fallback.isEmpty ? null : fallback;
+  }
+
+  static int? _legacyTemplateId(String quickActionId) {
+    if (quickActionId.startsWith('template:')) {
+      return int.tryParse(quickActionId.substring('template:'.length));
+    }
+    return int.tryParse(quickActionId);
   }
 }
