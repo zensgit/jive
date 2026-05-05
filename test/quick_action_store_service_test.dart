@@ -195,6 +195,119 @@ void main() {
     ]);
   });
 
+  test(
+    'reorderActions updates visible order without unhiding actions',
+    () async {
+      final firstId = await _putTemplate(
+        isar,
+        _template(name: '早餐', amount: 10, accountId: 1, categoryKey: 'food'),
+      );
+      final secondId = await _putTemplate(
+        isar,
+        _template(name: '午餐', amount: 20, accountId: 1, categoryKey: 'food'),
+      );
+      final hiddenId = await _putTemplate(
+        isar,
+        _template(name: '夜宵', amount: 30, accountId: 1, categoryKey: 'food'),
+      );
+      await service.getActions();
+      await store.updatePresentation('template:$hiddenId', showOnHome: false);
+
+      await store.reorderActions([
+        'template:$secondId',
+        'template:$firstId',
+      ], showOnHome: true);
+
+      expect((await service.getActions()).map((action) => action.id), [
+        'template:$secondId',
+        'template:$firstId',
+      ]);
+      final hidden = await isar.jiveQuickActions.getByStableId(
+        'template:$hiddenId',
+      );
+      expect(hidden!.showOnHome, isFalse);
+      expect(await service.findActionById('template:$hiddenId'), isNotNull);
+    },
+  );
+
+  test('reorderActions updates hidden order without showing actions', () async {
+    final firstId = await _putTemplate(
+      isar,
+      _template(name: '早餐', amount: 10, accountId: 1, categoryKey: 'food'),
+    );
+    final secondId = await _putTemplate(
+      isar,
+      _template(name: '午餐', amount: 20, accountId: 1, categoryKey: 'food'),
+    );
+    final thirdId = await _putTemplate(
+      isar,
+      _template(name: '夜宵', amount: 30, accountId: 1, categoryKey: 'food'),
+    );
+    await service.getActions();
+    await store.updatePresentation('template:$secondId', showOnHome: false);
+    await store.updatePresentation('template:$thirdId', showOnHome: false);
+
+    await store.reorderActions([
+      'template:$thirdId',
+      'template:$secondId',
+    ], showOnHome: false);
+
+    expect((await service.getActions()).map((action) => action.id), [
+      'template:$firstId',
+    ]);
+    final hidden = (await store.getRecords())
+        .where((record) => !record.showOnHome)
+        .map((record) => record.stableId);
+    expect(hidden, ['template:$thirdId', 'template:$secondId']);
+  });
+
+  test(
+    'reorderActions ignores stale ids and keeps remaining records',
+    () async {
+      final firstId = await _putTemplate(
+        isar,
+        _template(name: '早餐', amount: 10, accountId: 1, categoryKey: 'food'),
+      );
+      final secondId = await _putTemplate(
+        isar,
+        _template(name: '午餐', amount: 20, accountId: 1, categoryKey: 'food'),
+      );
+      final thirdId = await _putTemplate(
+        isar,
+        _template(name: '咖啡', amount: 30, accountId: 1, categoryKey: 'food'),
+      );
+      await service.getActions();
+
+      await store.reorderActions([
+        'template:missing',
+        'template:$thirdId',
+      ], showOnHome: true);
+
+      expect((await service.getActions()).map((action) => action.id), [
+        'template:$thirdId',
+        'template:$firstId',
+        'template:$secondId',
+      ]);
+    },
+  );
+
+  test('presentation keeps category icon library names', () async {
+    final templateId = await _putTemplate(
+      isar,
+      _template(name: '电影', amount: 45, accountId: 1, categoryKey: 'fun'),
+    );
+    await service.getActions();
+
+    await store.updatePresentation('template:$templateId', iconName: 'movie');
+
+    final record = await isar.jiveQuickActions.getByStableId(
+      'template:$templateId',
+    );
+    final action = await service.findActionById('template:$templateId');
+    expect(record!.iconName, 'movie');
+    expect(action!.iconName, 'movie');
+  });
+
   test('saveTransaction writes transaction and marks action used', () async {
     final templateId = await _putTemplate(
       isar,

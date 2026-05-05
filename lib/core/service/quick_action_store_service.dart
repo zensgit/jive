@@ -179,6 +179,41 @@ class QuickActionStoreService {
     });
   }
 
+  Future<void> reorderActions(
+    List<String> orderedStableIds, {
+    bool? showOnHome,
+  }) async {
+    if (orderedStableIds.isEmpty) return;
+
+    final records = await getRecords();
+    final scoped = records.where((record) {
+      if (showOnHome == null) return true;
+      return record.showOnHome == showOnHome;
+    }).toList();
+    final scopedById = {for (final record in scoped) record.stableId: record};
+    final nextOrder = <JiveQuickAction>[];
+
+    for (final stableId in orderedStableIds) {
+      final record = scopedById.remove(stableId);
+      if (record != null) nextOrder.add(record);
+    }
+    nextOrder.addAll(
+      scoped.where((record) => scopedById.containsKey(record.stableId)),
+    );
+    if (nextOrder.isEmpty) return;
+
+    final now = DateTime.now();
+    for (var i = 0; i < nextOrder.length; i++) {
+      nextOrder[i]
+        ..sortOrder = i
+        ..updatedAt = now;
+    }
+
+    await _isar.writeTxn(() async {
+      await _isar.jiveQuickActions.putAll(nextOrder);
+    });
+  }
+
   Future<void> deleteAction(String stableId) async {
     final record = await _activeRecord(stableId);
     if (record == null) return;
