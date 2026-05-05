@@ -52,4 +52,26 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(id, "template:42")
   }
 
+  func testShareTransactionURLBuildsShareReceiveLink() {
+    let url = JiveExternalEntryLinkBuilder.transactionURL(
+      entrySource: "shareReceive",
+      rawText: "星巴克 28",
+      sourceLabel: "来自 iOS 系统分享"
+    )
+
+    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    let query = Dictionary(
+      uniqueKeysWithValues: (components?.queryItems ?? []).map { ($0.name, $0.value) }
+    )
+
+    XCTAssertEqual(url.scheme, "jive")
+    XCTAssertEqual(url.host, "transaction")
+    XCTAssertEqual(url.path, "/new")
+    XCTAssertEqual(query["entrySource"]!, "shareReceive")
+    XCTAssertEqual(query["sourceLabel"]!, "来自 iOS 系统分享")
+    XCTAssertEqual(query["type"]!, "expense")
+    XCTAssertEqual(query["rawText"]!, "星巴克 28")
+    XCTAssertNil(query["note"] ?? nil)
+  }
+
 }

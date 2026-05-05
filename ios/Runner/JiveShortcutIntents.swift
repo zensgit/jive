@@ -9,65 +9,18 @@ enum JiveShortcutLinkBuilder {
     note: String? = nil,
     sourceLabel: String = "来自 iOS 快捷指令"
   ) -> URL {
-    var components = URLComponents()
-    components.scheme = "jive"
-    components.host = "transaction"
-    components.path = "/new"
-
-    var items = [
-      URLQueryItem(name: "entrySource", value: "deepLink"),
-      URLQueryItem(name: "sourceLabel", value: sourceLabel),
-      URLQueryItem(name: "type", value: normalizedTransactionType(type)),
-    ]
-    if let amount, amount > 0 {
-      items.append(URLQueryItem(name: "amount", value: formattedAmount(amount)))
-    }
-    if let note = trimmed(note) {
-      items.append(URLQueryItem(name: "note", value: note))
-      items.append(URLQueryItem(name: "rawText", value: note))
-    }
-
-    components.queryItems = items
-    return components.url!
+    JiveExternalEntryLinkBuilder.transactionURL(
+      entrySource: "deepLink",
+      type: type,
+      amount: amount,
+      note: note,
+      rawText: note,
+      sourceLabel: sourceLabel
+    )
   }
 
   static func quickActionURL(actionId: String) -> URL? {
-    guard let id = trimmed(actionId) else { return nil }
-    var components = URLComponents()
-    components.scheme = "jive"
-    components.host = "quick-action"
-    components.queryItems = [URLQueryItem(name: "id", value: id)]
-    return components.url
-  }
-
-  private static func normalizedTransactionType(_ raw: String) -> String {
-    let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-    switch value {
-    case "income", "transfer", "expense":
-      return value
-    default:
-      return "expense"
-    }
-  }
-
-  private static func formattedAmount(_ amount: Double) -> String {
-    var value = String(
-      format: "%.2f",
-      locale: Locale(identifier: "en_US_POSIX"),
-      amount
-    )
-    while value.contains(".") && value.last == "0" {
-      value.removeLast()
-    }
-    if value.last == "." {
-      value.removeLast()
-    }
-    return value
-  }
-
-  private static func trimmed(_ value: String?) -> String? {
-    let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed?.isEmpty == false ? trimmed : nil
+    JiveExternalEntryLinkBuilder.quickActionURL(actionId: actionId)
   }
 }
 
