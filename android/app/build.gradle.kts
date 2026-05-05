@@ -26,10 +26,19 @@ fun propOrEnv(key: String, envKey: String): String? {
         ?.takeIf { it.isNotEmpty() }
 }
 
+fun gradlePropOrEnv(key: String, defaultValue: String): String {
+    return (providers.gradleProperty(key).orNull ?: System.getenv(key))
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: defaultValue
+}
+
 val releaseStoreFilePath = propOrEnv("storeFile", "JIVE_ANDROID_STORE_FILE")
 val releaseStorePassword = propOrEnv("storePassword", "JIVE_ANDROID_STORE_PASSWORD")
 val releaseKeyAlias = propOrEnv("keyAlias", "JIVE_ANDROID_KEY_ALIAS")
 val releaseKeyPassword = propOrEnv("keyPassword", "JIVE_ANDROID_KEY_PASSWORD")
+val defaultAdMobApplicationId = "ca-app-pub-3940256099942544~3347511713"
+val adMobApplicationId = gradlePropOrEnv("ADMOB_APP_ID", defaultAdMobApplicationId)
 val hasReleaseSigning =
     releaseStoreFilePath != null &&
         releaseStorePassword != null &&
@@ -62,6 +71,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = buildTimeCode
         versionName = "${flutter.versionName}-$buildTimeName"
+        manifestPlaceholders["adMobApplicationId"] = adMobApplicationId
     }
 
     flavorDimensions += "env"

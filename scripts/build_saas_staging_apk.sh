@@ -8,6 +8,7 @@ ENV_FILE="${STAGING_ENV_FILE:-/tmp/jive-saas-staging.env}"
 FLAVOR="${JIVE_SAAS_BUILD_FLAVOR:-dev}"
 MODE="${JIVE_SAAS_BUILD_MODE:-debug}"
 BUILD_KIND="${JIVE_SAAS_BUILD_KIND:-apk}"
+ALLOW_PROD_FLAVOR="${JIVE_SAAS_ALLOW_PROD_FLAVOR:-0}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_ROOT="${JIVE_SAAS_BUILD_ARTIFACT_DIR:-$APP_DIR/build/saas-staging/$STAMP-$FLAVOR-$MODE}"
 REPORT_DIR="$APP_DIR/build/reports/saas-staging"
@@ -24,6 +25,8 @@ Options:
   --flavor <name>    Flutter flavor. Defaults to JIVE_SAAS_BUILD_FLAVOR or dev.
   --mode <name>      debug or release. Defaults to JIVE_SAAS_BUILD_MODE or debug.
   --kind <name>      apk or appbundle. Defaults to JIVE_SAAS_BUILD_KIND or apk.
+  --allow-prod-flavor
+                     Permit prod flavor in the staging lane for an intentional diagnostic build.
   --help             Show this help.
 
 Required env-file keys:
@@ -33,6 +36,8 @@ Required env-file keys:
 Notes:
   This script only passes client-safe Supabase values to Flutter.
   It never passes SUPABASE_SERVICE_ROLE_KEY into the app build.
+  It refuses prod flavor by default so staging builds cannot be mistaken for
+  release-candidate artifacts.
 EOF
 }
 
@@ -113,6 +118,10 @@ parse_args() {
         BUILD_KIND="${2:-}"
         shift 2
         ;;
+      --allow-prod-flavor)
+        ALLOW_PROD_FLAVOR=1
+        shift
+        ;;
       --help|-h)
         usage
         exit 0
@@ -141,6 +150,10 @@ parse_args() {
 
   if [[ "$BUILD_KIND" == "appbundle" && "$MODE" != "release" ]]; then
     die "appbundle builds must use --mode release"
+  fi
+
+  if [[ "$FLAVOR" == "prod" && "$ALLOW_PROD_FLAVOR" != "1" ]]; then
+    die "staging build refuses prod flavor; use scripts/build_release_candidate.sh or pass --allow-prod-flavor for a diagnostic build"
   fi
 }
 

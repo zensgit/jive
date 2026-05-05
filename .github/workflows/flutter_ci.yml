@@ -86,6 +86,73 @@ jobs:
         if: steps.asset_only.outputs.skip_flutter != 'true'
         run: flutter test
 
+  saas_production_readiness_self_check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run SaaS production readiness self-check
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          bash -n \
+            scripts/check_saas_production_readiness.sh \
+            scripts/build_saas_staging_apk.sh \
+            scripts/build_release_candidate.sh
+
+          good_env="$RUNNER_TEMP/jive-saas-prod-good.env"
+          bad_env="$RUNNER_TEMP/jive-saas-prod-bad.env"
+          staging_env="$RUNNER_TEMP/jive-saas-staging.env"
+
+          {
+            printf 'SUPABASE_URL=https://prod-demo.supabase.co\n'
+            printf 'SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.signature\n'
+            printf 'ADMIN_API_ALLOWED_ORIGINS=https://admin.jivemoney.example\n'
+            printf 'PAYMENT_CHANNEL=google_play\n'
+            printf 'ENABLE_STORE_BILLING=true\n'
+            printf 'ENABLE_WECHAT_PAY=false\n'
+            printf 'ENABLE_ALIPAY=false\n'
+            printf 'DOMESTIC_PAYMENT_MOCK_BASE_URL=\n'
+            printf 'ADMOB_APP_ID=ca-app-pub-1234567890123456~1234567890\n'
+            printf 'ADMOB_BANNER_ID=ca-app-pub-1234567890123456/1234567890\n'
+          } > "$good_env"
+
+          {
+            printf 'SUPABASE_URL=http://localhost:54321\n'
+            printf 'SUPABASE_ANON_KEY=sbp_bad\n'
+            printf 'PAYMENT_CHANNEL=direct_android\n'
+            printf 'ENABLE_STORE_BILLING=false\n'
+            printf 'ENABLE_WECHAT_PAY=true\n'
+            printf 'DOMESTIC_PAYMENT_MOCK_BASE_URL=http://localhost:8787\n'
+            printf 'ADMOB_APP_ID=ca-app-pub-3940256099942544~3347511713\n'
+            printf 'ADMOB_BANNER_ID=ca-app-pub-3940256099942544/6300978111\n'
+          } > "$bad_env"
+
+          {
+            printf 'SUPABASE_URL=https://evnluvzvbqmsmypbchym.supabase.co\n'
+            printf 'SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.signature\n'
+          } > "$staging_env"
+
+          if bash scripts/check_saas_production_readiness.sh --env-file "$bad_env" --profile app --store android; then
+            printf 'Expected bad production readiness env to fail.\n' >&2
+            exit 1
+          fi
+
+          bash scripts/check_saas_production_readiness.sh --env-file "$good_env" --profile app --store android
+
+          PRODUCTION_ENV_FILE="$good_env" \
+          JIVE_RELEASE_CANDIDATE_DRY_RUN=true \
+            bash scripts/build_release_candidate.sh
+
+          if bash scripts/build_saas_staging_apk.sh --env-file "$staging_env" --flavor prod --mode debug; then
+            printf 'Expected staging build lane to reject prod flavor.\n' >&2
+            exit 1
+          fi
+
   detect_saas_wave0_smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 5
