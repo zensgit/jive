@@ -204,6 +204,12 @@ scripts/check_saas_github_secrets.sh --profile production-release --repo zensgit
 scripts/check_saas_github_secrets.sh --profile production-release --include-signing --repo zensgit/jive
 ```
 
+生成一份不包含 secret 值的生产 release readiness Markdown 报告：
+
+```bash
+scripts/report_saas_production_release_readiness.sh --repo zensgit/jive --output docs/2026-05-05-saas-production-release-readiness.md
+```
+
 从 `/tmp/jive-saas-production.env` 上传最小 release secrets：
 
 ```bash
