@@ -38,6 +38,7 @@
 - 2026-05-05：`codex/moneythings-ios-shortcuts-entry` 补齐 iOS App Intent / Shortcuts 原生入口，继续复用 `jive://transaction/new` 与 `jive://quick-action` 协议。
 - 2026-05-05：`codex/moneythings-ios-share-extension` 补齐 iOS 系统分享入口，`text/url` 分享统一进入 `jive://transaction/new`。
 - 2026-05-05：`codex/moneythings-quick-action-store` 新增本地 `JiveQuickAction` shadow collection，模板自动回填为稳定 quick action，首页/快记中心/Deep Link 统一读取 `QuickActionService`。
+- 2026-05-05：`codex/moneythings-quick-action-management` 将旧模板列表升级为快速动作管理页，支持首页显示/隐藏、置顶、图标颜色、本地排序与删除。
 
 ## 保持不变
 
@@ -51,6 +52,7 @@
 ## 当前波次已完成
 
 - Quick Action / One Touch 兼容协议已覆盖模板、Deep Link、Android widget、Android share、iOS Shortcuts 与 iOS share 的低风险入口。
+- 快速动作已具备本地管理能力：显示/隐藏、置顶、图标颜色、排序和删除。
 - iOS Shortcuts / Siri 可通过 App Intent 打开结构化记账编辑器，或通过快速动作 ID 打开 One Touch 入口。
 - iOS 系统分享可把文本或 URL 作为 `shareReceive/rawText` 打开结构化编辑器。
 - 外部交易入口已统一到 `TransactionEntryParams`，复杂或缺字段场景进入 `TransactionFormScreen`。
@@ -61,7 +63,7 @@
 
 ## Post-Beta / 迁移型待评估
 
-- 跨端 quick action 同步、独立图标/排序 UI、从模板兼容源迁到独立云端 quick action 源。
+- 跨端 quick action 同步、从模板兼容源迁到独立云端 quick action 源、拖拽排序和更完整图标库。
 - `parentAccountKey` migration，用于真实父子账户。
 - 对象级 sharing table、RLS、离线冲突处理和审计日志。
 - E2EE / 密钥管理。
@@ -82,4 +84,5 @@
 - `docs/2026-05-05-moneythings-ios-shortcuts-dev-verify.md`
 - `docs/2026-05-05-moneythings-ios-share-extension-dev-verify.md`
 - `docs/2026-05-05-moneythings-quick-action-store-dev-verify.md`
+- `docs/2026-05-05-moneythings-quick-action-management-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`

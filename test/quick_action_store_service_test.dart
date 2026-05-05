@@ -9,11 +9,13 @@ import 'package:jive/core/database/template_model.dart';
 import 'package:jive/core/database/transaction_model.dart';
 import 'package:jive/core/model/quick_action.dart';
 import 'package:jive/core/service/quick_action_service.dart';
+import 'package:jive/core/service/quick_action_store_service.dart';
 
 void main() {
   late Directory dir;
   late Isar isar;
   late QuickActionService service;
+  late QuickActionStoreService store;
 
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
@@ -46,6 +48,7 @@ void main() {
       JiveTransactionSchema,
     ], directory: dir.path);
     service = QuickActionService(isar);
+    store = QuickActionStoreService(isar);
   });
 
   tearDown(() async {
@@ -128,6 +131,68 @@ void main() {
     expect(template, isNotNull);
     expect(template!.usageCount, 3);
     expect(template.lastUsedAt, isNotNull);
+  });
+
+  test('presentation metadata survives template sync', () async {
+    final templateId = await _putTemplate(
+      isar,
+      _template(
+        name: '咖啡',
+        amount: 18,
+        accountId: 7,
+        categoryKey: 'food',
+        usageCount: 2,
+      ),
+    );
+    await service.getActions();
+
+    await store.updatePresentation(
+      'template:$templateId',
+      iconName: 'local_cafe',
+      colorHex: '#EF6C00',
+      showOnHome: false,
+      isPinned: true,
+    );
+    await store.syncFromTemplates();
+
+    final record = await isar.jiveQuickActions.getByStableId(
+      'template:$templateId',
+    );
+    final template = await isar.jiveTemplates.get(templateId);
+    final visibleActions = await service.getActions();
+    final hiddenAction = await service.findActionById('template:$templateId');
+
+    expect(record, isNotNull);
+    expect(record!.iconName, 'local_cafe');
+    expect(record.colorHex, '#EF6C00');
+    expect(record.showOnHome, isFalse);
+    expect(record.isPinned, isTrue);
+    expect(template!.isPinned, isTrue);
+    expect(visibleActions, isEmpty);
+    expect(hiddenAction, isNotNull);
+    expect(hiddenAction!.id, 'template:$templateId');
+  });
+
+  test('moveAction updates manual order', () async {
+    final firstId = await _putTemplate(
+      isar,
+      _template(name: '早餐', amount: 10, accountId: 1, categoryKey: 'food'),
+    );
+    final secondId = await _putTemplate(
+      isar,
+      _template(name: '午餐', amount: 20, accountId: 1, categoryKey: 'food'),
+    );
+    expect((await service.getActions()).map((action) => action.id), [
+      'template:$firstId',
+      'template:$secondId',
+    ]);
+
+    await store.moveAction('template:$secondId', -1);
+
+    expect((await service.getActions()).map((action) => action.id), [
+      'template:$secondId',
+      'template:$firstId',
+    ]);
   });
 
   test('saveTransaction writes transaction and marks action used', () async {
