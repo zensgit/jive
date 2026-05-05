@@ -3,6 +3,7 @@
 Date: 2026-05-05
 Branch: `codex/moneythings-quick-action-dnd`
 Base: `origin/codex/moneythings-quick-action-management`
+PR: `#223`
 
 ## Summary
 
