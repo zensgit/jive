@@ -4,11 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-ENV_FILE="${STAGING_ENV_FILE:-/tmp/jive-saas-staging.env}"
+ENV_FILE="${STAGING_ENV_FILE:-}"
 PROFILE="${JIVE_SAAS_STAGING_PROFILE:-core}"
 REPO="${GITHUB_REPOSITORY:-}"
 APPLY=0
 INCLUDE_OPTIONAL=0
+INCLUDE_SIGNING=0
 
 usage() {
   cat <<'EOF'
@@ -16,10 +17,12 @@ Usage:
   scripts/push_saas_github_secrets.sh [options]
 
 Options:
-  --env-file <path>       Local staging env file. Defaults to STAGING_ENV_FILE or /tmp/jive-saas-staging.env.
+  --env-file <path>       Local env file. Defaults to STAGING_ENV_FILE or /tmp/jive-saas-staging.env for staging profiles,
+                          and PRODUCTION_ENV_FILE or /tmp/jive-saas-production.env for production-release.
   --repo <owner/repo>     GitHub repository. Defaults to GITHUB_REPOSITORY or the current gh repo.
-  --profile <name>        core or full. Defaults to JIVE_SAAS_STAGING_PROFILE or core.
-  --include-optional      Also upload STAGING_SUPABASE_FUNCTIONS_URL when available.
+  --profile <name>        core, full, or production-release. Defaults to JIVE_SAAS_STAGING_PROFILE or core.
+  --include-optional      Also upload optional secrets when available.
+  --include-signing       For production-release, upload Android release signing secrets too.
   --apply                 Actually write GitHub Actions secrets. Without this, only checks coverage.
   --help                  Show this help.
 
@@ -32,6 +35,9 @@ Required env-file keys for core:
   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
   PUBSUB_BEARER_TOKEN, WEBHOOK_HMAC_SECRET, ADMIN_API_TOKEN,
   ADMIN_API_ALLOWED_ORIGINS, ANALYTICS_ADMIN_TOKEN, NOTIFICATION_ADMIN_TOKEN
+
+Required env-file keys for production-release:
+  SUPABASE_URL, SUPABASE_ANON_KEY, ADMOB_APP_ID, ADMOB_BANNER_ID
 
 Notes:
   This script never prints secret values.
@@ -71,6 +77,10 @@ parse_args() {
         INCLUDE_OPTIONAL=1
         shift
         ;;
+      --include-signing)
+        INCLUDE_SIGNING=1
+        shift
+        ;;
       --apply)
         APPLY=1
         shift
@@ -86,12 +96,24 @@ parse_args() {
   done
 
   case "$PROFILE" in
-    core|full)
+    core|full|production-release)
       ;;
     *)
       die "unknown profile: $PROFILE"
       ;;
   esac
+}
+
+resolve_default_env_file() {
+  if [[ -n "$ENV_FILE" ]]; then
+    return 0
+  fi
+
+  if [[ "$PROFILE" == "production-release" ]]; then
+    ENV_FILE="${PRODUCTION_ENV_FILE:-/tmp/jive-saas-production.env}"
+  else
+    ENV_FILE="${STAGING_ENV_FILE:-/tmp/jive-saas-staging.env}"
+  fi
 }
 
 resolve_repo() {
@@ -145,6 +167,27 @@ build_secret_mappings() {
   SECRET_NAMES=()
   SECRET_ENV_KEYS=()
   SECRET_FILE_KEYS=()
+
+  if [[ "$PROFILE" == "production-release" ]]; then
+    add_secret_mapping PRODUCTION_SUPABASE_URL SUPABASE_URL SUPABASE_URL
+    add_secret_mapping PRODUCTION_SUPABASE_ANON_KEY SUPABASE_ANON_KEY SUPABASE_ANON_KEY
+    add_secret_mapping PRODUCTION_ADMOB_APP_ID ADMOB_APP_ID ADMOB_APP_ID
+    add_secret_mapping PRODUCTION_ADMOB_BANNER_ID ADMOB_BANNER_ID ADMOB_BANNER_ID
+
+    if [[ "$INCLUDE_OPTIONAL" -eq 1 ]]; then
+      add_secret_mapping PRODUCTION_ADMIN_API_ALLOWED_ORIGINS ADMIN_API_ALLOWED_ORIGINS ADMIN_API_ALLOWED_ORIGINS
+      add_secret_mapping PRODUCTION_PAYMENT_CHANNEL PAYMENT_CHANNEL PAYMENT_CHANNEL
+    fi
+
+    if [[ "$INCLUDE_SIGNING" -eq 1 ]]; then
+      add_secret_mapping ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_KEYSTORE_BASE64
+      add_secret_mapping ANDROID_RELEASE_STORE_PASSWORD ANDROID_RELEASE_STORE_PASSWORD ANDROID_RELEASE_STORE_PASSWORD
+      add_secret_mapping ANDROID_RELEASE_KEY_ALIAS ANDROID_RELEASE_KEY_ALIAS ANDROID_RELEASE_KEY_ALIAS
+      add_secret_mapping ANDROID_RELEASE_KEY_PASSWORD ANDROID_RELEASE_KEY_PASSWORD ANDROID_RELEASE_KEY_PASSWORD
+    fi
+
+    return 0
+  fi
 
   add_secret_mapping STAGING_SUPABASE_ACCESS_TOKEN STAGING_SUPABASE_ACCESS_TOKEN SUPABASE_ACCESS_TOKEN
   add_secret_mapping STAGING_PROJECT_REF STAGING_PROJECT_REF STAGING_PROJECT_REF
@@ -249,6 +292,7 @@ push_values() {
 
 main() {
   parse_args "$@"
+  resolve_default_env_file
 
   command -v gh >/dev/null 2>&1 || die "gh CLI is required"
   [[ -f "$ENV_FILE" ]] || warn "env file not found: $ENV_FILE; shell variables will still be checked"
@@ -272,9 +316,13 @@ main() {
 
   push_values "$repo"
   log "GitHub Actions secrets uploaded"
-  bash "$APP_DIR/scripts/check_saas_github_secrets.sh" \
-    --profile "$PROFILE" \
-    --repo "$repo"
+
+  local check_args=(--profile "$PROFILE" --repo "$repo")
+  if [[ "$INCLUDE_SIGNING" -eq 1 ]]; then
+    check_args+=(--include-signing)
+  fi
+
+  bash "$APP_DIR/scripts/check_saas_github_secrets.sh" "${check_args[@]}"
 }
 
 main "$@"

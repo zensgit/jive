@@ -131,6 +131,22 @@ export_if_present() {
   fi
 }
 
+file_size_bytes() {
+  local file="$1"
+
+  if stat -c%s "$file" >/dev/null 2>&1; then
+    stat -c%s "$file"
+    return 0
+  fi
+
+  if stat -f%z "$file" >/dev/null 2>&1; then
+    stat -f%z "$file"
+    return 0
+  fi
+
+  wc -c < "$file" | tr -d '[:space:]'
+}
+
 build_dart_define_file() {
   local output_dir
   local output_file
@@ -364,7 +380,7 @@ cp "$AAB_PATH" "$TARGET_AAB"
 SHA256="$(shasum -a 256 "$TARGET_AAB" | awk '{print $1}')"
 GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 GIT_COMMIT="$(git rev-parse HEAD)"
-write_report "$TARGET_AAB" "$(stat -f%z "$TARGET_AAB")" "$SHA256" "$GIT_BRANCH" "$GIT_COMMIT"
+write_report "$TARGET_AAB" "$(file_size_bytes "$TARGET_AAB")" "$SHA256" "$GIT_BRANCH" "$GIT_COMMIT"
 
 log "artifact=$TARGET_AAB"
 log "report=$REPORT_DIR/release-candidate.json"
