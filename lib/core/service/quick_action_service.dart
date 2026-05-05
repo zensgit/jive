@@ -28,8 +28,15 @@ class QuickActionService {
   QuickActionService(this._isar);
 
   Future<List<QuickAction>> getActions({int limit = 0}) async {
-    final actions = await _storeService.getActions(limit: limit);
-    if (actions.isNotEmpty) return actions;
+    final visibleRecords = await _storeService.getRecords(onlyVisible: true);
+    if (visibleRecords.isNotEmpty) {
+      final actions = visibleRecords.map(QuickActionStoreService.toQuickAction);
+      if (limit <= 0) return actions.toList(growable: false);
+      return actions.take(limit).toList(growable: false);
+    }
+
+    final allRecords = await _storeService.getRecords();
+    if (allRecords.isNotEmpty) return const [];
 
     final templates = await _templateService.getTemplates();
     final fallbackActions = templates.map(toQuickAction).toList();

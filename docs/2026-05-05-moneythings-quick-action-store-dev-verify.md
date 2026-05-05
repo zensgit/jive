@@ -55,6 +55,7 @@ Updated:
 - Home quick bar now loads `QuickActionService.getActions(limit: 5)` instead of sorting templates directly.
 - Quick entry hub now uses the same quick action list as the home quick bar.
 - Deep links resolve through `QuickActionService.findActionById()` before entering `QuickActionExecutor`.
+- Follow-up `codex/moneythings-quick-action-management` adds local management for visibility, pinning, style, ordering, and delete/archive behavior.
 
 ## Preserved Boundaries
 
@@ -95,5 +96,6 @@ Results:
 ## Deferred
 
 - Cross-device quick action sync and conflict handling.
-- Standalone quick action management UI for icon/color/manual ordering.
+- Cross-device quick action presentation sync.
+- Richer icon catalog and drag-and-drop ordering.
 - Migration from template compatibility source to independent cloud quick action source.

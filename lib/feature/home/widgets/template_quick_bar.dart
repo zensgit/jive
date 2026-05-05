@@ -7,9 +7,9 @@ import '../../../core/service/quick_action_service.dart';
 import '../../quick_entry/quick_action_executor.dart';
 import '../../template/template_list_screen.dart';
 
-/// Horizontal quick-bar showing the top 5 most-used templates.
+/// Horizontal quick-bar showing the top 5 visible quick actions.
 ///
-/// Tap a chip to instantly create a transaction; long-press to edit.
+/// Tap a chip to execute; long-press to manage quick actions.
 class TemplateQuickBar extends StatefulWidget {
   final VoidCallback? onTransactionCreated;
 
@@ -77,7 +77,7 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
             const Icon(Icons.flash_on, size: 18, color: Colors.amber),
             const SizedBox(width: 4),
             Text(
-              '快捷模板',
+              '快速动作',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
