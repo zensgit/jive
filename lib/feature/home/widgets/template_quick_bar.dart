@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/database/template_model.dart';
 import '../../../core/design_system/theme.dart';
+import '../../../core/model/quick_action.dart';
 import '../../../core/service/database_service.dart';
 import '../../../core/service/quick_action_service.dart';
-import '../../../core/service/template_service.dart';
 import '../../quick_entry/quick_action_executor.dart';
 import '../../template/template_list_screen.dart';
 
@@ -21,7 +20,7 @@ class TemplateQuickBar extends StatefulWidget {
 }
 
 class _TemplateQuickBarState extends State<TemplateQuickBar> {
-  List<JiveTemplate> _templates = [];
+  List<QuickAction> _actions = [];
   bool _isLoading = true;
 
   @override
@@ -32,24 +31,16 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
 
   Future<void> _load() async {
     final isar = await DatabaseService.getInstance();
-    final svc = TemplateService(isar);
-    final all = await svc.getTemplates();
-    // Sort: pinned first, then by usageCount descending
-    all.sort((a, b) {
-      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      return b.usageCount.compareTo(a.usageCount);
-    });
-    final top5 = all.take(5).toList();
+    final top5 = await QuickActionService(isar).getActions(limit: 5);
     if (mounted) {
       setState(() {
-        _templates = top5;
+        _actions = top5;
         _isLoading = false;
       });
     }
   }
 
-  Future<void> _executeTemplate(JiveTemplate template) async {
-    final action = QuickActionService.toQuickAction(template);
+  Future<void> _executeAction(QuickAction action) async {
     await QuickActionExecutor.execute(
       context,
       action,
@@ -60,7 +51,7 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
     );
   }
 
-  void _editTemplate(JiveTemplate template) {
+  void _editActions() {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const TemplateListScreen()),
@@ -76,7 +67,7 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading || _templates.isEmpty) return const SizedBox.shrink();
+    if (_isLoading || _actions.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -100,10 +91,10 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
           height: 52,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: _templates.length + 1, // +1 for "更多"
+            itemCount: _actions.length + 1, // +1 for "更多"
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
-              if (i == _templates.length) {
+              if (i == _actions.length) {
                 return ActionChip(
                   label: const Text('更多'),
                   onPressed: _goToFullList,
@@ -111,12 +102,13 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
                   side: BorderSide.none,
                 );
               }
-              final t = _templates[i];
-              final label = t.amount > 0
-                  ? '${t.name}  \u00a5${t.amount.toStringAsFixed(0)}'
-                  : t.name;
+              final action = _actions[i];
+              final amount = action.defaultAmount ?? 0;
+              final label = amount > 0
+                  ? '${action.name}  \u00a5${amount.toStringAsFixed(0)}'
+                  : action.name;
               return GestureDetector(
-                onLongPress: () => _editTemplate(t),
+                onLongPress: _editActions,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -126,7 +118,7 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
                         children: [
                           Text(label),
                           Text(
-                            '使用 ${t.usageCount} 次',
+                            '使用 ${action.usageCount} 次',
                             style: TextStyle(
                               fontSize: 10,
                               color: JiveTheme.primaryGreen.withAlpha(160),
@@ -134,7 +126,7 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
                           ),
                         ],
                       ),
-                      onPressed: () => _executeTemplate(t),
+                      onPressed: () => _executeAction(action),
                       backgroundColor: JiveTheme.primaryGreen.withAlpha(20),
                       side: BorderSide(
                         color: JiveTheme.primaryGreen.withAlpha(60),
@@ -149,7 +141,7 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
                         vertical: 2,
                       ),
                     ),
-                    if (t.usageCount > 0)
+                    if (action.usageCount > 0)
                       Positioned(
                         top: -4,
                         right: -4,
@@ -163,7 +155,7 @@ class _TemplateQuickBarState extends State<TemplateQuickBar> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            '${t.usageCount}',
+                            '${action.usageCount}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 9,

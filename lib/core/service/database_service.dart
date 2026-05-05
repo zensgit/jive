@@ -12,6 +12,7 @@ import '../database/currency_model.dart';
 import '../database/import_job_model.dart';
 import '../database/import_job_record_model.dart';
 import '../database/project_model.dart';
+import '../database/quick_action_model.dart';
 import '../database/recurring_rule_model.dart';
 import '../database/tag_conversion_log.dart';
 import '../database/tag_model.dart';
@@ -56,6 +57,7 @@ class DatabaseService {
     JiveBudgetSchema,
     JiveBudgetUsageSchema,
     JiveTemplateSchema,
+    JiveQuickActionSchema,
     JiveTagSchema,
     JiveTagGroupSchema,
     JiveTagRuleSchema,
