@@ -4,8 +4,10 @@ import 'package:isar/isar.dart';
 
 import '../../core/database/quick_action_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/quick_action_store_service.dart';
+import '../category/category_icon_library.dart';
 import '../quick_entry/quick_action_executor.dart';
 
 class TemplateListScreen extends StatefulWidget {
@@ -16,23 +18,14 @@ class TemplateListScreen extends StatefulWidget {
 }
 
 class _TemplateListScreenState extends State<TemplateListScreen> {
-  static const _iconChoices = <String, IconData>{
-    'restaurant': Icons.restaurant,
-    'local_cafe': Icons.local_cafe,
-    'directions_bus': Icons.directions_bus,
-    'shopping_bag': Icons.shopping_bag,
-    'home': Icons.home,
-    'credit_card': Icons.credit_card,
-    'swap_horiz': Icons.swap_horiz,
-    'payments': Icons.payments,
-  };
-  static const _iconLabels = <String, String>{
-    'restaurant': '餐饮',
-    'local_cafe': '咖啡',
-    'directions_bus': '通勤',
-    'shopping_bag': '购物',
+  static final _iconChoiceNames = _buildIconChoiceNames();
+  static const _quickActionIconLabels = <String, String>{
+    'local_grocery_store': '超市',
     'home': '家庭',
-    'credit_card': '还款',
+    'flight_takeoff': '出差',
+    'fitness_center': '健身',
+    'medical_services': '医疗',
+    'credit_card': '信用卡',
     'swap_horiz': '转账',
     'payments': '收款',
   };
@@ -126,15 +119,19 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         _buildIntroCard(),
-        if (visible.isNotEmpty) ...[
-          _buildSectionHeader('首页快速动作', '会出现在首页和快记中心'),
-          ...visible.map(_buildActionCard),
-        ],
-        if (hidden.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          _buildSectionHeader('已隐藏', '仍可通过 Deep Link 或快捷指令使用'),
-          ...hidden.map(_buildActionCard),
-        ],
+        _buildReorderableSection(
+          title: '首页快速动作',
+          subtitle: '拖拽右侧把手排序，会出现在首页和快记中心',
+          actions: visible,
+          showOnHome: true,
+        ),
+        const SizedBox(height: 12),
+        _buildReorderableSection(
+          title: '已隐藏',
+          subtitle: '拖拽右侧把手排序，仍可通过 Deep Link 或快捷指令使用',
+          actions: hidden,
+          showOnHome: false,
+        ),
       ],
     );
   }
@@ -191,11 +188,64 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     );
   }
 
-  Widget _buildActionCard(JiveQuickAction action) {
+  Widget _buildReorderableSection({
+    required String title,
+    required String subtitle,
+    required List<JiveQuickAction> actions,
+    required bool showOnHome,
+  }) {
+    if (actions.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(title, subtitle),
+        ReorderableListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          buildDefaultDragHandles: false,
+          itemCount: actions.length,
+          onReorder: (oldIndex, newIndex) {
+            _reorderSection(
+              actions: actions,
+              oldIndex: oldIndex,
+              newIndex: newIndex,
+              showOnHome: showOnHome,
+            );
+          },
+          itemBuilder: (context, index) {
+            final action = actions[index];
+            return _buildActionCard(
+              action,
+              key: ValueKey('quick_action_${action.stableId}'),
+              dragHandle: ReorderableDragStartListener(
+                index: index,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: Icon(
+                    Icons.drag_handle,
+                    color: Colors.grey.shade400,
+                    size: 20,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionCard(
+    JiveQuickAction action, {
+    required Key key,
+    required Widget dragHandle,
+  }) {
     final color = _actionColor(action);
     final icon = _actionIcon(action);
 
     return Card(
+      key: key,
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
@@ -279,11 +329,41 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                   ),
                 ],
               ),
+              dragHandle,
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _reorderSection({
+    required List<JiveQuickAction> actions,
+    required int oldIndex,
+    required int newIndex,
+    required bool showOnHome,
+  }) async {
+    if (oldIndex == newIndex) return;
+    if (newIndex > oldIndex) newIndex -= 1;
+    if (newIndex < 0 || newIndex >= actions.length) return;
+
+    final ordered = List<JiveQuickAction>.from(actions);
+    final moved = ordered.removeAt(oldIndex);
+    ordered.insert(newIndex, moved);
+
+    final other = _actions
+        .where((action) => action.showOnHome != showOnHome)
+        .toList();
+    setState(() {
+      _actions = showOnHome ? [...ordered, ...other] : [...other, ...ordered];
+    });
+
+    final service = await _quickActionStore();
+    await service.reorderActions(
+      ordered.map((action) => action.stableId).toList(growable: false),
+      showOnHome: showOnHome,
+    );
+    await _loadActions();
   }
 
   Future<void> _useAction(JiveQuickAction record) async {
@@ -408,14 +488,14 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
-                    children: _iconChoices.entries.map((entry) {
-                      final selected = selectedIcon == entry.key;
+                    children: _iconChoiceNames.map((iconName) {
+                      final selected = selectedIcon == iconName;
                       return ChoiceChip(
                         selected: selected,
-                        avatar: Icon(entry.value, size: 18),
-                        label: Text(_iconLabels[entry.key] ?? entry.key),
+                        avatar: Icon(_iconData(iconName), size: 18),
+                        label: Text(_iconLabel(iconName)),
                         onSelected: (_) {
-                          setSheetState(() => selectedIcon = entry.key);
+                          setSheetState(() => selectedIcon = iconName);
                         },
                       );
                     }).toList(),
@@ -510,7 +590,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
 
   IconData _actionIcon(JiveQuickAction action) {
     final name = action.iconName ?? _defaultIconName(action);
-    return _iconChoices[name] ?? Icons.bolt;
+    return _iconData(name);
   }
 
   Color _actionColor(JiveQuickAction action) {
@@ -561,5 +641,51 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
       default:
         return '进编辑器';
     }
+  }
+
+  static List<String> _buildIconChoiceNames() {
+    final names = <String>{
+      for (final entry in categoryIconEntries) entry.name,
+      ..._quickActionIconLabels.keys,
+    };
+    return names.toList(growable: false);
+  }
+
+  static IconData _iconData(String name) {
+    switch (name) {
+      case 'local_grocery_store':
+        return Icons.local_grocery_store;
+      case 'home':
+        return Icons.home;
+      case 'flight_takeoff':
+        return Icons.flight_takeoff;
+      case 'fitness_center':
+        return Icons.fitness_center;
+      case 'medical_services':
+        return Icons.medical_services;
+      case 'credit_card':
+        return Icons.credit_card;
+      case 'swap_horiz':
+        return Icons.swap_horiz;
+      default:
+        return CategoryService.getIcon(name);
+    }
+  }
+
+  static String _iconLabel(String name) {
+    final label = _quickActionIconLabels[name];
+    if (label != null) return label;
+    for (final entry in categoryIconEntries) {
+      if (entry.name != name || entry.keywords.isEmpty) continue;
+      return entry.keywords.firstWhere(
+        _containsChinese,
+        orElse: () => entry.keywords.first,
+      );
+    }
+    return name;
+  }
+
+  static bool _containsChinese(String value) {
+    return RegExp(r'[\u4e00-\u9fa5]').hasMatch(value);
   }
 }
