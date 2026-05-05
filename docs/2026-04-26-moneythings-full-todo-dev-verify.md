@@ -39,7 +39,7 @@
 - 2026-05-05：`codex/moneythings-ios-share-extension` 补齐 iOS 系统分享入口，`text/url` 分享统一进入 `jive://transaction/new`。
 - 2026-05-05：`codex/moneythings-quick-action-store` 新增本地 `JiveQuickAction` shadow collection，模板自动回填为稳定 quick action，首页/快记中心/Deep Link 统一读取 `QuickActionService`。
 - 2026-05-05：`codex/moneythings-quick-action-management` 将旧模板列表升级为快速动作管理页，支持首页显示/隐藏、置顶、图标颜色、本地排序与删除。
-- 2026-05-05：`codex/moneythings-quick-action-dnd` 补齐快速动作可见/隐藏分区拖拽排序，并复用分类图标库扩充图标候选。
+- 2026-05-05：PR #223 / `codex/moneythings-quick-action-dnd` 补齐快速动作可见/隐藏分区拖拽排序，并复用分类图标库扩充图标候选。
 
 ## 保持不变
 
