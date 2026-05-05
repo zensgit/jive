@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../core/database/template_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/entitlement/feature_gate.dart';
 import '../../core/entitlement/feature_id.dart';
+import '../../core/model/quick_action.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/quick_action_service.dart';
-import '../../core/service/template_service.dart';
 import '../import/screenshot_import_screen.dart';
 import '../quick_add/conversational_input_screen.dart';
 import '../template/template_list_screen.dart';
@@ -28,7 +27,7 @@ class QuickEntryHubSheet extends StatefulWidget {
 }
 
 class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
-  List<JiveTemplate> _templates = [];
+  List<QuickAction> _actions = [];
   bool _isLoading = true;
 
   @override
@@ -39,23 +38,16 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
 
   Future<void> _loadTemplates() async {
     final isar = await DatabaseService.getInstance();
-    final svc = TemplateService(isar);
-    final all = await svc.getTemplates();
-    all.sort((a, b) {
-      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
-      return b.usageCount.compareTo(a.usageCount);
-    });
-    final top5 = all.take(5).toList();
+    final top5 = await QuickActionService(isar).getActions(limit: 5);
     if (mounted) {
       setState(() {
-        _templates = top5;
+        _actions = top5;
         _isLoading = false;
       });
     }
   }
 
-  Future<void> _executeTemplate(JiveTemplate template) async {
-    final action = QuickActionService.toQuickAction(template);
+  Future<void> _executeAction(QuickAction action) async {
     await QuickActionExecutor.execute(
       context,
       action,
@@ -212,7 +204,7 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
   }
 
   Widget _buildTemplateSection() {
-    if (_isLoading || _templates.isEmpty) return const SizedBox.shrink();
+    if (_isLoading || _actions.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -230,16 +222,17 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
           height: 48,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: _templates.length,
+            itemCount: _actions.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
-              final t = _templates[i];
-              final label = t.amount > 0
-                  ? '${t.name}  \u00a5${t.amount.toStringAsFixed(0)}'
-                  : t.name;
+              final action = _actions[i];
+              final amount = action.defaultAmount ?? 0;
+              final label = amount > 0
+                  ? '${action.name}  \u00a5${amount.toStringAsFixed(0)}'
+                  : action.name;
               return ActionChip(
                 label: Text(label),
-                onPressed: () => _executeTemplate(t),
+                onPressed: () => _executeAction(action),
                 backgroundColor: JiveTheme.primaryGreen.withAlpha(20),
                 side: BorderSide(color: JiveTheme.primaryGreen.withAlpha(60)),
                 labelStyle: TextStyle(

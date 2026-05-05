@@ -198,7 +198,7 @@ Latest iOS Share Extension validation:
 
 These remain intentionally outside the current non-migration wave:
 
-- Dedicated `JiveQuickAction` collection replacing template compatibility persistence.
+- Cross-device quick action sync, standalone icon/color/order management, and migration from template compatibility source to independent cloud quick action source.
 - `parentAccountKey` migration for true parent-child accounts.
 - Full object-level sharing table, RLS, offline conflict handling, and audit log.
 - E2EE/key-management work.

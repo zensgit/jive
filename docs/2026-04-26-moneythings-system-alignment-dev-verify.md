@@ -49,7 +49,7 @@ MoneyThings 的核心启发是“交易入口体系”，不是单一页面：On
 
 ## 暂不做
 
-- 不新增 `JiveQuickAction` Isar collection，不跑 build_runner，不引入迁移。
+- 2026-05-05 后续波次已新增本地 `JiveQuickAction` shadow collection；仍不新增 Supabase migration，不改变 SaaS sync/payment/entitlement。
 - 不新增 `tertiaryCategoryKey` 到交易模型。
 - 不新增 `parentAccountKey` 到账户模型。
 - 不实现完整对象级 RLS、离线权限冲突与审计日志。
@@ -69,6 +69,6 @@ MoneyThings 的核心启发是“交易入口体系”，不是单一页面：On
 
 ## 风险与后续
 
-- 当前 QuickAction 仍以模板表兼容存储；后续如需 One Touch 独立排序、图标、跨端同步，应再引入真实 `JiveQuickAction` collection 和迁移。
+- 当前 QuickAction 已有本地 shadow collection，但模板仍是兼容来源；后续如需 One Touch 独立排序、图标、跨端同步，应再设计独立云端 quick action 源和冲突策略。
 - `AddTransactionScreen` 的计算器高频入口未改成三层路径式选择；本轮先把结构化编辑器打通，后续可逐步复用 `CategoryPathService`。
 - 对象级共享本轮是提示层；真实权限仍要等 SaaS 同步/RLS 稳定后再设计服务端协议。
