@@ -169,6 +169,14 @@ Latest iOS Shortcuts validation:
 - `flutter test test/moneythings_alignment_services_test.dart` passed.
 - Full iOS simulator packaging is still blocked by existing local iOS build environment issues unrelated to this bridge: first a Flutter.framework extended-attribute signing error, then `Library 'isar' not found` while linking.
 
+Latest iOS Share Extension validation:
+
+- `docs/2026-05-05-moneythings-ios-share-extension-dev-verify.md` records the Share Extension implementation and validation.
+- `xcodebuild -list` confirms the project now exposes `JiveShareExtension`.
+- `xcrun swiftc -typecheck -application-extension` passed for the shared link builder and Share Extension view controller.
+- `xcodebuild build -target JiveShareExtension` passed for Debug iPhone simulator.
+- Full Runner simulator build reaches the existing Runner link step and still fails with `ld: framework 'Pods_Runner' not found`; the dependency graph confirms `Runner -> JiveShareExtension`.
+
 ## Manual Smoke Checklist
 
 - Quick action: run a complete quick action and confirm direct/confirm/edit behavior is preserved.
@@ -181,6 +189,7 @@ Latest iOS Shortcuts validation:
 - Android widget: tap widget card background to open app, then tap `+ 记一笔` to open editor.
 - iOS Shortcuts: run `记一笔` and confirm Jive opens `jive://transaction/new` into the structured editor.
 - iOS Shortcuts: run `运行 Jive 快速动作` with `template:<id>` and confirm it follows One Touch direct/confirm/edit behavior.
+- iOS share: share `星巴克 28` or a URL to `记到 Jive` and confirm the editor opens with `shareReceive/rawText`.
 - Three-level category: save `出行 / 私家车 / 加油` and confirm details/export show the path.
 - Account group: confirm grouped accounts display as group/subaccount while transactions still save to child account.
 - Shared scene: confirm shared badges and delete warning copy appear on scene/category/tag/account surfaces.
@@ -189,7 +198,6 @@ Latest iOS Shortcuts validation:
 
 These remain intentionally outside the current non-migration wave:
 
-- iOS system share extension.
 - Dedicated `JiveQuickAction` collection replacing template compatibility persistence.
 - `parentAccountKey` migration for true parent-child accounts.
 - Full object-level sharing table, RLS, offline conflict handling, and audit log.
