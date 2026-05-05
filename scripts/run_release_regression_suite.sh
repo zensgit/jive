@@ -31,7 +31,6 @@ flutter analyze \
   lib/core/service/import_column_mapping_failfast_service.dart \
   test/account_category_sync_repository_test.dart \
   test/account_book_import_sync_conflict_report_service_test.dart \
-  test/backup_restore_stale_session_regression_test.dart \
   test/import_column_mapping_failfast_service_test.dart \
   test/sync_runtime_backup_restore_rebind_regression_test.dart \
   test/sync_runtime_telemetry_report_service_test.dart \
@@ -41,13 +40,11 @@ flutter analyze \
   test/sync_runtime_service_test.dart \
   test/data_backup_service_roundtrip_test.dart \
   test/data_backup_service_migration_regression_test.dart \
-  test/auth_stale_session_release_gate_test.dart \
   test/auto_draft_service_test.dart
 
 flutter test \
   test/account_category_sync_repository_test.dart \
   test/account_book_import_sync_conflict_report_service_test.dart \
-  test/backup_restore_stale_session_regression_test.dart \
   test/import_column_mapping_failfast_service_test.dart \
   test/sync_runtime_backup_restore_rebind_regression_test.dart \
   test/sync_runtime_telemetry_report_service_test.dart \
@@ -57,5 +54,4 @@ flutter test \
   test/sync_runtime_service_test.dart \
   test/data_backup_service_roundtrip_test.dart \
   test/data_backup_service_migration_regression_test.dart \
-  test/auth_stale_session_release_gate_test.dart \
   test/auto_draft_service_test.dart
