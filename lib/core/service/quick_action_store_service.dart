@@ -19,13 +19,22 @@ class QuickActionStoreService {
   QuickActionStoreService(this._isar);
 
   Future<List<QuickAction>> getActions({int limit = 0}) async {
-    await syncFromTemplates();
-    final records = await _isar.jiveQuickActions.where().findAll();
-    final active = records.where((record) => !record.archived).toList()
-      ..sort(_compareRecords);
-    final actions = active.map(toQuickAction).toList(growable: false);
+    final records = await getRecords(onlyVisible: true);
+    final actions = records.map(toQuickAction).toList(growable: false);
     if (limit <= 0 || actions.length <= limit) return actions;
     return actions.take(limit).toList(growable: false);
+  }
+
+  Future<List<JiveQuickAction>> getRecords({bool onlyVisible = false}) async {
+    await syncFromTemplates();
+    final records = await _isar.jiveQuickActions.where().findAll();
+    final active =
+        records
+            .where((record) => !record.archived)
+            .where((record) => !onlyVisible || record.showOnHome)
+            .toList()
+          ..sort(_compareRecords);
+    return active;
   }
 
   Future<QuickAction?> findAction(String stableId) async {
@@ -65,6 +74,7 @@ class QuickActionStoreService {
             ..iconName = existing.iconName
             ..colorHex = existing.colorHex
             ..showOnHome = existing.showOnHome
+            ..isPinned = existing.isPinned
             ..usageCount = existing.usageCount > template.usageCount
                 ? existing.usageCount
                 : template.usageCount
@@ -111,6 +121,78 @@ class QuickActionStoreService {
           ..updatedAt = now;
         await _isar.jiveQuickActions.put(record);
       }
+    });
+  }
+
+  Future<void> updatePresentation(
+    String stableId, {
+    String? iconName,
+    String? colorHex,
+    bool? showOnHome,
+    bool? isPinned,
+  }) async {
+    final record = await _activeRecord(stableId);
+    if (record == null) return;
+    final now = DateTime.now();
+
+    await _isar.writeTxn(() async {
+      if (iconName != null) record.iconName = iconName;
+      if (colorHex != null) record.colorHex = colorHex;
+      if (showOnHome != null) record.showOnHome = showOnHome;
+      if (isPinned != null) record.isPinned = isPinned;
+      record.updatedAt = now;
+      await _isar.jiveQuickActions.put(record);
+
+      if (isPinned != null && record.legacyTemplateId != null) {
+        final template = await _isar.jiveTemplates.get(
+          record.legacyTemplateId!,
+        );
+        if (template != null) {
+          template.isPinned = isPinned;
+          await _isar.jiveTemplates.put(template);
+        }
+      }
+    });
+  }
+
+  Future<void> moveAction(String stableId, int direction) async {
+    if (direction == 0) return;
+    final records = await getRecords();
+    final index = records.indexWhere((record) => record.stableId == stableId);
+    if (index < 0) return;
+    final targetIndex = direction < 0 ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= records.length) return;
+
+    for (var i = 0; i < records.length; i++) {
+      records[i].sortOrder = i;
+    }
+    final current = records[index];
+    final target = records[targetIndex];
+    final currentOrder = current.sortOrder;
+    current.sortOrder = target.sortOrder;
+    target.sortOrder = currentOrder;
+    current.updatedAt = DateTime.now();
+    target.updatedAt = current.updatedAt;
+
+    await _isar.writeTxn(() async {
+      await _isar.jiveQuickActions.putAll(records);
+    });
+  }
+
+  Future<void> deleteAction(String stableId) async {
+    final record = await _activeRecord(stableId);
+    if (record == null) return;
+    if (record.source == sourceTemplate && record.legacyTemplateId != null) {
+      await _templateService.deleteTemplate(record.legacyTemplateId!);
+      await syncFromTemplates();
+      return;
+    }
+
+    record
+      ..archived = true
+      ..updatedAt = DateTime.now();
+    await _isar.writeTxn(() async {
+      await _isar.jiveQuickActions.put(record);
     });
   }
 
@@ -170,9 +252,11 @@ class QuickActionStoreService {
 
   static int _compareRecords(JiveQuickAction a, JiveQuickAction b) {
     if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+    final order = a.sortOrder.compareTo(b.sortOrder);
+    if (order != 0) return order;
     final usage = b.usageCount.compareTo(a.usageCount);
     if (usage != 0) return usage;
-    return a.sortOrder.compareTo(b.sortOrder);
+    return a.name.compareTo(b.name);
   }
 
   static DateTime? _latest(DateTime? first, DateTime? second) {
@@ -218,5 +302,14 @@ class QuickActionStoreService {
     if (hasAccount && hasCategory && hasAmount) return QuickActionMode.direct;
     if (hasAccount && hasCategory) return QuickActionMode.confirm;
     return QuickActionMode.edit;
+  }
+
+  Future<JiveQuickAction?> _activeRecord(String stableId) async {
+    final id = stableId.trim();
+    if (id.isEmpty) return null;
+    await syncFromTemplates();
+    final record = await _isar.jiveQuickActions.getByStableId(id);
+    if (record == null || record.archived) return null;
+    return record;
   }
 }

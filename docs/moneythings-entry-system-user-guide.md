@@ -23,6 +23,7 @@ Expected behavior:
 - Complex actions such as transfer or repayment should open the full editor.
 - Deep links with `jive://quick-action?id=template:<id>` use the same executor as in-app quick actions.
 - Existing templates are now mirrored into local quick action records, so home, quick entry, deep link, widget, shortcut, and share entry points can converge on the same stable action protocol.
+- The quick action management page can hide/show actions on home, pin actions, adjust icon/color, reorder locally, and delete template-backed actions safely.
 
 ## Structured Transaction Editor
 
@@ -105,6 +106,8 @@ Expected behavior:
 ## QA Smoke Checklist
 
 - Run a complete quick action and confirm it saves or confirms according to mode.
+- Open quick action management, hide one action, and confirm it leaves home/quick entry but remains manageable in the hidden section.
+- Change one quick action icon/color and move it up/down, then reopen the page to confirm the local presentation persists.
 - Open `jive://transaction/new?amount=15&type=expense` and confirm the editor receives the amount.
 - Parse a conversational sentence and confirm the editor opens before save.
 - Open an AutoDraft with incomplete fields and confirm the editor highlights missing fields.
@@ -120,7 +123,7 @@ Expected behavior:
 
 ## Explicitly Deferred
 
-- Cross-device quick action sync, custom icon/color/order management, and migration from template compatibility source to independent cloud quick action source.
+- Cross-device quick action sync, cloud-backed independent quick action source, richer icon catalog, and drag-and-drop ordering.
 - True parent-child account migration with `parentAccountKey`.
 - Full object-level sharing table, RLS, offline conflict handling, and audit log.
 - E2EE/key-management work.
