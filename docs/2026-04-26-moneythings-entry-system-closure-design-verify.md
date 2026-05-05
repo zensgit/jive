@@ -4,6 +4,8 @@ Date: 2026-04-26
 Branch: `feature/moneythings-entry-system-closure-docs`
 Base: stacked on `feature/moneythings-android-widget-quick-entry` / PR #207
 
+Post-merge status: this stack landed in `main` through PR #196 on 2026-04-29. Main merge commit: `562d3d92b0bffcae53666a7a8a14d153a4c3fcd6`.
+
 ## Summary
 
 This document closes the current non-migration MoneyThings borrowing wave.
@@ -29,6 +31,19 @@ The implementation intentionally does not copy MoneyThings data structures. Jive
 - PR #205: AI Assistant voice and clipboard recognition now open `TransactionFormScreen` through `SpeechEntryParamsBuilder`.
 - PR #206: Android system text share (`ACTION_SEND text/plain`) normalizes into `jive://transaction/new` and opens the editor.
 - PR #207: Android Today widget adds a `+ 记一笔` action that opens the structured editor; existing widget card tap still opens the app.
+- PR #209: closure docs and Android validation references.
+
+### Mainline Landing
+
+- PR #209 merged into #207.
+- PR #207 merged into #206.
+- PR #206 merged into #205.
+- PR #205 merged into #202.
+- PR #202 merged into #201.
+- PR #201 merged into #200.
+- PR #200 merged into #197.
+- PR #197 merged into #196.
+- PR #196 merged into `main`.
 
 ## Design
 
@@ -118,6 +133,18 @@ GitHub CI status for the final external-entry stack:
 - PR #206: `analyze_and_test` passed, `detect_saas_wave0_smoke` passed.
 - PR #207: `analyze_and_test` passed, `detect_saas_wave0_smoke` passed.
 
+GitHub CI status after the stack landed on `main@562d3d92`:
+
+- `analyze_and_test`: passed.
+- `detect_saas_wave0_smoke`: passed.
+- `saas_wave0_smoke`: passed.
+- `android_integration_test`: skipped by workflow conditions.
+
+Fresh-main local post-merge verification:
+
+- `flutter analyze --no-fatal-infos`: passed with existing info-level findings only.
+- `flutter test test/moneythings_alignment_services_test.dart test/add_transaction_screen_entry_ux_test.dart test/category_picker_user_categories_test.dart test/transaction_entry_widget_regression_test.dart test/import_csv_mapping_service_test.dart test/import_service_test.dart test/speech_intent_parser_test.dart test/auto_draft_service_test.dart`: passed.
+
 Latest Android validation:
 
 - `docs/2026-04-29-moneythings-entry-system-android-validation.md` records the final docs-branch automated validation pass.
@@ -159,20 +186,10 @@ These remain intentionally outside the current non-migration wave:
 - E2EE/key-management work.
 - SaaS entitlement/payment/sync behavior changes.
 
-## Merge Guidance
+## Post-Merge Guidance
 
-Merge the external-entry closure stack in order:
+The non-migration MoneyThings wave is complete on `main`.
 
-- #205
-- #206
-- #207
-- this docs-only PR
+Use `docs/moneythings-entry-system-user-guide.md` for product QA and user-facing behavior checks. Use `docs/2026-05-05-moneythings-postmerge-closure-dev-verify.md` for the post-merge closure validation record.
 
-Earlier MoneyThings stack PRs should remain in their existing order:
-
-- #197
-- #200
-- #201
-- #202
-
-After the stack lands, update any central TODO page to mark the current non-migration MoneyThings wave as complete and keep the deferred items as a separate post-Beta track.
+Future work should start from the explicit deferred list above, not from the old stacked PR queue.
