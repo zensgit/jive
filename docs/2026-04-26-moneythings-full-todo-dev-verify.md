@@ -35,6 +35,7 @@
 - PR #206 已把 Android `ACTION_SEND text/plain` 分享接入 `jive://transaction/new`。
 - PR #207 已为 Android Today widget 增加 `+ 记一笔` 结构化编辑器入口。
 - PR #209 已补齐入口体系 closure 与 Android 验证文档。
+- 2026-05-05：`codex/moneythings-ios-shortcuts-entry` 补齐 iOS App Intent / Shortcuts 原生入口，继续复用 `jive://transaction/new` 与 `jive://quick-action` 协议。
 
 ## 保持不变
 
@@ -48,6 +49,7 @@
 ## 当前波次已完成
 
 - Quick Action / One Touch 兼容协议已覆盖模板、Deep Link、Android widget 与 Android share 的低风险入口。
+- iOS Shortcuts / Siri 可通过 App Intent 打开结构化记账编辑器，或通过快速动作 ID 打开 One Touch 入口。
 - 外部交易入口已统一到 `TransactionEntryParams`，复杂或缺字段场景进入 `TransactionFormScreen`。
 - 三层分类在选择、展示、详情、导入、导出上使用兼容路径，不新增 `tertiaryCategoryKey`。
 - 账户组以视图层表达，交易仍保存到具体 `accountId`。
@@ -56,7 +58,6 @@
 
 ## Post-Beta / 迁移型待评估
 
-- iOS App Intent / Shortcut 原生入口。
 - iOS system share extension。
 - 独立 `JiveQuickAction` collection 与跨端排序/图标/同步。
 - `parentAccountKey` migration，用于真实父子账户。
@@ -76,4 +77,5 @@
 最新 post-merge 验证记录见：
 
 - `docs/2026-05-05-moneythings-postmerge-closure-dev-verify.md`
+- `docs/2026-05-05-moneythings-ios-shortcuts-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`
