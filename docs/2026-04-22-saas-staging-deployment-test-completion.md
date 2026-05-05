@@ -2,6 +2,7 @@
 
 日期：2026-04-22
 基线：`main` @ `cede4903a649288373d1359e93ced0e3208c6666`
+复核日期：2026-04-29
 
 ## 结论
 
@@ -13,6 +14,12 @@ SaaS staging 部署测试按本轮口径已完成。
 - App 侧验证覆盖首页、设置页、订阅页、免费用户云同步门控、订阅测试态云同步入口、邮箱注册登录、手动新增交易与 logcat fatal 扫描。
 - 本轮未进入正式商业上线范围，生产支付、Apple 真验票、国内支付生产链路、admin dashboard、通知外发、E2EE 仍属于后续阶段。
 
+2026-04-29 复核补充：
+
+- 最新可见 `main` 为 `562d3d92b0bffcae53666a7a8a14d153a4c3fcd6`，Flutter CI run `25116703685` 成功。
+- 已重新下载并校验 `SaaS Core Staging` artifact，run `24786990813` 的 APK SHA-256 与报告一致。
+- `SaaS Release Candidate` workflow 仍在 stacked PR `#213` 中；未进入 `main` 前 GitHub 不会把它暴露为可手动运行的 workflow，这属于预期状态。
+
 ## GitHub Actions
 
 | 验证项 | Workflow run | 结果 | 备注 |
@@ -23,6 +30,7 @@ SaaS staging 部署测试按本轮口径已完成。
 | Functions deploy + smoke | `24786787918` | PASS | `analytics`、`send-notification`、`admin` deploy；function smoke 全部 PASS |
 | Core sync smoke | `24786855136` | PASS | accounts / transactions / budgets push-pull-tombstone 全部 PASS |
 | Staging dev debug APK build | `24786990813` | PASS | artifact guard 通过，APK build metadata 完整 |
+| Current main Flutter CI | `25116703685` | PASS | `562d3d92` 对应 CI green |
 
 ## Backend Smoke 明细
 
@@ -70,6 +78,15 @@ APK build run：`24786990813`
 - `supabaseUrlConfigured=true`
 - `supabaseAnonKeyConfigured=true`
 - `serviceRolePassedToClient=false`
+
+2026-04-29 artifact 复核：
+
+- Download root：`/tmp/jive-saas-completion-artifacts/run-24786990813`
+- Artifact group：`saas-staging-reports-24786990813`
+- APK path inside artifact：`saas-staging/20260422-152735-dev-debug/app-dev-debug.apk`
+- Report path inside artifact：`reports/saas-staging/saas-staging-build.json`
+- Latest summary inside artifact：`reports/saas-staging/latest.md`
+- `shasum -a 256` result：`16aff55dbed7b1cffa9b83467f67930359e4f1fb8746195fdde3d26b4dcecad9`
 
 ## Android Device Smoke
 
@@ -124,3 +141,20 @@ App 最小业务 smoke：
 
 - 将 fresh debug build 首次冷启动检测等待从 12 秒提高到 45 秒，或在 smoke 脚本里轮询 UI 文案，避免 splash 阶段误判。
 - 后续如要进入正式上线，应单独开生产发布计划，重点补齐真实支付验票、隐私合规、Crash/Analytics、生产 Supabase 项目和发布物料。
+- 合并 PR `#212` 后，将 PR `#213` rebase/retarget 到 `main`，再运行 production release-candidate dry-run。
+
+## 生产发布候选后续
+
+当前 staging 部署测试完成不等于正式生产发布。生产候选链路已拆到后续 PR：
+
+- PR `#212`：production readiness gate。
+- PR `#213`：stacked release-candidate workflow 与 production release secret helpers。
+
+推荐顺序：
+
+1. 合并 PR `#212`。
+2. 将 PR `#213` rebase 或 retarget 到 `main`。
+3. 配置 production release secrets。
+4. 先运行 `SaaS Release Candidate`，`build_appbundle=false`。
+5. 再运行 `strict_signing=true` dry-run。
+6. 最后仅在商店签名材料齐备时运行 `build_appbundle=true` + `strict_signing=true`。
