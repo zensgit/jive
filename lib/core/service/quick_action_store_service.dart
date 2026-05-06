@@ -155,6 +155,96 @@ class QuickActionStoreService {
     });
   }
 
+  Future<void> updateCoreFields(
+    String stableId, {
+    required String name,
+    required String transactionType,
+    int? bookId,
+    int? accountId,
+    int? toAccountId,
+    String? categoryKey,
+    String? subCategoryKey,
+    String? categoryName,
+    String? subCategoryName,
+    List<String>? tagKeys,
+    double? defaultAmount,
+    String? defaultNote,
+  }) async {
+    final record = await _activeRecord(stableId);
+    if (record == null) return;
+
+    final normalizedType = _normalizedType(transactionType);
+    final trimmedName = name.trim().isEmpty ? record.name : name.trim();
+    final trimmedNote = defaultNote?.trim();
+    final effectiveAmount = defaultAmount != null && defaultAmount > 0
+        ? defaultAmount
+        : null;
+    final effectiveToAccountId = normalizedType == 'transfer'
+        ? (toAccountId == accountId ? null : toAccountId)
+        : null;
+    final effectiveCategoryKey = normalizedType == 'transfer'
+        ? null
+        : _emptyToNull(categoryKey);
+    final effectiveSubCategoryKey = normalizedType == 'transfer'
+        ? null
+        : _emptyToNull(subCategoryKey);
+    final effectiveCategoryName = normalizedType == 'transfer'
+        ? null
+        : _emptyToNull(categoryName);
+    final effectiveSubCategoryName = normalizedType == 'transfer'
+        ? null
+        : _emptyToNull(subCategoryName);
+    final mode = _inferCoreMode(
+      transactionType: normalizedType,
+      defaultAmount: effectiveAmount,
+      accountId: accountId,
+      toAccountId: effectiveToAccountId,
+      categoryKey: effectiveCategoryKey,
+      subCategoryKey: effectiveSubCategoryKey,
+    ).name;
+    final now = DateTime.now();
+
+    await _isar.writeTxn(() async {
+      record
+        ..name = trimmedName
+        ..transactionType = normalizedType
+        ..bookId = bookId
+        ..accountId = accountId
+        ..toAccountId = effectiveToAccountId
+        ..categoryKey = effectiveCategoryKey
+        ..subCategoryKey = effectiveSubCategoryKey
+        ..categoryName = effectiveCategoryName
+        ..subCategoryName = effectiveSubCategoryName
+        ..tagKeys = List<String>.from(tagKeys ?? record.tagKeys)
+        ..defaultAmount = effectiveAmount
+        ..defaultNote = trimmedNote == null || trimmedNote.isEmpty
+            ? null
+            : trimmedNote
+        ..mode = mode
+        ..updatedAt = now;
+      await _isar.jiveQuickActions.put(record);
+
+      final templateId = record.legacyTemplateId;
+      if (record.source == sourceTemplate && templateId != null) {
+        final template = await _isar.jiveTemplates.get(templateId);
+        if (template != null) {
+          template
+            ..name = record.name
+            ..type = record.transactionType
+            ..amount = record.defaultAmount ?? 0
+            ..accountId = record.accountId
+            ..toAccountId = record.toAccountId
+            ..categoryKey = record.categoryKey
+            ..subCategoryKey = record.subCategoryKey
+            ..category = record.categoryName
+            ..subCategory = record.subCategoryName
+            ..note = record.defaultNote;
+          await _isar.jiveTemplates.put(template);
+        }
+      }
+    });
+  }
+
   Future<void> moveAction(String stableId, int direction) async {
     if (direction == 0) return;
     final records = await getRecords();
@@ -325,18 +415,14 @@ class QuickActionStoreService {
   }
 
   static QuickActionMode _inferTemplateMode(JiveTemplate template) {
-    final type = template.type;
-    final hasAmount = template.amount > 0;
-    final hasAccount = template.accountId != null;
-    final hasCategory =
-        (template.categoryKey != null && template.categoryKey!.isNotEmpty) ||
-        (template.subCategoryKey != null &&
-            template.subCategoryKey!.isNotEmpty);
-
-    if (type == 'transfer') return QuickActionMode.edit;
-    if (hasAccount && hasCategory && hasAmount) return QuickActionMode.direct;
-    if (hasAccount && hasCategory) return QuickActionMode.confirm;
-    return QuickActionMode.edit;
+    return _inferCoreMode(
+      transactionType: template.type,
+      defaultAmount: template.amount > 0 ? template.amount : null,
+      accountId: template.accountId,
+      toAccountId: template.toAccountId,
+      categoryKey: template.categoryKey,
+      subCategoryKey: template.subCategoryKey,
+    );
   }
 
   Future<JiveQuickAction?> _activeRecord(String stableId) async {
@@ -346,5 +432,31 @@ class QuickActionStoreService {
     final record = await _isar.jiveQuickActions.getByStableId(id);
     if (record == null || record.archived) return null;
     return record;
+  }
+
+  static QuickActionMode _inferCoreMode({
+    required String transactionType,
+    required double? defaultAmount,
+    required int? accountId,
+    required int? toAccountId,
+    required String? categoryKey,
+    required String? subCategoryKey,
+  }) {
+    final type = _normalizedType(transactionType);
+    final hasAmount = (defaultAmount ?? 0) > 0;
+    final hasAccount = accountId != null;
+    final hasCategory =
+        (categoryKey != null && categoryKey.isNotEmpty) ||
+        (subCategoryKey != null && subCategoryKey.isNotEmpty);
+
+    if (type == 'transfer') return QuickActionMode.edit;
+    if (hasAccount && hasCategory && hasAmount) return QuickActionMode.direct;
+    if (hasAccount && hasCategory) return QuickActionMode.confirm;
+    return QuickActionMode.edit;
+  }
+
+  static String? _emptyToNull(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 }

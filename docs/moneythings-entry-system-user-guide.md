@@ -31,6 +31,7 @@ Expected behavior:
 - Search is display-only: drag ordering is disabled while searching and returns after clearing the query.
 - On the manual add transaction page, once amount, account, and category are complete, `保存为快速动作` can turn the current entry into a reusable quick action.
 - The manual-entry quick action seed resolves calculator expressions and preserves the selected account, three-level category leaf, note, time, book, and tags.
+- Long-press a quick action and choose `编辑内容` to update its name, amount, account, category, type, transfer target, or note without changing the stable action id.
 
 ## Structured Transaction Editor
 
@@ -129,6 +130,7 @@ Expected behavior:
 - Use `更多图标` to set an emoji or text icon for a quick action and confirm the card updates.
 - Search quick actions by `餐饮`, `15`, `轻确认`, or `隐藏`; confirm matched actions remain tappable and drag handles return after clearing search.
 - From manual add transaction, enter `1+2×3`, choose a custom category, add a note, and confirm `保存为快速动作` appears.
+- Long-press a quick action, choose `编辑内容`, clear the amount, and confirm the card mode changes to `轻确认`.
 - Drag one hidden quick action and confirm it stays hidden after reload.
 - Open `jive://transaction/new?amount=15&type=expense` and confirm the editor receives the amount.
 - Open `jive://transaction/new?entrySource=quickAction&quickActionId=template:<id>&mode=direct` and confirm the editor banner/metadata reflect the quick action source.
