@@ -36,7 +36,7 @@ Options:
   --device <serial>            adb device serial. Defaults to JIVE_ANDROID_LOCAL_FEATURE_SMOKE_DEVICE or emulator-5554.
   --emulator <id>              Emulator id to launch when the device is offline. Defaults to Jive_Staging_API35.
   --flavor <name>              Flutter flavor. Defaults to dev.
-  --scenario <name>            guest-home, transaction-entry, quick-entry-hub, saas-gates, or all. Defaults to guest-home.
+  --scenario <name>            guest-home, transaction-entry, quick-entry-hub, settings-navigation, saas-gates, or all. Defaults to guest-home.
   --package <id>               Android package id. Defaults from flavor.
   --activity <name>            Launcher activity class. Defaults to com.jive.app.MainActivity.
   --artifact-dir <path>        Artifact output directory.
@@ -163,7 +163,7 @@ parse_args() {
   done
 
   case "$SCENARIO" in
-    guest-home|transaction-entry|quick-entry-hub|saas-gates|all)
+    guest-home|transaction-entry|quick-entry-hub|settings-navigation|saas-gates|all)
       ;;
     home)
       SCENARIO="guest-home"
@@ -456,7 +456,7 @@ scroll_until_contains() {
     return 0
   fi
 
-  for index in 1 2 3; do
+  for index in 1 2 3 4 5; do
     swipe_up
     sleep 1
     capture_step "${capture_prefix}_scrolled_$index"
@@ -560,6 +560,9 @@ write_summary() {
   verify keypad/category/account controls, and calculate 1+2×3 = 7.00.
 - When scenario is quick-entry-hub or all, long-press the home FAB, verify the
   quick-entry hub, and open manual bookkeeping without saving a transaction.
+- When scenario is settings-navigation or all, open Settings, verify the main
+  section anchors, open the language picker, open privacy policy, and return
+  home without changing persisted settings.
 - When scenario is saas-gates or all, open Settings, verify subscription
   entry points, and confirm the cloud-sync upgrade gate.
 
@@ -571,6 +574,7 @@ write_summary() {
 - final home screenshot/xml/logs: $ARTIFACT_DIR/final_home.*
 - transaction-entry scenario artifacts: $ARTIFACT_DIR/transaction_entry*.*
 - quick-entry-hub scenario artifacts: $ARTIFACT_DIR/quick_entry*.*
+- settings-navigation scenario artifacts: $ARTIFACT_DIR/settings_navigation*.*
 - saas-gates scenario artifacts: $ARTIFACT_DIR/saas_*.*
 EOF
 }
@@ -910,6 +914,76 @@ drive_saas_gates() {
   return_to_home
 }
 
+drive_settings_navigation() {
+  local xml="$ARTIFACT_DIR/final_home.xml"
+
+  if [[ ! -f "$xml" ]]; then
+    xml="$ARTIFACT_DIR/launch.xml"
+  fi
+
+  tap_label "$xml" "打开菜单" || fail "cannot tap home settings menu"
+  sleep 1
+  capture_step "settings_navigation_menu"
+  xml="$ARTIFACT_DIR/settings_navigation_menu.xml"
+
+  assert_ui_contains "$xml" "设置" "home menu missing settings entry"
+  tap_label "$xml" "设置" || fail "cannot tap settings entry"
+  sleep 2
+  capture_step "settings_navigation_top"
+  xml="$ARTIFACT_DIR/settings_navigation_top.xml"
+
+  assert_ui_contains "$xml" "设置" "settings screen missing title"
+  assert_ui_contains "$xml" "账户与订阅" "settings screen missing subscription entry"
+  assert_ui_contains "$xml" "云同步设置" "settings screen missing cloud sync entry"
+  assert_ui_contains "$xml" "外观" "settings screen missing appearance section"
+
+  xml="$(scroll_until_contains "$xml" "应用语言" "settings_navigation_language")" ||
+    fail "settings screen missing language entry"
+  assert_ui_contains "$xml" "语言" "settings screen missing language section"
+  assert_ui_contains "$xml" "应用语言" "settings screen missing app language entry"
+
+  tap_label "$xml" "应用语言" || fail "cannot tap app language entry"
+  sleep 1
+  capture_step "settings_navigation_language_picker"
+  xml="$ARTIFACT_DIR/settings_navigation_language_picker.xml"
+
+  assert_ui_contains "$xml" "选择语言" "language picker missing title"
+  assert_ui_contains "$xml" "简体中文" "language picker missing Simplified Chinese option"
+  assert_ui_contains "$xml" "English" "language picker missing English option"
+
+  press_back
+  sleep 1
+  capture_step "settings_navigation_after_language"
+  xml="$ARTIFACT_DIR/settings_navigation_after_language.xml"
+
+  xml="$(scroll_until_contains "$xml" "语音设置" "settings_navigation_voice")" ||
+    fail "settings screen missing voice settings entry"
+  assert_ui_contains "$xml" "语音与智能" "settings screen missing voice section"
+  assert_ui_contains "$xml" "语音设置" "settings screen missing voice settings entry"
+
+  xml="$(scroll_until_contains "$xml" "导出数据" "settings_navigation_data")" ||
+    fail "settings screen missing export data entry"
+  assert_ui_contains "$xml" "数据" "settings screen missing data section"
+  assert_ui_contains "$xml" "WebDAV 同步" "settings screen missing WebDAV entry"
+  assert_ui_contains "$xml" "导出数据" "settings screen missing export data entry"
+
+  xml="$(scroll_until_contains "$xml" "隐私政策" "settings_navigation_privacy")" ||
+    fail "settings screen missing privacy policy entry"
+  assert_ui_contains "$xml" "关于" "settings screen missing about section"
+  assert_ui_contains "$xml" "隐私政策" "settings screen missing privacy policy entry"
+
+  tap_label "$xml" "隐私政策" || fail "cannot tap privacy policy entry"
+  sleep 1
+  capture_step "settings_navigation_privacy_policy"
+  xml="$ARTIFACT_DIR/settings_navigation_privacy_policy.xml"
+
+  assert_ui_contains "$xml" "隐私政策" "privacy policy screen missing title"
+  assert_ui_contains "$xml" "Jive 积叶 隐私政策" "privacy policy screen missing heading"
+  assert_ui_contains "$xml" "数据存储" "privacy policy screen missing data storage copy"
+
+  return_to_home
+}
+
 drive_quick_entry_hub() {
   local xml="$ARTIFACT_DIR/final_home.xml"
 
@@ -954,11 +1028,15 @@ run_selected_scenario() {
     quick-entry-hub)
       drive_quick_entry_hub
       ;;
+    settings-navigation)
+      drive_settings_navigation
+      ;;
     saas-gates)
       drive_saas_gates
       ;;
     all)
       drive_saas_gates
+      drive_settings_navigation
       drive_quick_entry_hub
       drive_transaction_entry
       ;;

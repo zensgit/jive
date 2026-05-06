@@ -77,6 +77,7 @@ Each run emits:
 - `final_home.*`
 - `transaction_entry*.*` when `--scenario transaction-entry` or `--scenario all` is used
 - `quick_entry*.*` when `--scenario quick-entry-hub` or `--scenario all` is used
+- `settings_navigation*.*` when `--scenario settings-navigation` or `--scenario all` is used
 - `saas_*.*` when `--scenario saas-gates` or `--scenario all` is used
 - `install.log`
 - `flutter-build.log` when building
@@ -88,8 +89,9 @@ The `--scenario` option accepts:
 - `guest-home`, the default scenario.
 - `transaction-entry`, which runs guest-home first and then verifies the add-transaction screen.
 - `quick-entry-hub`, which runs guest-home first and then verifies the long-press quick-entry hub.
+- `settings-navigation`, which runs guest-home first and then verifies safe Settings navigation anchors.
 - `saas-gates`, which runs guest-home first and then verifies Settings subscription and cloud-sync gate entry points.
-- `all`, currently equivalent to guest-home plus saas-gates, quick-entry-hub, and transaction-entry.
+- `all`, currently equivalent to guest-home plus saas-gates, settings-navigation, quick-entry-hub, and transaction-entry.
 - `home`, a compatibility alias for `guest-home`.
 
 ### Guest Home
@@ -134,6 +136,20 @@ It validates:
 
 The scenario does not save a transaction. It backs out to the guest home after the manual page opens.
 
+### Settings Navigation
+
+The settings-navigation scenario starts from the guest home, opens the home menu through the stable `打开菜单` semantics label, and verifies Settings page navigation without changing persistent settings or invoking platform pickers.
+
+It validates:
+
+- Settings top anchors: `账户与订阅`, `云同步设置`, `外观`.
+- Language section anchors: `语言`, `应用语言`.
+- Language picker modal opens and exposes `选择语言`, `简体中文`, and `English`.
+- Voice and data sections can be reached by scrolling: `语音与智能`, `语音设置`, `数据`, `WebDAV 同步`, `导出数据`.
+- About section and privacy policy route: `关于`, `隐私政策`, `Jive 积叶 隐私政策`, `数据存储`.
+
+The scenario avoids destructive or environment-dependent actions such as WebDAV backup/restore, CSV file picking, system permission settings, payment purchase, and sync execution.
+
 ### SaaS Gates
 
 The saas-gates scenario starts from the guest home, opens Settings through the stable `打开菜单` semantics label, and verifies the visible SaaS entry points without using real payments or real cloud sync.
@@ -155,6 +171,7 @@ Use `--fresh-install` for this scenario when validating the free-tier gate, othe
 - Tap coordinates are derived from UI XML bounds rather than screenshots.
 - Long-press coordinates prefer `long-clickable=true` nodes when available.
 - Onboarding is advanced as a small state machine so transient empty launch XML or reordered onboarding pages do not strand the smoke before guest mode.
+- Scroll-until-visible checks allow up to five swipes so longer Settings pages can be validated on compact emulator viewports.
 
 ## Known Limits
 
