@@ -11,7 +11,7 @@ The implementation is stacked on `codex/moneythings-quick-action-search` and kee
 - Branch: `codex/moneythings-add-entry-save-action`
 - Base: `codex/moneythings-quick-action-search`
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-add-entry-save-action`
-- PR: pending
+- PR: https://github.com/zensgit/jive/pull/229
 
 ## Product Behavior
 
