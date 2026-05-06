@@ -294,6 +294,89 @@ void main() {
   );
 
   testWidgets(
+    'add transaction entry offers save current state as quick action',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AddTransactionScreen(
+            isar: harness.isar,
+            bootstrapDefaults: false,
+            initialParentCategories: [harness.parent],
+            initialSubCategories: [harness.child],
+            initialAccounts: [harness.account],
+            initialAccountBalances: {harness.account.id: 0},
+            initialTags: const [],
+            initialProjects: const [],
+            smartTagResolver: (_) async => const [],
+          ),
+        ),
+      );
+      await _pumpUntilFound(
+        tester,
+        find.byKey(AddTransactionScreenKeys.amountKey('1')),
+      );
+
+      await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('1')));
+      await tester.tap(
+        find.byKey(AddTransactionScreenKeys.subCategory('custom_coffee')),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(AddTransactionScreenKeys.noteCollapsed));
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(AddTransactionScreenKeys.noteTextField),
+        '每天一杯',
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pump();
+
+      expect(
+        find.byKey(AddTransactionScreenKeys.saveQuickActionButton),
+        findsOneWidget,
+      );
+    },
+  );
+
+  test('quick action seed captures amount category account and note', () {
+    final seed = buildAddTransactionQuickActionSeed(
+      amountText: '1+2×3',
+      selectedTime: DateTime(2026, 5, 6, 9, 30),
+      txType: TransactionType.expense,
+      isSplitMode: false,
+      selectedAccount: harness.account,
+      selectedToAccount: null,
+      selectedParent: harness.parent,
+      selectedSub: harness.grandchild,
+      categoryUniverse: [harness.parent, harness.child, harness.grandchild],
+      note: ' 每天一杯 ',
+      currentBookId: 42,
+      widgetBookId: null,
+      selectedTagKeys: const ['morning'],
+    );
+
+    expect(seed, isNotNull);
+    expect(seed!.amount, 7);
+    expect(seed.source, 'quick_action_seed');
+    expect(seed.timestamp, DateTime(2026, 5, 6, 9, 30));
+    expect(seed.type, 'expense');
+    expect(seed.accountId, harness.account.id);
+    expect(seed.categoryKey, 'custom_food');
+    expect(seed.subCategoryKey, 'custom_pourover');
+    expect(seed.category, '自定义餐饮');
+    expect(seed.subCategory, '手冲');
+    expect(seed.note, '每天一杯');
+    expect(seed.bookId, 42);
+    expect(seed.tagKeys, ['morning']);
+  });
+
+  testWidgets(
     'add transaction entry saves three-level category as top and leaf keys',
     (tester) async {
       tester.view.physicalSize = const Size(430, 932);
