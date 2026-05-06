@@ -68,6 +68,7 @@ Notes:
 - `flutter analyze --no-fatal-infos` passed with existing info-level lint output in unrelated files.
 - The regression bundle passed all 47 tests.
 - `git diff --name-only -- supabase/migrations lib/core/sync .github/workflows` returned no changes.
+- GitHub PR #227 checks passed: `analyze_and_test`, `detect_saas_wave0_smoke`, and `saas_production_readiness_self_check`; `android_integration_test` and `saas_wave0_smoke` were skipped by current CI rules.
 
 ## Manual Smoke
 
