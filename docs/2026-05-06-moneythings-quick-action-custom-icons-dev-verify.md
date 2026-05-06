@@ -3,7 +3,7 @@
 Date: 2026-05-06
 Branch: `codex/moneythings-quick-action-custom-icons`
 Base: `origin/codex/moneythings-quick-action-dnd`
-PR: `TBD`
+PR: `#225`
 
 ## Summary
 
