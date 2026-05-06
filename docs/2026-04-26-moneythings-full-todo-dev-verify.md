@@ -41,7 +41,7 @@
 - 2026-05-05：`codex/moneythings-quick-action-management` 将旧模板列表升级为快速动作管理页，支持首页显示/隐藏、置顶、图标颜色、本地排序与删除。
 - 2026-05-05：PR #223 / `codex/moneythings-quick-action-dnd` 补齐快速动作可见/隐藏分区拖拽排序，并复用分类图标库扩充图标候选。
 - 2026-05-06：PR #225 / `codex/moneythings-quick-action-custom-icons` 补齐快速动作自定义图标，复用分类图标源选择器，支持系统图标、表情、文字和本机图片。
-- 2026-05-06：`codex/moneythings-quick-action-search` 补齐快速动作管理页搜索/过滤，支持按名称、分类、备注、金额、模式、类型、首页/隐藏和置顶状态查找；搜索期间禁用拖拽，避免过滤子集误改全局排序。
+- 2026-05-06：PR #227 / `codex/moneythings-quick-action-search` 补齐快速动作管理页搜索/过滤，支持按名称、分类、备注、金额、模式、类型、首页/隐藏和置顶状态查找；搜索期间禁用拖拽，避免过滤子集误改全局排序。
 - 2026-05-10：`codex/moneythings-quick-action-editor-params` 补齐 Quick Action edit fallback 参数映射测试，并保留 `bookId` 作为结构化编辑器的场景/账本预填上下文。
 - 2026-05-10：`codex/moneythings-scene-template-contracts` 固定日常、旅行、装修、家庭、宠物、自由职业 6 个场景模板的 ID 顺序与核心分类/标签语义，避免场景产品化后续回退。
 - 2026-05-10：`codex/moneythings-transaction-entry-protocol` 补齐 `TransactionEntryParams` 协议回归测试，固定来源横幅、提交按钮、缺字段高亮和复杂转账预填合同。

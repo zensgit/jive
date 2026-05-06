@@ -6,6 +6,8 @@ This slice continues the MoneyThings-style One Touch management work on top of `
 
 The goal is small and local: make the quick action management page searchable without changing quick action storage, execution, transaction saving, SaaS sync/payment, or migrations.
 
+PR: #227 (`codex/moneythings-quick-action-search`)
+
 ## Design
 
 `TemplateListScreen` now includes a search field above the visible/hidden quick action sections.
