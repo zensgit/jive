@@ -8,6 +8,7 @@ import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/quick_action_store_service.dart';
 import '../category/category_icon_library.dart';
+import '../category/category_icon_source_picker.dart';
 import '../quick_entry/quick_action_executor.dart';
 
 class TemplateListScreen extends StatefulWidget {
@@ -242,7 +243,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     required Widget dragHandle,
   }) {
     final color = _actionColor(action);
-    final icon = _actionIcon(action);
+    final iconName = action.iconName ?? _defaultIconName(action);
 
     return Card(
       key: key,
@@ -262,7 +263,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                   color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 20),
+                child: _buildIconPreview(iconName, size: 20, color: color),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -466,100 +467,173 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setSheetState) {
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
           return SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '设置「${action.name}」',
-                    style: GoogleFonts.lato(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '设置「${action.name}」',
+                      style: GoogleFonts.lato(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('图标', style: GoogleFonts.lato(fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: _iconChoiceNames.map((iconName) {
-                      final selected = selectedIcon == iconName;
-                      return ChoiceChip(
-                        selected: selected,
-                        avatar: Icon(_iconData(iconName), size: 18),
-                        label: Text(_iconLabel(iconName)),
-                        onSelected: (_) {
-                          setSheetState(() => selectedIcon = iconName);
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('颜色', style: GoogleFonts.lato(fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 10,
-                    children: _colorChoices.entries.map((entry) {
-                      final selected = selectedColor == entry.key;
-                      return InkWell(
-                        onTap: () {
-                          setSheetState(() => selectedColor = entry.key);
-                        },
-                        borderRadius: BorderRadius.circular(18),
-                        child: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: entry.value,
-                            border: Border.all(
-                              color: selected
-                                  ? Colors.black87
-                                  : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                          child: selected
-                              ? const Icon(
-                                  Icons.check,
-                                  color: Colors.white,
-                                  size: 18,
-                                )
-                              : null,
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Text('图标', style: GoogleFonts.lato(fontSize: 13)),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: () {
+                            Navigator.pop(sheetContext);
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              if (!mounted) return;
+                              _pickAndSaveCustomIcon(
+                                action,
+                                initialIcon: selectedIcon,
+                                colorHex: selectedColor,
+                              );
+                            });
+                          },
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          label: const Text('更多图标'),
                         ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        final service = await _quickActionStore();
-                        await service.updatePresentation(
-                          action.stableId,
-                          iconName: selectedIcon,
-                          colorHex: selectedColor,
-                        );
-                        _loadActions();
-                      },
-                      child: const Text('保存样式'),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '可选系统图标、表情、文字或本机图片；本机图片仅保存在当前设备。',
+                      style: GoogleFonts.lato(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        if (!_isPresetIcon(selectedIcon))
+                          ChoiceChip(
+                            selected: true,
+                            avatar: _buildIconPreview(
+                              selectedIcon,
+                              size: 18,
+                              color: JiveTheme.primaryGreen,
+                            ),
+                            label: Text(_customIconLabel(selectedIcon)),
+                            onSelected: (_) {},
+                          ),
+                        ..._iconChoiceNames.map((iconName) {
+                          final selected = selectedIcon == iconName;
+                          return ChoiceChip(
+                            selected: selected,
+                            avatar: _buildIconPreview(
+                              iconName,
+                              size: 18,
+                              color: selected
+                                  ? JiveTheme.primaryGreen
+                                  : Colors.grey.shade700,
+                            ),
+                            label: Text(_iconLabel(iconName)),
+                            onSelected: (_) {
+                              setSheetState(() => selectedIcon = iconName);
+                            },
+                          );
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text('颜色', style: GoogleFonts.lato(fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10,
+                      children: _colorChoices.entries.map((entry) {
+                        final selected = selectedColor == entry.key;
+                        return InkWell(
+                          onTap: () {
+                            setSheetState(() => selectedColor = entry.key);
+                          },
+                          borderRadius: BorderRadius.circular(18),
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: entry.value,
+                              border: Border.all(
+                                color: selected
+                                    ? Colors.black87
+                                    : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
+                            child: selected
+                                ? const Icon(
+                                    Icons.check,
+                                    color: Colors.white,
+                                    size: 18,
+                                  )
+                                : null,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          Navigator.pop(sheetContext);
+                          final service = await _quickActionStore();
+                          await service.updatePresentation(
+                            action.stableId,
+                            iconName: selectedIcon,
+                            colorHex: selectedColor,
+                          );
+                          _loadActions();
+                        },
+                        child: const Text('保存样式'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           );
         },
       ),
     );
+  }
+
+  Future<void> _pickAndSaveCustomIcon(
+    JiveQuickAction action, {
+    required String initialIcon,
+    required String colorHex,
+  }) async {
+    final picked = await pickCategoryIcon(
+      context,
+      initialIcon: initialIcon,
+      forceTinted: true,
+    );
+    if (picked == null) return;
+    if (!mounted) return;
+    final service = await _quickActionStore();
+    await service.updatePresentation(
+      action.stableId,
+      iconName: picked,
+      colorHex: colorHex,
+    );
+    await _loadActions();
   }
 
   Future<void> _confirmDelete(JiveQuickAction action) async {
@@ -586,11 +660,6 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     final service = await _quickActionStore();
     await service.deleteAction(action.stableId);
     _loadActions();
-  }
-
-  IconData _actionIcon(JiveQuickAction action) {
-    final name = action.iconName ?? _defaultIconName(action);
-    return _iconData(name);
   }
 
   Color _actionColor(JiveQuickAction action) {
@@ -687,5 +756,41 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
 
   static bool _containsChinese(String value) {
     return RegExp(r'[\u4e00-\u9fa5]').hasMatch(value);
+  }
+
+  static Widget _buildIconPreview(
+    String iconName, {
+    required double size,
+    required Color color,
+  }) {
+    if (_quickActionIconLabels.containsKey(iconName)) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Icon(_iconData(iconName), size: size, color: color),
+      );
+    }
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CategoryService.buildIcon(
+        iconName,
+        size: size,
+        color: color,
+        forceTinted: true,
+      ),
+    );
+  }
+
+  static bool _isPresetIcon(String iconName) {
+    return _iconChoiceNames.contains(iconName);
+  }
+
+  static String _customIconLabel(String iconName) {
+    if (iconName.startsWith('emoji:')) return '表情';
+    if (iconName.startsWith('file:')) return '图片';
+    if (iconName.startsWith('text:')) return '文字';
+    if (iconName.startsWith('assets/')) return '图标';
+    return '自定义';
   }
 }
