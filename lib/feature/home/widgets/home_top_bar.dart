@@ -108,17 +108,24 @@ class HomeTopBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: onGearMenu,
-              child: CircleAvatar(
-                radius: avatarRadius,
-                backgroundColor: isDark
-                    ? Colors.grey.shade800
-                    : Colors.grey.shade200,
-                child: Icon(
-                  Icons.settings,
-                  color: isDark ? Colors.white70 : Colors.black54,
-                  size: iconSize,
+            Tooltip(
+              message: '打开菜单',
+              child: Semantics(
+                label: '打开菜单',
+                button: true,
+                child: GestureDetector(
+                  onTap: onGearMenu,
+                  child: CircleAvatar(
+                    radius: avatarRadius,
+                    backgroundColor: isDark
+                        ? Colors.grey.shade800
+                        : Colors.grey.shade200,
+                    child: Icon(
+                      Icons.settings,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                      size: iconSize,
+                    ),
+                  ),
                 ),
               ),
             ),

@@ -36,7 +36,7 @@ Options:
   --device <serial>            adb device serial. Defaults to JIVE_ANDROID_LOCAL_FEATURE_SMOKE_DEVICE or emulator-5554.
   --emulator <id>              Emulator id to launch when the device is offline. Defaults to Jive_Staging_API35.
   --flavor <name>              Flutter flavor. Defaults to dev.
-  --scenario <name>            guest-home, transaction-entry, or all. Defaults to guest-home.
+  --scenario <name>            guest-home, transaction-entry, quick-entry-hub, saas-gates, or all. Defaults to guest-home.
   --package <id>               Android package id. Defaults from flavor.
   --activity <name>            Launcher activity class. Defaults to com.jive.app.MainActivity.
   --artifact-dir <path>        Artifact output directory.
@@ -163,7 +163,7 @@ parse_args() {
   done
 
   case "$SCENARIO" in
-    guest-home|transaction-entry|all)
+    guest-home|transaction-entry|quick-entry-hub|saas-gates|all)
       ;;
     home)
       SCENARIO="guest-home"
@@ -317,6 +317,56 @@ print(matches[0][4], matches[0][5])
 PY
 }
 
+pick_long_node_center() {
+  local xml_file="$1"
+  local needle="$2"
+
+  python3 - "$xml_file" "$needle" <<'PY'
+import html
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+xml_file, needle = sys.argv[1:]
+try:
+    root = ET.parse(xml_file).getroot()
+except ET.ParseError:
+    sys.exit(1)
+matches = []
+
+for node in root.iter("node"):
+    text = html.unescape(node.attrib.get("text", ""))
+    desc = html.unescape(node.attrib.get("content-desc", ""))
+    haystack = "\n".join(value for value in [text, desc] if value)
+    normalized_needle = " ".join(needle.split())
+    normalized_haystack = re.sub(r"\s+", " ", haystack).strip()
+    if needle not in haystack and normalized_needle not in normalized_haystack:
+        continue
+    bounds = node.attrib.get("bounds", "")
+    match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
+    if not match:
+        continue
+    x1, y1, x2, y2 = map(int, match.groups())
+    long_clickable = node.attrib.get("long-clickable") == "true"
+    clickable = node.attrib.get("clickable") == "true"
+    focusable = node.attrib.get("focusable") == "true"
+    exact = (
+        text == needle
+        or desc == needle
+        or haystack == needle
+        or normalized_haystack == normalized_needle
+    )
+    area = max(1, (x2 - x1) * (y2 - y1))
+    matches.append((not exact, not long_clickable, not clickable, not focusable, area, (x1 + x2) // 2, (y1 + y2) // 2))
+
+if not matches:
+    sys.exit(1)
+
+matches.sort()
+print(matches[0][5], matches[0][6])
+PY
+}
+
 summarize_ui() {
   local xml_file="$1"
   local output_file="$2"
@@ -374,9 +424,13 @@ long_tap_label() {
   local label="$2"
   local coords
 
-  coords="$(pick_node_center "$xml_file" "$label")" || return 1
+  coords="$(pick_long_node_center "$xml_file" "$label")" || return 1
   # shellcheck disable=SC2086
-  "$ADB_BIN" -s "$DEVICE" shell input swipe $coords $coords 900
+  "$ADB_BIN" -s "$DEVICE" shell input swipe $coords $coords 1400
+}
+
+press_back() {
+  "$ADB_BIN" -s "$DEVICE" shell input keyevent 4
 }
 
 assert_ui_contains() {
@@ -389,6 +443,31 @@ assert_ui_contains() {
 
 swipe_up() {
   "$ADB_BIN" -s "$DEVICE" shell input swipe 540 2100 540 900 500
+}
+
+scroll_until_contains() {
+  local xml_file="$1"
+  local needle="$2"
+  local capture_prefix="$3"
+  local index
+
+  if ui_contains "$xml_file" "$needle"; then
+    printf '%s\n' "$xml_file"
+    return 0
+  fi
+
+  for index in 1 2 3; do
+    swipe_up
+    sleep 1
+    capture_step "${capture_prefix}_scrolled_$index"
+    xml_file="$ARTIFACT_DIR/${capture_prefix}_scrolled_$index.xml"
+    if ui_contains "$xml_file" "$needle"; then
+      printf '%s\n' "$xml_file"
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 capture_step() {
@@ -479,6 +558,10 @@ write_summary() {
 - Verify the home screen contains guest and net-worth content.
 - When scenario is transaction-entry or all, open the add-transaction page,
   verify keypad/category/account controls, and calculate 1+2×3 = 7.00.
+- When scenario is quick-entry-hub or all, long-press the home FAB, verify the
+  quick-entry hub, and open manual bookkeeping without saving a transaction.
+- When scenario is saas-gates or all, open Settings, verify subscription
+  entry points, and confirm the cloud-sync upgrade gate.
 
 ## Artifacts
 
@@ -487,6 +570,8 @@ write_summary() {
 - auth screenshots/xml/logs: $ARTIFACT_DIR/auth*.*
 - final home screenshot/xml/logs: $ARTIFACT_DIR/final_home.*
 - transaction-entry scenario artifacts: $ARTIFACT_DIR/transaction_entry*.*
+- quick-entry-hub scenario artifacts: $ARTIFACT_DIR/quick_entry*.*
+- saas-gates scenario artifacts: $ARTIFACT_DIR/saas_*.*
 EOF
 }
 
@@ -591,6 +676,7 @@ launch_app() {
 
 drive_onboarding() {
   local xml="$ARTIFACT_DIR/launch.xml"
+  local index
 
   if [[ "$DRIVE_ONBOARDING" -ne 1 ]]; then
     log "skipping onboarding drive"
@@ -607,49 +693,61 @@ drive_onboarding() {
     return 0
   fi
 
-  if ui_contains "$xml" "欢迎使用积叶"; then
-    tap_label "$xml" "跳过" || fail "cannot tap welcome skip"
-    sleep 3
-    capture_step "onboarding_entry"
-    xml="$ARTIFACT_DIR/onboarding_entry.xml"
-  fi
-
-  if ui_contains "$xml" "记一笔"; then
-    tap_label "$xml" "餐饮" || fail "cannot tap onboarding category"
-    sleep 1
-    tap_label "$xml" "下一步" || fail "cannot tap next after category selection"
-    sleep 3
-    capture_step "onboarding_after_category"
-    xml="$ARTIFACT_DIR/onboarding_after_category.xml"
-  fi
-
-  for index in 1 2 3 4 5 6; do
-    if ui_contains "$xml" "邮箱登录" || ui_contains "$xml" "Jive 积叶"; then
+  for index in 1 2 3 4 5 6 7 8 9 10; do
+    if ui_contains "$xml" "跳过，以游客身份使用" ||
+      ui_contains "$xml" "邮箱登录" ||
+      ui_contains "$xml" "Jive 积叶"; then
       break
     fi
+
+    if ui_contains "$xml" "欢迎使用积叶"; then
+      tap_label "$xml" "跳过" || fail "cannot tap welcome skip"
+      sleep 2
+      capture_step "onboarding_progress_$index"
+      xml="$ARTIFACT_DIR/onboarding_progress_$index.xml"
+      continue
+    fi
+
+    if ui_contains "$xml" "记一笔"; then
+      tap_label "$xml" "餐饮" || fail "cannot tap onboarding category"
+      sleep 1
+      tap_label "$xml" "下一步" || fail "cannot tap next after category selection"
+      sleep 2
+      capture_step "onboarding_progress_$index"
+      xml="$ARTIFACT_DIR/onboarding_progress_$index.xml"
+      continue
+    fi
+
     if tap_label "$xml" "跳过"; then
       sleep 2
-      capture_step "onboarding_skip_$index"
-      xml="$ARTIFACT_DIR/onboarding_skip_$index.xml"
+      capture_step "onboarding_progress_$index"
+      xml="$ARTIFACT_DIR/onboarding_progress_$index.xml"
       continue
     fi
+
+    if tap_label "$xml" "下一步"; then
+      sleep 2
+      capture_step "onboarding_progress_$index"
+      xml="$ARTIFACT_DIR/onboarding_progress_$index.xml"
+      continue
+    fi
+
     if tap_label "$xml" "完成"; then
       sleep 2
-      capture_step "onboarding_done_$index"
-      xml="$ARTIFACT_DIR/onboarding_done_$index.xml"
+      capture_step "onboarding_progress_$index"
+      xml="$ARTIFACT_DIR/onboarding_progress_$index.xml"
       continue
     fi
-    break
-  done
 
-  if ! ui_contains "$xml" "跳过，以游客身份使用"; then
     swipe_up
     sleep 2
-    capture_step "auth_scrolled"
-    xml="$ARTIFACT_DIR/auth_scrolled.xml"
-  else
-    cp "$xml" "$ARTIFACT_DIR/auth.xml"
-  fi
+    capture_step "onboarding_progress_$index"
+    xml="$ARTIFACT_DIR/onboarding_progress_$index.xml"
+  done
+
+  xml="$(scroll_until_contains "$xml" "跳过，以游客身份使用" "auth_guest")" ||
+    fail "cannot find guest mode entry"
+  cp "$xml" "$ARTIFACT_DIR/auth.xml"
 
   tap_label "$xml" "跳过，以游客身份使用" || fail "cannot tap guest mode entry"
   sleep 2
@@ -726,11 +824,142 @@ drive_transaction_entry() {
   assert_ui_contains "$xml" "7.00" "transaction entry result did not show 7.00"
 }
 
+return_to_home() {
+  local index
+  local xml
+
+  for index in 1 2 3 4 5; do
+    capture_step "return_home_$index"
+    xml="$ARTIFACT_DIR/return_home_$index.xml"
+    if ui_contains "$xml" "访客" && ui_contains "$xml" "净资产"; then
+      cp "$xml" "$ARTIFACT_DIR/final_home.xml"
+      cp "$ARTIFACT_DIR/return_home_$index.png" "$ARTIFACT_DIR/final_home.png" || true
+      cp "$ARTIFACT_DIR/return_home_$index.summary.txt" "$ARTIFACT_DIR/final_home.summary.txt" || true
+      cp "$ARTIFACT_DIR/return_home_$index.crash.log" "$ARTIFACT_DIR/final_home.crash.log" || true
+      cp "$ARTIFACT_DIR/return_home_$index.alerts.log" "$ARTIFACT_DIR/final_home.alerts.log" || true
+      return 0
+    fi
+    press_back
+    sleep 1
+  done
+
+  fail "could not return to guest home"
+}
+
+drive_saas_gates() {
+  local xml="$ARTIFACT_DIR/final_home.xml"
+
+  if [[ ! -f "$xml" ]]; then
+    xml="$ARTIFACT_DIR/launch.xml"
+  fi
+
+  tap_label "$xml" "打开菜单" || fail "cannot tap home settings menu"
+  sleep 1
+  capture_step "saas_menu"
+  xml="$ARTIFACT_DIR/saas_menu.xml"
+
+  assert_ui_contains "$xml" "设置" "home menu missing settings entry"
+  tap_label "$xml" "设置" || fail "cannot tap settings entry"
+  sleep 2
+  capture_step "saas_settings"
+  xml="$ARTIFACT_DIR/saas_settings.xml"
+
+  assert_ui_contains "$xml" "账户与订阅" "settings missing subscription entry"
+  assert_ui_contains "$xml" "云同步设置" "settings missing cloud sync entry"
+  assert_ui_contains "$xml" "外观" "settings missing appearance section"
+
+  tap_label "$xml" "账户与订阅" || fail "cannot tap subscription entry"
+  sleep 2
+  capture_step "saas_subscription"
+  xml="$ARTIFACT_DIR/saas_subscription.xml"
+
+  assert_ui_contains "$xml" "升级方案" "subscription screen missing title"
+  assert_ui_contains "$xml" "当前方案" "subscription screen missing current plan"
+  xml="$(scroll_until_contains "$xml" "云同步与多设备使用" "saas_subscription")" ||
+    fail "subscription screen missing cloud sync feature copy"
+  assert_ui_contains "$xml" "云同步与多设备使用" "subscription screen missing cloud sync feature copy"
+
+  xml="$(scroll_until_contains "$xml" "恢复购买" "saas_subscription_restore")" ||
+    fail "subscription screen missing restore action"
+  assert_ui_contains "$xml" "恢复购买" "subscription screen missing restore action"
+
+  press_back
+  sleep 1
+  capture_step "saas_settings_after_subscription"
+  xml="$ARTIFACT_DIR/saas_settings_after_subscription.xml"
+
+  tap_label "$xml" "云同步设置" || fail "cannot tap cloud sync settings gate"
+  sleep 1
+  capture_step "saas_cloud_sync_gate"
+  xml="$ARTIFACT_DIR/saas_cloud_sync_gate.xml"
+
+  assert_ui_contains "$xml" "此功能需要订阅版" "cloud sync gate missing subscriber copy"
+  assert_ui_contains "$xml" "了解订阅版" "cloud sync gate missing learn more action"
+  assert_ui_contains "$xml" "稍后再说" "cloud sync gate missing later action"
+
+  tap_label "$xml" "了解订阅版" || fail "cannot open subscription from cloud sync gate"
+  sleep 2
+  capture_step "saas_cloud_sync_subscription"
+  xml="$ARTIFACT_DIR/saas_cloud_sync_subscription.xml"
+
+  assert_ui_contains "$xml" "升级方案" "cloud sync gate did not navigate to subscription screen"
+  xml="$(scroll_until_contains "$xml" "云同步与多设备使用" "saas_cloud_sync_subscription")" ||
+    fail "cloud sync subscription screen missing feature copy"
+  assert_ui_contains "$xml" "云同步与多设备使用" "cloud sync subscription screen missing feature copy"
+
+  return_to_home
+}
+
+drive_quick_entry_hub() {
+  local xml="$ARTIFACT_DIR/final_home.xml"
+
+  if [[ ! -f "$xml" ]]; then
+    xml="$ARTIFACT_DIR/launch.xml"
+  fi
+
+  long_tap_label "$xml" "新增记账" || fail "cannot long press home quick-entry FAB"
+  sleep 1
+  capture_step "quick_entry_hub"
+  xml="$ARTIFACT_DIR/quick_entry_hub.xml"
+
+  assert_ui_contains "$xml" "手动记账" "quick entry hub missing manual entry"
+  assert_ui_contains "$xml" "语音记账" "quick entry hub missing voice entry"
+  assert_ui_contains "$xml" "对话记账" "quick entry hub missing conversation entry"
+  assert_ui_contains "$xml" "截图识别" "quick entry hub missing screenshot entry"
+  assert_ui_contains "$xml" "从模板记" "quick entry hub missing template entry"
+  assert_ui_contains "$xml" "从分享记" "quick entry hub missing share entry"
+
+  tap_label "$xml" "手动记账" || fail "cannot tap manual entry from quick-entry hub"
+  sleep 2
+  capture_step "quick_entry_manual_transaction"
+  xml="$ARTIFACT_DIR/quick_entry_manual_transaction.xml"
+
+  assert_ui_contains "$xml" "支出" "quick entry manual flow missing expense tab"
+  assert_ui_contains "$xml" "收入" "quick entry manual flow missing income tab"
+  assert_ui_contains "$xml" "转账" "quick entry manual flow missing transfer tab"
+  assert_ui_contains "$xml" "餐饮" "quick entry manual flow missing category grid"
+  assert_ui_contains "$xml" "现金" "quick entry manual flow missing cash account"
+  assert_ui_contains "$xml" "再记" "quick entry manual flow missing save-and-new action"
+
+  return_to_home
+}
+
 run_selected_scenario() {
   case "$SCENARIO" in
     guest-home)
       ;;
-    transaction-entry|all)
+    transaction-entry)
+      drive_transaction_entry
+      ;;
+    quick-entry-hub)
+      drive_quick_entry_hub
+      ;;
+    saas-gates)
+      drive_saas_gates
+      ;;
+    all)
+      drive_saas_gates
+      drive_quick_entry_hub
       drive_transaction_entry
       ;;
   esac
