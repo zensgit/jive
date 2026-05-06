@@ -181,28 +181,32 @@ class _QuickEntryHubSheetState extends State<QuickEntryHubSheet> {
   }
 
   Widget _buildEntryCard(_EntryCardData data) {
-    final card = GestureDetector(
-      onTap: data.onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: JiveTheme.surfaceWhite,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(data.emoji, style: const TextStyle(fontSize: 28)),
-            const SizedBox(height: 6),
-            Text(
-              data.label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade800,
+    final card = Semantics(
+      label: data.label,
+      button: true,
+      child: GestureDetector(
+        onTap: data.onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: JiveTheme.surfaceWhite,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(data.emoji, style: const TextStyle(fontSize: 28)),
+              const SizedBox(height: 6),
+              Text(
+                data.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade800,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

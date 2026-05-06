@@ -91,11 +91,22 @@ class _MainScreenState extends State<MainScreen>
           ),
         ],
       ),
-      floatingActionButton: GestureDetector(
-        onLongPress: () => _showQuickEntryHub(),
-        child: FloatingActionButton(
-          onPressed: () => showAddTransaction('expense'),
-          child: const Icon(Icons.add, size: 32),
+      floatingActionButton: Semantics(
+        label: '新增记账，长按打开快记中心',
+        button: true,
+        onTap: () => showAddTransaction('expense'),
+        onLongPress: _showQuickEntryHub,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => showAddTransaction('expense'),
+          onLongPress: () => _showQuickEntryHub(),
+          child: AbsorbPointer(
+            child: FloatingActionButton(
+              tooltip: '新增记账，长按打开快记中心',
+              onPressed: () {},
+              child: const Icon(Icons.add, size: 32),
+            ),
+          ),
         ),
       ),
       bottomNavigationBar: NavigationBar(

@@ -27,7 +27,7 @@ Reuse an existing APK:
 
 ```bash
 scripts/run_android_local_feature_smoke.sh \
-  --scenario transaction-entry \
+  --scenario quick-entry-hub \
   --skip-build \
   --fresh-install \
   --allow-uninstall-on-signature-mismatch \
@@ -76,6 +76,8 @@ Each run emits:
 - `guest_confirm.*`
 - `final_home.*`
 - `transaction_entry*.*` when `--scenario transaction-entry` or `--scenario all` is used
+- `quick_entry*.*` when `--scenario quick-entry-hub` or `--scenario all` is used
+- `saas_*.*` when `--scenario saas-gates` or `--scenario all` is used
 - `install.log`
 - `flutter-build.log` when building
 
@@ -85,7 +87,9 @@ The `--scenario` option accepts:
 
 - `guest-home`, the default scenario.
 - `transaction-entry`, which runs guest-home first and then verifies the add-transaction screen.
-- `all`, currently equivalent to guest-home plus transaction-entry.
+- `quick-entry-hub`, which runs guest-home first and then verifies the long-press quick-entry hub.
+- `saas-gates`, which runs guest-home first and then verifies Settings subscription and cloud-sync gate entry points.
+- `all`, currently equivalent to guest-home plus saas-gates, quick-entry-hub, and transaction-entry.
 - `home`, a compatibility alias for `guest-home`.
 
 ### Guest Home
@@ -117,12 +121,40 @@ It validates:
 
 The scenario intentionally does not tap the save action, so it does not create a real transaction record.
 
+### Quick Entry Hub
+
+The quick-entry-hub scenario starts from the guest home and long-presses the home FAB. The FAB exposes a stable Android semantics label, `新增记账，长按打开快记中心`, so the smoke runner does not depend on screenshot coordinates.
+
+It validates:
+
+- Quick-entry hub entry cards: `手动记账`, `语音记账`, `对话记账`, `截图识别`, `从模板记`, `从分享记`.
+- Subscriber-only voice entry remains visibly locked for the free guest account.
+- Tapping `手动记账` opens the calculator-based add-transaction page.
+- Manual flow anchors are present: `支出`, `收入`, `转账`, `餐饮`, `现金`, `再记`.
+
+The scenario does not save a transaction. It backs out to the guest home after the manual page opens.
+
+### SaaS Gates
+
+The saas-gates scenario starts from the guest home, opens Settings through the stable `打开菜单` semantics label, and verifies the visible SaaS entry points without using real payments or real cloud sync.
+
+It validates:
+
+- Settings anchors: `账户与订阅`, `云同步设置`, `外观`.
+- Subscription page anchors: `升级方案`, `当前方案`, `云同步与多设备使用`, `恢复购买`.
+- Free-tier cloud-sync gate: `此功能需要订阅版`, `了解订阅版`, `稍后再说`.
+- The cloud-sync upgrade prompt can navigate to the subscription page.
+
+Use `--fresh-install` for this scenario when validating the free-tier gate, otherwise preserved local entitlement state may bypass the upgrade prompt.
+
 ## Implementation Notes
 
 - UI matching parses sanitized `uiautomator` XML and checks decoded `text` and `content-desc` values.
 - Matching normalizes whitespace because Flutter semantics may expose `+ 长按×` as `content-desc="+\n长按×"`.
 - UI capture retries transient `ERROR: null root node returned by UiTestAutomationBridge` dumps during cold startup.
 - Tap coordinates are derived from UI XML bounds rather than screenshots.
+- Long-press coordinates prefer `long-clickable=true` nodes when available.
+- Onboarding is advanced as a small state machine so transient empty launch XML or reordered onboarding pages do not strand the smoke before guest mode.
 
 ## Known Limits
 
