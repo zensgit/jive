@@ -11,7 +11,7 @@ The implementation remains template-compatible: template-backed quick actions up
 - Branch: `codex/moneythings-quick-action-core-edit`
 - Base: `codex/moneythings-add-entry-save-action`
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-quick-action-core-edit`
-- PR: pending
+- PR: https://github.com/zensgit/jive/pull/230
 
 ## Product Behavior
 
