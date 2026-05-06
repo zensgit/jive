@@ -27,6 +27,8 @@ Expected behavior:
 - Quick action icon choices reuse the category icon library and add One Touch-specific icons such as transfer, credit card, and payment.
 - Quick action custom icons reuse the category icon source picker, so a local quick action can use system icons, emoji, text icons, or a local gallery image.
 - Local gallery image icons are current-device presentation only until quick action cloud sync and file backup semantics are designed.
+- The quick action management page can search by name, category, note, amount, type, mode, home/hidden state, or pinned state.
+- Search is display-only: drag ordering is disabled while searching and returns after clearing the query.
 
 ## Structured Transaction Editor
 
@@ -123,6 +125,7 @@ Expected behavior:
 - Open quick action management, hide one action, and confirm it leaves home/quick entry but remains manageable in the hidden section.
 - Change one quick action icon/color, drag it by the right-side handle, and reopen the page to confirm the local presentation persists.
 - Use `更多图标` to set an emoji or text icon for a quick action and confirm the card updates.
+- Search quick actions by `餐饮`, `15`, `轻确认`, or `隐藏`; confirm matched actions remain tappable and drag handles return after clearing search.
 - Drag one hidden quick action and confirm it stays hidden after reload.
 - Open `jive://transaction/new?amount=15&type=expense` and confirm the editor receives the amount.
 - Open `jive://transaction/new?entrySource=quickAction&quickActionId=template:<id>&mode=direct` and confirm the editor banner/metadata reflect the quick action source.
