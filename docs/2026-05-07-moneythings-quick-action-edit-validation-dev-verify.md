@@ -11,7 +11,7 @@ Before this change, a non-empty invalid amount could be parsed as `null` and acc
 - Branch: `codex/moneythings-quick-action-edit-validation`
 - Base: `codex/moneythings-quick-action-core-edit`
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-quick-action-edit-validation`
-- PR: TBD
+- PR: #233 (`https://github.com/zensgit/jive/pull/233`)
 
 ## Implementation
 
