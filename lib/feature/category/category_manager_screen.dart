@@ -699,8 +699,11 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final updated = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            CategoryEditDialog(category: category, isar: _isar),
+        builder: (context) => CategoryEditDialog(
+          category: category,
+          isar: _isar,
+          currentBook: _currentBook,
+        ),
         fullscreenDialog: true,
       ),
     );

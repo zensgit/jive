@@ -156,6 +156,7 @@ Expected behavior:
 - In a shared scene, check shared badges and delete warning copy.
 - In a shared scene, try a private account/category/tag and confirm Jive asks you to replace it before saving.
 - In a shared scene, save a manual transaction and confirm the `保存到共享场景？` prompt appears before saving.
+- In a shared scene, edit, hide, restore, promote, transfer, or delete a category and confirm the warning explains the shared-member impact before the change is applied.
 
 ## Explicitly Deferred
 

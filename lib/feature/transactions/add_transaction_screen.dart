@@ -1501,8 +1501,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                 final updated = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>
-                        CategoryEditDialog(category: sub, isar: _isar),
+                    builder: (context) => CategoryEditDialog(
+                      category: sub,
+                      isar: _isar,
+                      currentBook: _currentBook,
+                    ),
                     fullscreenDialog: true,
                   ),
                 );

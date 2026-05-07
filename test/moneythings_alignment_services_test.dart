@@ -709,6 +709,17 @@ void main() {
       expect(warning, contains('共享成员'));
       expect(warning, contains('3 笔交易'));
     });
+
+    test('keeps private deletion warnings scoped to local books', () {
+      final warning = const ObjectSharePolicyService().deletionWarning(
+        objectLabel: '餐饮',
+        affectedTransactionCount: 0,
+        shared: false,
+      );
+
+      expect(warning, contains('本地账本'));
+      expect(warning, contains('候选列表'));
+    });
   });
 }
 
