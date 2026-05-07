@@ -52,7 +52,7 @@
 
 ## 继续收口记录
 
-- 2026-05-07：`codex/moneythings-smartlist-regression-tests` 补齐 SmartList 服务级回归测试，覆盖筛选状态映射、置顶排序和默认视图删除清理。
+- 2026-05-07：PR #248 / `codex/moneythings-smartlist-regression-tests` 补齐 SmartList 服务级回归测试，覆盖筛选状态映射、置顶排序和默认视图删除清理。
 
 ## 当前波次已完成
 

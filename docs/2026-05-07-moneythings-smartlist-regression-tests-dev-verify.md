@@ -6,7 +6,7 @@ This branch adds service-level regression coverage for the MoneyThings-inspired 
 
 - Branch: `codex/moneythings-smartlist-regression-tests`
 - Base: `origin/main`
-- PR: TBD
+- PR: #248
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-smartlist-regression-tests`
 
 ## Implementation
