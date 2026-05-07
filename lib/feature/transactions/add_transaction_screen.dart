@@ -81,6 +81,9 @@ class AddTransactionScreenKeys {
   static const noteCollapsed = ValueKey('add-transaction-note-collapsed');
   static const noteTextField = ValueKey('add-transaction-note-text-field');
   static const saveButton = ValueKey('add-transaction-save-button');
+  static const sharedSceneSaveDialog = ValueKey(
+    'add-transaction-shared-scene-save-dialog',
+  );
 
   static ValueKey<String> amountKey(String key) =>
       ValueKey('add-transaction-amount-key-$key');
@@ -113,6 +116,8 @@ class AddTransactionScreen extends StatefulWidget {
   @visibleForTesting
   final Map<int, double>? initialAccountBalances;
   @visibleForTesting
+  final List<JiveBook>? initialBooks;
+  @visibleForTesting
   final List<JiveTag>? initialTags;
   @visibleForTesting
   final List<JiveProject>? initialProjects;
@@ -138,6 +143,7 @@ class AddTransactionScreen extends StatefulWidget {
     this.initialSubCategories,
     this.initialAccounts,
     this.initialAccountBalances,
+    this.initialBooks,
     this.initialTags,
     this.initialProjects,
     this.initialCurrentBook,
@@ -148,6 +154,7 @@ class AddTransactionScreen extends StatefulWidget {
                  initialSubCategories == null &&
                  initialAccounts == null &&
                  initialAccountBalances == null &&
+                 initialBooks == null &&
                  initialTags == null &&
                  initialProjects == null &&
                  initialCurrentBook == null) ||
@@ -426,6 +433,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       widget.initialSubCategories != null ||
       widget.initialAccounts != null ||
       widget.initialAccountBalances != null ||
+      widget.initialBooks != null ||
       widget.initialTags != null ||
       widget.initialProjects != null;
 
@@ -439,8 +447,10 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final accounts = _sceneOrderedAccounts(
       widget.initialAccounts ?? const <JiveAccount>[],
     );
+    final books = widget.initialBooks ?? const <JiveBook>[];
     final tags = widget.initialTags ?? const <JiveTag>[];
     final projects = widget.initialProjects ?? const <JiveProject>[];
+    final selectedBook = _selectInitialBook(books);
     if (!mounted) return;
     setState(() {
       _parentCategories = parents;
@@ -453,12 +463,27 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
           {for (final account in accounts) account.id: account.openingBalance};
       _selectedAccount = accounts.isEmpty ? null : accounts.first;
       _selectedToAccount = accounts.length > 1 ? accounts[1] : null;
+      _books = books;
+      _currentBook = selectedBook;
       _tags = tags;
       _projects = projects;
       _baseCurrency = accounts.isEmpty ? 'CNY' : accounts.first.currency;
       _isFallbackMode = false;
       _isLoading = false;
     });
+  }
+
+  JiveBook? _selectInitialBook(List<JiveBook> books) {
+    if (books.isEmpty) return null;
+    if (widget.bookId != null) {
+      for (final book in books) {
+        if (book.id == widget.bookId) return book;
+      }
+    }
+    for (final book in books) {
+      if (book.isDefault) return book;
+    }
+    return books.first;
   }
 
   void _startCategoryWatcher() {
@@ -1595,6 +1620,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         _selectedToAccount?.id == _selectedAccount?.id) {
       return;
     }
+    final canSaveToSharedScene = await _confirmSharedSceneSaveIfNeeded();
+    if (!canSaveToSharedScene || !mounted) return;
 
     final typeValue = _typeValue(_txType);
     final categoryKeys = _txType == TransactionType.transfer
@@ -1846,6 +1873,43 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         Navigator.pop(context, true);
       }
     }
+  }
+
+  bool get _isCurrentBookShared {
+    final book = _currentBook;
+    if (book == null) return false;
+    final sharedLedgerKey = book.sharedLedgerKey?.trim();
+    return book.isShared ||
+        (sharedLedgerKey != null && sharedLedgerKey.isNotEmpty);
+  }
+
+  Future<bool> _confirmSharedSceneSaveIfNeeded() async {
+    if (_isEditing || !_isCurrentBookShared) return true;
+    if (!mounted) return false;
+
+    final bookName = _currentBook?.name.trim();
+    final displayName = bookName == null || bookName.isEmpty
+        ? '共享场景'
+        : bookName;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: AddTransactionScreenKeys.sharedSceneSaveDialog,
+        title: const Text('保存到共享场景？'),
+        content: Text('此交易将保存到「$displayName」，其他成员也能看到。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('继续保存'),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
   }
 
   Future<bool?> _confirmBudgetImpact(
