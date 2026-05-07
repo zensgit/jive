@@ -16,7 +16,7 @@ It stays within the first-stage account-group strategy:
 - Branch: `codex/moneythings-account-group-collapse`
 - Base: `codex/moneythings-quick-action-core-edit`
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-account-group-collapse`
-- PR: TBD
+- PR: #232 (`https://github.com/zensgit/jive/pull/232`)
 
 ## Implementation
 
