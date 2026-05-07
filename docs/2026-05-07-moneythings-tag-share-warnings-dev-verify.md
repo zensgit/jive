@@ -6,7 +6,7 @@ This branch extends the MoneyThings object-sharing first phase from categories t
 
 - Branch: `codex/moneythings-tag-share-warnings`
 - Base: `codex/moneythings-category-share-warnings`
-- PR: TBD
+- PR: #237
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-tag-share-warnings`
 
 ## Implementation

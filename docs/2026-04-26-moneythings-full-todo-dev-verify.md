@@ -50,7 +50,7 @@
 - 2026-05-07：PR #233 / `codex/moneythings-quick-action-edit-validation` 已打开并通过 CI，把快速动作编辑页的金额校验、模式预览和账户路径显示收为独立 stacked PR。
 - 2026-05-07：PR #235 / `codex/moneythings-account-picker-paths` 已打开，交易高频账户选择器、结构化编辑器账户选择器和账户 chip 展示改为账户组路径，交易仍保存到具体 `accountId`。
 - 2026-05-07：PR #236 / `codex/moneythings-category-share-warnings` 为分类编辑、隐藏/恢复、提升层级、转移账单和删除流程补齐共享场景风险提示，仍只使用 `ObjectSharePolicyService` 提示层。
-- 2026-05-07：`codex/moneythings-tag-share-warnings` 将同一共享提示策略扩展到标签和标签分组编辑、归档/恢复、删除分组流程，不新增对象级权限真相。
+- 2026-05-07：PR #237 / `codex/moneythings-tag-share-warnings` 将同一共享提示策略扩展到标签和标签分组编辑、归档/恢复、删除分组流程，不新增对象级权限真相。
 - 2026-05-10：`codex/moneythings-quick-action-editor-params` 补齐 Quick Action edit fallback 参数映射测试，并保留 `bookId` 作为结构化编辑器的场景/账本预填上下文。
 - 2026-05-10：`codex/moneythings-scene-template-contracts` 固定日常、旅行、装修、家庭、宠物、自由职业 6 个场景模板的 ID 顺序与核心分类/标签语义，避免场景产品化后续回退。
 - 2026-05-10：`codex/moneythings-transaction-entry-protocol` 补齐 `TransactionEntryParams` 协议回归测试，固定来源横幅、提交按钮、缺字段高亮和复杂转账预填合同。
