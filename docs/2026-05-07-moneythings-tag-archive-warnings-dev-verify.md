@@ -2,6 +2,11 @@
 
 This low-risk PR extends the shared-scene warning coverage for tag management.
 
+- Branch: `codex/moneythings-tag-archive-warnings`
+- Base: `codex/moneythings-tag-share-warnings`
+- PR: #241
+- Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-tag-archive-warnings`
+
 ## Scope
 
 - Single tag archive and restore actions now ask for confirmation when the current book/scene is shared.
@@ -25,3 +30,7 @@ This low-risk PR extends the shared-scene warning coverage for tag management.
 - `/Users/chauhua/development/flutter/bin/dart format lib/feature/tag/tag_management_screen.dart test/moneythings_alignment_services_test.dart`
 - `/Users/chauhua/development/flutter/bin/flutter test test/moneythings_alignment_services_test.dart --plain-name ObjectSharePolicyService`
 - `/Users/chauhua/development/flutter/bin/flutter analyze lib/feature/tag/tag_management_screen.dart test/moneythings_alignment_services_test.dart`
+
+## Validation Notes
+
+- Manual device smoke was not run in this worktree.
