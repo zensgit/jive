@@ -616,6 +616,19 @@ void main() {
       );
       expect(expanded, original);
     });
+
+    test('uses grouped account path for picker and filter labels', () {
+      final account = _account(
+        id: 1,
+        name: '活期',
+        groupName: '中国银行',
+        currency: 'CNY',
+      );
+
+      final path = const AccountGroupService().displayPath(account);
+
+      expect(path, '中国银行 / 活期 / CNY');
+    });
   });
 
   group('SceneCandidateService', () {
