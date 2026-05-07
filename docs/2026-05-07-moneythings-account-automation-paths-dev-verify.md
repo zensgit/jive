@@ -6,7 +6,7 @@ This branch extends MoneyThings-style account group paths into automation-adjace
 
 - Branch: `codex/moneythings-account-automation-paths`
 - Base: `codex/moneythings-account-filter-paths`
-- PR: TBD
+- PR: #244
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-account-automation-paths`
 
 ## Implementation
