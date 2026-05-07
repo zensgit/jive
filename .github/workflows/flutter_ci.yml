@@ -86,6 +86,34 @@ jobs:
         if: steps.asset_only.outputs.skip_flutter != 'true'
         run: flutter test
 
+  release_smoke_script_self_check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Run release smoke script self-checks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for script in \
+            scripts/run_release_smoke.sh \
+            scripts/run_release_android_smoke.sh \
+            scripts/run_android_local_feature_smoke.sh \
+            scripts/verify_release_android_smoke_artifacts.sh \
+            scripts/render_release_android_smoke_summary.sh \
+            scripts/test_release_android_smoke_artifact_verifier.sh; do
+            bash -n "$script"
+          done
+
+          scripts/verify_release_android_smoke_artifacts.sh --help >/dev/null
+          scripts/render_release_android_smoke_summary.sh --help >/dev/null
+          scripts/test_release_android_smoke_artifact_verifier.sh --help >/dev/null
+          scripts/test_release_android_smoke_artifact_verifier.sh
+
   saas_production_readiness_self_check:
     runs-on: ubuntu-latest
     timeout-minutes: 8

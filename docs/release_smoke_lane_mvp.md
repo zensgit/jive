@@ -15,6 +15,7 @@
 - Host 脚本：`scripts/run_release_smoke.sh`
 - Android 本地脚本：`scripts/run_release_android_smoke.sh`
 - Host smoke 车道：`.github/workflows/flutter_ci.yml`
+- Release smoke script self-check 车道：`.github/workflows/flutter_ci.yml`
 - Android emulator integration 车道：`.github/workflows/flutter_ci.yml`
 
 ## Host 执行内容
@@ -121,6 +122,8 @@ scripts/render_release_android_smoke_summary.sh build/reports/release-android-sm
 ```bash
 scripts/test_release_android_smoke_artifact_verifier.sh
 ```
+
+GitHub CI 会在 `release_smoke_script_self_check` job 中自动运行该 self-test，并同时检查 release smoke 相关 shell 脚本语法与帮助入口。
 
 ## 暂缓项
 
