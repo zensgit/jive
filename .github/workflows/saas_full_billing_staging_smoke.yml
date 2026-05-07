@@ -281,54 +281,17 @@ jobs:
         run: |
           set -euo pipefail
           report_dir="${FULL_BILLING_SMOKE_REPORT_DIR:-$RUNNER_TEMP/saas-full-billing-staging-smoke}"
-          [[ -d "$report_dir" ]] || exit 0
-
-          blocked_file="$(mktemp)"
-          leaked_file="$(mktemp)"
-          trap 'rm -f "$blocked_file" "$leaked_file"' EXIT
-
-          find "$report_dir" -type f \
-              \( \
-                -name '*.env' -o \
-                -name '*.pem' -o \
-                -name '*.key' -o \
-                -iname '*secret*' -o \
-                -iname '*secrets*' -o \
-                -iname '*credential*' -o \
-                -iname '*credentials*' -o \
-                -iname '*dart-defines*' \
-              \) | sort > "$blocked_file"
-
-          if [[ -s "$blocked_file" ]]; then
-            printf 'SaaS full billing artifact guard blocked sensitive-looking files:\n' >&2
-            sed 's/^/ - /' "$blocked_file" >&2
-            exit 1
-          fi
-
-          keys=(
-            STAGING_SUPABASE_ANON_KEY
-            STAGING_SUPABASE_ACCESS_TOKEN
-            STAGING_SUPABASE_SERVICE_ROLE_KEY
-            STAGING_PUBSUB_BEARER_TOKEN
-            STAGING_ADMIN_API_TOKEN
-            STAGING_ANALYTICS_ADMIN_TOKEN
-            STAGING_NOTIFICATION_ADMIN_TOKEN
-            STAGING_DOMESTIC_PAYMENT_WEBHOOK_TOKEN
-          )
-
-          for key in "${keys[@]}"; do
-            value="${!key:-}"
-            if [[ -n "$value" && "${#value}" -ge 8 ]] &&
-              grep -R -F -q -- "$value" "$report_dir"; then
-              printf '%s\n' "$key" >> "$leaked_file"
-            fi
-          done
-
-          if [[ -s "$leaked_file" ]]; then
-            printf 'SaaS full billing artifact guard found secret values in reports:\n' >&2
-            sort -u "$leaked_file" | sed 's/^/ - /' >&2
-            exit 1
-          fi
+          scripts/guard_saas_report_artifacts.sh \
+            --label "SaaS full billing" \
+            --root "$report_dir" \
+            --secret-env STAGING_SUPABASE_ANON_KEY \
+            --secret-env STAGING_SUPABASE_ACCESS_TOKEN \
+            --secret-env STAGING_SUPABASE_SERVICE_ROLE_KEY \
+            --secret-env STAGING_PUBSUB_BEARER_TOKEN \
+            --secret-env STAGING_ADMIN_API_TOKEN \
+            --secret-env STAGING_ANALYTICS_ADMIN_TOKEN \
+            --secret-env STAGING_NOTIFICATION_ADMIN_TOKEN \
+            --secret-env STAGING_DOMESTIC_PAYMENT_WEBHOOK_TOKEN
 
       - name: Upload full billing smoke reports
         if: always() && steps.guard_full_billing_smoke_artifacts.outcome == 'success'

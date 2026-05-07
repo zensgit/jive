@@ -132,6 +132,7 @@ scripts/test_release_android_smoke_summary_renderer.sh
 
 GitHub CI 会在 `release_smoke_script_self_check` job 中自动运行这些 self-test，并同时检查 release smoke 相关 shell 脚本语法与帮助入口。
 同一个 self-check job 也会运行 `scripts/test_saas_wave0_smoke_trigger.sh`，保护 SaaS Wave0 smoke 的路径触发契约，避免 auth/payment/sync/Supabase 相关变更被错误跳过。
+同一组自检还会运行 `scripts/test_saas_report_artifact_guard.sh`，保护 SaaS staging/full billing/release candidate 报告产物上传前不会包含敏感文件名或已知 secret 值。
 
 ## 暂缓项
 
