@@ -6,7 +6,7 @@ This branch continues the MoneyThings object-sharing first phase. It adds shared
 
 - Branch: `codex/moneythings-category-share-warnings`
 - Base: `codex/moneythings-quick-action-edit-validation`
-- PR: TBD
+- PR: #236
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-category-share-warnings`
 
 ## Implementation
