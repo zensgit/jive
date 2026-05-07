@@ -2729,10 +2729,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
         if (action == _GroupAction.edit) {
           await _editGroup(group);
         } else if (action == _GroupAction.archive) {
-          await TagService(
-            _isar,
-          ).setGroupArchived(group.key, !group.isArchived);
-          await _loadData();
+          await _archiveGroup(group);
         } else if (action == _GroupAction.delete) {
           await _deleteGroup(group);
         }
@@ -2770,6 +2767,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
               tag: tag,
               initialGroupKey: groupKey,
               scrollController: controller,
+              currentBook: _currentBook,
             );
           },
         );
@@ -2793,6 +2791,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
               isar: _isar,
               group: group,
               scrollController: controller,
+              currentBook: _currentBook,
             );
           },
         );
@@ -2829,12 +2828,54 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     if (result == true) await _loadData();
   }
 
+  Future<void> _archiveGroup(JiveTagGroup group) async {
+    final shareWarning = _tagSharePolicy.warning;
+    if (shareWarning != null) {
+      final actionLabel = group.isArchived ? '继续恢复' : '继续归档';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(group.isArchived ? '恢复共享标签分组？' : '归档共享标签分组？'),
+          content: Text(
+            '$shareWarning\n\n${group.isArchived ? '恢复' : '归档'}分组 "${group.name}" 会影响共享成员看到的标签候选结构。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(actionLabel),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    await TagService(_isar).setGroupArchived(group.key, !group.isArchived);
+    await _loadData();
+  }
+
   Future<void> _deleteGroup(JiveTagGroup group) async {
+    final tagCount = await _isar
+        .collection<JiveTag>()
+        .filter()
+        .groupKeyEqualTo(group.key)
+        .count();
+    final shareWarning = _tagSharePolicy.warning;
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('删除分组'),
-        content: Text('确定删除分组 "${group.name}" 吗？分组内标签将移出分组。'),
+        content: Text(
+          [
+            if (shareWarning != null) shareWarning,
+            '确定删除分组 "${group.name}" 吗？',
+            if (tagCount > 0) '分组内 $tagCount 个标签将移出分组。',
+          ].join('\n\n'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

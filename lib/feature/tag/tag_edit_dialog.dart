@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:isar/isar.dart';
+import '../../core/database/book_model.dart';
 import '../../core/database/tag_model.dart';
+import '../../core/service/object_share_policy_service.dart';
 import '../../core/service/tag_service.dart';
 import '../category/category_icon_source_picker.dart';
 import 'tag_icon_catalog.dart';
@@ -12,6 +14,7 @@ class TagEditDialog extends StatefulWidget {
   final JiveTag? tag;
   final String? initialGroupKey;
   final ScrollController? scrollController;
+  final JiveBook? currentBook;
 
   const TagEditDialog({
     super.key,
@@ -19,6 +22,7 @@ class TagEditDialog extends StatefulWidget {
     this.tag,
     this.initialGroupKey,
     this.scrollController,
+    this.currentBook,
   });
 
   @override
@@ -50,7 +54,9 @@ class _TagEditDialogState extends State<TagEditDialog> {
       _selectedGroupKey = tag.groupKey;
       _selectedColor = tag.colorHex ?? TagService.defaultColors.first;
       final iconText = tag.iconText?.trim() ?? '';
-      _selectedIcon = (tag.iconName == null || tag.iconName!.trim().isEmpty) && iconText.isNotEmpty
+      _selectedIcon =
+          (tag.iconName == null || tag.iconName!.trim().isEmpty) &&
+              iconText.isNotEmpty
           ? 'text:$iconText'
           : tag.iconName;
       if (tag.groupKey == null) {
@@ -73,7 +79,9 @@ class _TagEditDialogState extends State<TagEditDialog> {
   }
 
   Future<void> _loadGroups() async {
-    final groups = await TagService(widget.isar).getGroups(includeArchived: false);
+    final groups = await TagService(
+      widget.isar,
+    ).getGroups(includeArchived: false);
     if (!mounted) return;
     String? selectedName;
     if (_selectedGroupKey != null && _groupQuery.isEmpty) {
@@ -90,7 +98,9 @@ class _TagEditDialogState extends State<TagEditDialog> {
       final name = selectedName;
       if (name != null) {
         _groupSearchController.text = name;
-        _groupSearchController.selection = TextSelection.collapsed(offset: name.length);
+        _groupSearchController.selection = TextSelection.collapsed(
+          offset: name.length,
+        );
         _groupQuery = name;
         _ungroupedSelected = false;
       }
@@ -112,15 +122,18 @@ class _TagEditDialogState extends State<TagEditDialog> {
     });
     try {
       final created = await TagService(widget.isar).createGroup(name: name);
-      final groups = await TagService(widget.isar).getGroups(includeArchived: false);
+      final groups = await TagService(
+        widget.isar,
+      ).getGroups(includeArchived: false);
       if (!mounted) return;
       setState(() {
         _groups = groups;
         _selectedGroupKey = created.key;
         _groupQuery = created.name;
         _groupSearchController.text = created.name;
-        _groupSearchController.selection =
-            TextSelection.collapsed(offset: created.name.length);
+        _groupSearchController.selection = TextSelection.collapsed(
+          offset: created.name.length,
+        );
         _ungroupedSelected = false;
         _loading = false;
       });
@@ -159,6 +172,14 @@ class _TagEditDialogState extends State<TagEditDialog> {
         return;
       }
       colorHex = groupColor;
+    }
+    if (widget.tag != null) {
+      final confirmed = await _confirmSharedTagChange(
+        title: '修改共享标签？',
+        actionLabel: '继续保存',
+        description: '保存标签名称、图标、颜色或分组设置。',
+      );
+      if (!confirmed) return;
     }
     setState(() {
       _error = null;
@@ -209,16 +230,57 @@ class _TagEditDialogState extends State<TagEditDialog> {
     }
   }
 
+  String? get _tagShareWarning {
+    return const ObjectSharePolicyService()
+        .evaluate(book: widget.currentBook, objectLabel: '标签')
+        .warning;
+  }
+
+  Future<bool> _confirmSharedTagChange({
+    required String title,
+    required String actionLabel,
+    required String description,
+  }) async {
+    final warning = _tagShareWarning;
+    if (warning == null) return true;
+    if (!mounted) return false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text('$warning\n\n$description'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
 
   @override
   Widget build(BuildContext context) {
     final filteredGroups = _groupQuery.isEmpty
         ? _groups
         : _groups
-            .where((group) => groupDisplayName(group).toLowerCase().contains(_groupQuery.toLowerCase()))
-            .toList();
-    final canCreateGroup = _groupQuery.trim().isNotEmpty &&
-        !_groups.any((group) => group.name.toLowerCase() == _groupQuery.toLowerCase());
+              .where(
+                (group) => groupDisplayName(
+                  group,
+                ).toLowerCase().contains(_groupQuery.toLowerCase()),
+              )
+              .toList();
+    final canCreateGroup =
+        _groupQuery.trim().isNotEmpty &&
+        !_groups.any(
+          (group) => group.name.toLowerCase() == _groupQuery.toLowerCase(),
+        );
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final primary = Theme.of(context).colorScheme.primary;
     final cancelStyle = OutlinedButton.styleFrom(
@@ -244,9 +306,7 @@ class _TagEditDialogState extends State<TagEditDialog> {
           children: [
             _buildSheetHandle(),
             if (_loading)
-              const Expanded(
-                child: Center(child: CircularProgressIndicator()),
-              )
+              const Expanded(child: Center(child: CircularProgressIndicator()))
             else ...[
               Expanded(
                 child: SingleChildScrollView(
@@ -259,7 +319,10 @@ class _TagEditDialogState extends State<TagEditDialog> {
                         children: [
                           Text(
                             widget.tag == null ? '创建标签' : '编辑标签',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const Spacer(),
                           IconButton(
@@ -275,10 +338,15 @@ class _TagEditDialogState extends State<TagEditDialog> {
                           labelText: '标签名称',
                           hintText: '最多9字',
                           errorText: _error,
-                          suffixText: _nameController.text.trim().length > _maxTagNameLength
+                          suffixText:
+                              _nameController.text.trim().length >
+                                  _maxTagNameLength
                               ? '超过9字'
                               : null,
-                          suffixStyle: TextStyle(color: Colors.red.shade400, fontSize: 12),
+                          suffixStyle: TextStyle(
+                            color: Colors.red.shade400,
+                            fontSize: 12,
+                          ),
                           border: const OutlineInputBorder(),
                         ),
                         onChanged: (_) {
@@ -371,11 +439,11 @@ class _TagEditDialogState extends State<TagEditDialog> {
       children: [
         const Text('颜色', style: TextStyle(fontWeight: FontWeight.w500)),
         const Spacer(),
-        Text('跟随目录颜色', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-        Switch(
-          value: _followGroupColor,
-          onChanged: _toggleFollowGroupColor,
+        Text(
+          '跟随目录颜色',
+          style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
         ),
+        Switch(value: _followGroupColor, onChanged: _toggleFollowGroupColor),
       ],
     );
   }
@@ -385,7 +453,10 @@ class _TagEditDialogState extends State<TagEditDialog> {
     if (group == null) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 8),
-        child: Text('请选择分组后自动跟随颜色', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+        child: Text(
+          '请选择分组后自动跟随颜色',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+        ),
       );
     }
     final colorHex = group.colorHex ?? TagService.defaultColors.first;
@@ -395,10 +466,7 @@ class _TagEditDialogState extends State<TagEditDialog> {
         Container(
           width: 22,
           height: 22,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 8),
         Expanded(
@@ -413,7 +481,8 @@ class _TagEditDialogState extends State<TagEditDialog> {
 
   Widget _buildColorGrid() {
     final colors = TagService.defaultColors;
-    final isCustomSelected = _selectedColor != null && !colors.contains(_selectedColor);
+    final isCustomSelected =
+        _selectedColor != null && !colors.contains(_selectedColor);
     return GridView.count(
       crossAxisCount: 7,
       shrinkWrap: true,
@@ -436,7 +505,9 @@ class _TagEditDialogState extends State<TagEditDialog> {
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
-          border: isSelected ? Border.all(color: Colors.black87, width: 2) : null,
+          border: isSelected
+              ? Border.all(color: Colors.black87, width: 2)
+              : null,
         ),
         child: isSelected
             ? const Icon(Icons.check, color: Colors.white, size: 16)
@@ -452,7 +523,9 @@ class _TagEditDialogState extends State<TagEditDialog> {
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: selected && customHex != null ? _colorFromHex(customHex) : null,
+          color: selected && customHex != null
+              ? _colorFromHex(customHex)
+              : null,
           gradient: showCustom
               ? null
               : const LinearGradient(
@@ -535,7 +608,10 @@ class _TagEditDialogState extends State<TagEditDialog> {
         if (_groupError != null)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text(_groupError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+            child: Text(
+              _groupError!,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+            ),
           ),
         if (canCreateGroup)
           Align(
@@ -556,7 +632,10 @@ class _TagEditDialogState extends State<TagEditDialog> {
                 ChoiceChip(
                   label: const Text('未分组', style: TextStyle(fontSize: 10)),
                   selected: _ungroupedSelected,
-                  visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                  visualDensity: const VisualDensity(
+                    horizontal: -4,
+                    vertical: -4,
+                  ),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   labelPadding: const EdgeInsets.symmetric(horizontal: 6),
                   onSelected: (selected) => _toggleUngrouped(selected),
@@ -567,7 +646,10 @@ class _TagEditDialogState extends State<TagEditDialog> {
         else if (filteredGroups.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text('暂无分组', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+            child: Text(
+              '暂无分组',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+            ),
           )
         else
           Padding(
@@ -602,7 +684,10 @@ class _TagEditDialogState extends State<TagEditDialog> {
         ),
         for (final group in filteredGroups)
           ChoiceChip(
-            label: Text(groupDisplayName(group), style: const TextStyle(fontSize: 10)),
+            label: Text(
+              groupDisplayName(group),
+              style: const TextStyle(fontSize: 10),
+            ),
             selected: _selectedGroupKey == group.key,
             visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -657,8 +742,9 @@ class _TagEditDialogState extends State<TagEditDialog> {
         final group = _findGroupByKey(key);
         if (group != null) {
           _groupSearchController.text = group.name;
-          _groupSearchController.selection =
-              TextSelection.collapsed(offset: group.name.length);
+          _groupSearchController.selection = TextSelection.collapsed(
+            offset: group.name.length,
+          );
           _groupQuery = group.name;
         }
         if (_followGroupColor) {
