@@ -106,7 +106,9 @@ jobs:
             scripts/verify_release_android_smoke_artifacts.sh \
             scripts/render_release_android_smoke_summary.sh \
             scripts/test_release_android_smoke_artifact_verifier.sh \
-            scripts/test_release_android_smoke_summary_renderer.sh; do
+            scripts/test_release_android_smoke_summary_renderer.sh \
+            scripts/should_run_saas_wave0_smoke.sh \
+            scripts/test_saas_wave0_smoke_trigger.sh; do
             bash -n "$script"
           done
 
@@ -114,8 +116,10 @@ jobs:
           scripts/render_release_android_smoke_summary.sh --help >/dev/null
           scripts/test_release_android_smoke_artifact_verifier.sh --help >/dev/null
           scripts/test_release_android_smoke_summary_renderer.sh --help >/dev/null
+          scripts/test_saas_wave0_smoke_trigger.sh --help >/dev/null
           scripts/test_release_android_smoke_artifact_verifier.sh
           scripts/test_release_android_smoke_summary_renderer.sh
+          scripts/test_saas_wave0_smoke_trigger.sh
 
   saas_production_readiness_self_check:
     runs-on: ubuntu-latest
