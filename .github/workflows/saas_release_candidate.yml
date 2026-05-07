@@ -205,37 +205,23 @@ jobs:
           bash scripts/build_release_candidate.sh "${args[@]}"
 
       - name: Guard release candidate artifacts
+        id: guard_release_candidate_artifacts
         if: always()
+        env:
+          PRODUCTION_SUPABASE_ANON_KEY: ${{ secrets.PRODUCTION_SUPABASE_ANON_KEY }}
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          roots=()
-          [[ -d build/reports/release-candidate ]] && roots+=(build/reports/release-candidate)
-          [[ -d build/release-candidate ]] && roots+=(build/release-candidate)
-
-          if (( ${#roots[@]} == 0 )); then
-            exit 0
-          fi
-
-          blocked_file="$(mktemp)"
-          trap 'rm -f "$blocked_file"' EXIT
-
-          find "${roots[@]}" -type f \
-              \( \
-                -name '*.env' -o \
-                -name '*.pem' -o \
-                -name '*.key' -o \
-                -iname '*secret*' -o \
-                -iname '*secrets*' -o \
-                -iname '*credential*' -o \
-                -iname '*credentials*' -o \
-                -iname '*dart-defines*' \
-              \) | sort > "$blocked_file"
-
-          if [[ -s "$blocked_file" ]]; then
-            printf 'Release candidate artifact guard blocked sensitive-looking files:\n' >&2
-            sed 's/^/ - /' "$blocked_file" >&2
-            exit 1
-          fi
+          scripts/guard_saas_report_artifacts.sh \
+            --label "Release candidate" \
+            --root build/reports/release-candidate \
+            --root build/release-candidate \
+            --secret-env PRODUCTION_SUPABASE_ANON_KEY \
+            --secret-env ANDROID_RELEASE_KEYSTORE_BASE64 \
+            --secret-env ANDROID_RELEASE_STORE_PASSWORD \
+            --secret-env ANDROID_RELEASE_KEY_PASSWORD
 
       - name: Publish release candidate summary
         if: always()
@@ -249,7 +235,7 @@ jobs:
           fi
 
       - name: Upload release candidate reports
-        if: always()
+        if: always() && steps.guard_release_candidate_artifacts.outcome == 'success'
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:

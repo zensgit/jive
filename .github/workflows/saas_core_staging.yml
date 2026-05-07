@@ -282,40 +282,40 @@ jobs:
           bash scripts/run_saas_core_staging_lane.sh "${args[@]}"
 
       - name: Guard SaaS staging report artifacts
+        id: guard_saas_staging_report_artifacts
         if: always()
+        env:
+          STAGING_SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+          STAGING_DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          STAGING_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.STAGING_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY }}
+          STAGING_APPLE_APP_STORE_SHARED_SECRET: ${{ secrets.STAGING_APPLE_APP_STORE_SHARED_SECRET }}
+          STAGING_PUBSUB_BEARER_TOKEN: ${{ secrets.STAGING_PUBSUB_BEARER_TOKEN }}
+          STAGING_WEBHOOK_HMAC_SECRET: ${{ secrets.STAGING_WEBHOOK_HMAC_SECRET }}
+          STAGING_ADMIN_API_TOKEN: ${{ secrets.STAGING_ADMIN_API_TOKEN }}
+          STAGING_ANALYTICS_ADMIN_TOKEN: ${{ secrets.STAGING_ANALYTICS_ADMIN_TOKEN }}
+          STAGING_NOTIFICATION_ADMIN_TOKEN: ${{ secrets.STAGING_NOTIFICATION_ADMIN_TOKEN }}
         run: |
           set -euo pipefail
-          roots=()
-          [[ -d build/reports/saas-staging ]] && roots+=(build/reports/saas-staging)
-          [[ -d build/saas-staging ]] && roots+=(build/saas-staging)
-
-          if (( ${#roots[@]} == 0 )); then
-            exit 0
-          fi
-
-          blocked_file="$(mktemp)"
-          trap 'rm -f "$blocked_file"' EXIT
-
-          find "${roots[@]}" -type f \
-              \( \
-                -name '*.env' -o \
-                -name '*.pem' -o \
-                -name '*.key' -o \
-                -iname '*secret*' -o \
-                -iname '*secrets*' -o \
-                -iname '*credential*' -o \
-                -iname '*credentials*' -o \
-                -iname '*dart-defines*' \
-              \) | sort > "$blocked_file"
-
-          if [[ -s "$blocked_file" ]]; then
-            printf 'SaaS staging artifact guard blocked sensitive-looking files:\n' >&2
-            sed 's/^/ - /' "$blocked_file" >&2
-            exit 1
-          fi
+          scripts/guard_saas_report_artifacts.sh \
+            --label "SaaS staging" \
+            --root build/reports/saas-staging \
+            --root build/saas-staging \
+            --secret-env STAGING_SUPABASE_ACCESS_TOKEN \
+            --secret-env STAGING_DB_PASSWORD \
+            --secret-env STAGING_SUPABASE_ANON_KEY \
+            --secret-env STAGING_SUPABASE_SERVICE_ROLE_KEY \
+            --secret-env STAGING_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY \
+            --secret-env STAGING_APPLE_APP_STORE_SHARED_SECRET \
+            --secret-env STAGING_PUBSUB_BEARER_TOKEN \
+            --secret-env STAGING_WEBHOOK_HMAC_SECRET \
+            --secret-env STAGING_ADMIN_API_TOKEN \
+            --secret-env STAGING_ANALYTICS_ADMIN_TOKEN \
+            --secret-env STAGING_NOTIFICATION_ADMIN_TOKEN
 
       - name: Upload SaaS staging reports
-        if: always()
+        if: always() && steps.guard_saas_staging_report_artifacts.outcome == 'success'
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
