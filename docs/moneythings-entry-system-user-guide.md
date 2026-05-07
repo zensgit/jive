@@ -124,6 +124,7 @@ Expected behavior:
 - Creating a manual transaction in a shared scene should ask for confirmation before saving.
 - Canceling the shared-scene confirmation should keep the user on the entry page and save nothing.
 - Continuing the shared-scene confirmation should preserve the selected shared book on the saved transaction.
+- Creating or editing an account inside a shared scene should ask for confirmation before saving.
 - Deleting shared categories or tags should show impact copy.
 - Merging a tag in a shared scene should ask again after target selection because transactions and smart rules move to the target tag and the source tag is deleted.
 - Permissions still come from the existing shared ledger/book role model.
@@ -160,6 +161,7 @@ Expected behavior:
 - Review an AutoDraft or transfer AutoDraft and confirm account dropdowns show grouped paths while matching still uses the original account.
 - Create or edit a recurring rule and confirm account dropdowns show grouped paths.
 - Open tag rule account conditions and confirm account chips show grouped paths.
+- In a shared scene, create or edit an account and confirm the shared-impact dialog appears before saving.
 - In a shared scene, check shared badges and delete warning copy.
 - In a shared scene, try a private account/category/tag and confirm Jive asks you to replace it before saving.
 - In a shared scene, save a manual transaction and confirm the `保存到共享场景？` prompt appears before saving.

@@ -51,6 +51,7 @@
 - 2026-05-07：PR #235 / `codex/moneythings-account-picker-paths` 已打开，交易高频账户选择器、结构化编辑器账户选择器和账户 chip 展示改为账户组路径，选择时仍保存具体 `accountId`。
 - 2026-05-07：PR #240 / `codex/moneythings-account-filter-paths` 将账户组路径延伸到账单筛选器账户下拉，筛选值仍保持具体 `accountId`。
 - 2026-05-07：PR #244 / `codex/moneythings-account-automation-paths` 将账户组路径延伸到自动草稿、周期规则和标签规则的账户选择/筛选入口，识别与保存仍使用具体账户。
+- 2026-05-07：PR #246 / `codex/moneythings-account-edit-warnings` 为共享场景中的账户新增/编辑补齐确认提示，仍只使用 shared ledger/book 作为权限真相。
 - 2026-05-07：PR #236 / `codex/moneythings-category-share-warnings` 为分类编辑、隐藏/恢复、提升层级、转移账单和删除流程补齐共享场景风险提示，仍只使用 `ObjectSharePolicyService` 提示层。
 - 2026-05-07：PR #237 / `codex/moneythings-tag-share-warnings` 将同一共享提示策略扩展到标签和标签分组编辑、归档/恢复、删除分组流程，不新增对象级权限真相。
 - 2026-05-07：PR #241 / `codex/moneythings-tag-archive-warnings` 为单个标签归档/恢复补齐共享场景确认，私有场景仍保持即时操作。
@@ -102,7 +103,7 @@
 - 账户组以视图层表达，交易仍保存到具体 `accountId`。
 - SmartList 支持默认视图、置顶、当前筛选/搜索保存，以及固定分类页面保存；服务级测试已覆盖保存视图映射、置顶排序和默认视图清理。
 - 账户选择器在交易高频入口和结构化编辑器中显示账户组路径，避免用户在复杂子账户中选错具体账户。
-- 对象共享第一阶段保持提示层，覆盖场景、账户、分类、标签的共享状态、共享场景交易保存提示与删除风险提示；分类、标签和标签分组的关键编辑/归档/合并操作会在共享场景中追加确认。
+- 对象共享第一阶段保持提示层，覆盖场景、账户、分类、标签的共享状态、共享场景交易保存提示与删除风险提示；账户新增/编辑以及分类、标签和标签分组的关键编辑/归档/合并操作会在共享场景中追加确认。
 
 ## Post-Beta / 迁移型待评估
 
@@ -138,6 +139,7 @@
 - `docs/2026-05-07-moneythings-account-picker-paths-dev-verify.md`
 - `docs/2026-05-07-moneythings-account-filter-paths-dev-verify.md`
 - `docs/2026-05-07-moneythings-account-automation-paths-dev-verify.md`
+- `docs/2026-05-07-moneythings-account-edit-warnings-dev-verify.md`
 - `docs/2026-05-07-moneythings-category-share-warnings-dev-verify.md`
 - `docs/2026-05-07-moneythings-tag-share-warnings-dev-verify.md`
 - `docs/2026-05-07-moneythings-tag-archive-warnings-dev-verify.md`

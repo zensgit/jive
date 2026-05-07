@@ -742,7 +742,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton(
-                            onPressed: () {
+                            onPressed: () async {
                               final name = nameController.text.trim();
                               if (name.isEmpty) return;
                               if (editing == null &&
@@ -786,6 +786,12 @@ class _AccountsScreenState extends State<AccountsScreen> {
                                         : null,
                                     fallbackGroupName: selectedType!.group,
                                   );
+                              final confirmed =
+                                  await _confirmSharedAccountChange(
+                                    accountName: name,
+                                    isEditing: editing != null,
+                                  );
+                              if (!confirmed || !sheetContext.mounted) return;
                               Navigator.pop(
                                 sheetContext,
                                 _AccountDraft(
@@ -818,6 +824,37 @@ class _AccountsScreenState extends State<AccountsScreen> {
         );
       },
     );
+  }
+
+  Future<bool> _confirmSharedAccountChange({
+    required String accountName,
+    required bool isEditing,
+  }) async {
+    final policy = _accountSharePolicy();
+    if (policy.visibility == ObjectShareVisibility.private) return true;
+    final warning = policy.warning ?? '修改「账户」会影响共享场景成员看到的内容。';
+    final action = isEditing ? '保存修改' : '创建账户';
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(isEditing ? '确认修改共享账户？' : '确认创建共享账户？'),
+        content: Text(
+          '$warning\n\n账户「$accountName」会继续按当前 shared ledger/book 权限展示；'
+          '本次操作不会新增对象级权限，也不会改变交易保存到具体账户的语义。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    return result == true;
   }
 
   Future<AccountTypeOption?> _showAccountTypePicker({
@@ -1511,6 +1548,13 @@ class _AccountsScreenState extends State<AccountsScreen> {
     );
   }
 
+  ObjectSharePolicy _accountSharePolicy() {
+    return const ObjectSharePolicyService().evaluate(
+      book: _currentBook,
+      objectLabel: '账户',
+    );
+  }
+
   Widget _buildSection(String title, List<JiveAccount> accounts) {
     final accountGroups = const AccountGroupService().groupAccounts(accounts);
     return Column(
@@ -1718,10 +1762,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
         : (accountPath == account.name
               ? option?.label ?? AccountService.displayGroupName(account)
               : accountPath);
-    final sharePolicy = const ObjectSharePolicyService().evaluate(
-      book: _currentBook,
-      objectLabel: '账户',
-    );
+    final sharePolicy = _accountSharePolicy();
     final currencySymbol = CurrencyDefaults.getSymbol(account.currency);
     return InkWell(
       borderRadius: BorderRadius.circular(16),

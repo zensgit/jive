@@ -809,6 +809,30 @@ void main() {
       expect(deletionWarning, contains('共享成员'));
       expect(deletionWarning, contains('4 笔交易'));
     });
+
+    test('warns account edits inherited from shared scenes', () {
+      final book = JiveBook()
+        ..key = 'book_shared_account'
+        ..name = '家庭'
+        ..currency = 'CNY'
+        ..order = 0
+        ..isDefault = false
+        ..isArchived = false
+        ..isShared = true
+        ..memberCount = 2
+        ..createdAt = DateTime(2026)
+        ..updatedAt = DateTime(2026);
+
+      final policy = const ObjectSharePolicyService().evaluate(
+        book: book,
+        objectLabel: '账户',
+      );
+
+      expect(policy.visibility, ObjectShareVisibility.inheritedFromScene);
+      expect(policy.label, '继承场景共享');
+      expect(policy.warning, contains('账户'));
+      expect(policy.warning, contains('场景成员'));
+    });
   });
 }
 
