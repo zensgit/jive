@@ -210,6 +210,12 @@ scripts/check_saas_github_secrets.sh --profile production-release --include-sign
 scripts/report_saas_production_release_readiness.sh --repo zensgit/jive --output docs/2026-05-05-saas-production-release-readiness.md
 ```
 
+本地无密钥自检：
+
+```bash
+scripts/test_saas_production_release_readiness_report.sh
+```
+
 从 `/tmp/jive-saas-production.env` 上传最小 release secrets：
 
 ```bash

@@ -146,8 +146,14 @@ jobs:
 
           bash -n \
             scripts/check_saas_production_readiness.sh \
+            scripts/report_saas_production_release_readiness.sh \
+            scripts/test_saas_production_release_readiness_report.sh \
             scripts/build_saas_staging_apk.sh \
             scripts/build_release_candidate.sh
+
+          scripts/report_saas_production_release_readiness.sh --help >/dev/null
+          scripts/test_saas_production_release_readiness_report.sh --help >/dev/null
+          scripts/test_saas_production_release_readiness_report.sh
 
           good_env="$RUNNER_TEMP/jive-saas-prod-good.env"
           bad_env="$RUNNER_TEMP/jive-saas-prod-bad.env"
