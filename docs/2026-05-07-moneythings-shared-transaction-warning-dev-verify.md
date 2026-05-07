@@ -6,7 +6,7 @@ This branch adds the first transaction-level sharing safety prompt inspired by M
 
 - Branch: `codex/moneythings-shared-transaction-warning`
 - Base: `origin/main`
-- PR: TBD
+- PR: #251
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-shared-transaction-warning`
 
 ## Implementation
