@@ -95,6 +95,7 @@ Expected behavior:
 - On the Assets page, tap a multi-account group header to collapse or expand child accounts.
 - Collapsed groups keep showing child count, currencies, and a group-level balance summary.
 - The collapsed/expanded preference is remembered per book and account section.
+- Manual transaction entry and the structured editor show grouped account paths in chips and pickers.
 - No `parentAccountKey` migration is introduced in this wave.
 
 ## Scenes And SmartList
@@ -153,6 +154,7 @@ Expected behavior:
 - Create grouped accounts and confirm transactions still save to the child account.
 - Save a SmartList from filters, pin it, set it as default, delete it, and confirm default view is cleared.
 - Collapse and reopen an account group, then revisit the Assets page and confirm the collapsed state persists.
+- Search for an account group name in the manual account picker and confirm grouped child accounts are shown.
 - In a shared scene, check shared badges and delete warning copy.
 - In a shared scene, try a private account/category/tag and confirm Jive asks you to replace it before saving.
 - In a shared scene, save a manual transaction and confirm the `保存到共享场景？` prompt appears before saving.

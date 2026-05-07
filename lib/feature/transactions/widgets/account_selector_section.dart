@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/database/account_model.dart';
 import '../../../core/database/currency_model.dart';
 import '../../../core/design_system/theme.dart';
+import '../../../core/service/account_group_service.dart';
 import '../../../core/service/account_service.dart';
 import '../add_transaction_screen.dart' show TransactionType;
 
@@ -46,7 +47,8 @@ class AccountSelectorSection extends StatelessWidget {
     if (txType == TransactionType.transfer) {
       final fromCurrency = selectedAccount?.currency ?? 'CNY';
       final toCurrency = selectedToAccount?.currency ?? 'CNY';
-      final isCrossCurrency = selectedAccount != null &&
+      final isCrossCurrency =
+          selectedAccount != null &&
           selectedToAccount != null &&
           fromCurrency != toCurrency;
 
@@ -124,9 +126,12 @@ class AccountChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = AccountService.parseColorHex(account?.colorHex) ??
+    final color =
+        AccountService.parseColorHex(account?.colorHex) ??
         JiveTheme.primaryGreen;
-    final name = account?.name ?? '请选择';
+    final name = account == null
+        ? '请选择'
+        : const AccountGroupService().displayPath(account!);
 
     final inner = Row(
       mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
@@ -272,10 +277,7 @@ class _CrossCurrencyCard extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   '1 $fromCurrency = ${rate!.toStringAsFixed(4)} $toCurrency',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.orange.shade600,
-                  ),
+                  style: TextStyle(fontSize: 10, color: Colors.orange.shade600),
                 ),
               ],
             ],
@@ -286,10 +288,7 @@ class _CrossCurrencyCard extends StatelessWidget {
             children: [
               Text(
                 '转入金额',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
               ),
               const SizedBox(width: 8),
               Expanded(

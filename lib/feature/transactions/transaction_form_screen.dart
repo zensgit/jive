@@ -8,6 +8,7 @@ import '../../core/database/currency_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/project_model.dart';
 import '../../core/database/transaction_model.dart';
+import '../../core/service/account_group_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/category_path_service.dart';
 import '../../core/service/database_service.dart';
@@ -453,12 +454,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         itemBuilder: (_, i) {
           final acct = candidates[i];
           final isSelected = acct.id == _selectedToAccount?.id;
+          final accountPath = _accountDisplayPath(acct)!;
           return ListTile(
             leading: Icon(
               Icons.call_received,
               color: isSelected ? Theme.of(ctx).colorScheme.primary : null,
             ),
-            title: Text(acct.name),
+            title: Text(accountPath),
             subtitle: Text(acct.currency),
             selected: isSelected,
             onTap: () => Navigator.pop(ctx, acct),
@@ -561,6 +563,11 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     }
   }
 
+  String? _accountDisplayPath(JiveAccount? account) {
+    if (account == null) return null;
+    return const AccountGroupService().displayPath(account);
+  }
+
   void _showAccountPicker() async {
     final result = await showModalBottomSheet<JiveAccount>(
       context: context,
@@ -570,12 +577,13 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
         itemBuilder: (_, i) {
           final acct = _accounts[i];
           final isSelected = acct.id == _selectedAccount?.id;
+          final accountPath = _accountDisplayPath(acct)!;
           return ListTile(
             leading: Icon(
               Icons.account_balance_wallet,
               color: isSelected ? Theme.of(ctx).colorScheme.primary : null,
             ),
-            title: Text(acct.name),
+            title: Text(accountPath),
             subtitle: Text(acct.currency),
             selected: isSelected,
             onTap: () => Navigator.pop(ctx, acct),
@@ -774,7 +782,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     categoryName: _txType == 'transfer'
                         ? '转账'
                         : selectedCategoryName,
-                    accountName: _selectedAccount?.name,
+                    accountName: _accountDisplayPath(_selectedAccount),
                     note: _note.isEmpty ? null : _note,
                     date: _selectedDate,
                     highlightCategory: highlightCategory,
@@ -805,7 +813,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   if (_txType == 'transfer') ...[
                     const SizedBox(height: 12),
                     _TransferTargetCard(
-                      accountName: _selectedToAccount?.name,
+                      accountName: _accountDisplayPath(_selectedToAccount),
                       highlighted: highlightTransferAccount,
                       onTap: _showToAccountPicker,
                     ),
@@ -987,12 +995,16 @@ class _TransferTargetCard extends StatelessWidget {
                 ),
               ),
             if (highlighted) const SizedBox(width: 8),
-            Text(
-              accountName ?? '未选择',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: accountName == null
-                    ? theme.colorScheme.onSurfaceVariant
-                    : theme.colorScheme.onSurface,
+            Flexible(
+              child: Text(
+                accountName ?? '未选择',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: accountName == null
+                      ? theme.colorScheme.onSurfaceVariant
+                      : theme.colorScheme.onSurface,
+                ),
               ),
             ),
             const SizedBox(width: 4),
