@@ -7,6 +7,7 @@ import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/service/auto_draft_service.dart';
 import '../../core/service/auto_account_mapping.dart';
+import '../../core/service/account_group_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/service/database_service.dart';
@@ -395,7 +396,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                     for (final account in _accounts)
                                       DropdownMenuItem(
                                         value: account.id,
-                                        child: Text(account.name),
+                                        child: Text(
+                                          _displayAccountPath(account),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                   ],
                                   onChanged: (value) => setSheetState(() {
@@ -467,7 +471,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                     for (final account in _accounts)
                                       DropdownMenuItem(
                                         value: account.id,
-                                        child: Text(account.name),
+                                        child: Text(
+                                          _displayAccountPath(account),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                   ],
                                   onChanged: (value) => setSheetState(() {
@@ -486,7 +493,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                     for (final account in _accounts)
                                       DropdownMenuItem(
                                         value: account.id,
-                                        child: Text(account.name),
+                                        child: Text(
+                                          _displayAccountPath(account),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                   ],
                                   onChanged: (value) => setSheetState(() {
@@ -894,7 +904,13 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
 
   String? _displayAccountName(int? accountId) {
     if (accountId == null) return null;
-    return _accountById[accountId]?.name;
+    final account = _accountById[accountId];
+    if (account == null) return null;
+    return _displayAccountPath(account);
+  }
+
+  String _displayAccountPath(JiveAccount account) {
+    return const AccountGroupService().displayPath(account);
   }
 
   Future<bool> _ensureTransferAccounts(JiveAutoDraft draft) async {
@@ -1042,7 +1058,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   for (final account in _accounts)
                                     DropdownMenuItem(
                                       value: account.id,
-                                      child: Text(account.name),
+                                      child: Text(
+                                        _displayAccountPath(account),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                 ],
                                 onChanged: (value) =>
@@ -1075,7 +1094,10 @@ class _AutoDraftsScreenState extends State<AutoDraftsScreen> {
                                   for (final account in _accounts)
                                     DropdownMenuItem(
                                       value: account.id,
-                                      child: Text(account.name),
+                                      child: Text(
+                                        _displayAccountPath(account),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
                                     ),
                                 ],
                                 onChanged: (value) =>
