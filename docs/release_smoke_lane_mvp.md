@@ -20,6 +20,7 @@
 ## Host 执行内容
 
 - `flutter analyze`
+- `scripts/test_release_android_smoke_artifact_verifier.sh`
 - `flutter test test/data_backup_service_roundtrip_test.dart test/data_backup_service_migration_regression_test.dart test/auth_stale_session_release_gate_test.dart`
 - `flutter test integration_test/import_center_failure_analytics_flow_test.dart --dart-define=JIVE_E2E=true`
 - `flutter test integration_test/category_icon_picker_flow_test.dart --dart-define=JIVE_E2E=true`
@@ -113,6 +114,12 @@ build/reports/release-android-smoke/<timestamp>/
 ```bash
 scripts/verify_release_android_smoke_artifacts.sh build/reports/release-android-smoke/<timestamp>
 scripts/render_release_android_smoke_summary.sh build/reports/release-android-smoke/<timestamp>
+```
+
+如需在无设备、无 emulator 的 host 环境回归验证器自身的 artifact 契约：
+
+```bash
+scripts/test_release_android_smoke_artifact_verifier.sh
 ```
 
 ## 暂缓项
