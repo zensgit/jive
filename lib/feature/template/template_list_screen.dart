@@ -6,6 +6,7 @@ import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/quick_action_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/account_group_service.dart';
 import '../../core/service/category_path_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
@@ -645,6 +646,35 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                   selectedToAccountId != selectedAccountId
               ? selectedToAccountId
               : null;
+          final amountText = amountController.text.trim();
+          final amountError = _quickActionAmountError(amountText);
+          final parsedAmount = amountText.isEmpty || amountError != null
+              ? null
+              : double.parse(amountText);
+          final categoryKeys =
+              selectedType == 'transfer' || selectedPath == null
+              ? null
+              : const CategoryPathService().toTransactionKeys(
+                  categories,
+                  selectedPath.leaf,
+                );
+          final previewMode = QuickActionStoreService.previewCoreMode(
+            transactionType: selectedType,
+            defaultAmount: parsedAmount,
+            accountId: accountValue,
+            toAccountId: toAccountValue,
+            categoryKey: categoryKeys?.categoryKey,
+            subCategoryKey: categoryKeys?.subCategoryKey,
+          );
+          final missingFields = QuickActionStoreService.missingCoreFields(
+            transactionType: selectedType,
+            defaultAmount: parsedAmount,
+            accountId: accountValue,
+            toAccountId: toAccountValue,
+            categoryKey: categoryKeys?.categoryKey,
+            subCategoryKey: categoryKeys?.subCategoryKey,
+          );
+          final accountPathService = const AccountGroupService();
 
           return SafeArea(
             child: SingleChildScrollView(
@@ -673,6 +703,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                       border: OutlineInputBorder(),
                     ),
                     textInputAction: TextInputAction.next,
+                    onChanged: (_) => setSheetState(() {}),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -699,17 +730,20 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: amountController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: '默认金额（留空则轻确认）',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
+                      errorText: amountError,
                     ),
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    onChanged: (_) => setSheetState(() {}),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<int>(
                     initialValue: accountValue,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: '账户',
                       border: OutlineInputBorder(),
@@ -719,7 +753,10 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                         .map(
                           (account) => DropdownMenuItem<int>(
                             value: account.id,
-                            child: Text(account.name),
+                            child: Text(
+                              accountPathService.displayPath(account),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                         )
                         .toList(growable: false),
@@ -730,6 +767,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
                       initialValue: toAccountValue,
+                      isExpanded: true,
                       decoration: const InputDecoration(
                         labelText: '转入账户',
                         border: OutlineInputBorder(),
@@ -740,7 +778,10 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                           .map(
                             (account) => DropdownMenuItem<int>(
                               value: account.id,
-                              child: Text(account.name),
+                              child: Text(
+                                accountPathService.displayPath(account),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           )
                           .toList(growable: false),
@@ -778,46 +819,43 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                     minLines: 1,
                     maxLines: 3,
                   ),
+                  const SizedBox(height: 12),
+                  _buildQuickActionModePreview(
+                    previewMode: previewMode.name,
+                    missingFields: missingFields,
+                    amountError: amountError,
+                  ),
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () async {
-                        final name = nameController.text.trim();
-                        if (name.isEmpty) {
-                          ScaffoldMessenger.of(sheetContext).showSnackBar(
-                            const SnackBar(content: Text('请输入快速动作名称')),
-                          );
-                          return;
-                        }
-                        final amountText = amountController.text.trim();
-                        final amount = amountText.isEmpty
-                            ? null
-                            : double.tryParse(amountText);
-                        final categoryKeys =
-                            selectedType == 'transfer' || selectedPath == null
-                            ? null
-                            : const CategoryPathService().toTransactionKeys(
-                                categories,
-                                selectedPath.leaf,
+                      onPressed: amountError != null
+                          ? null
+                          : () async {
+                              final name = nameController.text.trim();
+                              if (name.isEmpty) {
+                                ScaffoldMessenger.of(sheetContext).showSnackBar(
+                                  const SnackBar(content: Text('请输入快速动作名称')),
+                                );
+                                return;
+                              }
+                              Navigator.pop(sheetContext);
+                              final service = await _quickActionStore();
+                              await service.updateCoreFields(
+                                action.stableId,
+                                name: name,
+                                transactionType: selectedType,
+                                accountId: accountValue,
+                                toAccountId: toAccountValue,
+                                categoryKey: categoryKeys?.categoryKey,
+                                subCategoryKey: categoryKeys?.subCategoryKey,
+                                categoryName: categoryKeys?.categoryName,
+                                subCategoryName: categoryKeys?.subCategoryName,
+                                defaultAmount: parsedAmount,
+                                defaultNote: noteController.text,
                               );
-                        Navigator.pop(sheetContext);
-                        final service = await _quickActionStore();
-                        await service.updateCoreFields(
-                          action.stableId,
-                          name: name,
-                          transactionType: selectedType,
-                          accountId: accountValue,
-                          toAccountId: toAccountValue,
-                          categoryKey: categoryKeys?.categoryKey,
-                          subCategoryKey: categoryKeys?.subCategoryKey,
-                          categoryName: categoryKeys?.categoryName,
-                          subCategoryName: categoryKeys?.subCategoryName,
-                          defaultAmount: amount,
-                          defaultNote: noteController.text,
-                        );
-                        await _loadActions();
-                      },
+                              await _loadActions();
+                            },
                       child: const Text('保存内容'),
                     ),
                   ),
@@ -1071,6 +1109,111 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     if (names.isNotEmpty) return names;
     if (action.transactionType == 'transfer') return '转账';
     return '未分类';
+  }
+
+  String? _quickActionAmountError(String text) {
+    final amountText = text.trim();
+    if (amountText.isEmpty) return null;
+    final amount = double.tryParse(amountText);
+    if (amount == null) return '金额格式无效，请输入数字';
+    if (amount <= 0) return '金额需大于 0；需要轻确认时请留空';
+    return null;
+  }
+
+  Widget _buildQuickActionModePreview({
+    required String previewMode,
+    required List<String> missingFields,
+    String? amountError,
+  }) {
+    final color = _modePreviewColor(previewMode);
+    final missingLabel = _missingFieldLabels(missingFields).join('、');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.16)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.route_outlined, size: 18, color: color),
+              const SizedBox(width: 6),
+              Text(
+                '保存后模式：${_modeLabel(previewMode)}',
+                style: GoogleFonts.lato(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            amountError ?? _modePreviewDescription(previewMode),
+            style: GoogleFonts.lato(color: Colors.grey.shade700, fontSize: 12),
+          ),
+          if (amountError == null && missingLabel.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              '待补充：$missingLabel',
+              style: GoogleFonts.lato(
+                color: Colors.grey.shade600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _modePreviewColor(String mode) {
+    switch (mode) {
+      case 'direct':
+        return JiveTheme.primaryGreen;
+      case 'confirm':
+        return Colors.orange.shade700;
+      case 'edit':
+        return Colors.blueGrey.shade600;
+      default:
+        return Colors.blueGrey.shade600;
+    }
+  }
+
+  String _modePreviewDescription(String mode) {
+    switch (mode) {
+      case 'direct':
+        return '字段完整，点击快速动作时会直接保存交易。';
+      case 'confirm':
+        return '信息基本完整，点击时会先弹出轻确认。';
+      case 'edit':
+        return '信息不足或交易较复杂，点击时会进入完整编辑器。';
+      default:
+        return '信息不足或交易较复杂，点击时会进入完整编辑器。';
+    }
+  }
+
+  List<String> _missingFieldLabels(List<String> fields) {
+    return fields
+        .map((field) {
+          switch (field) {
+            case 'amount':
+              return '金额';
+            case 'account':
+              return '账户';
+            case 'transferAccount':
+              return '转入账户';
+            case 'category':
+              return '分类';
+            default:
+              return field;
+          }
+        })
+        .toList(growable: false);
   }
 
   String _modeLabel(String mode) {

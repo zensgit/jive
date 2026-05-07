@@ -329,6 +329,56 @@ void main() {
     }
   });
 
+  test('core edit preview reports mode and missing fields', () {
+    expect(
+      QuickActionStoreService.previewCoreMode(
+        transactionType: 'expense',
+        defaultAmount: null,
+        accountId: 1,
+        toAccountId: null,
+        categoryKey: 'food',
+        subCategoryKey: null,
+      ),
+      QuickActionMode.confirm,
+    );
+    expect(
+      QuickActionStoreService.missingCoreFields(
+        transactionType: 'expense',
+        defaultAmount: null,
+        accountId: 1,
+        toAccountId: null,
+        categoryKey: 'food',
+        subCategoryKey: null,
+      ),
+      ['amount'],
+    );
+  });
+
+  test('core edit preview keeps transfer actions in editor mode', () {
+    expect(
+      QuickActionStoreService.previewCoreMode(
+        transactionType: 'transfer',
+        defaultAmount: 100,
+        accountId: 1,
+        toAccountId: null,
+        categoryKey: null,
+        subCategoryKey: null,
+      ),
+      QuickActionMode.edit,
+    );
+    expect(
+      QuickActionStoreService.missingCoreFields(
+        transactionType: 'transfer',
+        defaultAmount: 100,
+        accountId: 1,
+        toAccountId: null,
+        categoryKey: null,
+        subCategoryKey: null,
+      ),
+      ['transferAccount'],
+    );
+  });
+
   test('updateCoreFields updates quick action and legacy template', () async {
     final templateId = await _putTemplate(
       isar,

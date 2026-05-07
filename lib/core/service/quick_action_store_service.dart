@@ -425,6 +425,49 @@ class QuickActionStoreService {
     );
   }
 
+  static QuickActionMode previewCoreMode({
+    required String transactionType,
+    required double? defaultAmount,
+    required int? accountId,
+    required int? toAccountId,
+    required String? categoryKey,
+    required String? subCategoryKey,
+  }) {
+    return _inferCoreMode(
+      transactionType: transactionType,
+      defaultAmount: defaultAmount,
+      accountId: accountId,
+      toAccountId: toAccountId,
+      categoryKey: categoryKey,
+      subCategoryKey: subCategoryKey,
+    );
+  }
+
+  static List<String> missingCoreFields({
+    required String transactionType,
+    required double? defaultAmount,
+    required int? accountId,
+    required int? toAccountId,
+    required String? categoryKey,
+    required String? subCategoryKey,
+  }) {
+    final type = _normalizedType(transactionType);
+    final missing = <String>[];
+    if ((defaultAmount ?? 0) <= 0) missing.add('amount');
+    if (accountId == null) missing.add('account');
+    if (type == 'transfer') {
+      if (toAccountId == null || toAccountId == accountId) {
+        missing.add('transferAccount');
+      }
+    } else {
+      final hasCategory =
+          (categoryKey != null && categoryKey.isNotEmpty) ||
+          (subCategoryKey != null && subCategoryKey.isNotEmpty);
+      if (!hasCategory) missing.add('category');
+    }
+    return missing;
+  }
+
   Future<JiveQuickAction?> _activeRecord(String stableId) async {
     final id = stableId.trim();
     if (id.isEmpty) return null;

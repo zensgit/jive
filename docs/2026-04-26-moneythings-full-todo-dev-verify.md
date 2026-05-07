@@ -45,6 +45,7 @@
 - 2026-05-06：`codex/moneythings-add-entry-save-action` 让新增记账页在金额、账户、分类完整后显示“保存为快速动作”，并把当前金额算式结果、账户、三层分类叶子、备注、时间、账本和标签反向生成快速动作 seed，生产仍复用模板兼容存储。
 - 2026-05-06：`codex/moneythings-quick-action-core-edit` 为快速动作管理页补齐“编辑内容”，可修改名称、类型、默认金额、账户/转入账户、三层分类叶子和备注，并同步回 template-backed 兼容源。
 - 2026-05-07：`codex/moneythings-account-group-collapse` 为资产页账户组补齐折叠/展开、本地偏好持久化和组内余额摘要，继续保持交易保存到具体子账户。
+- 2026-05-07：`codex/moneythings-quick-action-edit-validation` 为快速动作“编辑内容”补齐金额内联校验、保存后执行模式预览和账户组路径显示。
 - 2026-05-10：`codex/moneythings-quick-action-editor-params` 补齐 Quick Action edit fallback 参数映射测试，并保留 `bookId` 作为结构化编辑器的场景/账本预填上下文。
 - 2026-05-10：`codex/moneythings-scene-template-contracts` 固定日常、旅行、装修、家庭、宠物、自由职业 6 个场景模板的 ID 顺序与核心分类/标签语义，避免场景产品化后续回退。
 - 2026-05-10：`codex/moneythings-transaction-entry-protocol` 补齐 `TransactionEntryParams` 协议回归测试，固定来源横幅、提交按钮、缺字段高亮和复杂转账预填合同。
@@ -83,6 +84,7 @@
 - 新增记账页已支持从当前完整手动输入保存为快速动作，补上 One Touch 从“真实记账行为”反向沉淀快捷入口的闭环。
 - 快速动作管理页已支持编辑核心字段，用户可以在不重建动作、不更换 stable id 的情况下调整 One Touch 内容。
 - 账户组已支持按账本和资产分区记住折叠状态，收起时保留子账户数量、币种和组内余额摘要。
+- 快速动作编辑页已支持保存前预览 direct / confirm / edit 执行模式，非空无效金额会阻止保存，避免误改 One Touch 行为。
 - iOS Shortcuts / Siri 可通过 App Intent 打开结构化记账编辑器，或通过快速动作 ID 打开 One Touch 入口。
 - iOS 系统分享可把文本或 URL 作为 `shareReceive/rawText` 打开结构化编辑器。
 - 外部交易入口已统一到 `TransactionEntryParams`，复杂或缺字段场景进入 `TransactionFormScreen`；结构化编辑器可展示传入账本/共享场景上下文，并在共享场景保存前确认。
@@ -121,6 +123,7 @@
 - `docs/2026-05-06-moneythings-add-entry-save-action-dev-verify.md`
 - `docs/2026-05-06-moneythings-quick-action-core-edit-dev-verify.md`
 - `docs/2026-05-07-moneythings-account-group-collapse-dev-verify.md`
+- `docs/2026-05-07-moneythings-quick-action-edit-validation-dev-verify.md`
 - `docs/2026-05-10-moneythings-quick-action-editor-params-dev-verify.md`
 - `docs/2026-05-10-moneythings-scene-template-contracts-dev-verify.md`
 - `docs/2026-05-10-moneythings-transaction-entry-protocol-dev-verify.md`
