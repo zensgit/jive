@@ -53,6 +53,21 @@ scripts/verify_release_android_smoke_artifacts.sh <artifact-dir>
 release_android_smoke_artifact_verification.md
 ```
 
+随后 wrapper 会自动渲染一页式索引：
+
+```bash
+scripts/render_release_android_smoke_summary.sh <artifact-dir>
+```
+
+输出：
+
+```text
+<artifact-dir>/latest.md
+build/reports/release-android-smoke/latest.md
+```
+
+`latest.md` 汇总 smoke 状态、验证状态、scenario、APK SHA-256、最终 crash 字节数、artifact 路径和覆盖范围，方便部署测试完成报告直接引用。
+
 覆盖：
 
 - `guest-home`：冷启动、onboarding、游客首页
@@ -97,6 +112,7 @@ build/reports/release-android-smoke/<timestamp>/
 
 ```bash
 scripts/verify_release_android_smoke_artifacts.sh build/reports/release-android-smoke/<timestamp>
+scripts/render_release_android_smoke_summary.sh build/reports/release-android-smoke/<timestamp>
 ```
 
 ## 暂缓项

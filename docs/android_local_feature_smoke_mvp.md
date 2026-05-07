@@ -56,6 +56,9 @@ to `run_android_local_feature_smoke.sh`.
 After the smoke completes, the wrapper also runs
 `scripts/verify_release_android_smoke_artifacts.sh` and writes
 `release_android_smoke_artifact_verification.md` into the artifact directory.
+It then renders a one-page run index with
+`scripts/render_release_android_smoke_summary.sh`, writing `latest.md` both in
+the artifact directory and under `build/reports/release-android-smoke/latest.md`.
 
 The wrapper defaults to a fresh install, so use it on an emulator by default.
 For a physical device, pass `--preserve-data` unless resetting local app data is
