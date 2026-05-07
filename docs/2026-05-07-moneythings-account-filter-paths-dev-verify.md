@@ -6,7 +6,7 @@ This branch extends the MoneyThings account-group presentation from transaction 
 
 - Branch: `codex/moneythings-account-filter-paths`
 - Base: `codex/moneythings-account-picker-paths`
-- PR: TBD
+- PR: #240
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-account-filter-paths`
 
 ## Implementation
