@@ -103,8 +103,10 @@ jobs:
             scripts/run_release_smoke.sh \
             scripts/run_release_android_smoke.sh \
             scripts/run_android_local_feature_smoke.sh \
+            scripts/render_release_report_summary.sh \
             scripts/verify_release_android_smoke_artifacts.sh \
             scripts/render_release_android_smoke_summary.sh \
+            scripts/test_release_report_summary_renderer.sh \
             scripts/test_release_android_smoke_artifact_verifier.sh \
             scripts/test_release_android_smoke_summary_renderer.sh \
             scripts/should_run_saas_wave0_smoke.sh \
@@ -112,11 +114,14 @@ jobs:
             bash -n "$script"
           done
 
+          scripts/render_release_report_summary.sh --help >/dev/null
           scripts/verify_release_android_smoke_artifacts.sh --help >/dev/null
           scripts/render_release_android_smoke_summary.sh --help >/dev/null
+          scripts/test_release_report_summary_renderer.sh --help >/dev/null
           scripts/test_release_android_smoke_artifact_verifier.sh --help >/dev/null
           scripts/test_release_android_smoke_summary_renderer.sh --help >/dev/null
           scripts/test_saas_wave0_smoke_trigger.sh --help >/dev/null
+          scripts/test_release_report_summary_renderer.sh
           scripts/test_release_android_smoke_artifact_verifier.sh
           scripts/test_release_android_smoke_summary_renderer.sh
           scripts/test_saas_wave0_smoke_trigger.sh

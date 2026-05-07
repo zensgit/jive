@@ -3,9 +3,25 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPORT_DIR="$APP_DIR/build/reports"
+REPORT_DIR="${JIVE_RELEASE_REPORT_DIR:-$APP_DIR/build/reports}"
 CONTEXT="${1:-release}"
 SUMMARY_TARGET="${GITHUB_STEP_SUMMARY:-}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  scripts/render_release_report_summary.sh [context]
+
+Renders JSON files under build/reports into a concise Markdown summary. Set
+JIVE_RELEASE_REPORT_DIR to point at a different report root for local self-tests.
+When GITHUB_STEP_SUMMARY is set, the rendered summary is appended there too.
+EOF
+}
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+  usage
+  exit 0
+fi
 
 tmp_file="$(mktemp)"
 trap 'rm -f "$tmp_file"' EXIT
@@ -26,7 +42,10 @@ sections = [
     ("import-column-mapping", "Import Column Mapping Reports"),
 ]
 
-print(f"## {context.capitalize()} Release Report Summary")
+if context.strip().lower() == "release":
+    print("## Release Report Summary")
+else:
+    print(f"## {context.capitalize()} Release Report Summary")
 printed = False
 
 for folder, title in sections:

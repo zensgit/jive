@@ -17,3 +17,7 @@
 ## Scope
 - CI/reporting only.
 - No product behavior changes.
+
+## Self-Test
+- `scripts/test_release_report_summary_renderer.sh` creates temporary JSON report fixtures and validates empty report handling, Android/iOS/sync/import summary sections, `GITHUB_STEP_SUMMARY` append behavior, and repeated render stability.
+- GitHub CI runs the self-test from `release_smoke_script_self_check`.
