@@ -7,6 +7,11 @@ APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO="${GITHUB_REPOSITORY:-}"
 OUTPUT_FILE="$APP_DIR/build/reports/saas-production-release-readiness/latest.md"
 STRICT=0
+GH_BIN="${JIVE_GH_BIN:-gh}"
+SECRET_CHECK_SCRIPT="${JIVE_SAAS_GITHUB_SECRETS_CHECK_SCRIPT:-$APP_DIR/scripts/check_saas_github_secrets.sh}"
+MAIN_SHA_OVERRIDE="${JIVE_PROD_RELEASE_MAIN_SHA:-}"
+WORKFLOW_STATE_OVERRIDE="${JIVE_PROD_RELEASE_WORKFLOW_STATE:-}"
+LATEST_CI_OVERRIDE="${JIVE_PROD_RELEASE_LATEST_CI:-}"
 
 usage() {
   cat <<'EOF'
@@ -66,7 +71,7 @@ resolve_repo() {
     return 0
   fi
 
-  gh repo view --json nameWithOwner --jq .nameWithOwner
+  "$GH_BIN" repo view --json nameWithOwner --jq .nameWithOwner
 }
 
 run_secret_check() {
@@ -79,7 +84,10 @@ run_secret_check() {
 main() {
   parse_args "$@"
 
-  command -v gh >/dev/null 2>&1 || die "gh CLI is required"
+  if [[ -z "$REPO" || -z "$WORKFLOW_STATE_OVERRIDE" || -z "$LATEST_CI_OVERRIDE" ]]; then
+    command -v "$GH_BIN" >/dev/null 2>&1 || die "gh CLI is required"
+  fi
+  [[ -f "$SECRET_CHECK_SCRIPT" ]] || die "secret check script not found: $SECRET_CHECK_SCRIPT"
 
   local repo
   repo="$(resolve_repo)"
@@ -90,19 +98,31 @@ main() {
   mkdir -p "$output_dir"
 
   local main_sha=""
-  main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+  if [[ -n "$MAIN_SHA_OVERRIDE" ]]; then
+    main_sha="$MAIN_SHA_OVERRIDE"
+  else
+    main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+  fi
 
   local workflow_state="missing"
-  workflow_state="$(gh workflow list --repo "$repo" --all | awk -F '\t' '$1 == "SaaS Release Candidate" { print $2; found=1 } END { if (!found) print "missing" }')"
+  if [[ -n "$WORKFLOW_STATE_OVERRIDE" ]]; then
+    workflow_state="$WORKFLOW_STATE_OVERRIDE"
+  else
+    workflow_state="$("$GH_BIN" workflow list --repo "$repo" --all | awk -F '\t' '$1 == "SaaS Release Candidate" { print $2; found=1 } END { if (!found) print "missing" }')"
+  fi
 
   local latest_ci="unavailable"
-  latest_ci="$(gh run list \
-    --repo "$repo" \
-    --workflow "Flutter CI" \
-    --branch main \
-    --limit 1 \
-    --json databaseId,conclusion,status,headSha,url,createdAt \
-    --jq 'if length == 0 then "unavailable" else "run=" + (.[0].databaseId|tostring) + " status=" + .[0].status + " conclusion=" + (.[0].conclusion // "") + " head=" + .[0].headSha + " url=" + .[0].url end')"
+  if [[ -n "$LATEST_CI_OVERRIDE" ]]; then
+    latest_ci="$LATEST_CI_OVERRIDE"
+  else
+    latest_ci="$("$GH_BIN" run list \
+      --repo "$repo" \
+      --workflow "Flutter CI" \
+      --branch main \
+      --limit 1 \
+      --json databaseId,conclusion,status,headSha,url,createdAt \
+      --jq 'if length == 0 then "unavailable" else "run=" + (.[0].databaseId|tostring) + " status=" + .[0].status + " conclusion=" + (.[0].conclusion // "") + " head=" + .[0].headSha + " url=" + .[0].url end')"
+  fi
 
   local minimum_log
   local strict_log
@@ -114,9 +134,9 @@ main() {
   local strict_status
 
   set +e
-  run_secret_check "$minimum_log" "$APP_DIR/scripts/check_saas_github_secrets.sh" --profile production-release --repo "$repo"
+  run_secret_check "$minimum_log" "$SECRET_CHECK_SCRIPT" --profile production-release --repo "$repo"
   minimum_status=$?
-  run_secret_check "$strict_log" "$APP_DIR/scripts/check_saas_github_secrets.sh" --profile production-release --include-signing --repo "$repo"
+  run_secret_check "$strict_log" "$SECRET_CHECK_SCRIPT" --profile production-release --include-signing --repo "$repo"
   strict_status=$?
   set -e
 

@@ -13,6 +13,8 @@ matches_saas_wave0_path() {
     scripts/check_saas_deployment_readiness.sh | \
     scripts/guard_saas_report_artifacts.sh | \
     scripts/test_saas_report_artifact_guard.sh | \
+    scripts/report_saas_production_release_readiness.sh | \
+    scripts/test_saas_production_release_readiness_report.sh | \
     scripts/should_run_saas_wave0_smoke.sh | \
     scripts/test_saas_wave0_smoke_trigger.sh | \
     pubspec.yaml | \
