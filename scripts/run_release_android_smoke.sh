@@ -42,7 +42,8 @@ Notes:
   The default fresh install is intended for emulators. On a physical device,
   pass --preserve-data unless you explicitly accept resetting local app data.
   After the smoke completes, this wrapper verifies the artifact directory and
-  writes release_android_smoke_artifact_verification.md.
+  writes release_android_smoke_artifact_verification.md, then renders latest.md
+  as the one-page run index.
 EOF
 }
 
@@ -80,3 +81,4 @@ bash "$SCRIPT_DIR/run_android_local_feature_smoke.sh" \
   "$@"
 
 bash "$SCRIPT_DIR/verify_release_android_smoke_artifacts.sh" "$effective_artifact_dir"
+bash "$SCRIPT_DIR/render_release_android_smoke_summary.sh" "$effective_artifact_dir"
