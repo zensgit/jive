@@ -16,7 +16,7 @@ The first-stage account-group model remains unchanged:
 - Branch: `codex/moneythings-account-picker-paths`
 - Base: `codex/moneythings-quick-action-edit-validation`
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-account-picker-paths`
-- PR: TBD
+- PR: #235 (`https://github.com/zensgit/jive/pull/235`)
 
 ## Implementation
 
