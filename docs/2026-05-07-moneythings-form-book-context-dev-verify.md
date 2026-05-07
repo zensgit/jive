@@ -6,7 +6,7 @@ This branch gives `TransactionFormScreen` the same book/share context discipline
 
 - Branch: `codex/moneythings-form-book-context`
 - Base: `origin/main`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/255
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-form-book-context`
 
 ## Implementation
