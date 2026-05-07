@@ -6,7 +6,7 @@ This branch continues the MoneyThings TODO closure by locking the existing Smart
 
 - Branch: `codex/moneythings-smartlist-regression`
 - Base: `origin/main`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/256
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-smartlist-regression`
 
 ## Implementation
