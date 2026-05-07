@@ -16,6 +16,12 @@ This document does not replace the detailed runbooks. It adds a fast readiness g
 
 ## New Readiness Gate
 
+Before touching real staging secrets, the readiness script contract can be tested locally without network or credentials:
+
+```bash
+bash scripts/test_saas_deployment_readiness.sh
+```
+
 Initialize a local core env draft first:
 
 ```bash

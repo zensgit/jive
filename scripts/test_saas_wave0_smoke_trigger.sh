@@ -56,6 +56,7 @@ assert_stdin false "docs-only change" $'docs/readme.md\n'
 assert_stdin false "category-icon asset-only change" $'assets/category_icons/foo.svg\n'
 
 assert_stdin true "workflow change" $'.github/workflows/flutter_ci.yml\n'
+assert_stdin true "deployment readiness self-test change" $'scripts/test_saas_deployment_readiness.sh\n'
 assert_stdin true "artifact guard script change" $'scripts/guard_saas_report_artifacts.sh\n'
 assert_stdin true "artifact guard self-test change" $'scripts/test_saas_report_artifact_guard.sh\n'
 assert_stdin true "release readiness report change" $'scripts/report_saas_production_release_readiness.sh\n'

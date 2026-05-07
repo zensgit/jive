@@ -13,6 +13,7 @@
 当前代码侧已满足：
 - `bash scripts/run_saas_wave0_smoke.sh` 可作为本地 SaaS Wave0 smoke
 - `bash scripts/check_saas_deployment_readiness.sh --profile core` 可作为静态 readiness gate
+- `bash scripts/test_saas_deployment_readiness.sh` 可作为 readiness gate 的本地无密钥契约测试
 - `bash scripts/run_saas_core_staging_lane.sh --env-file /tmp/jive-saas-staging.env` 可作为 core staging 一键 lane
 
 当前环境侧仍需要你补齐：

@@ -146,10 +146,16 @@ jobs:
 
           bash -n \
             scripts/check_saas_production_readiness.sh \
+            scripts/check_saas_deployment_readiness.sh \
             scripts/report_saas_production_release_readiness.sh \
             scripts/test_saas_production_release_readiness_report.sh \
+            scripts/test_saas_deployment_readiness.sh \
             scripts/build_saas_staging_apk.sh \
             scripts/build_release_candidate.sh
+
+          scripts/check_saas_deployment_readiness.sh --help >/dev/null
+          scripts/test_saas_deployment_readiness.sh --help >/dev/null
+          scripts/test_saas_deployment_readiness.sh
 
           scripts/report_saas_production_release_readiness.sh --help >/dev/null
           scripts/test_saas_production_release_readiness_report.sh --help >/dev/null
