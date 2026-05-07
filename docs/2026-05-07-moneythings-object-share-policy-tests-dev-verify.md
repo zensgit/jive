@@ -6,7 +6,7 @@ This branch adds service-level regression coverage for the MoneyThings-inspired 
 
 - Branch: `codex/moneythings-object-share-policy-tests`
 - Base: `origin/main`
-- PR: TBD
+- PR: #249
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-sharing-legacy-tests`
 
 ## Implementation
