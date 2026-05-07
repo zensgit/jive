@@ -22,6 +22,7 @@
 
 - `flutter analyze`
 - `scripts/test_release_android_smoke_artifact_verifier.sh`
+- `scripts/test_release_android_smoke_summary_renderer.sh`
 - `flutter test test/data_backup_service_roundtrip_test.dart test/data_backup_service_migration_regression_test.dart test/auth_stale_session_release_gate_test.dart`
 - `flutter test integration_test/import_center_failure_analytics_flow_test.dart --dart-define=JIVE_E2E=true`
 - `flutter test integration_test/category_icon_picker_flow_test.dart --dart-define=JIVE_E2E=true`
@@ -123,7 +124,13 @@ scripts/render_release_android_smoke_summary.sh build/reports/release-android-sm
 scripts/test_release_android_smoke_artifact_verifier.sh
 ```
 
-GitHub CI 会在 `release_smoke_script_self_check` job 中自动运行该 self-test，并同时检查 release smoke 相关 shell 脚本语法与帮助入口。
+如需在无设备、无 emulator 的 host 环境回归 `latest.md` 摘要渲染契约：
+
+```bash
+scripts/test_release_android_smoke_summary_renderer.sh
+```
+
+GitHub CI 会在 `release_smoke_script_self_check` job 中自动运行这些 self-test，并同时检查 release smoke 相关 shell 脚本语法与帮助入口。
 
 ## 暂缓项
 

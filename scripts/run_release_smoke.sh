@@ -13,6 +13,7 @@ fi
 
 bash "$SCRIPT_DIR/run_release_regression_suite.sh"
 bash "$SCRIPT_DIR/test_release_android_smoke_artifact_verifier.sh"
+bash "$SCRIPT_DIR/test_release_android_smoke_summary_renderer.sh"
 
 flutter analyze \
   integration_test/import_center_failure_analytics_flow_test.dart \
