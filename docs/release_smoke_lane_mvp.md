@@ -41,6 +41,18 @@ scripts/run_android_local_feature_smoke.sh \
   --allow-uninstall-on-signature-mismatch
 ```
 
+smoke 完成后会自动执行：
+
+```bash
+scripts/verify_release_android_smoke_artifacts.sh <artifact-dir>
+```
+
+验证器会检查 `summary.md`、最终首页证据、场景对应的关键 UI 摘要，以及关键步骤的 crash/alert 日志，并在产物目录写入：
+
+```text
+release_android_smoke_artifact_verification.md
+```
+
 覆盖：
 
 - `guest-home`：冷启动、onboarding、游客首页
@@ -79,6 +91,12 @@ scripts/run_release_android_smoke.sh --device <serial>
 
 ```text
 build/reports/release-android-smoke/<timestamp>/
+```
+
+如需只复核已有产物：
+
+```bash
+scripts/verify_release_android_smoke_artifacts.sh build/reports/release-android-smoke/<timestamp>
 ```
 
 ## 暂缓项
