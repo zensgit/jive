@@ -6,7 +6,7 @@ This low-risk stacked slice extends the MoneyThings-style object sharing visibil
 
 - Branch: `codex/moneythings-account-edit-warnings`
 - Base: `codex/moneythings-account-automation-paths`
-- PR: TBD
+- PR: #246
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-account-edit-warnings`
 
 ## Implementation
