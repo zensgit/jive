@@ -43,6 +43,20 @@ scripts/run_android_local_feature_smoke.sh \
   --allow-uninstall-on-signature-mismatch
 ```
 
+Deployment-test wrapper:
+
+```bash
+scripts/run_release_android_smoke.sh
+```
+
+The wrapper runs the full local Android scenario set, writes artifacts under
+`build/reports/release-android-smoke/<timestamp>/`, and forwards extra options
+to `run_android_local_feature_smoke.sh`.
+
+The wrapper defaults to a fresh install, so use it on an emulator by default.
+For a physical device, pass `--preserve-data` unless resetting local app data is
+explicitly acceptable.
+
 Launch/capture only, without driving onboarding:
 
 ```bash
