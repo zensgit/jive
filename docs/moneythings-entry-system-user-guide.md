@@ -125,6 +125,7 @@ Expected behavior:
 - Canceling the shared-scene confirmation should keep the user on the entry page and save nothing.
 - Continuing the shared-scene confirmation should preserve the selected shared book on the saved transaction.
 - Deleting shared categories or tags should show impact copy.
+- Merging a tag in a shared scene should ask again after target selection because transactions and smart rules move to the target tag and the source tag is deleted.
 - Permissions still come from the existing shared ledger/book role model.
 - No object-level sharing table or RLS is introduced in this wave.
 
@@ -162,6 +163,7 @@ Expected behavior:
 - In a shared scene, edit, hide, restore, promote, transfer, or delete a category and confirm the warning explains the shared-member impact before the change is applied.
 - In a shared scene, edit an existing tag or tag group, archive/restore a tag group, or delete a tag group and confirm the warning explains the shared-member impact before the change is applied.
 - In a shared scene, archive or restore a single tag and confirm the warning appears before the change is applied.
+- In a shared scene, merge one tag into another and confirm the second dialog appears after choosing the target tag; cancel once to confirm no merge happens, then confirm once to verify transactions/rules move and the source tag disappears.
 
 ## Explicitly Deferred
 

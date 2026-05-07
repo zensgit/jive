@@ -781,6 +781,34 @@ void main() {
         expect(policy.warning, contains('场景成员'));
       },
     );
+
+    test('provides shared tag merge warning copy without changing scope', () {
+      final book = JiveBook()
+        ..key = 'book_shared_tag_merge'
+        ..name = '家庭'
+        ..currency = 'CNY'
+        ..order = 0
+        ..isDefault = false
+        ..isArchived = false
+        ..isShared = true
+        ..memberCount = 2
+        ..createdAt = DateTime(2026)
+        ..updatedAt = DateTime(2026);
+
+      final policy = const ObjectSharePolicyService().evaluate(
+        book: book,
+        objectLabel: '标签',
+      );
+      final deletionWarning = const ObjectSharePolicyService().deletionWarning(
+        objectLabel: '外卖',
+        affectedTransactionCount: 4,
+        shared: policy.visibility != ObjectShareVisibility.private,
+      );
+
+      expect(policy.warning, contains('场景成员'));
+      expect(deletionWarning, contains('共享成员'));
+      expect(deletionWarning, contains('4 笔交易'));
+    });
   });
 }
 
