@@ -14,7 +14,7 @@ BUILD_NAME="${JIVE_IOS_RELEASE_BUILD_NAME:-$DEFAULT_BUILD_NAME}"
 BUILD_NUMBER="${JIVE_IOS_RELEASE_BUILD_NUMBER:-$DEFAULT_BUILD_NUMBER}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 ARTIFACT_ROOT="${JIVE_IOS_RELEASE_ARTIFACT_DIR:-$APP_DIR/build/ios-release-candidate/$STAMP}"
-REPORT_DIR="$APP_DIR/build/reports/ios-release-candidate"
+REPORT_DIR="${JIVE_IOS_RELEASE_REPORT_DIR:-$APP_DIR/build/reports/ios-release-candidate}"
 
 mkdir -p "$ARTIFACT_ROOT" "$REPORT_DIR"
 
@@ -192,6 +192,8 @@ content = "\n".join([
     "# iOS Release Candidate",
     "",
     f"- generatedAt: {stamp}",
+    "- status: review",
+    "- message: Unsigned iOS release candidate built successfully; manual codesign/archive is still required.",
     f"- buildName: {build_name}",
     f"- buildNumber: {build_number}",
     f"- codesign: disabled",
