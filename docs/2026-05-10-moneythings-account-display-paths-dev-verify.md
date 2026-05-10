@@ -6,7 +6,7 @@ This branch continues the MoneyThings account-group TODO by making grouped accou
 
 - Branch: `codex/moneythings-account-display-paths`
 - Base: `origin/main`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/260
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-account-display-paths`
 
 ## Implementation
