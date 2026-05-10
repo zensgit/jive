@@ -282,6 +282,24 @@ void main() {
       expect(path.displayName, '餐饮 / 午餐');
     });
 
+    test('visible paths keep hidden parents for full leaf context', () {
+      final categories = [
+        _category(key: 'transport', name: '出行', isHidden: true, order: 2),
+        _category(key: 'car', name: '私家车', parentKey: 'transport'),
+        _category(key: 'fuel', name: '加油', parentKey: 'car'),
+      ];
+
+      final paths = const CategoryPathService().visiblePaths(
+        categories,
+        isIncome: false,
+      );
+
+      expect(
+        paths.map((path) => path.displayName),
+        contains('出行 / 私家车 / 加油'),
+      );
+    });
+
     test('treats two-level paths as default and third-level as optional', () {
       final categories = [
         _category(key: 'transport', name: '出行'),
@@ -638,6 +656,7 @@ JiveCategory _category({
   String? parentKey,
   int order = 0,
   bool isIncome = false,
+  bool isHidden = false,
 }) {
   return JiveCategory()
     ..key = key
@@ -646,7 +665,7 @@ JiveCategory _category({
     ..parentKey = parentKey
     ..order = order
     ..isSystem = false
-    ..isHidden = false
+    ..isHidden = isHidden
     ..isIncome = isIncome
     ..updatedAt = DateTime(2026);
 }
