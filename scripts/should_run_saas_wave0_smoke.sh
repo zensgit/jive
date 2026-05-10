@@ -7,6 +7,7 @@ matches_saas_wave0_path() {
   case "$path" in
     .github/workflows/flutter_ci.yml | \
     .github/workflows/saas_full_billing_staging_smoke.yml | \
+    .github/workflows/saas_release_candidate.yml | \
     analysis_options.yaml | \
     scripts/run_saas_wave0_smoke.sh | \
     scripts/run_saas_core_staging_lane.sh | \
@@ -15,6 +16,7 @@ matches_saas_wave0_path() {
     scripts/test_saas_staging_rollout.sh | \
     scripts/run_saas_staging_function_smoke.sh | \
     scripts/test_saas_full_billing_staging_smoke_workflow.sh | \
+    scripts/test_saas_release_candidate_workflow.sh | \
     scripts/check_saas_deployment_readiness.sh | \
     scripts/test_saas_deployment_readiness.sh | \
     scripts/guard_saas_report_artifacts.sh | \

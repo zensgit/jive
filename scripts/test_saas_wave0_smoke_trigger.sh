@@ -57,9 +57,11 @@ assert_stdin false "category-icon asset-only change" $'assets/category_icons/foo
 
 assert_stdin true "workflow change" $'.github/workflows/flutter_ci.yml\n'
 assert_stdin true "full billing workflow change" $'.github/workflows/saas_full_billing_staging_smoke.yml\n'
+assert_stdin true "release candidate workflow change" $'.github/workflows/saas_release_candidate.yml\n'
 assert_stdin true "core staging lane self-test change" $'scripts/test_saas_core_staging_lane.sh\n'
 assert_stdin true "staging rollout self-test change" $'scripts/test_saas_staging_rollout.sh\n'
 assert_stdin true "full billing workflow self-test change" $'scripts/test_saas_full_billing_staging_smoke_workflow.sh\n'
+assert_stdin true "release candidate workflow self-test change" $'scripts/test_saas_release_candidate_workflow.sh\n'
 assert_stdin true "deployment readiness self-test change" $'scripts/test_saas_deployment_readiness.sh\n'
 assert_stdin true "artifact guard script change" $'scripts/guard_saas_report_artifacts.sh\n'
 assert_stdin true "artifact guard self-test change" $'scripts/test_saas_report_artifact_guard.sh\n'
