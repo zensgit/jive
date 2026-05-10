@@ -6,7 +6,7 @@ This branch continues the MoneyThings three-level category TODO by preserving fu
 
 - Branch: `codex/moneythings-category-hidden-paths`
 - Base: `origin/main`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/259
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-category-hidden-paths`
 
 ## Implementation
