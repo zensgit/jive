@@ -10,7 +10,7 @@ the quick action book context when opening `TransactionFormScreen`.
 
 - Branch: `codex/moneythings-quick-action-editor-params`
 - Base: `origin/main@432e8716`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/269
 
 ## Changes
 
