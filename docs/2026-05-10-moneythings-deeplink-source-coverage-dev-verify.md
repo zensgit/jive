@@ -6,7 +6,7 @@ This branch continues the MoneyThings entry-system TODO by widening `jive://tran
 
 - Branch: `codex/moneythings-deeplink-source-coverage`
 - Base: `origin/main`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/257
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-deeplink-source-coverage`
 
 ## Implementation
