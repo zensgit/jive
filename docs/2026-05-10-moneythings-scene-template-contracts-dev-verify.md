@@ -11,7 +11,7 @@ travel, renovation, family, pet, and freelance.
 
 - Branch: `codex/moneythings-scene-template-contracts`
 - Base: `origin/main@432e8716`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/271
 
 ## Changes
 
