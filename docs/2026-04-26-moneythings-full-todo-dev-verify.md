@@ -42,6 +42,7 @@
 - 2026-05-10：`codex/moneythings-transaction-entry-protocol` 补齐 `TransactionEntryParams` 协议回归测试，固定来源横幅、提交按钮、缺字段高亮和复杂转账预填合同。
 - 2026-05-10：`codex/moneythings-category-import-segments` 补齐三层分类导入路径保真，CSV / 映射导入可保留完整 `大类 / 中类 / 小类` segments，并在同名叶子分类时按完整路径解析到正确叶子。
 - 2026-05-10：`codex/moneythings-category-share-path-preview` 补齐分类分享预览的三层路径显示，导入前可看到 `大类 / 中类 / 小类`，并用 roundtrip 测试确认 `parentKey` 不丢失。
+- 2026-05-10：`codex/moneythings-object-share-shared-ledger-boundary` 补齐对象共享提示在 sharedLedger-only 场景下的私有对象风险提示，仍保持提示层语义。
 
 ## 保持不变
 
@@ -111,4 +112,5 @@
 - `docs/2026-05-07-moneythings-shared-transaction-warning-dev-verify.md`
 - `docs/2026-05-10-moneythings-category-import-segments-dev-verify.md`
 - `docs/2026-05-10-moneythings-category-share-path-preview-dev-verify.md`
+- `docs/2026-05-10-moneythings-object-share-shared-ledger-boundary-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`

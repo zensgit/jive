@@ -1,15 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:jive/core/database/book_model.dart';
 import 'package:jive/core/database/shared_ledger_model.dart';
 import 'package:jive/core/service/object_share_policy_service.dart';
 
 void main() {
   group('ObjectSharePolicyService', () {
-    test('treats book shared ledger key as inherited shared scene', () {
-      final book = _book(sharedLedgerKey: 'ledger_family', isShared: false);
+    const service = ObjectSharePolicyService();
 
-      final policy = const ObjectSharePolicyService().evaluate(
-        book: book,
+    test('treats book shared ledger key as inherited shared scene', () {
+      final policy = service.evaluate(
+        book: _book(sharedLedgerKey: 'ledger_family', isShared: false),
         objectLabel: '账户',
       );
 
@@ -19,10 +20,22 @@ void main() {
       expect(policy.warning, contains('场景成员'));
     });
 
+    test('evaluate treats sharedLedger-only context as shared scene', () {
+      final policy = service.evaluate(
+        book: null,
+        sharedLedger: _sharedLedger(),
+        objectLabel: '标签',
+      );
+
+      expect(policy.visibility, ObjectShareVisibility.inheritedFromScene);
+      expect(policy.label, '继承场景共享');
+      expect(policy.warning, contains('同步给场景成员'));
+    });
+
     test(
       'explicitly shared object takes shared label outside shared scenes',
       () {
-        final policy = const ObjectSharePolicyService().evaluate(
+        final policy = service.evaluate(
           book: _book(),
           objectLabel: '标签',
           explicitlyShared: true,
@@ -35,32 +48,32 @@ void main() {
       },
     );
 
-    test('shared ledger instance marks object as inherited shared scene', () {
-      final ledger = JiveSharedLedger()
-        ..key = 'ledger_family'
-        ..name = '家庭共享';
-
-      final policy = const ObjectSharePolicyService().evaluate(
-        book: null,
-        sharedLedger: ledger,
-        objectLabel: '分类',
-      );
-
-      expect(policy.visibility, ObjectShareVisibility.inheritedFromScene);
-      expect(policy.label, '继承场景共享');
-      expect(policy.warning, contains('分类'));
-    });
-
-    test('private object warning only appears inside shared scenes', () {
-      final service = const ObjectSharePolicyService();
-
+    test('private object warnings follow shared scene boundaries', () {
       expect(
         service.privateObjectInSharedSceneWarning(
-          book: _book(sharedLedgerKey: 'ledger_family'),
+          book: _book(isShared: true),
+          objectIsPrivate: true,
+          objectLabel: '分类',
+        ),
+        contains('私有分类'),
+      );
+      expect(
+        service.privateObjectInSharedSceneWarning(
+          book: null,
+          sharedLedger: _sharedLedger(),
           objectIsPrivate: true,
           objectLabel: '账户',
         ),
-        contains('私有账户不能直接用于共享场景交易'),
+        contains('私有账户'),
+      );
+      expect(
+        service.privateObjectInSharedSceneWarning(
+          book: _book(),
+          sharedLedger: _sharedLedger(),
+          objectIsPrivate: true,
+          objectLabel: '标签',
+        ),
+        contains('共享场景交易'),
       );
       expect(
         service.privateObjectInSharedSceneWarning(
@@ -74,15 +87,13 @@ void main() {
         service.privateObjectInSharedSceneWarning(
           book: _book(),
           objectIsPrivate: true,
-          objectLabel: '账户',
+          objectLabel: '分类',
         ),
         isNull,
       );
     });
 
     test('deletion warnings cover empty shared and local scopes', () {
-      final service = const ObjectSharePolicyService();
-
       expect(
         service.deletionWarning(
           objectLabel: '差旅',
@@ -101,8 +112,8 @@ void main() {
 
 JiveBook _book({bool isShared = false, String? sharedLedgerKey}) {
   return JiveBook()
-    ..key = 'book_daily'
-    ..name = '日常'
+    ..key = 'book_default'
+    ..name = '默认账本'
     ..currency = 'CNY'
     ..order = 0
     ..isDefault = true
@@ -110,6 +121,17 @@ JiveBook _book({bool isShared = false, String? sharedLedgerKey}) {
     ..isShared = isShared
     ..sharedLedgerKey = sharedLedgerKey
     ..memberCount = isShared || sharedLedgerKey != null ? 2 : 1
+    ..createdAt = DateTime(2026)
+    ..updatedAt = DateTime(2026);
+}
+
+JiveSharedLedger _sharedLedger() {
+  return JiveSharedLedger()
+    ..key = 'ledger_family'
+    ..name = '家庭共享账本'
+    ..ownerUserId = 'user_owner'
+    ..currency = 'CNY'
+    ..memberCount = 2
     ..createdAt = DateTime(2026)
     ..updatedAt = DateTime(2026);
 }

@@ -29,10 +29,10 @@ class ObjectSharePolicyService {
     bool objectIsPrivate = false,
     String objectLabel = '对象',
   }) {
-    final isSharedScene =
-        book?.isShared == true ||
-        (book?.sharedLedgerKey != null && book!.sharedLedgerKey!.isNotEmpty) ||
-        sharedLedger != null;
+    final isSharedScene = _isSharedScene(
+      book: book,
+      sharedLedger: sharedLedger,
+    );
 
     if (explicitlyShared) {
       return ObjectSharePolicy(
@@ -68,12 +68,14 @@ class ObjectSharePolicyService {
 
   String? privateObjectInSharedSceneWarning({
     required JiveBook? book,
+    JiveSharedLedger? sharedLedger,
     required bool objectIsPrivate,
     required String objectLabel,
   }) {
-    final isSharedScene =
-        book?.isShared == true ||
-        (book?.sharedLedgerKey != null && book!.sharedLedgerKey!.isNotEmpty);
+    final isSharedScene = _isSharedScene(
+      book: book,
+      sharedLedger: sharedLedger,
+    );
     if (!isSharedScene || !objectIsPrivate) return null;
     return '私有$objectLabel不能直接用于共享场景交易，请替换为共享对象或先退出共享场景。';
   }
@@ -88,5 +90,15 @@ class ObjectSharePolicyService {
       return '删除「$objectLabel」后，将不再出现在$scope的候选列表中。';
     }
     return '删除「$objectLabel」会影响$scope中 $affectedTransactionCount 笔交易的展示和筛选。';
+  }
+
+  bool _isSharedScene({
+    required JiveBook? book,
+    JiveSharedLedger? sharedLedger,
+  }) {
+    final sharedLedgerKey = book?.sharedLedgerKey;
+    return book?.isShared == true ||
+        (sharedLedgerKey != null && sharedLedgerKey.isNotEmpty) ||
+        sharedLedger != null;
   }
 }
