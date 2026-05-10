@@ -14,7 +14,8 @@ The import pipeline now preserves full category path segments such as `出行 / 
 
 - Branch: `codex/moneythings-category-import-segments`
 - Base: `origin/main@6315589f`
-- PR: TBD
+- Commit: `b46e8aa9`
+- PR: [#264](https://github.com/zensgit/jive/pull/264)
 
 ## Changes
 
