@@ -275,6 +275,7 @@ class ImportCsvMappingService {
           toAccountName: toAccountName,
           parentCategoryName: parentCategoryName,
           childCategoryName: childCategoryName,
+          categoryPathSegments: categoryPath.segments,
           serviceCharge: serviceCharge,
           tagNames: tagNames,
           lineNumber: lineNumber,

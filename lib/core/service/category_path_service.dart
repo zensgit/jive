@@ -167,10 +167,15 @@ class TransactionCategoryKeys {
 }
 
 class CategoryPathNames {
-  const CategoryPathNames({this.parentName, this.childName});
+  const CategoryPathNames({
+    this.parentName,
+    this.childName,
+    this.segments = const [],
+  });
 
   final String? parentName;
   final String? childName;
+  final List<String> segments;
 }
 
 class CategoryPathImportParser {
@@ -187,8 +192,14 @@ class CategoryPathImportParser {
         .where((part) => part.isNotEmpty)
         .toList(growable: false);
     if (parts.isEmpty) return const CategoryPathNames();
-    if (parts.length == 1) return CategoryPathNames(parentName: parts.first);
-    return CategoryPathNames(parentName: parts.first, childName: parts.last);
+    if (parts.length == 1) {
+      return CategoryPathNames(parentName: parts.first, segments: parts);
+    }
+    return CategoryPathNames(
+      parentName: parts.first,
+      childName: parts.last,
+      segments: parts,
+    );
   }
 
   static String? preferExplicitCategoryName(

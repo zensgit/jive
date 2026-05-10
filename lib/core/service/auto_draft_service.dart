@@ -26,6 +26,7 @@ class AutoCapture {
   final String? toAccountName;
   final String? parentCategoryName;
   final String? childCategoryName;
+  final List<String> categoryPathSegments;
   final double? serviceCharge;
   final List<String> tagNames;
 
@@ -40,6 +41,7 @@ class AutoCapture {
     this.toAccountName,
     this.parentCategoryName,
     this.childCategoryName,
+    this.categoryPathSegments = const [],
     this.serviceCharge,
     this.tagNames = const [],
   });
@@ -193,10 +195,7 @@ class AutoDraftService {
     final toAccountId = capture.type == 'transfer'
         ? (explicitToAccountId ?? inferredToAccountId)
         : null;
-    final explicitResolved = categories.resolve(
-      capture.parentCategoryName,
-      capture.childCategoryName,
-    );
+    final explicitResolved = _resolveExplicitCategory(capture, categories);
     final resolved =
         explicitResolved.parent != null || explicitResolved.child != null
         ? explicitResolved
@@ -492,6 +491,40 @@ class AutoDraftService {
     }
     final updated = categories.resolve(parentName, subName);
     return updated.child?.key;
+  }
+
+  CategoryMatch _resolveExplicitCategory(
+    AutoCapture capture,
+    CategoryIndex categories,
+  ) {
+    final pathSegments = capture.categoryPathSegments
+        .map((segment) => segment.trim())
+        .where((segment) => segment.isNotEmpty)
+        .toList(growable: false);
+    if (_pathSegmentsMatchCategoryHints(capture, pathSegments)) {
+      final resolvedPath = categories.resolvePath(pathSegments);
+      if (resolvedPath.parent != null || resolvedPath.child != null) {
+        return resolvedPath;
+      }
+    }
+    return categories.resolve(
+      capture.parentCategoryName,
+      capture.childCategoryName,
+    );
+  }
+
+  bool _pathSegmentsMatchCategoryHints(
+    AutoCapture capture,
+    List<String> segments,
+  ) {
+    if (segments.length < 2) return false;
+    final parent = capture.parentCategoryName?.trim();
+    final child = capture.childCategoryName?.trim();
+    final parentMatches =
+        parent == null || parent.isEmpty || parent == segments.first;
+    final childMatches =
+        child == null || child.isEmpty || child == segments.last;
+    return parentMatches && childMatches;
   }
 
   Future<bool> _mergeTransferDraftIfNeeded({
@@ -1180,8 +1213,13 @@ class CategoryIndex {
   final Map<String, JiveCategory> _childByName = {};
   final Map<String, JiveCategory> _childByParentAndName = {};
   final Map<String, JiveCategory> _parentByKey = {};
+  final Map<String, JiveCategory> _categoryByKey = {};
+  final Map<String, JiveCategory> _childByParentKeyAndName = {};
 
   CategoryIndex(List<JiveCategory> categories) {
+    for (final cat in categories) {
+      _categoryByKey[cat.key] = cat;
+    }
     for (final cat in categories) {
       if (cat.parentKey == null) {
         _parentByKey[cat.key] = cat;
@@ -1193,6 +1231,15 @@ class CategoryIndex {
     }
     for (final cat in categories) {
       if (cat.parentKey == null) continue;
+      final directParent = _categoryByKey[cat.parentKey!];
+      if (directParent != null) {
+        final directKey = '${directParent.key}|${cat.name}';
+        final directExisting = _childByParentKeyAndName[directKey];
+        if (directExisting == null ||
+            (cat.isSystem && !directExisting.isSystem)) {
+          _childByParentKeyAndName[directKey] = cat;
+        }
+      }
       final parent = _parentByKey[cat.parentKey!];
       if (parent == null) continue;
       final key = '${parent.name}|${cat.name}';
@@ -1205,6 +1252,26 @@ class CategoryIndex {
         _childByName[cat.name] = cat;
       }
     }
+  }
+
+  CategoryMatch resolvePath(List<String> categoryNames) {
+    final names = categoryNames
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList(growable: false);
+    if (names.isEmpty) return const CategoryMatch(parent: null, child: null);
+
+    final root = _parentByName[names.first];
+    if (root == null) return resolve(names.first, names.last);
+    if (names.length == 1) return CategoryMatch(parent: root, child: null);
+
+    var current = root;
+    for (final name in names.skip(1)) {
+      final next = _childByParentKeyAndName['${current.key}|$name'];
+      if (next == null) return resolve(names.first, names.last);
+      current = next;
+    }
+    return CategoryMatch(parent: root, child: current);
   }
 
   CategoryMatch resolve(String? parentName, String? subName) {

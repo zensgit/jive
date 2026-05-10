@@ -329,6 +329,32 @@ void main() {
     });
   });
 
+  group('CategoryPathImportParser', () {
+    test('keeps full three-level import segments', () {
+      final names = CategoryPathImportParser.split('出行 / 私家车 / 加油');
+
+      expect(names.parentName, '出行');
+      expect(names.childName, '加油');
+      expect(names.segments, ['出行', '私家车', '加油']);
+    });
+
+    test('keeps single category import segment compatible', () {
+      final names = CategoryPathImportParser.split('餐饮');
+
+      expect(names.parentName, '餐饮');
+      expect(names.childName, isNull);
+      expect(names.segments, ['餐饮']);
+    });
+
+    test('returns empty segments for blank input', () {
+      final names = CategoryPathImportParser.split('  ');
+
+      expect(names.parentName, isNull);
+      expect(names.childName, isNull);
+      expect(names.segments, isEmpty);
+    });
+  });
+
   group('QuickActionDeepLinkService', () {
     test('parses template quick action links', () {
       final request = QuickActionDeepLinkService.parse(

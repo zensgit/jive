@@ -104,6 +104,7 @@ void main() {
     expect(records.first.type, 'expense');
     expect(records.first.parentCategoryName, '出行');
     expect(records.first.childCategoryName, '加油');
+    expect(records.first.categoryPathSegments, ['出行', '私家车', '加油']);
     expect(records.first.rawText, '周末加油');
   });
 }

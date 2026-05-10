@@ -113,6 +113,7 @@ void main() {
     expect(records.first.accountName, '招商银行');
     expect(records.first.parentCategoryName, '出行');
     expect(records.first.childCategoryName, '加油');
+    expect(records.first.categoryPathSegments, ['出行', '私家车', '加油']);
     expect(records.first.tagNames, ['汽车']);
   });
 
@@ -312,6 +313,111 @@ void main() {
       expect(drafts.first.categoryKey, 'cat_food');
       expect(drafts.first.subCategoryKey, 'cat_food_breakfast');
       expect(drafts.first.tagKeys, ['tag_breakfast']);
+    },
+  );
+
+  test(
+    'importPreparedRecords resolves duplicate leaf names by full category path',
+    () async {
+      final transport = JiveCategory()
+        ..key = 'cat_transport'
+        ..name = '出行'
+        ..iconName = 'directions_car'
+        ..parentKey = null
+        ..order = 0
+        ..isSystem = false
+        ..isHidden = false
+        ..isIncome = false
+        ..updatedAt = DateTime(2026, 3, 15);
+      final privateCar = JiveCategory()
+        ..key = 'cat_private_car'
+        ..name = '私家车'
+        ..iconName = 'car'
+        ..parentKey = transport.key
+        ..order = 0
+        ..isSystem = false
+        ..isHidden = false
+        ..isIncome = false
+        ..updatedAt = DateTime(2026, 3, 15);
+      final businessCar = JiveCategory()
+        ..key = 'cat_business_car'
+        ..name = '公务车'
+        ..iconName = 'business'
+        ..parentKey = transport.key
+        ..order = 1
+        ..isSystem = false
+        ..isHidden = false
+        ..isIncome = false
+        ..updatedAt = DateTime(2026, 3, 15);
+      final privateFuel = JiveCategory()
+        ..key = 'cat_private_fuel'
+        ..name = '加油'
+        ..iconName = 'local_gas_station'
+        ..parentKey = privateCar.key
+        ..order = 0
+        ..isSystem = false
+        ..isHidden = false
+        ..isIncome = false
+        ..updatedAt = DateTime(2026, 3, 15);
+      final businessFuel = JiveCategory()
+        ..key = 'cat_business_fuel'
+        ..name = '加油'
+        ..iconName = 'local_gas_station'
+        ..parentKey = businessCar.key
+        ..order = 0
+        ..isSystem = false
+        ..isHidden = false
+        ..isIncome = false
+        ..updatedAt = DateTime(2026, 3, 15);
+      final account = JiveAccount()
+        ..key = 'acct_wechat_import'
+        ..name = '微信'
+        ..type = 'asset'
+        ..currency = 'CNY'
+        ..iconName = 'wallet'
+        ..order = 0
+        ..includeInBalance = true
+        ..isHidden = false
+        ..isArchived = false
+        ..updatedAt = DateTime(2026, 3, 15);
+
+      await isar.writeTxn(() async {
+        await isar.collection<JiveCategory>().putAll([
+          transport,
+          privateCar,
+          businessCar,
+          privateFuel,
+          businessFuel,
+        ]);
+        await isar.collection<JiveAccount>().put(account);
+      });
+
+      final result = await service.importPreparedRecords(
+        records: [
+          ImportParsedRecord(
+            amount: 58,
+            source: 'Import',
+            timestamp: DateTime(2026, 3, 15, 9),
+            rawText: '公务车加油',
+            type: 'expense',
+            accountName: '微信',
+            parentCategoryName: '出行',
+            childCategoryName: '加油',
+            categoryPathSegments: const ['出行', '公务车', '加油'],
+            lineNumber: 1,
+          ),
+        ],
+        payloadText: 'debug payload',
+        sourceType: ImportSourceType.csv,
+        entryType: ImportEntryType.text,
+      );
+
+      expect(result.errorMessage, isNull, reason: result.errorMessage);
+      expect(result.insertedCount, 1);
+      final drafts = await isar.collection<JiveAutoDraft>().where().findAll();
+      expect(drafts, hasLength(1));
+      expect(drafts.first.categoryKey, 'cat_transport');
+      expect(drafts.first.subCategoryKey, 'cat_business_fuel');
     },
   );
 
