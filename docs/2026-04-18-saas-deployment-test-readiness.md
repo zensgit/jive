@@ -21,6 +21,7 @@ Before touching real staging secrets, the readiness script contract can be teste
 ```bash
 bash scripts/test_saas_deployment_readiness.sh
 bash scripts/test_saas_core_staging_lane.sh
+bash scripts/test_saas_staging_rollout.sh
 ```
 
 Initialize a local core env draft first:
