@@ -59,6 +59,16 @@ void main() {
     expect(await service.getDefaultView(), isNull);
   });
 
+  test(
+    'stale default id is cleared when target view no longer exists',
+    () async {
+      await prefs.setInt(SmartListService.defaultSmartListIdKey, 404);
+
+      expect(await service.getDefaultView(), isNull);
+      expect(await service.getDefaultId(), isNull);
+    },
+  );
+
   test('getAll keeps pinned views first then sort order', () async {
     final later = await service.create(name: '后建普通视图');
     final pinned = await service.create(name: '置顶视图');

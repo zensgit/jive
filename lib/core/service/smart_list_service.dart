@@ -110,7 +110,11 @@ class SmartListService {
   Future<JiveSmartList?> getDefaultView() async {
     final id = await getDefaultId();
     if (id == null) return null;
-    return _isar.jiveSmartLists.get(id);
+    final view = await _isar.jiveSmartLists.get(id);
+    if (view == null) {
+      await clearDefaultView();
+    }
+    return view;
   }
 
   /// 根据 JiveSmartList 构建 TransactionListFilterState。
