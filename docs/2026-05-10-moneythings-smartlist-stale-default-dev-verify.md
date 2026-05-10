@@ -6,7 +6,7 @@ This branch continues the MoneyThings SmartList TODO by clearing stale default-v
 
 - Branch: `codex/moneythings-smartlist-stale-default`
 - Base: `origin/main`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/262
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-smartlist-stale-default`
 
 ## Implementation
