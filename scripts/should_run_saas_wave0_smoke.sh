@@ -17,6 +17,8 @@ matches_saas_wave0_path() {
     scripts/run_saas_staging_function_smoke.sh | \
     scripts/test_saas_full_billing_staging_smoke_workflow.sh | \
     scripts/test_saas_release_candidate_workflow.sh | \
+    scripts/build_saas_staging_apk.sh | \
+    scripts/test_saas_staging_apk_builder.sh | \
     scripts/check_saas_deployment_readiness.sh | \
     scripts/test_saas_deployment_readiness.sh | \
     scripts/guard_saas_report_artifacts.sh | \
