@@ -11,7 +11,7 @@ saving incomplete transactions.
 
 - Branch: `codex/moneythings-deeplink-entry-contracts`
 - Base: `origin/main@c521cdcb`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/273
 
 ## Changes
 
