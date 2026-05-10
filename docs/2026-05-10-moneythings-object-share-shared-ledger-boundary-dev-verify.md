@@ -6,7 +6,8 @@
 - Worktree: `/Users/chauhua/Documents/GitHub/Jive/worktrees/moneythings-object-share-shared-ledger-boundary`
 - Branch: `codex/moneythings-object-share-shared-ledger-boundary`
 - Base: `origin/main@6315589f`
-- Draft PR: TBD
+- Commit: `1fe5a3a3`
+- Draft PR: [#268](https://github.com/zensgit/jive/pull/268)
 
 ## Scope
 
