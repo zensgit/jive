@@ -19,6 +19,8 @@ matches_saas_wave0_path() {
     scripts/test_saas_release_candidate_workflow.sh | \
     scripts/build_saas_staging_apk.sh | \
     scripts/test_saas_staging_apk_builder.sh | \
+    scripts/install_saas_staging_apk.sh | \
+    scripts/test_saas_staging_apk_installer.sh | \
     scripts/check_saas_deployment_readiness.sh | \
     scripts/test_saas_deployment_readiness.sh | \
     scripts/guard_saas_report_artifacts.sh | \

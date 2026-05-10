@@ -64,6 +64,8 @@ assert_stdin true "full billing workflow self-test change" $'scripts/test_saas_f
 assert_stdin true "release candidate workflow self-test change" $'scripts/test_saas_release_candidate_workflow.sh\n'
 assert_stdin true "staging apk builder change" $'scripts/build_saas_staging_apk.sh\n'
 assert_stdin true "staging apk builder self-test change" $'scripts/test_saas_staging_apk_builder.sh\n'
+assert_stdin true "staging apk installer change" $'scripts/install_saas_staging_apk.sh\n'
+assert_stdin true "staging apk installer self-test change" $'scripts/test_saas_staging_apk_installer.sh\n'
 assert_stdin true "deployment readiness self-test change" $'scripts/test_saas_deployment_readiness.sh\n'
 assert_stdin true "artifact guard script change" $'scripts/guard_saas_report_artifacts.sh\n'
 assert_stdin true "artifact guard self-test change" $'scripts/test_saas_report_artifact_guard.sh\n'

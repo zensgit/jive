@@ -120,11 +120,11 @@ find_adb() {
 }
 
 run_adb() {
-  local -a serial_args=()
   if [[ -n "$DEVICE" ]]; then
-    serial_args=(-s "$DEVICE")
+    "$ADB" -s "$DEVICE" "$@"
+    return $?
   fi
-  "$ADB" "${serial_args[@]}" "$@"
+  "$ADB" "$@"
 }
 
 print_device_info() {
