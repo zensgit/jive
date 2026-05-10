@@ -10,7 +10,8 @@ The goal is to protect the shared `TransactionEntryParams` contract used by manu
 
 - Branch: `codex/moneythings-transaction-entry-protocol`
 - Base: `origin/main@6315589f`
-- PR: TBD
+- Commit: `160f339a`
+- PR: [#266](https://github.com/zensgit/jive/pull/266)
 
 ## Changes
 
