@@ -194,11 +194,11 @@ find_adb() {
 }
 
 run_adb() {
-  local -a serial_args=()
   if [[ -n "$DEVICE" ]]; then
-    serial_args=(-s "$DEVICE")
+    run_with_timeout "$ADB_TIMEOUT_SECONDS" "$ADB" -s "$DEVICE" "$@"
+    return $?
   fi
-  run_with_timeout "$ADB_TIMEOUT_SECONDS" "$ADB" "${serial_args[@]}" "$@"
+  run_with_timeout "$ADB_TIMEOUT_SECONDS" "$ADB" "$@"
 }
 
 validate_positive_integer() {
