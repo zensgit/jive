@@ -10,7 +10,7 @@ button disabled until a scene is selected, then returns the selected template.
 
 - Branch: `codex/moneythings-scene-template-picker-test`
 - Base: `origin/main@432e8716`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/272
 
 ## Changes
 
