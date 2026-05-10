@@ -11,7 +11,7 @@ receive, voice, and OCR entries show an explicit source banner.
 
 - Branch: `codex/moneythings-source-banner-contracts`
 - Base: `origin/main@3604b361`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/276
 
 ## Changes
 
