@@ -30,4 +30,4 @@ git diff --name-only origin/main...HEAD | grep -E '(^lib/(core/(sync|payment|ent
 
 ## PR
 
-- Draft PR：待创建后回填。
+- Draft PR：https://github.com/zensgit/jive/pull/278
