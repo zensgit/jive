@@ -11,7 +11,7 @@ to a concrete `JiveAccount.id`.
 
 - Branch: `codex/moneythings-account-group-contracts`
 - Base: `origin/main@c521cdcb`
-- PR: TBD
+- PR: https://github.com/zensgit/jive/pull/275
 
 ## Changes
 
