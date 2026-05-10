@@ -162,6 +162,8 @@ jobs:
             scripts/test_saas_deployment_readiness.sh \
             scripts/build_saas_staging_apk.sh \
             scripts/test_saas_staging_apk_builder.sh \
+            scripts/install_saas_staging_apk.sh \
+            scripts/test_saas_staging_apk_installer.sh \
             scripts/build_release_candidate.sh \
             scripts/test_saas_release_candidate_workflow.sh
 
@@ -181,6 +183,9 @@ jobs:
           scripts/test_saas_release_candidate_workflow.sh
           scripts/test_saas_staging_apk_builder.sh --help >/dev/null
           scripts/test_saas_staging_apk_builder.sh
+          scripts/install_saas_staging_apk.sh --help >/dev/null
+          scripts/test_saas_staging_apk_installer.sh --help >/dev/null
+          scripts/test_saas_staging_apk_installer.sh
 
           scripts/report_saas_production_release_readiness.sh --help >/dev/null
           scripts/test_saas_production_release_readiness_report.sh --help >/dev/null
