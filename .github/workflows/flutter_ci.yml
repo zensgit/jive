@@ -151,6 +151,8 @@ jobs:
             scripts/test_saas_core_staging_lane.sh \
             scripts/run_saas_staging_rollout.sh \
             scripts/test_saas_staging_rollout.sh \
+            scripts/run_saas_staging_function_smoke.sh \
+            scripts/test_saas_full_billing_staging_smoke_workflow.sh \
             scripts/report_saas_production_release_readiness.sh \
             scripts/test_saas_production_release_readiness_report.sh \
             scripts/test_saas_deployment_readiness.sh \
@@ -166,6 +168,9 @@ jobs:
           scripts/run_saas_staging_rollout.sh --help >/dev/null
           scripts/test_saas_staging_rollout.sh --help >/dev/null
           scripts/test_saas_staging_rollout.sh
+          scripts/run_saas_staging_function_smoke.sh --help >/dev/null
+          scripts/test_saas_full_billing_staging_smoke_workflow.sh --help >/dev/null
+          scripts/test_saas_full_billing_staging_smoke_workflow.sh
 
           scripts/report_saas_production_release_readiness.sh --help >/dev/null
           scripts/test_saas_production_release_readiness_report.sh --help >/dev/null
