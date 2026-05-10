@@ -10,7 +10,8 @@ Category share export/import already preserves `parentKey`. The missing piece wa
 
 - Branch: `codex/moneythings-category-share-path-preview`
 - Base: `origin/main@6315589f`
-- PR: TBD
+- Commit: `f3cf9e92`
+- PR: [#265](https://github.com/zensgit/jive/pull/265)
 
 ## Changes
 
