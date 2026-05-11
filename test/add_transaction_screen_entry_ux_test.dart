@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
 import 'package:jive/core/database/account_model.dart';
+import 'package:jive/core/database/book_model.dart';
 import 'package:jive/core/database/category_model.dart';
 import 'package:jive/core/database/merchant_memory_model.dart';
 import 'package:jive/core/database/project_model.dart';
@@ -475,6 +476,217 @@ void main() {
       );
     },
   );
+
+  testWidgets('scene template prioritizes category candidates in entry UI', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final travelBook = _book(id: 7, key: 'book_travel', name: '✈️ 旅行出差');
+    final shopping = _category(
+      key: 'shopping',
+      name: '购物',
+      iconName: 'shopping_bag',
+      order: 0,
+    );
+    final transport = _category(
+      key: 'transport',
+      name: '交通',
+      iconName: 'directions_bus',
+      order: 10,
+    );
+    final food = _category(
+      key: 'food',
+      name: '餐饮',
+      iconName: 'restaurant',
+      order: 20,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AddTransactionScreen(
+          isar: harness.isar,
+          bootstrapDefaults: false,
+          initialCurrentBook: travelBook,
+          initialParentCategories: [shopping, food, transport],
+          initialSubCategories: const [],
+          initialAccounts: [harness.account],
+          initialAccountBalances: {harness.account.id: 0},
+          initialTags: const [],
+          initialProjects: const [],
+        ),
+      ),
+    );
+
+    await _pumpUntilFound(
+      tester,
+      find.byKey(AddTransactionScreenKeys.parentCategory('transport')),
+    );
+
+    final transportLeft = tester
+        .getTopLeft(
+          find.byKey(AddTransactionScreenKeys.parentCategory('transport')),
+        )
+        .dx;
+    final shoppingLeft = tester
+        .getTopLeft(
+          find.byKey(AddTransactionScreenKeys.parentCategory('shopping')),
+        )
+        .dx;
+
+    expect(transportLeft, lessThan(shoppingLeft));
+  });
+
+  testWidgets(
+    'scene book prioritizes account candidates with default fallback',
+    (tester) async {
+      tester.view.physicalSize = const Size(430, 932);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      final travelBook = _book(id: 7, key: 'book_travel', name: '✈️ 旅行出差');
+      final defaultCash = _account(id: 10, key: 'cash', name: '现金');
+      final travelCard = _account(
+        id: 11,
+        key: 'travel_card',
+        name: '旅行卡',
+        bookId: 7,
+        order: 10,
+      );
+      final otherBookCard = _account(
+        id: 12,
+        key: 'other_card',
+        name: '其它账本卡',
+        bookId: 8,
+        order: 1,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AddTransactionScreen(
+            isar: harness.isar,
+            bootstrapDefaults: false,
+            initialCurrentBook: travelBook,
+            initialParentCategories: [harness.parent],
+            initialSubCategories: [harness.child],
+            initialAccounts: [defaultCash, otherBookCard, travelCard],
+            initialAccountBalances: const {10: 0, 11: 0, 12: 0},
+            initialTags: const [],
+            initialProjects: const [],
+          ),
+        ),
+      );
+
+      await _pumpUntilFound(tester, find.text('旅行卡'));
+      expect(find.text('现金'), findsNothing);
+    },
+  );
+
+  testWidgets('scene account candidates fall back to default book accounts', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final travelBook = _book(id: 7, key: 'book_travel', name: '✈️ 旅行出差');
+    final defaultCash = _account(id: 20, key: 'cash_default', name: '现金');
+    final otherBookCard = _account(
+      id: 21,
+      key: 'other_card',
+      name: '其它账本卡',
+      bookId: 8,
+      order: 0,
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AddTransactionScreen(
+          isar: harness.isar,
+          bootstrapDefaults: false,
+          initialCurrentBook: travelBook,
+          initialParentCategories: [harness.parent],
+          initialSubCategories: [harness.child],
+          initialAccounts: [otherBookCard, defaultCash],
+          initialAccountBalances: const {20: 0, 21: 0},
+          initialTags: const [],
+          initialProjects: const [],
+        ),
+      ),
+    );
+
+    await _pumpUntilFound(tester, find.text('现金'));
+    expect(find.text('其它账本卡'), findsNothing);
+  });
+}
+
+JiveBook _book({required int id, required String key, required String name}) {
+  return JiveBook()
+    ..id = id
+    ..key = key
+    ..name = name
+    ..iconName = 'book'
+    ..currency = 'CNY'
+    ..order = 0
+    ..isDefault = false
+    ..isArchived = false
+    ..createdAt = DateTime(2026, 5, 11)
+    ..updatedAt = DateTime(2026, 5, 11);
+}
+
+JiveCategory _category({
+  required String key,
+  required String name,
+  required String iconName,
+  int order = 0,
+  String? parentKey,
+}) {
+  return JiveCategory()
+    ..key = key
+    ..name = name
+    ..iconName = iconName
+    ..parentKey = parentKey
+    ..order = order
+    ..isSystem = false
+    ..isHidden = false
+    ..isIncome = false
+    ..updatedAt = DateTime(2026, 5, 11);
+}
+
+JiveAccount _account({
+  required int id,
+  required String key,
+  required String name,
+  int? bookId,
+  int order = 0,
+}) {
+  return JiveAccount()
+    ..id = id
+    ..key = key
+    ..name = name
+    ..type = 'asset'
+    ..subType = 'cash'
+    ..groupName = '现金'
+    ..currency = 'CNY'
+    ..iconName = 'account_balance_wallet'
+    ..bookId = bookId
+    ..order = order
+    ..includeInBalance = true
+    ..isHidden = false
+    ..isArchived = false
+    ..openingBalance = 0
+    ..updatedAt = DateTime(2026, 5, 11);
 }
 
 class _AddTransactionHarness {
