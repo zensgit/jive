@@ -23,6 +23,9 @@ matches_saas_wave0_path() {
     scripts/test_saas_staging_apk_installer.sh | \
     scripts/run_saas_staging_device_smoke.sh | \
     scripts/test_saas_staging_device_smoke.sh | \
+    scripts/check_saas_github_secrets.sh | \
+    scripts/push_saas_github_secrets.sh | \
+    scripts/test_saas_github_secrets.sh | \
     scripts/check_saas_deployment_readiness.sh | \
     scripts/test_saas_deployment_readiness.sh | \
     scripts/guard_saas_report_artifacts.sh | \
