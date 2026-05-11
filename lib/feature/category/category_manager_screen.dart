@@ -677,14 +677,16 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
       includeIncome: true,
     );
     if (!mounted) return;
+    final parentPath = _categoryFullPath(parent);
+    final isNestedParent = parent.parentKey != null;
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
         builder: (context) => CategoryCreateScreen(
-          title: "添加子类 · ${parent.name}",
-          parentName: parent.name,
+          title: isNestedParent ? "添加下级分类 · $parentPath" : "添加子类 · $parentPath",
+          parentName: parentPath,
           initialIcon: parent.iconName,
-          nameLabel: "子类名称",
+          nameLabel: isNestedParent ? "下级分类名称" : "子类名称",
           allowBatch: true,
           initialText: initialText,
           initialBatch: initialBatch,
@@ -2674,6 +2676,23 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     while (parentKey != null) {
       final parent = byKey[parentKey];
       if (parent == null || parent.parentKey == null) break;
+      names.insert(0, parent.name);
+      parentKey = parent.parentKey;
+    }
+    return names.join(' / ');
+  }
+
+  String _categoryFullPath(JiveCategory category) {
+    final names = <String>[category.name];
+    var parentKey = category.parentKey;
+    final byKey = <String, JiveCategory>{
+      for (final parent in _parents) parent.key: parent,
+      for (final list in _childrenByParentKey.values)
+        for (final child in list) child.key: child,
+    };
+    while (parentKey != null) {
+      final parent = byKey[parentKey];
+      if (parent == null) break;
       names.insert(0, parent.name);
       parentKey = parent.parentKey;
     }
