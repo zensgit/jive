@@ -109,6 +109,7 @@ jobs:
             scripts/guard_saas_report_artifacts.sh \
             scripts/verify_release_android_smoke_artifacts.sh \
             scripts/render_release_android_smoke_summary.sh \
+            scripts/test_release_android_smoke_wrapper.sh \
             scripts/test_release_report_summary_renderer.sh \
             scripts/test_saas_report_artifact_guard.sh \
             scripts/test_release_android_smoke_artifact_verifier.sh \
@@ -121,6 +122,7 @@ jobs:
           scripts/render_release_report_summary.sh --help >/dev/null
           scripts/guard_saas_report_artifacts.sh --help >/dev/null
           scripts/test_ios_release_candidate_builder.sh --help >/dev/null
+          scripts/test_release_android_smoke_wrapper.sh --help >/dev/null
           scripts/verify_release_android_smoke_artifacts.sh --help >/dev/null
           scripts/render_release_android_smoke_summary.sh --help >/dev/null
           scripts/test_release_report_summary_renderer.sh --help >/dev/null
@@ -131,6 +133,7 @@ jobs:
           scripts/test_release_report_summary_renderer.sh
           scripts/test_saas_report_artifact_guard.sh
           scripts/test_ios_release_candidate_builder.sh
+          scripts/test_release_android_smoke_wrapper.sh
           scripts/test_release_android_smoke_artifact_verifier.sh
           scripts/test_release_android_smoke_summary_renderer.sh
           scripts/test_saas_wave0_smoke_trigger.sh
