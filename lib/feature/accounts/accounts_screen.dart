@@ -19,6 +19,7 @@ import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/object_share_policy_service.dart';
 import 'account_reconcile_screen.dart';
+import 'widgets/account_group_summary_header.dart';
 
 class AccountsScreen extends StatefulWidget {
   final ValueListenable<int>? reloadSignal;
@@ -1266,9 +1267,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
         ? _accounts
         : _accounts.where((a) => a.currency == _filterCurrency).toList();
 
+    final accountGroupService = const AccountGroupService();
     final groupedAccounts = <String, List<JiveAccount>>{};
     for (final account in filteredAccounts) {
-      final group = AccountService.displayGroupName(account);
+      final group = accountGroupService.sectionNameFor(account);
       groupedAccounts.putIfAbsent(group, () => []).add(account);
     }
     final orderedGroups = <String>[...AccountService.groupOrder];
@@ -1517,8 +1519,6 @@ class _AccountsScreenState extends State<AccountsScreen> {
   }
 
   Widget _buildAccountGroupCard(AccountGroupSummary group) {
-    final currencies = group.currencies.toList()..sort();
-    final currencyLabel = currencies.join(' / ');
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
@@ -1539,45 +1539,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: JiveTheme.primaryGreen.withValues(alpha: 0.10),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.account_balance_outlined,
-                  color: JiveTheme.primaryGreen,
-                  size: 19,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      group.name,
-                      style: GoogleFonts.lato(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      '${group.accounts.length} 个子账户 · $currencyLabel',
-                      style: GoogleFonts.lato(
-                        color: Colors.grey.shade500,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          AccountGroupSummaryHeader(group: group),
           const SizedBox(height: 10),
           for (final account in group.accounts) _buildAccountItem(account),
         ],

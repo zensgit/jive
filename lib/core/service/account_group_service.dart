@@ -1,4 +1,5 @@
 import '../data/account_constants.dart';
+import '../data/account_type_catalog.dart';
 import '../database/account_model.dart';
 
 class AccountGroupSummary {
@@ -27,6 +28,14 @@ class AccountGroupService {
   const AccountGroupService();
 
   static const _legacyBroadGroupNames = {'信用账户'};
+
+  String sectionNameFor(JiveAccount account) {
+    final option = AccountTypeCatalog.optionFor(account.subType);
+    if (option != null) return option.group;
+    if (account.type == accountTypeAsset) return accountGroupAssets;
+    if (account.type == accountTypeLiability) return accountGroupDebt;
+    return accountGroupOther;
+  }
 
   List<AccountGroupSummary> groupAccounts(Iterable<JiveAccount> accounts) {
     final buckets = <String, List<JiveAccount>>{};
