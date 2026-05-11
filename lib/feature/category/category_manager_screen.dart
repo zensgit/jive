@@ -32,6 +32,10 @@ class CategoryManagerScreen extends StatefulWidget {
   final int? currentBookId;
   final bool onlyUserCategories;
   final bool initialShowIncome;
+  @visibleForTesting
+  final bool bootstrapDefaults;
+  @visibleForTesting
+  final List<JiveCategory>? initialCategories;
 
   const CategoryManagerScreen({
     super.key,
@@ -39,10 +43,17 @@ class CategoryManagerScreen extends StatefulWidget {
     this.currentBookId,
     this.onlyUserCategories = false,
     this.initialShowIncome = false,
+    this.bootstrapDefaults = true,
+    this.initialCategories,
   });
 
   @override
   State<CategoryManagerScreen> createState() => _CategoryManagerScreenState();
+}
+
+class CategoryManagerScreenKeys {
+  static ValueKey<String> subCategory(String key) =>
+      ValueKey('category-manager-sub-category-$key');
 }
 
 class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
@@ -107,8 +118,14 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
         _isar = await DatabaseService.getInstance();
       }
       _service = CategoryService(_isar);
+      if (widget.initialCategories != null) {
+        _applyInitialCategories(widget.initialCategories!);
+        return;
+      }
       _currentBook = await _loadCurrentBook(BookService(_isar));
-      await _service.initDefaultCategories();
+      if (widget.bootstrapDefaults) {
+        await _service.initDefaultCategories();
+      }
       await _loadCategories();
     } catch (e, s) {
       _loadError = e.toString();
@@ -116,6 +133,40 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _applyInitialCategories(List<JiveCategory> all) {
+    final onlyUser = widget.onlyUserCategories;
+    final parents =
+        all
+            .where(
+              (c) =>
+                  c.parentKey == null &&
+                  c.isIncome == _showIncome &&
+                  (_showHidden || !c.isHidden) &&
+                  (!onlyUser || !c.isSystem),
+            )
+            .toList()
+          ..sort((a, b) => a.order.compareTo(b.order));
+    final children = all
+        .where(
+          (c) =>
+              c.parentKey != null &&
+              c.isIncome == _showIncome &&
+              (_showHidden || !c.isHidden) &&
+              (!onlyUser || !c.isSystem),
+        )
+        .toList();
+    final byParent = <String, List<JiveCategory>>{};
+    for (final child in children) {
+      byParent.putIfAbsent(child.parentKey!, () => []).add(child);
+    }
+    for (final list in byParent.values) {
+      list.sort((a, b) => a.order.compareTo(b.order));
+    }
+    _parents = parents;
+    _childrenByParentKey = byParent;
+    _knownParentKeys.addAll(parents.map((parent) => parent.key));
   }
 
   Future<JiveBook?> _loadCurrentBook(BookService service) async {
@@ -664,12 +715,15 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     bool initialBatch = false,
   }) async {
     final addAsSystem = !widget.onlyUserCategories;
+    final initialCategories = widget.initialCategories;
     final existingNames =
-        (await _isar
-                .collection<JiveCategory>()
-                .filter()
-                .parentKeyEqualTo(parent.key)
-                .findAll())
+        (initialCategories ??
+                await _isar
+                    .collection<JiveCategory>()
+                    .filter()
+                    .parentKeyEqualTo(parent.key)
+                    .findAll())
+            .where((child) => child.parentKey == parent.key)
             .map((child) => child.name)
             .toSet();
     final systemLibrary = _service.getSystemLibrary(
@@ -2525,6 +2579,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
     final tile = _buildSubChipBody(sub, highlightQuery: highlightQuery);
     if (!allowDrag) {
       return GestureDetector(
+        key: CategoryManagerScreenKeys.subCategory(sub.key),
         onTap: () => _editCategory(sub),
         onLongPress: () => _showSubCategoryActions(sub, parent),
         child: tile,
@@ -2551,6 +2606,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           highlightQuery: highlightQuery,
         );
         return LongPressDraggable<JiveCategory>(
+          key: CategoryManagerScreenKeys.subCategory(sub.key),
           data: sub,
           onDragStarted: () => HapticFeedback.mediumImpact(),
           feedback: Material(
