@@ -14,6 +14,8 @@ import 'package:jive/core/service/category_path_service.dart';
 import 'package:jive/core/service/conversational_parser.dart';
 import 'package:jive/core/service/object_share_policy_service.dart';
 import 'package:jive/core/service/quick_action_service.dart';
+import 'package:jive/core/service/scene_candidate_service.dart';
+import 'package:jive/core/data/scene_templates.dart';
 import 'package:jive/feature/auto/auto_draft_entry_params_builder.dart';
 import 'package:jive/feature/quick_entry/quick_action_deep_link_service.dart';
 import 'package:jive/feature/transactions/speech_entry_params_builder.dart';
@@ -380,6 +382,62 @@ void main() {
     });
   });
 
+  group('SceneCandidateService', () {
+    test(
+      'prioritizes template categories before generic category candidates',
+      () {
+        const service = SceneCandidateService();
+        final categories = [
+          _category(key: 'parking', name: '停车', order: 1),
+          _category(key: 'food', name: '餐饮', order: 2),
+          _category(key: 'traffic', name: '交通', order: 3),
+          _category(key: 'salary', name: '收入', order: 4, isIncome: true),
+          _category(key: 'shopping', name: '购物', order: 5)..isHidden = true,
+        ];
+
+        final candidates = service.categoryCandidates(
+          template: kSceneTemplates.firstWhere((t) => t.id == 'travel'),
+          categories: categories,
+          isIncome: false,
+        );
+
+        expect(candidates.map((c) => c.name), ['交通', '餐饮', '停车']);
+        expect(
+          service
+              .defaultCategoryCandidate(
+                template: kSceneTemplates.firstWhere((t) => t.id == 'travel'),
+                categories: categories,
+                isIncome: false,
+              )
+              ?.name,
+          '交通',
+        );
+      },
+    );
+
+    test('scopes account candidates to scene book with default fallback', () {
+      const service = SceneCandidateService();
+      final accounts = [
+        _account(id: 1, name: '默认现金', order: 1),
+        _account(id: 2, name: '旅行卡', order: 2, bookId: 7),
+        _account(id: 3, name: '旅行信用卡', order: 3, bookId: 7)..type = 'liability',
+        _account(id: 4, name: '其他账本', order: 4, bookId: 8),
+        _account(id: 5, name: '已隐藏', order: 5, bookId: 7)..isHidden = true,
+      ];
+
+      final candidates = service.accountCandidates(
+        bookId: 7,
+        accounts: accounts,
+      );
+
+      expect(candidates.map((a) => a.name), ['旅行卡', '旅行信用卡', '默认现金']);
+      expect(
+        service.defaultAccountCandidate(bookId: 7, accounts: accounts)?.name,
+        '旅行卡',
+      );
+    });
+  });
+
   group('ObjectSharePolicyService', () {
     test('labels objects in shared books as inherited from scene', () {
       final book = JiveBook()
@@ -439,16 +497,18 @@ JiveCategory _category({
   required String key,
   required String name,
   String? parentKey,
+  int order = 0,
+  bool isIncome = false,
 }) {
   return JiveCategory()
     ..key = key
     ..name = name
     ..iconName = 'category'
     ..parentKey = parentKey
-    ..order = 0
+    ..order = order
     ..isSystem = false
     ..isHidden = false
-    ..isIncome = false
+    ..isIncome = isIncome
     ..updatedAt = DateTime(2026);
 }
 
@@ -457,6 +517,8 @@ JiveAccount _account({
   required String name,
   String? groupName,
   String currency = 'CNY',
+  int? bookId,
+  int? order,
 }) {
   return JiveAccount()
     ..id = id
@@ -466,9 +528,10 @@ JiveAccount _account({
     ..groupName = groupName
     ..currency = currency
     ..iconName = 'wallet'
-    ..order = id
+    ..order = order ?? id
     ..includeInBalance = true
     ..isHidden = false
     ..isArchived = false
+    ..bookId = bookId
     ..updatedAt = DateTime(2026);
 }
