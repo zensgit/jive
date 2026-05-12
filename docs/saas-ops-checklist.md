@@ -219,6 +219,18 @@ scripts/run_saas_release_candidate_sequence.sh --repo zensgit/jive --artifact-di
 scripts/report_saas_internal_test_release_artifact.sh --artifact-dir /tmp/jive-saas-release-candidate --output docs/$(date +%F)-saas-internal-test-release-completion.md
 ```
 
+如已安装 `bundletool`，建议在正式上传 Play 内测前加严 AAB manifest 校验，确认包名仍是 `com.jivemoney.app`，并把 manifest versionName/versionCode 写入归档报告：
+
+```bash
+scripts/report_saas_internal_test_release_artifact.sh --artifact-dir /tmp/jive-saas-release-candidate --output docs/$(date +%F)-saas-internal-test-release-completion.md --require-manifest-check --bundletool bundletool
+```
+
+如果通过 finalizer 自动生成报告，也可以用环境变量开启同样的强校验：
+
+```bash
+JIVE_SAAS_INTERNAL_TEST_REQUIRE_MANIFEST_CHECK=true JIVE_BUNDLETOOL_BIN=bundletool scripts/run_saas_internal_test_release.sh --repo zensgit/jive --use-existing-secrets --artifact-dir /tmp/jive-saas-release-candidate --completion-report docs/$(date +%F)-saas-internal-test-release-completion.md --apply
+```
+
 ### Secrets 检查与上传
 
 初始化本地生产 release env 文件：
