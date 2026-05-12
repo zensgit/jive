@@ -767,6 +767,15 @@ class _AccountsScreenState extends State<AccountsScreen> {
                                       selectedBank?.color.isNotEmpty == true)
                                   ? selectedBank!.color
                                   : colorHex;
+                              final resolvedGroupName =
+                                  AccountService.defaultGroupNameForCreation(
+                                    type: selectedType!.type,
+                                    subType: selectedType!.id,
+                                    selectedBankName: editing == null
+                                        ? selectedBank?.name
+                                        : null,
+                                    fallbackGroupName: selectedType!.group,
+                                  );
                               Navigator.pop(
                                 sheetContext,
                                 _AccountDraft(
@@ -776,7 +785,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
                                   subType: selectedType!.id,
                                   iconName: resolvedIcon,
                                   colorHex: resolvedColor,
-                                  groupName: selectedType!.group,
+                                  groupName: resolvedGroupName,
                                   currency: currency,
                                   openingBalance: amount,
                                   billingDay: billingDay,
