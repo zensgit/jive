@@ -182,6 +182,14 @@ Banner ID: ca-app-pub-3940256099942544/6300978111
 2. `build_appbundle=false`、`strict_signing=true`：确认签名 secrets 可用。
 3. `build_appbundle=true`、`strict_signing=true`：生成可用于内部测试/商店上传的 prod AAB。
 
+配置齐全后也可以使用本地 runner 自动执行三段流程、等待每个 workflow 成功、下载最终 artifact，并校验 `release-candidate.json` 与 AAB SHA-256：
+
+```bash
+scripts/run_saas_release_candidate_sequence.sh --repo zensgit/jive --artifact-dir /tmp/jive-saas-release-candidate
+```
+
+如果 production Supabase / AdMob / Android signing secrets 缺失，runner 会在派发 GitHub Actions 前停止，避免制造预期失败的 workflow run。
+
 ### Secrets 检查与上传
 
 初始化本地生产 release env 文件：
