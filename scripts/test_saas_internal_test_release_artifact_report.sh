@@ -116,6 +116,35 @@ JSON
 EOF
 }
 
+create_manifest_dump() {
+  local file="$1"
+  local package_name="${2:-com.jivemoney.app}"
+
+  cat > "$file" <<EOF
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="$package_name"
+    android:versionCode="100"
+    android:versionName="1.0.0-20260512">
+</manifest>
+EOF
+}
+
+create_fake_bundletool() {
+  local file="$1"
+  local manifest_file="$2"
+
+  cat > "$file" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "\${1:-}" != "dump" || "\${2:-}" != "manifest" || "\${3:-}" != --bundle=* ]]; then
+  printf 'unexpected bundletool args: %s\\n' "\$*" >&2
+  exit 2
+fi
+cat "$manifest_file"
+EOF
+  chmod +x "$file"
+}
+
 run_case() {
   local label="$1"
   shift
@@ -140,9 +169,53 @@ assert_status good 0
 assert_contains "$ROOT/good.md" "Status: \`ready-for-play-internal\`"
 assert_contains "$ROOT/good.md" "Workflow run id: \`424242\`"
 assert_contains "$ROOT/good.md" "AAB SHA-256:"
+assert_contains "$ROOT/good.md" "Manifest check: \`skipped\`"
 assert_contains "$ROOT/good.md" "status=passed"
 assert_contains "$ROOT/good.md" "Google Play Internal Test Checklist"
 log "good fixture ok: renders validated internal test report"
+
+manifest_dir="$ROOT/manifest-artifact"
+create_good_artifact "$manifest_dir" 515151
+manifest_file="$ROOT/manifest.xml"
+fake_bundletool="$ROOT/fake-bundletool"
+create_manifest_dump "$manifest_file"
+create_fake_bundletool "$fake_bundletool" "$manifest_file"
+run_case manifest \
+  --artifact-dir "$manifest_dir" \
+  --output "$ROOT/manifest.md" \
+  --bundletool "$fake_bundletool" \
+  --require-manifest-check
+assert_status manifest 0
+assert_contains "$ROOT/manifest.md" "Manifest check: \`passed\`"
+assert_contains "$ROOT/manifest.md" "Manifest package: \`com.jivemoney.app\`"
+assert_contains "$ROOT/manifest.md" "Manifest version name: \`1.0.0-20260512\`"
+assert_contains "$ROOT/manifest.md" "Manifest version code: \`100\`"
+assert_contains "$ROOT/manifest.md" "Android manifest package matches \`com.jivemoney.app\`."
+log "manifest fixture ok: validates package and records manifest version details"
+
+bad_manifest_dir="$ROOT/bad-manifest-artifact"
+create_good_artifact "$bad_manifest_dir" 616161
+bad_manifest_file="$ROOT/bad-manifest.xml"
+create_manifest_dump "$bad_manifest_file" "com.example.bad"
+run_case bad-manifest \
+  --artifact-dir "$bad_manifest_dir" \
+  --output "$ROOT/bad-manifest.md" \
+  --manifest-dump "$bad_manifest_file" \
+  --require-manifest-check
+assert_status bad-manifest 1
+assert_contains "$ROOT/bad-manifest/stderr.txt" "manifest package expected"
+log "bad-manifest fixture ok: rejects unexpected package"
+
+missing_bundletool_dir="$ROOT/missing-bundletool-artifact"
+create_good_artifact "$missing_bundletool_dir" 717171
+run_case missing-bundletool \
+  --artifact-dir "$missing_bundletool_dir" \
+  --output "$ROOT/missing-bundletool.md" \
+  --bundletool "$ROOT/not-a-bundletool" \
+  --require-manifest-check
+assert_status missing-bundletool 1
+assert_contains "$ROOT/missing-bundletool/stderr.txt" "bundletool not found"
+log "missing-bundletool fixture ok: require-manifest-check blocks if bundletool is unavailable"
 
 bad_sha_dir="$ROOT/bad-sha"
 create_good_artifact "$bad_sha_dir" 777
