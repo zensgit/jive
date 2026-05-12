@@ -16,6 +16,7 @@ APPLY=0
 INCLUDE_OPTIONAL=0
 RUN_SEQUENCE=1
 GENERATE_COMPLETION_REPORT=1
+USE_EXISTING_SECRETS=0
 
 READINESS_SCRIPT="${JIVE_SAAS_PROD_READINESS_SCRIPT:-$APP_DIR/scripts/check_saas_production_readiness.sh}"
 SECRET_PUSH_SCRIPT="${JIVE_SAAS_SECRET_PUSH_SCRIPT:-$APP_DIR/scripts/push_saas_github_secrets.sh}"
@@ -39,6 +40,7 @@ Options:
   --build-name <version>   Optional Flutter build-name override.
   --build-number <number>  Optional Flutter build-number override.
   --include-optional       Upload optional production-release secrets from the env file too.
+  --use-existing-secrets   Skip local env validation/upload and use already configured GitHub Actions secrets.
   --skip-sequence          Upload and verify secrets, but do not run the release-candidate workflow sequence.
   --skip-completion-report Do not render the internal-test completion report after the sequence.
   --apply                  Upload GitHub secrets and run the sequence. Without this, only local dry-run checks run.
@@ -49,6 +51,8 @@ production AAB. It validates the production env file, uploads production client
 secrets when --apply is passed, checks GitHub Actions secrets including Android
 release signing, delegates to scripts/run_saas_release_candidate_sequence.sh,
 and renders the internal-test completion report from the downloaded artifact.
+If production secrets were configured manually in GitHub, pass
+--use-existing-secrets to skip the local env file and upload steps.
 
 The script never prints secret values.
 EOF
@@ -100,6 +104,10 @@ parse_args() {
         ;;
       --include-optional)
         INCLUDE_OPTIONAL=1
+        shift
+        ;;
+      --use-existing-secrets)
+        USE_EXISTING_SECRETS=1
         shift
         ;;
       --skip-sequence)
@@ -237,20 +245,7 @@ run_completion_report() {
   "$REPORT_SCRIPT" "${args[@]}"
 }
 
-main() {
-  parse_args "$@"
-
-  run_production_readiness
-
-  if [[ "$APPLY" -ne 1 ]]; then
-    run_secret_upload_dry_run
-    log "dry run complete; pass --apply to upload secrets and run the release sequence"
-    return 0
-  fi
-
-  run_secret_upload_apply
-  run_secret_check
-
+run_sequence_and_report() {
   if [[ "$RUN_SEQUENCE" -eq 1 ]]; then
     run_release_sequence
     if [[ "$GENERATE_COMPLETION_REPORT" -eq 1 ]]; then
@@ -262,6 +257,35 @@ main() {
     log "release sequence skipped"
     log "completion report skipped because release sequence was skipped"
   fi
+}
+
+main() {
+  parse_args "$@"
+
+  if [[ "$USE_EXISTING_SECRETS" -eq 1 ]]; then
+    log "using existing GitHub Actions production-release secrets"
+    run_secret_check
+
+    if [[ "$APPLY" -ne 1 ]]; then
+      log "existing-secrets dry run complete; pass --apply to run the release sequence"
+      return 0
+    fi
+
+    run_sequence_and_report
+    return 0
+  fi
+
+  run_production_readiness
+
+  if [[ "$APPLY" -ne 1 ]]; then
+    run_secret_upload_dry_run
+    log "dry run complete; pass --apply to upload secrets and run the release sequence"
+    return 0
+  fi
+
+  run_secret_upload_apply
+  run_secret_check
+  run_sequence_and_report
 }
 
 main "$@"

@@ -197,6 +197,14 @@ scripts/run_saas_internal_test_release.sh --repo zensgit/jive --env-file /tmp/ji
 scripts/run_saas_internal_test_release.sh --repo zensgit/jive --env-file /tmp/jive-saas-production.env --artifact-dir /tmp/jive-saas-release-candidate --completion-report docs/$(date +%F)-saas-internal-test-release-completion.md --apply
 ```
 
+如果生产 Supabase / AdMob / Android 签名 secrets 已经通过 GitHub UI 或其他安全渠道配置完成，也可以不在本地保留 production env 文件，直接复用现有 GitHub Actions secrets：
+
+```bash
+scripts/run_saas_internal_test_release.sh --repo zensgit/jive --use-existing-secrets --artifact-dir /tmp/jive-saas-release-candidate --completion-report docs/$(date +%F)-saas-internal-test-release-completion.md --apply
+```
+
+`--use-existing-secrets` 会跳过本地 env 文件校验和 secrets 上传，只检查 GitHub Actions 上必需 secrets 是否存在，然后执行三段 release candidate、下载 artifact 并生成归档报告。
+
 如果 GitHub Actions secrets 已经全部配置齐全，也可以直接使用 sequence runner 自动执行三段流程、等待每个 workflow 成功、下载最终 artifact，并校验 `release-candidate.json` 与 AAB SHA-256：
 
 ```bash

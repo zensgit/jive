@@ -175,6 +175,39 @@ run_missing_env_case() {
   printf '%s\n' "$status" > "$fixture/status.txt"
 }
 
+run_existing_secrets_case() {
+  local label="$1"
+  local check_exit="$2"
+  shift 2
+
+  local fixture="$ROOT/$label"
+  mkdir -p "$fixture"
+  : > "$fixture/calls.log"
+
+  create_fake_script "$fixture/check" check "$check_exit"
+  create_fake_script "$fixture/sequence" sequence 0
+  create_fake_script "$fixture/report" report 0
+
+  set +e
+  env \
+    JIVE_FAKE_FINALIZER_CALLS="$fixture/calls.log" \
+    JIVE_SAAS_SECRET_CHECK_SCRIPT="$fixture/check" \
+    JIVE_SAAS_RELEASE_SEQUENCE_SCRIPT="$fixture/sequence" \
+    JIVE_SAAS_INTERNAL_TEST_REPORT_SCRIPT="$fixture/report" \
+    "$TARGET" \
+      --repo zensgit/jive \
+      --env-file "$fixture/missing.env" \
+      --artifact-dir "$fixture/artifacts" \
+      --use-existing-secrets \
+      "$@" \
+      > "$fixture/stdout.txt" \
+      2> "$fixture/stderr.txt"
+  local status=$?
+  set -e
+
+  printf '%s\n' "$status" > "$fixture/status.txt"
+}
+
 run_case dry-run 0
 assert_status dry-run 0
 assert_contains "$ROOT/dry-run/calls.log" "readiness --env-file $ROOT/dry-run/production.env --profile app --store android"
@@ -193,6 +226,31 @@ assert_contains "$ROOT/apply/calls.log" "sequence --artifact-dir $ROOT/apply/art
 assert_contains "$ROOT/apply/calls.log" "report --artifact-dir $ROOT/apply/artifacts --output "
 assert_contains "$ROOT/apply/calls.log" "--play-track internal"
 log "apply fixture ok: uploads, verifies, runs sequence, and renders completion report"
+
+run_existing_secrets_case existing-secrets-dry-run 0
+assert_status existing-secrets-dry-run 0
+assert_contains "$ROOT/existing-secrets-dry-run/calls.log" "check --profile production-release --include-signing --repo zensgit/jive"
+assert_not_contains "$ROOT/existing-secrets-dry-run/calls.log" "readiness "
+assert_not_contains "$ROOT/existing-secrets-dry-run/calls.log" "push "
+assert_not_contains "$ROOT/existing-secrets-dry-run/calls.log" "sequence "
+assert_not_contains "$ROOT/existing-secrets-dry-run/calls.log" "report "
+log "existing-secrets dry-run fixture ok: checks GitHub secrets without env upload"
+
+run_existing_secrets_case existing-secrets-apply 0 --apply --build-name 1.2.3 --build-number 45
+assert_status existing-secrets-apply 0
+assert_contains "$ROOT/existing-secrets-apply/calls.log" "check --profile production-release --include-signing --repo zensgit/jive"
+assert_contains "$ROOT/existing-secrets-apply/calls.log" "sequence --artifact-dir $ROOT/existing-secrets-apply/artifacts --repo zensgit/jive --build-name 1.2.3 --build-number 45"
+assert_contains "$ROOT/existing-secrets-apply/calls.log" "report --artifact-dir $ROOT/existing-secrets-apply/artifacts --output "
+assert_not_contains "$ROOT/existing-secrets-apply/calls.log" "readiness "
+assert_not_contains "$ROOT/existing-secrets-apply/calls.log" "push "
+log "existing-secrets apply fixture ok: runs sequence from preconfigured GitHub secrets"
+
+run_existing_secrets_case existing-secrets-missing 9 --apply
+assert_status existing-secrets-missing 9
+assert_contains "$ROOT/existing-secrets-missing/calls.log" "check --profile production-release --include-signing --repo zensgit/jive"
+assert_not_contains "$ROOT/existing-secrets-missing/calls.log" "sequence "
+assert_not_contains "$ROOT/existing-secrets-missing/calls.log" "report "
+log "existing-secrets missing fixture ok: blocks before workflow dispatch"
 
 run_case report-options 0 --apply --completion-report "$ROOT/report-options/completion.md" --play-track closed-test --play-version 1.2.3+45
 assert_status report-options 0
