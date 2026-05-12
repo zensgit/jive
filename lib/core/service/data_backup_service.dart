@@ -21,6 +21,7 @@ import '../repository/import_job_history_repository.dart';
 import '../repository/sync_checkpoint_snapshot.dart';
 import '../repository/sync_cursor_store.dart';
 import '../repository/sync_lease_store.dart';
+import 'account_group_service.dart';
 import 'currency_service.dart';
 import 'transaction_service.dart';
 
@@ -73,6 +74,11 @@ class BackupImportSummary {
 class JiveDataBackupService {
   static const int legacySchemaVersion = 1;
   static const int schemaVersion = 5;
+
+  static String reportAccountDisplayName(JiveAccount? account) {
+    if (account == null) return '';
+    return const AccountGroupService().displayPath(account);
+  }
 
   static Future<File> exportToFile(
     Isar isar, {
@@ -1026,7 +1032,7 @@ class JiveDataBackupService {
         'type': _translateType(type),
         'category': category?.name ?? tx.category ?? '',
         'subCategory': subCategory?.name ?? tx.subCategory ?? '',
-        'account': account?.name ?? '',
+        'account': reportAccountDisplayName(account),
         'originalAmount': tx.amount,
         'originalCurrency': txCurrency,
         'convertedAmount': double.parse(convertedAmount.toStringAsFixed(2)),
