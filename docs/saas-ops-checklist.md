@@ -231,6 +231,14 @@ scripts/report_saas_internal_test_release_artifact.sh --artifact-dir /tmp/jive-s
 JIVE_SAAS_INTERNAL_TEST_REQUIRE_MANIFEST_CHECK=true JIVE_BUNDLETOOL_BIN=bundletool scripts/run_saas_internal_test_release.sh --repo zensgit/jive --use-existing-secrets --artifact-dir /tmp/jive-saas-release-candidate --completion-report docs/$(date +%F)-saas-internal-test-release-completion.md --apply
 ```
 
+生成 AAB 与完成报告后，可再生成 Google Play 内测上传交接报告。该脚本不会读取 service account JSON，也不会上传，只会校验 AAB artifact 并输出 fastlane `supply` 命令模板、AAB SHA-256、Play track、release status 与上传后回填字段：
+
+```bash
+scripts/render_saas_play_internal_upload_handoff.sh --artifact-dir /tmp/jive-saas-release-candidate --completion-report docs/$(date +%F)-saas-internal-test-release-completion.md --output docs/$(date +%F)-saas-play-internal-upload-handoff.md --service-account-json /secure/google-play-service-account.json --release-status completed
+```
+
+上传完成后可用 `--play-release-id`、`--tester-link`、`--rollout-status` 重新渲染同一份报告，保留 Play Console 的可追溯信息。
+
 ### Secrets 检查与上传
 
 初始化本地生产 release env 文件：
