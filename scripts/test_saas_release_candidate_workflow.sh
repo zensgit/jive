@@ -146,6 +146,8 @@ assert_contains "$BUILD_SCRIPT" "build_dart_define_file"
 assert_contains "$BUILD_SCRIPT" "write_report"
 assert_contains "$BUILD_SCRIPT" "dry run requested; skipping Flutter build"
 assert_contains "$BUILD_SCRIPT" "flutter \"\${build_args[@]}\""
+assert_contains "$BUILD_SCRIPT" "PRE_FLIGHT_STATUS=\"passed\""
+assert_contains "$BUILD_SCRIPT" "Release candidate appbundle built and archived."
 assert_not_contains "$BUILD_SCRIPT" "SUPABASE_SERVICE_ROLE_KEY"
 ok "build script keeps production readiness gate, dry-run, and client-safe defines"
 

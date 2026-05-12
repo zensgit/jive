@@ -380,6 +380,8 @@ cp "$AAB_PATH" "$TARGET_AAB"
 SHA256="$(shasum -a 256 "$TARGET_AAB" | awk '{print $1}')"
 GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 GIT_COMMIT="$(git rev-parse HEAD)"
+PRE_FLIGHT_STATUS="passed"
+PRE_FLIGHT_MESSAGE="Release candidate appbundle built and archived."
 write_report "$TARGET_AAB" "$(file_size_bytes "$TARGET_AAB")" "$SHA256" "$GIT_BRANCH" "$GIT_COMMIT"
 
 log "artifact=$TARGET_AAB"
