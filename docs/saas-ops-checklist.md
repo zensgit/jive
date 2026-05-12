@@ -183,12 +183,19 @@ Banner ID: ca-app-pub-3940256099942544/6300978111
 3. `build_appbundle=true`、`strict_signing=true`：生成可用于内部测试/商店上传的 prod AAB。
 
 如果 production env 文件已经填好但 GitHub Actions secrets 还没上传，推荐使用最终收口入口。它会先校验 env 文件，再上传 production release secrets，检查包含 Android 签名在内的 GitHub Actions secrets，然后自动执行三段 release candidate 并下载校验 artifact：
+成功后它还会基于下载的 artifact 自动生成内部测试归档报告，默认输出到 `build/reports/saas-internal-test-release/latest.md`。
 
 ```bash
 scripts/run_saas_internal_test_release.sh --repo zensgit/jive --env-file /tmp/jive-saas-production.env --artifact-dir /tmp/jive-saas-release-candidate --apply
 ```
 
 不带 `--apply` 时只做本地 dry-run，不会上传 secrets，也不会触发 GitHub Actions。
+
+如需把报告写入 docs 目录，可在同一条命令里指定：
+
+```bash
+scripts/run_saas_internal_test_release.sh --repo zensgit/jive --env-file /tmp/jive-saas-production.env --artifact-dir /tmp/jive-saas-release-candidate --completion-report docs/$(date +%F)-saas-internal-test-release-completion.md --apply
+```
 
 如果 GitHub Actions secrets 已经全部配置齐全，也可以直接使用 sequence runner 自动执行三段流程、等待每个 workflow 成功、下载最终 artifact，并校验 `release-candidate.json` 与 AAB SHA-256：
 
@@ -198,7 +205,7 @@ scripts/run_saas_release_candidate_sequence.sh --repo zensgit/jive --artifact-di
 
 如果 production Supabase / AdMob / Android signing secrets 缺失，runner 会在派发 GitHub Actions 前停止，避免制造预期失败的 workflow run。
 
-下载到本地的 release candidate artifact 可以生成内部测试归档报告。报告会再次校验 `release-candidate.json`、AAB bytes、SHA-256 和敏感文件名，并列出 Play 内测手工 smoke checklist：
+下载到本地的 release candidate artifact 也可以单独重新生成内部测试归档报告。报告会再次校验 `release-candidate.json`、AAB bytes、SHA-256 和敏感文件名，并列出 Play 内测手工 smoke checklist：
 
 ```bash
 scripts/report_saas_internal_test_release_artifact.sh --artifact-dir /tmp/jive-saas-release-candidate --output docs/$(date +%F)-saas-internal-test-release-completion.md
