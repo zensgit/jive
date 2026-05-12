@@ -16,6 +16,7 @@ import '../../core/repository/isar_transaction_repository.dart';
 import '../../core/repository/account_repository.dart';
 import '../../core/repository/isar_account_repository.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/account_group_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/category_path_service.dart';
 import '../../core/service/currency_service.dart';
@@ -1844,7 +1845,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   String _resolveAccountName(int? accountId) {
     if (accountId == null) return '未指定';
-    return _accountById[accountId]?.name ?? '未指定';
+    return transactionDetailAccountDisplayName(_accountById[accountId]);
   }
 
   Widget _buildProjectRow(int? projectId) {
@@ -2148,6 +2149,11 @@ class _RuleExplainCard extends StatelessWidget {
     }
     return lines;
   }
+}
+
+String transactionDetailAccountDisplayName(JiveAccount? account) {
+  if (account == null) return '未指定';
+  return const AccountGroupService().displayPath(account);
 }
 
 Future<bool?> showTransactionDetailSheet(
