@@ -130,6 +130,7 @@ run_case() {
   create_fake_script "$fixture/push" push 0
   create_fake_script "$fixture/check" check 0
   create_fake_script "$fixture/sequence" sequence 0
+  create_fake_script "$fixture/report" report 0
 
   set +e
   env \
@@ -138,6 +139,7 @@ run_case() {
     JIVE_SAAS_SECRET_PUSH_SCRIPT="$fixture/push" \
     JIVE_SAAS_SECRET_CHECK_SCRIPT="$fixture/check" \
     JIVE_SAAS_RELEASE_SEQUENCE_SCRIPT="$fixture/sequence" \
+    JIVE_SAAS_INTERNAL_TEST_REPORT_SCRIPT="$fixture/report" \
     "$TARGET" \
       --repo zensgit/jive \
       --env-file "$env_file" \
@@ -180,6 +182,7 @@ assert_contains "$ROOT/dry-run/calls.log" "push --profile production-release --e
 assert_not_contains "$ROOT/dry-run/calls.log" " --apply"
 assert_not_contains "$ROOT/dry-run/calls.log" "check "
 assert_not_contains "$ROOT/dry-run/calls.log" "sequence "
+assert_not_contains "$ROOT/dry-run/calls.log" "report "
 log "dry-run fixture ok: validates env and secret values without remote mutation"
 
 run_case apply 0 --apply --build-name 1.2.3 --build-number 45
@@ -187,12 +190,26 @@ assert_status apply 0
 assert_contains "$ROOT/apply/calls.log" "push --profile production-release --env-file $ROOT/apply/production.env --apply --repo zensgit/jive"
 assert_contains "$ROOT/apply/calls.log" "check --profile production-release --include-signing --repo zensgit/jive"
 assert_contains "$ROOT/apply/calls.log" "sequence --artifact-dir $ROOT/apply/artifacts --repo zensgit/jive --build-name 1.2.3 --build-number 45"
-log "apply fixture ok: uploads, verifies, and runs sequence"
+assert_contains "$ROOT/apply/calls.log" "report --artifact-dir $ROOT/apply/artifacts --output "
+assert_contains "$ROOT/apply/calls.log" "--play-track internal"
+log "apply fixture ok: uploads, verifies, runs sequence, and renders completion report"
+
+run_case report-options 0 --apply --completion-report "$ROOT/report-options/completion.md" --play-track closed-test --play-version 1.2.3+45
+assert_status report-options 0
+assert_contains "$ROOT/report-options/calls.log" "report --artifact-dir $ROOT/report-options/artifacts --output $ROOT/report-options/completion.md --play-track closed-test --play-version 1.2.3+45"
+log "report-options fixture ok: passes report output and Play labels"
+
+run_case skip-report 0 --apply --skip-completion-report
+assert_status skip-report 0
+assert_contains "$ROOT/skip-report/calls.log" "sequence --artifact-dir $ROOT/skip-report/artifacts --repo zensgit/jive"
+assert_not_contains "$ROOT/skip-report/calls.log" "report "
+log "skip-report fixture ok: keeps report generation optional"
 
 run_case skip-sequence 0 --apply --skip-sequence
 assert_status skip-sequence 0
 assert_contains "$ROOT/skip-sequence/calls.log" "check --profile production-release --include-signing --repo zensgit/jive"
 assert_not_contains "$ROOT/skip-sequence/calls.log" "sequence "
+assert_not_contains "$ROOT/skip-sequence/calls.log" "report "
 log "skip-sequence fixture ok: supports upload-only cut point"
 
 run_case readiness-failure 7 --apply
@@ -200,6 +217,7 @@ assert_status readiness-failure 7
 assert_contains "$ROOT/readiness-failure/calls.log" "readiness --env-file $ROOT/readiness-failure/production.env --profile app --store android"
 assert_not_contains "$ROOT/readiness-failure/calls.log" "push "
 assert_not_contains "$ROOT/readiness-failure/calls.log" "sequence "
+assert_not_contains "$ROOT/readiness-failure/calls.log" "report "
 log "readiness-failure fixture ok: blocks before upload"
 
 run_missing_env_case
