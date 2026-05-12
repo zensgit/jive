@@ -56,6 +56,16 @@ class ObjectSharePolicyService {
     );
   }
 
+  ObjectSharePolicy transactionPolicy({required JiveBook? book}) {
+    final policy = evaluate(book: book, objectLabel: '交易');
+    if (policy.visibility == ObjectShareVisibility.private) return policy;
+    return ObjectSharePolicy(
+      visibility: policy.visibility,
+      label: policy.label,
+      warning: '此交易位于共享场景，保存或修改后共享成员可见。',
+    );
+  }
+
   String? privateObjectInSharedSceneWarning({
     required JiveBook? book,
     required bool objectIsPrivate,

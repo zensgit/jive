@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
 
 import '../../core/database/account_model.dart';
+import '../../core/database/book_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/database/tag_model.dart';
@@ -11,6 +12,7 @@ import '../../core/service/category_service.dart';
 import '../../core/service/category_path_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/data_reload_bus.dart';
+import '../../core/service/object_share_policy_service.dart';
 import '../../core/service/template_service.dart';
 import '../../core/repository/transaction_repository.dart';
 import '../../core/repository/isar_transaction_repository.dart';
@@ -23,6 +25,7 @@ import 'widgets/transaction_core_fields.dart';
 import 'widgets/transaction_advanced_section.dart';
 import 'widgets/transaction_footer_bar.dart';
 import 'widgets/quick_action_suggest_bar.dart';
+import 'widgets/transaction_share_hint_banner.dart';
 
 /// Form-based transaction editor (完整编辑页).
 ///
@@ -65,6 +68,7 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   List<JiveAccount> _accounts = [];
   List<JiveTag> _tags = [];
   List<JiveProject> _projects = [];
+  JiveBook? _entryBook;
 
   @override
   void initState() {
@@ -123,12 +127,17 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _selectedTagKeys = List.of(tx.tagKeys);
       _selectedProjectId = tx.projectId;
     }
+    final entryBookId = p.prefillBookId ?? p.editingTransaction?.bookId;
+    final entryBook = entryBookId == null
+        ? null
+        : _isar.jiveBooks.getSync(entryBookId);
 
     setState(() {
       _categories = categories;
       _accounts = accounts;
       _tags = tags;
       _projects = projects;
+      _entryBook = entryBook;
       _isLoading = false;
     });
   }
@@ -622,6 +631,9 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             ? _selectedToAccount != null &&
                   _selectedToAccount?.id != _selectedAccount?.id
             : _selectedCategory != null);
+    final sharePolicy = const ObjectSharePolicyService().transactionPolicy(
+      book: _entryBook,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -644,6 +656,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                   TransactionSourceBanner(params: params),
                   if (params.sourceBannerText != null)
                     const SizedBox(height: 12),
+                  TransactionShareHintBanner(policy: sharePolicy),
+                  if (sharePolicy.warning != null) const SizedBox(height: 12),
 
                   // Type selector
                   _TypeSelector(
