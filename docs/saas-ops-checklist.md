@@ -198,6 +198,12 @@ scripts/run_saas_release_candidate_sequence.sh --repo zensgit/jive --artifact-di
 
 如果 production Supabase / AdMob / Android signing secrets 缺失，runner 会在派发 GitHub Actions 前停止，避免制造预期失败的 workflow run。
 
+下载到本地的 release candidate artifact 可以生成内部测试归档报告。报告会再次校验 `release-candidate.json`、AAB bytes、SHA-256 和敏感文件名，并列出 Play 内测手工 smoke checklist：
+
+```bash
+scripts/report_saas_internal_test_release_artifact.sh --artifact-dir /tmp/jive-saas-release-candidate --output docs/$(date +%F)-saas-internal-test-release-completion.md
+```
+
 ### Secrets 检查与上传
 
 初始化本地生产 release env 文件：
