@@ -3627,7 +3627,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       categoryKey: category.key,
     );
     if (path.segments.length <= 2) return null;
-    return '三级分类';
+    return '可选三级';
   }
 
   List<SystemSuggestion> _systemSuggestionsForQuery(String query) {

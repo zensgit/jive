@@ -6,6 +6,7 @@ class CategoryPath {
   const CategoryPath(this.segments);
 
   bool get isEmpty => segments.isEmpty;
+  int get depth => segments.length;
   JiveCategory? get primary => segments.isEmpty ? null : segments.first;
   JiveCategory? get leaf => segments.isEmpty ? null : segments.last;
   String? get primaryKey => primary?.key;
@@ -25,6 +26,16 @@ class CategoryPath {
 /// compatible: transactions store the top-level key plus the selected leaf key.
 class CategoryPathService {
   const CategoryPathService();
+
+  static const int defaultInteractiveDepth = 2;
+
+  bool isDefaultInteractivePath(CategoryPath path) {
+    return path.depth <= defaultInteractiveDepth;
+  }
+
+  bool isOptionalExtendedPath(CategoryPath path) {
+    return path.depth > defaultInteractiveDepth;
+  }
 
   CategoryPath resolve(
     Iterable<JiveCategory> categories, {
@@ -107,6 +118,28 @@ class CategoryPathService {
       return a.displayName.compareTo(b.displayName);
     });
     return paths;
+  }
+
+  /// Default category pickers should stay simple: parent + child. Deeper
+  /// paths are still supported, but should be entered intentionally.
+  List<CategoryPath> defaultInteractivePaths(
+    Iterable<JiveCategory> categories, {
+    required bool isIncome,
+  }) {
+    return visiblePaths(
+      categories,
+      isIncome: isIncome,
+    ).where(isDefaultInteractivePath).toList(growable: false);
+  }
+
+  List<CategoryPath> optionalExtendedPaths(
+    Iterable<JiveCategory> categories, {
+    required bool isIncome,
+  }) {
+    return visiblePaths(
+      categories,
+      isIncome: isIncome,
+    ).where(isOptionalExtendedPath).toList(growable: false);
   }
 
   static String? _firstNonEmpty(String? first, String? second) {
