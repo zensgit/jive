@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar/isar.dart';
+import 'package:jive/core/database/account_model.dart';
 import 'package:jive/core/database/currency_model.dart';
 import 'package:jive/core/service/currency_service.dart';
 
@@ -127,4 +128,58 @@ void main() {
     final after = await fake.getRate('USD', 'JPY');
     expect(after, before);
   });
+
+  test('multi-currency overview shows account group display paths', () async {
+    final overview = await service.calculateMultiCurrencyOverview(
+      [
+        _account(
+          id: 1,
+          name: '活期',
+          groupName: '中国银行',
+          currency: 'CNY',
+          openingBalance: 1200,
+        ),
+        _account(
+          id: 2,
+          name: 'Visa 尾号 8899',
+          groupName: '信用卡账户',
+          type: 'liability',
+          currency: 'CNY',
+          openingBalance: -300,
+        ),
+      ],
+      {1: 1200, 2: -300},
+      'CNY',
+    );
+
+    expect(
+      overview.assetGroups.single.accounts.single.accountName,
+      '中国银行 / 活期 / CNY',
+    );
+    expect(
+      overview.liabilityGroups.single.accounts.single.accountName,
+      'Visa 尾号 8899',
+    );
+  });
+}
+
+JiveAccount _account({
+  required int id,
+  required String name,
+  String type = 'asset',
+  String currency = 'CNY',
+  String? groupName,
+  double openingBalance = 0,
+}) {
+  return JiveAccount()
+    ..id = id
+    ..name = name
+    ..type = type
+    ..currency = currency
+    ..groupName = groupName
+    ..openingBalance = openingBalance
+    ..includeInBalance = true
+    ..isHidden = false
+    ..isArchived = false
+    ..iconName = 'account_balance_wallet';
 }

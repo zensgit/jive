@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:isar/isar.dart';
 import '../database/currency_model.dart';
+import 'account_group_service.dart';
 
 /// 汇率 API 响应模型
 class ExchangeRateResponse {
@@ -24,6 +25,7 @@ class ExchangeRateResponse {
 /// 货币服务
 class CurrencyService {
   final Isar _isar;
+  final AccountGroupService _accountGroupService = const AccountGroupService();
 
   // 免费汇率 API（无需 key）
   // 使用 exchangerate.host 或 frankfurter.app 作为备选
@@ -599,7 +601,9 @@ class CurrencyService {
           }
         }
       }
-    } catch (e) { debugPrint('Failed to fetch rate from CoinGecko: $e'); }
+    } catch (e) {
+      debugPrint('Failed to fetch rate from CoinGecko: $e');
+    }
     return null;
   }
 
@@ -628,7 +632,9 @@ class CurrencyService {
           );
         }
       }
-    } catch (e) { debugPrint('Failed to fetch rate from Frankfurter: $e'); }
+    } catch (e) {
+      debugPrint('Failed to fetch rate from Frankfurter: $e');
+    }
     return null;
   }
 
@@ -657,7 +663,9 @@ class CurrencyService {
           );
         }
       }
-    } catch (e) { debugPrint('Failed to fetch rate from ExchangeRate.host: $e'); }
+    } catch (e) {
+      debugPrint('Failed to fetch rate from ExchangeRate.host: $e');
+    }
     return null;
   }
 
@@ -919,7 +927,7 @@ class CurrencyService {
         accountItems.add(
           CurrencyAccountItem(
             accountId: account.id,
-            accountName: account.name,
+            accountName: _accountGroupService.displayPath(account),
             accountType: account.type,
             iconName: account.iconName,
             balance: balance,
@@ -982,7 +990,7 @@ class CurrencyService {
         accountItems.add(
           CurrencyAccountItem(
             accountId: account.id,
-            accountName: account.name,
+            accountName: _accountGroupService.displayPath(account),
             accountType: account.type,
             iconName: account.iconName,
             balance: balance,
