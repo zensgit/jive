@@ -9,6 +9,7 @@ import '../database/account_model.dart';
 import '../database/category_model.dart';
 import '../database/tag_model.dart';
 import '../database/transaction_model.dart';
+import 'account_group_service.dart';
 
 /// Exports transactions to a formatted .xlsx file.
 class ExcelExportService {
@@ -17,6 +18,11 @@ class ExcelExportService {
   final Isar _isar;
 
   const ExcelExportService(this._isar);
+
+  static String accountDisplayLabel(JiveAccount? account) {
+    if (account == null) return '';
+    return const AccountGroupService().displayPath(account);
+  }
 
   /// Export transactions in the given date range to an Excel file.
   Future<File> exportTransactions(
@@ -28,13 +34,18 @@ class ExcelExportService {
     final rangeStart = DateTime(start.year, start.month, start.day);
     final rangeEnd = DateTime(end.year, end.month, end.day, 23, 59, 59);
 
-    var query = _isar.jiveTransactions
-        .filter()
-        .timestampBetween(rangeStart, rangeEnd);
+    var query = _isar.jiveTransactions.filter().timestampBetween(
+      rangeStart,
+      rangeEnd,
+    );
 
     if (categoryKey != null && categoryKey.isNotEmpty) {
-      query = query.group((q) =>
-          q.categoryKeyEqualTo(categoryKey).or().subCategoryKeyEqualTo(categoryKey));
+      query = query.group(
+        (q) => q
+            .categoryKeyEqualTo(categoryKey)
+            .or()
+            .subCategoryKeyEqualTo(categoryKey),
+      );
     }
 
     final transactions = await query.sortByTimestampDesc().findAll();
@@ -70,10 +81,16 @@ class ExcelExportService {
       sheet.getRangeByIndex(row, 2).setText(_typeLabel(tx.type));
       sheet.getRangeByIndex(row, 3).setNumber(tx.amount);
       sheet.getRangeByIndex(row, 3).numberFormat = '#,##0.00';
-      sheet.getRangeByIndex(row, 4).setText(_categoryName(tx.categoryKey, categoryByKey));
-      sheet.getRangeByIndex(row, 5).setText(_categoryName(tx.subCategoryKey, categoryByKey));
+      sheet
+          .getRangeByIndex(row, 4)
+          .setText(_categoryName(tx.categoryKey, categoryByKey));
+      sheet
+          .getRangeByIndex(row, 5)
+          .setText(_categoryName(tx.subCategoryKey, categoryByKey));
       sheet.getRangeByIndex(row, 6).setText(tx.note?.trim() ?? '');
-      sheet.getRangeByIndex(row, 7).setText(_accountName(tx.accountId, accountById));
+      sheet
+          .getRangeByIndex(row, 7)
+          .setText(_accountName(tx.accountId, accountById));
       sheet.getRangeByIndex(row, 8).setText(_tagNames(tx.tagKeys, tagByKey));
 
       // Color code by type
@@ -113,7 +130,9 @@ class ExcelExportService {
 
     sheet.getRangeByIndex(summaryRow + 3, 1).setText('结余');
     sheet.getRangeByIndex(summaryRow + 3, 1).cellStyle.bold = true;
-    sheet.getRangeByIndex(summaryRow + 3, 2).setNumber(totalIncome - totalExpense);
+    sheet
+        .getRangeByIndex(summaryRow + 3, 2)
+        .setNumber(totalIncome - totalExpense);
     sheet.getRangeByIndex(summaryRow + 3, 2).numberFormat = '#,##0.00';
     sheet.getRangeByIndex(summaryRow + 3, 2).cellStyle.bold = true;
 
@@ -132,9 +151,12 @@ class ExcelExportService {
 
   String _typeLabel(String? type) {
     switch (type) {
-      case 'income': return '收入';
-      case 'transfer': return '转账';
-      default: return '支出';
+      case 'income':
+        return '收入';
+      case 'transfer':
+        return '转账';
+      default:
+        return '支出';
     }
   }
 
@@ -145,7 +167,7 @@ class ExcelExportService {
 
   String _accountName(int? id, Map<int, JiveAccount> map) {
     if (id == null) return '';
-    return map[id]?.name ?? '';
+    return accountDisplayLabel(map[id]);
   }
 
   String _tagNames(List<String> keys, Map<String, JiveTag> map) {
