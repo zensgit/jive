@@ -36,6 +36,7 @@ import '../../core/widgets/jive_calendar/jive_calendar.dart';
 import '../../core/database/category_model.dart';
 import '../../core/service/auto_rule_engine.dart';
 import '../../core/service/merchant_memory_service.dart';
+import '../../core/service/account_speech_alias_service.dart';
 import '../../core/service/scene_candidate_service.dart';
 import '../../core/service/speech_intent_parser.dart';
 import '../../core/service/speech_settings.dart';
@@ -164,6 +165,8 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   // ── Voice recognition state ──
   final SpeechIntentParser _speechParser = SpeechIntentParser();
+  final AccountSpeechAliasService _accountSpeechAliases =
+      const AccountSpeechAliasService();
   bool _speechHoldActive = false;
   bool _speechHoldPending = false;
   bool _speechHoldStopQueued = false;
@@ -2618,7 +2621,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     if (!mounted) return null;
     var currentText = text;
-    final accountNames = _accounts.map((account) => account.name).toList();
+    final accountNames = _accountSpeechAliases.parserAccountNames(_accounts);
     SpeechIntent? intent = _speechParser.parse(
       currentText,
       now: DateTime.now(),
@@ -2909,19 +2912,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   }
 
   List<String> _speechAccountAliases(JiveAccount account) {
-    final aliases = <String>{account.name};
-    final trimmed = account.name.replaceAll(RegExp(r'(钱包|账户|帐户)$'), '');
-    if (trimmed.length >= 2 && trimmed != account.name) {
-      aliases.add(trimmed);
-    }
-    if (account.name.contains('微信')) aliases.add('微信');
-    if (account.name.contains('支付宝')) aliases.add('支付宝');
-    if (account.name.contains('现金')) aliases.add('现金');
-    if (account.name.contains('银行卡') || account.name.contains('银行')) {
-      aliases.add('银行卡');
-    }
-    if (account.name.contains('信用卡')) aliases.add('信用卡');
-    return aliases.toList();
+    return _accountSpeechAliases.aliasesFor(account);
   }
 
   JiveAccount? _speechPickAlternateAccount(JiveAccount? selected) {
