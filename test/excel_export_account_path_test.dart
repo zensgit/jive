@@ -1,0 +1,29 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:jive/core/database/account_model.dart';
+import 'package:jive/core/service/excel_export_service.dart';
+
+void main() {
+  test('Excel account display label includes custom account group path', () {
+    final account = JiveAccount()
+      ..name = '活期'
+      ..type = 'asset'
+      ..groupName = '中国银行'
+      ..currency = 'CNY';
+
+    expect(ExcelExportService.accountDisplayLabel(account), '中国银行 / 活期 / CNY');
+  });
+
+  test('Excel account display label keeps broad legacy groups compact', () {
+    final account = JiveAccount()
+      ..name = '微信零钱'
+      ..type = 'asset'
+      ..groupName = '资金账户'
+      ..currency = 'CNY';
+
+    expect(ExcelExportService.accountDisplayLabel(account), '微信零钱');
+  });
+
+  test('Excel account display label is empty for missing account', () {
+    expect(ExcelExportService.accountDisplayLabel(null), '');
+  });
+}
