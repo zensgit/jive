@@ -1,6 +1,8 @@
 import 'package:isar/isar.dart';
+import '../database/account_model.dart';
 import '../database/transaction_model.dart';
 import '../database/category_model.dart';
+import 'account_group_service.dart';
 import 'account_service.dart';
 import 'currency_service.dart';
 import 'database_service.dart';
@@ -55,17 +57,12 @@ class CapitalFlowService {
   }
 
   /// Get capital flow data for the last [months] months.
-  Future<CapitalFlowData> getCapitalFlow(
-    int months, {
-    int? bookId,
-  }) async {
+  Future<CapitalFlowData> getCapitalFlow(int months, {int? bookId}) async {
     final baseCurrency = await currencyService.getBaseCurrency();
     final now = DateTime.now();
     final start = DateTime(now.year, now.month - months + 1, 1);
 
-    var query = isar.jiveTransactions
-        .filter()
-        .timestampGreaterThan(start);
+    var query = isar.jiveTransactions.filter().timestampGreaterThan(start);
     if (bookId != null) {
       query = query.bookIdEqualTo(bookId);
     }
@@ -92,13 +89,12 @@ class CapitalFlowService {
       if (tx.amount <= 0) continue;
 
       // Currency conversion
-      final account =
-          tx.accountId != null ? accountById[tx.accountId] : null;
+      final account = tx.accountId != null ? accountById[tx.accountId] : null;
       final txCurrency = account?.currency ?? 'CNY';
       double amount = tx.amount;
       if (txCurrency != baseCurrency) {
-        amount = await currencyService.convert(
-                amount, txCurrency, baseCurrency) ??
+        amount =
+            await currencyService.convert(amount, txCurrency, baseCurrency) ??
             amount;
       }
 
@@ -113,14 +109,13 @@ class CapitalFlowService {
         expenseByCategory[label] = (expenseByCategory[label] ?? 0) + amount;
         totalExpense += amount;
       } else if (type == 'transfer') {
-        final fromName = account?.name ?? '未知账户';
+        final fromName = capitalFlowAccountDisplayName(account);
         final toAccount = tx.toAccountId != null
             ? accountById[tx.toAccountId]
             : null;
-        final toName = toAccount?.name ?? '未知账户';
+        final toName = capitalFlowAccountDisplayName(toAccount);
         final flowKey = '$fromName->$toName';
-        transferAmounts[flowKey] =
-            (transferAmounts[flowKey] ?? 0) + amount;
+        transferAmounts[flowKey] = (transferAmounts[flowKey] ?? 0) + amount;
       }
     }
 
@@ -144,4 +139,9 @@ class CapitalFlowService {
       netFlow: totalIncome - totalExpense,
     );
   }
+}
+
+String capitalFlowAccountDisplayName(JiveAccount? account) {
+  if (account == null) return '未知账户';
+  return const AccountGroupService().displayPath(account);
 }
