@@ -7,6 +7,7 @@ import '../../core/database/category_model.dart';
 import '../../core/database/recurring_rule_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/account_group_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
@@ -30,6 +31,11 @@ class RecurringRuleSaveResult {
   final int generatedDrafts;
   final int committedTransactions;
   final String? processingError;
+}
+
+@visibleForTesting
+String recurringRuleAccountDisplayLabel(JiveAccount account) {
+  return const AccountGroupService().displayPath(account);
 }
 
 class RecurringRuleFormScreen extends StatefulWidget {
@@ -517,7 +523,9 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                       .map(
                         (account) => DropdownMenuItem(
                           value: account.id,
-                          child: Text(account.name),
+                          child: Text(
+                            recurringRuleAccountDisplayLabel(account),
+                          ),
                         ),
                       )
                       .toList(),
@@ -536,7 +544,9 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                         .map(
                           (account) => DropdownMenuItem(
                             value: account.id,
-                            child: Text(account.name),
+                            child: Text(
+                              recurringRuleAccountDisplayLabel(account),
+                            ),
                           ),
                         )
                         .toList(),
