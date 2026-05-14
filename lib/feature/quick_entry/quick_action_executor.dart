@@ -71,13 +71,13 @@ class QuickActionExecutor {
   }) async {
     final result = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => TransactionFormScreen(params: _paramsFor(action)),
+        builder: (_) => TransactionFormScreen(params: paramsFor(action)),
       ),
     );
     if (result == true) onCompleted?.call();
   }
 
-  static TransactionEntryParams _paramsFor(QuickAction action) {
+  static TransactionEntryParams paramsFor(QuickAction action) {
     final missing = QuickActionService.missingFields(action);
     return TransactionEntryParams(
       source: TransactionEntrySource.quickAction,
@@ -89,6 +89,7 @@ class QuickActionExecutor {
       prefillSubCategoryKey: action.subCategoryKey,
       prefillAccountId: action.accountId,
       prefillToAccountId: action.toAccountId,
+      prefillBookId: action.bookId,
       prefillNote: action.defaultNote,
       prefillTagKeys: action.tagKeys,
       highlightFields: missing,

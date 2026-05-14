@@ -37,6 +37,7 @@
 - PR #209 已补齐入口体系 closure 与 Android 验证文档。
 - 2026-05-05：`codex/moneythings-ios-shortcuts-entry` 补齐 iOS App Intent / Shortcuts 原生入口，继续复用 `jive://transaction/new` 与 `jive://quick-action` 协议。
 - 2026-05-05：`codex/moneythings-ios-share-extension` 补齐 iOS 系统分享入口，`text/url` 分享统一进入 `jive://transaction/new`。
+- 2026-05-10：`codex/moneythings-quick-action-editor-params` 补齐 Quick Action edit fallback 参数映射测试，并保留 `bookId` 作为结构化编辑器的场景/账本预填上下文。
 
 ## 保持不变
 
@@ -80,4 +81,5 @@
 - `docs/2026-05-05-moneythings-postmerge-closure-dev-verify.md`
 - `docs/2026-05-05-moneythings-ios-shortcuts-dev-verify.md`
 - `docs/2026-05-05-moneythings-ios-share-extension-dev-verify.md`
+- `docs/2026-05-10-moneythings-quick-action-editor-params-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`
