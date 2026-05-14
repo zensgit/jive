@@ -8,6 +8,7 @@ import '../database/account_model.dart';
 import '../database/category_model.dart';
 import '../database/tag_model.dart';
 import '../database/transaction_model.dart';
+import 'account_group_service.dart';
 import 'category_path_service.dart';
 
 enum CsvExportTransactionType {
@@ -38,6 +39,26 @@ class CsvExportService {
   final Isar _isar;
 
   const CsvExportService(this._isar);
+
+  static String accountDisplayLabel(JiveAccount? account) {
+    if (account == null) return '';
+    return const AccountGroupService().displayPath(account);
+  }
+
+  static String transferAccountDisplayLabel(
+    JiveAccount? sourceAccount,
+    JiveAccount? targetAccount,
+  ) {
+    final sourceName = accountDisplayLabel(sourceAccount);
+    final targetName = accountDisplayLabel(targetAccount);
+    if (sourceName.isNotEmpty && targetName.isNotEmpty) {
+      return '$sourceName -> $targetName';
+    }
+    if (sourceName.isNotEmpty) {
+      return sourceName;
+    }
+    return targetName;
+  }
 
   /// Count transactions matching the given filters (from main).
   Future<int> countTransactions({
@@ -437,18 +458,10 @@ class CsvExportService {
         : accountById[transaction.toAccountId!];
 
     if (transaction.type == 'transfer') {
-      final sourceName = sourceAccount?.name ?? '';
-      final targetName = targetAccount?.name ?? '';
-      if (sourceName.isNotEmpty && targetName.isNotEmpty) {
-        return '$sourceName -> $targetName';
-      }
-      if (sourceName.isNotEmpty) {
-        return sourceName;
-      }
-      return targetName;
+      return transferAccountDisplayLabel(sourceAccount, targetAccount);
     }
 
-    return sourceAccount?.name ?? '';
+    return accountDisplayLabel(sourceAccount);
   }
 
   String _tagLabel(JiveTransaction transaction, Map<String, JiveTag> tagByKey) {
