@@ -254,6 +254,34 @@ void main() {
 
       expect(path.displayName, '餐饮 / 午餐');
     });
+
+    test('treats two-level paths as default and third-level as optional', () {
+      final categories = [
+        _category(key: 'transport', name: '出行'),
+        _category(key: 'car', name: '私家车', parentKey: 'transport'),
+        _category(key: 'fuel', name: '加油', parentKey: 'car'),
+      ];
+
+      final service = const CategoryPathService();
+      final defaultPaths = service.defaultInteractivePaths(
+        categories,
+        isIncome: false,
+      );
+      final optionalPaths = service.optionalExtendedPaths(
+        categories,
+        isIncome: false,
+      );
+
+      expect(
+        defaultPaths.map((path) => path.displayName),
+        containsAll(['出行', '出行 / 私家车']),
+      );
+      expect(
+        defaultPaths.map((path) => path.displayName),
+        isNot(contains('出行 / 私家车 / 加油')),
+      );
+      expect(optionalPaths.map((path) => path.displayName), ['出行 / 私家车 / 加油']);
+    });
   });
 
   group('QuickActionDeepLinkService', () {

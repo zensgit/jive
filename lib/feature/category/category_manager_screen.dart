@@ -716,6 +716,7 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
   }) async {
     final addAsSystem = !widget.onlyUserCategories;
     final initialCategories = widget.initialCategories;
+    final isNestedParent = parent.parentKey != null;
     final existingNames =
         (initialCategories ??
                 await _isar
@@ -726,13 +727,14 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
             .where((child) => child.parentKey == parent.key)
             .map((child) => child.name)
             .toSet();
-    final systemLibrary = _service.getSystemLibrary(
-      isIncome: parent.isIncome,
-      includeIncome: true,
-    );
+    final systemLibrary = isNestedParent
+        ? const <String, Map<String, dynamic>>{}
+        : _service.getSystemLibrary(
+            isIncome: parent.isIncome,
+            includeIncome: true,
+          );
     if (!mounted) return;
     final parentPath = _categoryFullPath(parent);
-    final isNestedParent = parent.parentKey != null;
     final result = await Navigator.push<CategoryCreateResult>(
       context,
       MaterialPageRoute(
@@ -741,13 +743,13 @@ class _CategoryManagerScreenState extends State<CategoryManagerScreen> {
           parentName: parentPath,
           initialIcon: parent.iconName,
           nameLabel: isNestedParent ? "下级分类名称" : "子类名称",
-          allowBatch: true,
+          allowBatch: !isNestedParent,
           initialText: initialText,
-          initialBatch: initialBatch,
+          initialBatch: !isNestedParent && initialBatch,
           systemLibrary: systemLibrary,
           existingNames: existingNames,
           initialGroupName: parent.name,
-          autoBatchAdd: true,
+          autoBatchAdd: !isNestedParent,
           onBatchAdd: (suggestion, colorHex, iconForceTinted) async {
             final created = await _service.createSubCategory(
               parent: parent,

@@ -23,7 +23,12 @@ class CategoryCreateScreen extends StatefulWidget {
   final Set<String> existingNames;
   final String? initialGroupName;
   final bool autoBatchAdd;
-  final Future<bool> Function(SystemCategorySuggestion suggestion, String? colorHex, bool iconForceTinted)? onBatchAdd;
+  final Future<bool> Function(
+    SystemCategorySuggestion suggestion,
+    String? colorHex,
+    bool iconForceTinted,
+  )?
+  onBatchAdd;
 
   const CategoryCreateScreen({
     super.key,
@@ -119,20 +124,27 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
 
       for (final entry in library.entries) {
         final groupName = _canonicalGroupName(entry.key);
-        final icon = _normalizeSystemIcon(entry.value['icon'] as String?, groupName);
+        final icon = _normalizeSystemIcon(
+          entry.value['icon'] as String?,
+          groupName,
+        );
         final parentSuggestion = SystemCategorySuggestion(
           name: groupName,
           iconName: icon,
           isParent: true,
         );
         itemByName[groupName] = parentSuggestion;
-        final childrenRaw = entry.value['children'] as List<dynamic>? ?? const [];
+        final childrenRaw =
+            entry.value['children'] as List<dynamic>? ?? const [];
         final seenChildren = <String>{};
         final children = <SystemCategorySuggestion>[];
         for (final child in childrenRaw) {
           final name = (child['name'] as String? ?? "").trim();
           if (name.isEmpty || !seenChildren.add(name)) continue;
-          final childIcon = _normalizeSystemIcon(child['icon'] as String?, name);
+          final childIcon = _normalizeSystemIcon(
+            child['icon'] as String?,
+            name,
+          );
           final suggestion = SystemCategorySuggestion(
             name: name,
             iconName: childIcon,
@@ -143,22 +155,26 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
           allChildren.putIfAbsent(name, () => suggestion);
         }
 
-        children.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+        children.sort(
+          (a, b) => CategoryService.compareCategoryName(a.name, b.name),
+        );
         groups.add(
-          _SystemGroup(
-            name: groupName,
-            iconName: icon,
-            children: children,
-          ),
+          _SystemGroup(name: groupName, iconName: icon, children: children),
         );
       }
 
-      groups.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+      groups.sort(
+        (a, b) => CategoryService.compareCategoryName(a.name, b.name),
+      );
       final sortedGroups = <_SystemGroup>[];
       if (allChildren.isNotEmpty) {
         final allList = allChildren.values.toList();
-        allList.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
-        sortedGroups.add(_SystemGroup(name: "全部", iconName: "category", children: allList));
+        allList.sort(
+          (a, b) => CategoryService.compareCategoryName(a.name, b.name),
+        );
+        sortedGroups.add(
+          _SystemGroup(name: "全部", iconName: "category", children: allList),
+        );
       }
       sortedGroups.addAll(groups);
       _systemGroups = sortedGroups;
@@ -173,7 +189,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     final itemByName = <String, SystemCategorySuggestion>{};
     final allSuggestions = <String, SystemCategorySuggestion>{};
     final globalChildNames = <String>{};
-    void upsertSuggestion(Map<String, SystemCategorySuggestion> map, SystemCategorySuggestion suggestion) {
+    void upsertSuggestion(
+      Map<String, SystemCategorySuggestion> map,
+      SystemCategorySuggestion suggestion,
+    ) {
       final name = suggestion.name.trim();
       if (name.isEmpty) return;
       final existing = map[name];
@@ -182,10 +201,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         return;
       }
       final isParent = existing.isParent || suggestion.isParent;
-      final iconName = (existing.iconName == "category" && suggestion.iconName != "category")
+      final iconName =
+          (existing.iconName == "category" && suggestion.iconName != "category")
           ? suggestion.iconName
           : existing.iconName;
-      final parentName = isParent ? null : (existing.parentName ?? suggestion.parentName);
+      final parentName = isParent
+          ? null
+          : (existing.parentName ?? suggestion.parentName);
       map[name] = SystemCategorySuggestion(
         name: name,
         iconName: iconName,
@@ -207,7 +229,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     for (final entry in library.entries) {
       final rawGroupName = entry.key;
       final groupName = _canonicalGroupName(rawGroupName);
-      final icon = _normalizeSystemIcon(entry.value['icon'] as String?, groupName);
+      final icon = _normalizeSystemIcon(
+        entry.value['icon'] as String?,
+        groupName,
+      );
       final parentSuggestion = SystemCategorySuggestion(
         name: groupName,
         iconName: icon,
@@ -216,11 +241,18 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       upsertSuggestion(allSuggestions, parentSuggestion);
 
       final childrenRaw = entry.value['children'] as List<dynamic>? ?? const [];
-      final children = groupChildren.putIfAbsent(groupName, () => <SystemCategorySuggestion>[]);
-      final seenNames = groupChildNames.putIfAbsent(groupName, () => <String>{});
+      final children = groupChildren.putIfAbsent(
+        groupName,
+        () => <SystemCategorySuggestion>[],
+      );
+      final seenNames = groupChildNames.putIfAbsent(
+        groupName,
+        () => <String>{},
+      );
 
       final existingIcon = groupIcons[groupName];
-      if (existingIcon == null || (existingIcon == "category" && icon != "category")) {
+      if (existingIcon == null ||
+          (existingIcon == "category" && icon != "category")) {
         groupIcons[groupName] = icon;
       }
 
@@ -249,7 +281,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         }
         continue;
       }
-      children.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
+      children.sort(
+        (a, b) => CategoryService.compareCategoryName(a.name, b.name),
+      );
       groups.add(
         _SystemGroup(
           name: groupName,
@@ -262,8 +296,12 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     final sortedGroups = <_SystemGroup>[];
     if (allSuggestions.isNotEmpty) {
       final allList = allSuggestions.values.toList();
-      allList.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
-      sortedGroups.add(_SystemGroup(name: "全部", iconName: "category", children: allList));
+      allList.sort(
+        (a, b) => CategoryService.compareCategoryName(a.name, b.name),
+      );
+      sortedGroups.add(
+        _SystemGroup(name: "全部", iconName: "category", children: allList),
+      );
     }
 
     groups.sort((a, b) => CategoryService.compareCategoryName(a.name, b.name));
@@ -319,16 +357,19 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         final canonical = _canonicalGroupName(token);
         final match = groups.firstWhere(
           (group) => group.name == canonical && group.children.isNotEmpty,
-          orElse: () => const _SystemGroup(name: "", iconName: "", children: []),
+          orElse: () =>
+              const _SystemGroup(name: "", iconName: "", children: []),
         );
         if (match.name.isNotEmpty) return match.name;
       }
       for (final token in tokens) {
         final canonical = _canonicalGroupName(token);
         final childMatch = groups.firstWhere(
-          (group) =>
-              group.children.any((child) => child.name == token || child.name == canonical),
-          orElse: () => const _SystemGroup(name: "", iconName: "", children: []),
+          (group) => group.children.any(
+            (child) => child.name == token || child.name == canonical,
+          ),
+          orElse: () =>
+              const _SystemGroup(name: "", iconName: "", children: []),
         );
         if (childMatch.name.isNotEmpty) return childMatch.name;
       }
@@ -340,7 +381,8 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               token.contains(group.name) ||
               group.name.contains(canonical) ||
               canonical.contains(group.name),
-          orElse: () => const _SystemGroup(name: "", iconName: "", children: []),
+          orElse: () =>
+              const _SystemGroup(name: "", iconName: "", children: []),
         );
         if (fuzzyMatch.name.isNotEmpty) return fuzzyMatch.name;
       }
@@ -354,21 +396,28 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return value;
   }
 
-	@override
-	Widget build(BuildContext context) {
-	  final canSave = _parseNames().isNotEmpty || _selectedSystemNames.isNotEmpty;
-	  final hasSystemLibrary = _systemGroups.isNotEmpty;
-	  final showBottomBar = _isBatch && !widget.autoBatchAdd && _selectedSystemNames.isNotEmpty;
-	  return PopScope<Object?>(
-	    canPop: false,
-	    onPopInvokedWithResult: (didPop, result) {
-	      if (didPop) return;
-	      _exitWithChanges();
-	    },
-	    child: Scaffold(
-	      backgroundColor: Colors.white,
-	      appBar: AppBar(
-	        title: Text(widget.title, style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold)),
+  @override
+  Widget build(BuildContext context) {
+    final canSave = _parseNames().isNotEmpty || _selectedSystemNames.isNotEmpty;
+    final hasSystemLibrary = _systemGroups.isNotEmpty;
+    final showBottomBar =
+        _isBatch && !widget.autoBatchAdd && _selectedSystemNames.isNotEmpty;
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _exitWithChanges();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          title: Text(
+            widget.title,
+            style: const TextStyle(
+              color: Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           backgroundColor: Colors.white,
           elevation: 0,
           iconTheme: const IconThemeData(color: Colors.black87),
@@ -420,6 +469,7 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     final showSystemBatch = _isBatch && _systemGroups.isNotEmpty;
     final duplicateHint = showSystemBatch ? null : _duplicateNameHint();
     final isParentCreate = _isParentCreateMode();
+    final childLevelLabel = _childLevelLabel();
     if (isParentCreate) {
       final typeName = _effectiveTypeName();
       return Container(
@@ -427,14 +477,23 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Text("分类信息", style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  "分类信息",
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 const Spacer(),
               ],
             ),
@@ -449,7 +508,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                   const Spacer(),
                   Text(
                     typeName,
-                    style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
                   ),
                 ],
               ),
@@ -482,8 +544,12 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                         labelText: widget.nameLabel ?? "一级分类名称",
                         border: const OutlineInputBorder(),
                       ),
-                      keyboardType: _isBatch ? TextInputType.multiline : TextInputType.text,
-                      textInputAction: _isBatch ? TextInputAction.newline : TextInputAction.done,
+                      keyboardType: _isBatch
+                          ? TextInputType.multiline
+                          : TextInputType.text,
+                      textInputAction: _isBatch
+                          ? TextInputAction.newline
+                          : TextInputAction.done,
                       maxLines: _isBatch ? 4 : 1,
                       onChanged: (_) {
                         setState(() {
@@ -496,7 +562,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 ] else
                   Expanded(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(12),
@@ -505,13 +574,18 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                         children: [
                           Text(
                             "已选择 ${_selectedSystemNames.length} 个系统分类",
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                            ),
                           ),
                           const Spacer(),
                           TextButton(
                             onPressed: _selectedSystemNames.isEmpty
                                 ? null
-                                : () => setState(() => _selectedSystemNames.clear()),
+                                : () => setState(
+                                    () => _selectedSystemNames.clear(),
+                                  ),
                             child: const Text("清空"),
                           ),
                         ],
@@ -554,7 +628,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
             if (!showSystemBatch && !isParentCreate)
               SwitchListTile(
                 dense: true,
-                visualDensity: const VisualDensity(horizontal: -2, vertical: -4),
+                visualDensity: const VisualDensity(
+                  horizontal: -2,
+                  vertical: -4,
+                ),
                 contentPadding: EdgeInsets.zero,
                 value: _autoMatchIcon,
                 onChanged: (value) => setState(() => _autoMatchIcon = value),
@@ -574,18 +651,30 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Text("一级分类", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const Text(
+                "一级分类",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
               const Spacer(),
               Text(
                 widget.parentName ?? "",
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey.shade800),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade800,
+                ),
               ),
             ],
           ),
@@ -593,7 +682,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
           if (showSystemBatch)
             Row(
               children: [
-                const Text("二级分类", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(
+                  childLevelLabel,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
                 const Spacer(),
                 if (widget.autoBatchAdd)
                   Text(
@@ -618,7 +710,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
           else
             Row(
               children: [
-                const Text("二级分类", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(
+                  childLevelLabel,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextField(
@@ -695,7 +790,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -719,7 +820,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                       ),
                 filled: true,
                 fillColor: Colors.grey.shade100,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -727,7 +831,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Text("未找到相关图标", style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+            Text(
+              "未找到相关图标",
+              style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            ),
           ],
         ),
       );
@@ -738,7 +845,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -772,7 +885,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                     ),
               filled: true,
               fillColor: Colors.grey.shade100,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -800,7 +916,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                 ),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: isSelected ? highlightColor.withValues(alpha: 0.15) : Colors.grey.shade100,
+                    color: isSelected
+                        ? highlightColor.withValues(alpha: 0.15)
+                        : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isSelected ? highlightColor : Colors.transparent,
@@ -809,7 +927,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                   child: CategoryService.buildIcon(
                     entry.name,
                     size: 20,
-                    color: isSelected ? highlightColor : JiveTheme.categoryIconInactive,
+                    color: isSelected
+                        ? highlightColor
+                        : JiveTheme.categoryIconInactive,
                     isSystemCategory: false,
                     forceTinted: _iconForceTinted,
                   ),
@@ -827,7 +947,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     final highlightColor = _resolveSelectedColor() ?? JiveTheme.primaryGreen;
     final query = _normalizeSearch(_systemQuery);
     final isSearching = query.isNotEmpty;
-    final items = isSearching ? _searchSystemItems(query) : _currentGroupItems();
+    final items = isSearching
+        ? _searchSystemItems(query)
+        : _currentGroupItems();
     final listHeight = _systemListHeight(context);
 
     return Container(
@@ -835,7 +957,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -843,25 +971,35 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final labelStyle = const TextStyle(fontWeight: FontWeight.bold);
-              final countStyle = TextStyle(fontSize: 11, color: Colors.grey.shade500);
+              final countStyle = TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade500,
+              );
               final labelWidth = _measureTextWidth("分类图标", labelStyle);
               final countText = _isBatch && !widget.autoBatchAdd
                   ? "已选 ${_selectedSystemNames.length}"
                   : "";
-              final countWidth = countText.isEmpty ? 0.0 : _measureTextWidth(countText, countStyle);
+              final countWidth = countText.isEmpty
+                  ? 0.0
+                  : _measureTextWidth(countText, countStyle);
               const columnsButtonWidth = 32.0;
               const columnsButtonGap = 8.0;
               const emojiButtonWidth = 32.0;
               const emojiButtonGap = 8.0;
-              final reserved = labelWidth +
+              final reserved =
+                  labelWidth +
                   (countText.isEmpty ? 0.0 : (8 + countWidth)) +
                   columnsButtonWidth +
                   columnsButtonGap +
                   emojiButtonWidth +
                   emojiButtonGap +
                   12;
-              final maxSearchWidth = (constraints.maxWidth - reserved).clamp(120.0, constraints.maxWidth);
-              final maxCompactWidth = maxSearchWidth < constraints.maxWidth * 0.65
+              final maxSearchWidth = (constraints.maxWidth - reserved).clamp(
+                120.0,
+                constraints.maxWidth,
+              );
+              final maxCompactWidth =
+                  maxSearchWidth < constraints.maxWidth * 0.65
                   ? maxSearchWidth
                   : constraints.maxWidth * 0.65;
               final searchWidth = _computeSearchFieldWidth(maxCompactWidth);
@@ -872,7 +1010,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                     const SizedBox(width: 8),
                     Text(
                       "已选 ${_selectedSystemNames.length}",
-                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade500,
+                      ),
                     ),
                   ],
                   const Spacer(),
@@ -899,17 +1040,23 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               builder: (context, constraints) {
                 const gap = 8.0;
                 var leftWidth = 46.0;
-                var availableWidth = (constraints.maxWidth - leftWidth - gap).clamp(0.0, double.infinity);
+                var availableWidth = (constraints.maxWidth - leftWidth - gap)
+                    .clamp(0.0, double.infinity);
                 var columns = _columnsForWidth(availableWidth);
                 leftWidth = _leftWidthForColumns(columns);
-                availableWidth = (constraints.maxWidth - leftWidth - gap).clamp(0.0, double.infinity);
+                availableWidth = (constraints.maxWidth - leftWidth - gap).clamp(
+                  0.0,
+                  double.infinity,
+                );
                 columns = _columnsForWidth(availableWidth);
                 leftWidth = _leftWidthForColumns(columns);
                 final leftFontSize = _leftFontSizeForColumns(columns);
                 final leftRowMargin = _leftRowMarginForColumns(columns);
                 final leftRowPadding = _leftRowPaddingForColumns(columns);
                 final leftLineHeight = _leftLineHeightForColumns(columns);
-                final leftIndicatorWidth = _leftIndicatorWidthForColumns(columns);
+                final leftIndicatorWidth = _leftIndicatorWidthForColumns(
+                  columns,
+                );
                 final iconSize = _systemIconSizeForColumns(columns);
                 final iconBox = _systemIconBoxForColumns(columns);
                 final labelSize = _systemLabelSizeForColumns(columns);
@@ -935,7 +1082,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                           itemCount: _systemGroups.length,
                           itemBuilder: (context, index) {
                             final group = _systemGroups[index];
-                            final isSelected = !isSearching && group.name == _selectedGroupName;
+                            final isSelected =
+                                !isSearching &&
+                                group.name == _selectedGroupName;
                             return InkWell(
                               onTap: () {
                                 if (isSearching) return;
@@ -947,14 +1096,25 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                               borderRadius: BorderRadius.circular(12),
                               child: Container(
                                 width: double.infinity,
-                                margin: EdgeInsets.symmetric(vertical: leftRowMargin),
-                                padding: EdgeInsets.symmetric(vertical: leftRowPadding, horizontal: 0),
+                                margin: EdgeInsets.symmetric(
+                                  vertical: leftRowMargin,
+                                ),
+                                padding: EdgeInsets.symmetric(
+                                  vertical: leftRowPadding,
+                                  horizontal: 0,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: isSelected ? JiveTheme.primaryGreen.withValues(alpha: 0.04) : Colors.transparent,
+                                  color: isSelected
+                                      ? JiveTheme.primaryGreen.withValues(
+                                          alpha: 0.04,
+                                        )
+                                      : Colors.transparent,
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border(
                                     left: BorderSide(
-                                      color: isSelected ? JiveTheme.primaryGreen : Colors.transparent,
+                                      color: isSelected
+                                          ? JiveTheme.primaryGreen
+                                          : Colors.transparent,
                                       width: leftIndicatorWidth,
                                     ),
                                   ),
@@ -966,7 +1126,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                     style: TextStyle(
                                       fontSize: leftFontSize,
                                       height: leftLineHeight,
-                                      color: isSelected ? JiveTheme.primaryGreen : Colors.grey.shade600,
+                                      color: isSelected
+                                          ? JiveTheme.primaryGreen
+                                          : Colors.grey.shade600,
                                       fontWeight: FontWeight.w700,
                                     ),
                                     textAlign: TextAlign.left,
@@ -989,7 +1151,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                 padding: const EdgeInsets.only(top: 16),
                                 child: Text(
                                   isSearching ? "未找到相关分类" : "暂无可用分类",
-                                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade500,
+                                  ),
                                 ),
                               ),
                             )
@@ -1003,39 +1168,57 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                 cacheExtent: tileHeight * 8,
                                 addAutomaticKeepAlives: false,
                                 addRepaintBoundaries: true,
-                                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columns,
-                                  crossAxisSpacing: gridSpacing,
-                                  mainAxisSpacing: gridSpacing,
-                                  mainAxisExtent: tileHeight,
-                                ),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: columns,
+                                      crossAxisSpacing: gridSpacing,
+                                      mainAxisSpacing: gridSpacing,
+                                      mainAxisExtent: tileHeight,
+                                    ),
                                 itemCount: items.length,
                                 itemBuilder: (context, index) {
                                   final entry = items[index];
-                                  final isExisting = _existingNames.contains(entry.name);
+                                  final isExisting = _existingNames.contains(
+                                    entry.name,
+                                  );
                                   final isParentCreate = _isParentCreateMode();
                                   final isDisabled = _isBatch && isExisting;
                                   final isSelected = _isBatch
-                                      ? _selectedSystemNames.contains(entry.name)
+                                      ? _selectedSystemNames.contains(
+                                          entry.name,
+                                        )
                                       : (isParentCreate
-                                          ? entry.iconName == _selectedIcon
-                                          : entry.name == _nameController.text.trim() &&
-                                              entry.iconName == _selectedIcon);
+                                            ? entry.iconName == _selectedIcon
+                                            : entry.name ==
+                                                      _nameController.text
+                                                          .trim() &&
+                                                  entry.iconName ==
+                                                      _selectedIcon);
                                   final canTap = !isDisabled;
                                   return RepaintBoundary(
                                     child: InkWell(
                                       borderRadius: BorderRadius.circular(12),
-                                      onTap: canTap ? () => _applySuggestion(entry) : null,
+                                      onTap: canTap
+                                          ? () => _applySuggestion(entry)
+                                          : null,
                                       child: Container(
-                                        padding: EdgeInsets.symmetric(vertical: tilePadding, horizontal: tilePadding),
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: tilePadding,
+                                          horizontal: tilePadding,
+                                        ),
                                         child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Container(
                                               width: iconBox,
                                               height: iconBox,
                                               decoration: BoxDecoration(
-                                                color: isSelected ? highlightColor.withValues(alpha: 0.15) : Colors.transparent,
+                                                color: isSelected
+                                                    ? highlightColor.withValues(
+                                                        alpha: 0.15,
+                                                      )
+                                                    : Colors.transparent,
                                                 shape: BoxShape.circle,
                                               ),
                                               child: Center(
@@ -1045,8 +1228,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                                   color: isDisabled
                                                       ? Colors.grey.shade400
                                                       : (isSelected
-                                                          ? highlightColor
-                                                          : JiveTheme.categoryIconInactive),
+                                                            ? highlightColor
+                                                            : JiveTheme
+                                                                  .categoryIconInactive),
                                                   isSystemCategory: true,
                                                   forceTinted: _iconForceTinted,
                                                 ),
@@ -1060,17 +1244,25 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                                                 height: labelHeight,
                                                 color: isDisabled
                                                     ? Colors.grey.shade400
-                                                    : JiveTheme.categoryLabelInactive,
+                                                    : JiveTheme
+                                                          .categoryLabelInactive,
                                               ),
                                               overflow: TextOverflow.ellipsis,
                                               textAlign: TextAlign.center,
                                               maxLines: 1,
                                             ),
-                                            if (_isBatch && !widget.autoBatchAdd && !isDisabled)
+                                            if (_isBatch &&
+                                                !widget.autoBatchAdd &&
+                                                !isDisabled)
                                               Icon(
-                                                isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                                                isSelected
+                                                    ? Icons.check_circle
+                                                    : Icons
+                                                          .radio_button_unchecked,
                                                 size: indicatorSize,
-                                                color: isSelected ? highlightColor : Colors.grey.shade400,
+                                                color: isSelected
+                                                    ? highlightColor
+                                                    : Colors.grey.shade400,
                                               ),
                                           ],
                                         ),
@@ -1098,7 +1290,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     const suffixWidth = 32.0;
     final text = _systemQuery.isEmpty ? "搜索" : _systemQuery;
     final textWidth = _measureTextWidth(text, textStyle);
-    final minWidth = _measureTextWidth("搜索", textStyle) + prefixWidth + horizontalPadding + suffixWidth;
+    final minWidth =
+        _measureTextWidth("搜索", textStyle) +
+        prefixWidth +
+        horizontalPadding +
+        suffixWidth;
     final extra = suffixWidth;
     final desired = textWidth + prefixWidth + horizontalPadding + extra + 12;
     final safeMaxWidth = maxWidth < minWidth ? minWidth : maxWidth;
@@ -1119,14 +1315,23 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         decoration: InputDecoration(
           hintText: "搜索",
           prefixIcon: const Icon(Icons.search, size: 18),
-          prefixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          suffixIconConstraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 32,
+            minHeight: 32,
+          ),
+          suffixIconConstraints: const BoxConstraints(
+            minWidth: 32,
+            minHeight: 32,
+          ),
           suffixIcon: _systemQuery.isEmpty
               ? const SizedBox(width: 32, height: 32)
               : IconButton(
                   icon: const Icon(Icons.close, size: 18),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 32,
+                    height: 32,
+                  ),
                   onPressed: () {
                     _systemSearchController.clear();
                   },
@@ -1134,7 +1339,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
           filled: true,
           isDense: true,
           fillColor: Colors.grey.shade100,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 8,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
             borderSide: BorderSide.none,
@@ -1164,22 +1372,26 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
       elevation: 6,
       offset: const Offset(0, 8),
       constraints: const BoxConstraints(minWidth: 120),
-	      itemBuilder: (context) {
-	        return [
-	          for (final columns in const [3, 4, 5, 6])
-	            PopupMenuItem(
-	              value: columns,
-	              height: 32,
-	              child: Row(
-	                children: [
-	                  Icon(Icons.grid_view_rounded, size: 16, color: Colors.grey.shade600),
-	                  const SizedBox(width: 6),
-	                  Text('$columns列', style: const TextStyle(fontSize: 12)),
-	                  const Spacer(),
-	                  if (_systemGridColumns == columns)
-	                    Icon(Icons.check, size: 16, color: JiveTheme.primaryGreen),
-	                ],
-	              ),
+      itemBuilder: (context) {
+        return [
+          for (final columns in const [3, 4, 5, 6])
+            PopupMenuItem(
+              value: columns,
+              height: 32,
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.grid_view_rounded,
+                    size: 16,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Text('$columns列', style: const TextStyle(fontSize: 12)),
+                  const Spacer(),
+                  if (_systemGridColumns == columns)
+                    Icon(Icons.check, size: 16, color: JiveTheme.primaryGreen),
+                ],
+              ),
             ),
         ];
       },
@@ -1189,7 +1401,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
           color: Colors.grey.shade100,
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(Icons.grid_view_rounded, size: 18, color: Colors.grey.shade600),
+        child: Icon(
+          Icons.grid_view_rounded,
+          size: 18,
+          color: Colors.grey.shade600,
+        ),
       ),
     );
   }
@@ -1206,7 +1422,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
             color: Colors.grey.shade100,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Icon(Icons.emoji_emotions_outlined, size: 18, color: Colors.grey.shade600),
+          child: Icon(
+            Icons.emoji_emotions_outlined,
+            size: 18,
+            color: Colors.grey.shade600,
+          ),
         ),
       ),
     );
@@ -1227,7 +1447,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     for (final group in _systemGroups) {
       for (final child in group.children) {
         if (!seen.add(child.name)) continue;
-        final key = _systemSearchCache[child.name] ??= _buildSystemSearchKey(child);
+        final key = _systemSearchCache[child.name] ??= _buildSystemSearchKey(
+          child,
+        );
         if (key.contains(query)) {
           results.add(child);
         }
@@ -1254,26 +1476,32 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     }
     setState(() => _selectedIcon = suggestion.iconName);
     _nameController.text = suggestion.name;
-    _nameController.selection = TextSelection.collapsed(offset: _nameController.text.length);
+    _nameController.selection = TextSelection.collapsed(
+      offset: _nameController.text.length,
+    );
   }
 
   Future<void> _applyBatchAdd(SystemCategorySuggestion suggestion) async {
     final handler = widget.onBatchAdd;
     if (handler == null) return;
-    final added = await handler(suggestion, _selectedColorHex, _iconForceTinted);
+    final added = await handler(
+      suggestion,
+      _selectedColorHex,
+      _iconForceTinted,
+    );
     if (!mounted) return;
     ScaffoldMessenger.maybeOf(context)?.hideCurrentSnackBar();
     if (added) {
       _hasAutoChanges = true;
       setState(() => _existingNames.add(suggestion.name));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("已添加: ${suggestion.name}")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("已添加: ${suggestion.name}")));
     } else {
       setState(() => _existingNames.add(suggestion.name));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("已存在: ${suggestion.name}")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("已存在: ${suggestion.name}")));
     }
   }
 
@@ -1294,6 +1522,12 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         parentName == "收入";
   }
 
+  String _childLevelLabel() {
+    final label = widget.nameLabel?.trim();
+    if (label == null || label.isEmpty) return "二级分类";
+    return label.replaceFirst(RegExp(r"名称$"), "");
+  }
+
   String? _effectiveTypeName() {
     if (widget.typeName != null) return widget.typeName;
     final parentName = widget.parentName?.trim();
@@ -1308,13 +1542,23 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
         decoration: BoxDecoration(
           color: Colors.white,
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, -4))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, -4),
+            ),
+          ],
         ),
         child: Row(
           children: [
             Text(
               "已选 ${_selectedSystemNames.length} 个",
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade700, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const Spacer(),
             ElevatedButton(
@@ -1322,8 +1566,13 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: JiveTheme.primaryGreen,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(22),
+                ),
               ),
               child: const Text("一键添加"),
             ),
@@ -1353,9 +1602,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     final selections = _selectedSystemNames.isEmpty
         ? const <SystemCategorySuggestion>[]
         : _selectedSystemNames
-            .map((name) => _systemItemByName[name])
-            .whereType<SystemCategorySuggestion>()
-            .toList();
+              .map((name) => _systemItemByName[name])
+              .whereType<SystemCategorySuggestion>()
+              .toList();
     if (selections.isNotEmpty) {
       Navigator.pop(
         context,
@@ -1407,7 +1656,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     if (raw.isEmpty) return null;
     if (_isBatch) {
       final names = _parseNames();
-      final duplicates = names.where((name) => _existingNames.contains(name)).toList();
+      final duplicates = names
+          .where((name) => _existingNames.contains(name))
+          .toList();
       if (duplicates.isEmpty) return null;
       final preview = duplicates.take(3).join("、");
       final suffix = duplicates.length > 3 ? "等" : "";
@@ -1461,7 +1712,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     final current = _nameController.text.trim();
     if (current.isNotEmpty && current != _lastAutoFilledName) return;
     _nameController.text = trimmed;
-    _nameController.selection = TextSelection.collapsed(offset: _nameController.text.length);
+    _nameController.selection = TextSelection.collapsed(
+      offset: _nameController.text.length,
+    );
     _lastAutoFilledName = trimmed;
   }
 
@@ -1512,7 +1765,11 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   }
 
   List<String> _expandGroupTokens(String raw) {
-    final tokens = raw.split(RegExp(r'[\\/、\\s]+')).map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    final tokens = raw
+        .split(RegExp(r'[\\/、\\s]+'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (tokens.isEmpty) return [raw];
     return tokens;
   }
@@ -1617,17 +1874,21 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
 
   double _systemListHeight(BuildContext context) {
     final media = MediaQuery.of(context);
-    final safeHeight = media.size.height - media.padding.top - media.padding.bottom - media.viewInsets.bottom;
+    final safeHeight =
+        media.size.height -
+        media.padding.top -
+        media.padding.bottom -
+        media.viewInsets.bottom;
     final target = safeHeight * 0.62;
     return target.clamp(240.0, 640.0);
   }
 
-	double _systemTileHeight(BuildContext context, int columns) {
-	  final scale = MediaQuery.textScalerOf(context).scale(14.0) / 14.0;
-	  double base;
-	  if (columns <= 3) {
-	    base = 80;
-	  } else if (columns == 4) {
+  double _systemTileHeight(BuildContext context, int columns) {
+    final scale = MediaQuery.textScalerOf(context).scale(14.0) / 14.0;
+    double base;
+    if (columns <= 3) {
+      base = 80;
+    } else if (columns == 4) {
       base = 72;
     } else if (columns == 5) {
       base = 64;
@@ -1643,10 +1904,10 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     return CategoryService.parseColorHex(_selectedColorHex);
   }
 
-	String _colorHexFromColor(Color color) {
-	  final value = color.toARGB32().toRadixString(16).padLeft(8, '0');
-	  return "#${value.substring(2).toUpperCase()}";
-	}
+  String _colorHexFromColor(Color color) {
+    final value = color.toARGB32().toRadixString(16).padLeft(8, '0');
+    return "#${value.substring(2).toUpperCase()}";
+  }
 
   Widget _buildColorPicker() {
     return Row(
@@ -1725,8 +1986,12 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
     required bool forceTinted,
     required Color color,
   }) {
-    final borderColor = active ? JiveTheme.primaryGreen.withValues(alpha: 0.45) : Colors.grey.shade300;
-    final backgroundColor = active ? JiveTheme.primaryGreen.withValues(alpha: 0.08) : Colors.white;
+    final borderColor = active
+        ? JiveTheme.primaryGreen.withValues(alpha: 0.45)
+        : Colors.grey.shade300;
+    final backgroundColor = active
+        ? JiveTheme.primaryGreen.withValues(alpha: 0.08)
+        : Colors.white;
     return Semantics(
       container: true,
       label: title,
@@ -1769,7 +2034,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
-                      color: active ? JiveTheme.primaryGreen : Colors.grey.shade700,
+                      color: active
+                          ? JiveTheme.primaryGreen
+                          : Colors.grey.shade700,
                     ),
                   ),
                   Text(
@@ -1790,7 +2057,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
   Widget _buildColorDot(Color? color) {
     final hex = color == null ? null : _colorHexFromColor(color);
     final isSelected = _selectedColorHex == hex;
-    final borderColor = isSelected ? (color ?? Colors.grey.shade600) : Colors.grey.shade300;
+    final borderColor = isSelected
+        ? (color ?? Colors.grey.shade600)
+        : Colors.grey.shade300;
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () => setState(() => _selectedColorHex = hex),
@@ -1804,7 +2073,9 @@ class _CategoryCreateScreenState extends State<CategoryCreateScreen> {
         ),
         child: color == null
             ? Icon(Icons.close, size: 12, color: Colors.grey.shade500)
-            : (isSelected ? const Icon(Icons.check, size: 12, color: Colors.white) : null),
+            : (isSelected
+                  ? const Icon(Icons.check, size: 12, color: Colors.white)
+                  : null),
       ),
     );
   }
