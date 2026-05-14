@@ -26,6 +26,8 @@ class AccountGroupSummary {
 class AccountGroupService {
   const AccountGroupService();
 
+  static const _legacyBroadGroupNames = {'信用账户'};
+
   List<AccountGroupSummary> groupAccounts(Iterable<JiveAccount> accounts) {
     final buckets = <String, List<JiveAccount>>{};
     for (final account in accounts.where((a) => !a.isArchived)) {
@@ -58,7 +60,7 @@ class AccountGroupService {
     if (groupName == null ||
         groupName.isEmpty ||
         groupName == account.name ||
-        accountGroupOrder.contains(groupName)) {
+        _isBroadGroupName(groupName)) {
       return account.name;
     }
     final subtype = account.subType?.trim();
@@ -73,9 +75,14 @@ class AccountGroupService {
     if (groupName == null ||
         groupName.isEmpty ||
         groupName == account.name ||
-        accountGroupOrder.contains(groupName)) {
+        _isBroadGroupName(groupName)) {
       return account.name;
     }
     return groupName;
+  }
+
+  static bool _isBroadGroupName(String groupName) {
+    return accountGroupOrder.contains(groupName) ||
+        _legacyBroadGroupNames.contains(groupName);
   }
 }
