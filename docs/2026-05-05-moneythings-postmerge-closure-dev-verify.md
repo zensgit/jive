@@ -86,12 +86,18 @@ Use `docs/moneythings-entry-system-user-guide.md` for product verification of:
 - Scenes and SmartList.
 - Sharing visibility.
 
+## Status Calibration
+
+2026-05-13 update:
+
+- iOS App Intent / Shortcuts native bridge is no longer deferred; it is recorded as completed in `docs/2026-04-26-moneythings-full-todo-dev-verify.md`.
+- iOS system share extension is no longer deferred; it is recorded as completed in `docs/2026-04-26-moneythings-full-todo-dev-verify.md`.
+- The explicit deferred track below now only lists work that still requires migration, new persistence, object-level authorization, E2EE, or SaaS behavior changes.
+
 ## Deferred Track
 
 Future work should start from one of these explicit post-Beta tracks:
 
-- iOS App Intent / Shortcut native bridge.
-- iOS system share extension.
 - Dedicated `JiveQuickAction` collection.
 - True parent-child account migration.
 - Full object-level sharing permissions.
