@@ -380,6 +380,21 @@ void main() {
       expect(groups.map((g) => g.name), ['现金', '微信钱包']);
       expect(groups.every((g) => g.isSingleAccount), isTrue);
     });
+
+    test('keeps custom account groups inside broad asset sections', () {
+      final account = _account(
+        id: 1,
+        name: '活期',
+        subType: 'bank',
+        groupName: '中国银行',
+      );
+
+      expect(const AccountGroupService().sectionNameFor(account), '资金账户');
+      expect(
+        const AccountGroupService().displayPath(account),
+        '中国银行 / 活期 / bank CNY',
+      );
+    });
   });
 
   group('SceneCandidateService', () {
@@ -515,6 +530,7 @@ JiveCategory _category({
 JiveAccount _account({
   required int id,
   required String name,
+  String? subType,
   String? groupName,
   String currency = 'CNY',
   int? bookId,
@@ -525,6 +541,7 @@ JiveAccount _account({
     ..key = 'account_$id'
     ..name = name
     ..type = 'asset'
+    ..subType = subType
     ..groupName = groupName
     ..currency = currency
     ..iconName = 'wallet'
