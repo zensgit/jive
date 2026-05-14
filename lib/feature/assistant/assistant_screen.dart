@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 
 import '../../core/database/account_model.dart';
+import '../../core/service/account_speech_alias_service.dart';
 import '../../core/service/ai_assistant_service.dart';
 import '../../core/service/smart_input_service.dart';
 import '../../core/service/speech_intent_parser.dart';
@@ -23,6 +24,8 @@ class AssistantScreen extends StatefulWidget {
 }
 
 class _AssistantScreenState extends State<AssistantScreen> {
+  final AccountSpeechAliasService _accountSpeechAliases =
+      const AccountSpeechAliasService();
   bool _isBusy = false;
 
   Future<void> _runAutoCategorize() async {
@@ -186,7 +189,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
     if (!mounted) return;
     final intent = SpeechIntentParser().parse(
       text,
-      accountNames: accounts.map((account) => account.name).toList(),
+      accountNames: _accountSpeechAliases.parserAccountNames(accounts),
     );
     if (intent == null || !intent.isValid) {
       _showMessage("剪贴板内容缺少可确认的金额");

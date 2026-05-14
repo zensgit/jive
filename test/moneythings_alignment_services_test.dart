@@ -219,6 +219,33 @@ void main() {
         isNot(contains(TransactionHighlightField.category)),
       );
     });
+
+    test(
+      'resolves compact account group path hints to concrete subaccounts',
+      () {
+        final intent = SpeechIntent(
+          rawText: '从中国银行活期转到中国银行定期 500 元',
+          cleanedText: '从中国银行活期转到中国银行定期',
+          amount: 500,
+          timestamp: DateTime(2026, 4, 26, 12),
+          type: 'transfer',
+          accountHint: '中国银行活期',
+          toAccountHint: '中国银行定期',
+        );
+
+        final params = const SpeechEntryParamsBuilder().build(
+          intent,
+          accounts: [
+            _account(id: 1, name: '活期', groupName: '中国银行', currency: 'CNY'),
+            _account(id: 2, name: '定期', groupName: '中国银行', currency: 'USD'),
+          ],
+        );
+
+        expect(params.prefillAccountId, 1);
+        expect(params.prefillToAccountId, 2);
+        expect(params.highlightFields, isEmpty);
+      },
+    );
   });
 
   group('CategoryPathService', () {

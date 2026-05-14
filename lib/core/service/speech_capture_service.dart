@@ -1,15 +1,18 @@
 import 'package:isar/isar.dart';
 
 import '../service/account_service.dart';
+import '../service/account_speech_alias_service.dart';
 import '../service/auto_draft_service.dart';
 import 'speech_intent_parser.dart';
 
 class SpeechCaptureService {
   SpeechCaptureService(this.isar, {SpeechIntentParser? parser})
-      : _parser = parser ?? SpeechIntentParser();
+    : _parser = parser ?? SpeechIntentParser();
 
   final Isar isar;
   final SpeechIntentParser _parser;
+  final AccountSpeechAliasService _accountSpeechAliases =
+      const AccountSpeechAliasService();
 
   Future<AutoCaptureResult> ingestText(
     String text, {
@@ -21,7 +24,7 @@ class SpeechCaptureService {
     final intent = _parser.parse(
       text,
       now: now,
-      accountNames: accounts.map((account) => account.name).toList(),
+      accountNames: _accountSpeechAliases.parserAccountNames(accounts),
     );
     if (intent == null || !intent.isValid) {
       return AutoCaptureResult.ignored;
@@ -37,9 +40,8 @@ class SpeechCaptureService {
       toAccountName: intent.toAccountHint,
     );
 
-    return AutoDraftService(isar).ingestCapture(
-      capture,
-      directCommit: directCommit,
-    );
+    return AutoDraftService(
+      isar,
+    ).ingestCapture(capture, directCommit: directCommit);
   }
 }

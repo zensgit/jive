@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jive/core/database/account_model.dart';
+import 'package:jive/core/service/account_speech_alias_service.dart';
 import 'package:jive/core/service/speech_intent_parser.dart';
 
 void main() {
@@ -127,6 +129,25 @@ void main() {
       expect(result.cleanedText!.contains('帮我'), isFalse);
       expect(result.cleanedText!.contains('记账'), isFalse);
     });
+
+    test('matches compact account group paths for subaccounts', () {
+      final accountNames = const AccountSpeechAliasService()
+          .parserAccountNames([
+            _account(id: 1, name: '活期', groupName: '中国银行', currency: 'CNY'),
+            _account(id: 2, name: '定期', groupName: '中国银行', currency: 'USD'),
+          ]);
+
+      final result = parser.parse(
+        '从中国银行活期转到中国银行定期 500 元',
+        now: fixedNow,
+        accountNames: accountNames,
+      );
+
+      expect(result, isNotNull);
+      expect(result!.type, 'transfer');
+      expect(result.accountHint, '中国银行活期');
+      expect(result.toAccountHint, '中国银行定期');
+    });
   });
 
   group('SpeechIntent', () {
@@ -156,4 +177,18 @@ void main() {
       expect(intent.isValid, isFalse);
     });
   });
+}
+
+JiveAccount _account({
+  required int id,
+  required String name,
+  String currency = 'CNY',
+  String? groupName,
+}) {
+  return JiveAccount()
+    ..id = id
+    ..name = name
+    ..type = 'asset'
+    ..currency = currency
+    ..groupName = groupName;
 }

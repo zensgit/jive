@@ -1,4 +1,5 @@
 import '../../core/database/account_model.dart';
+import '../../core/service/account_speech_alias_service.dart';
 import '../../core/service/speech_intent_parser.dart';
 import 'transaction_entry_params.dart';
 
@@ -12,6 +13,8 @@ class SpeechEntryParamsBuilder {
 
   static final RegExp _accountTailPattern = RegExp(r'(\d{3,4})');
   static final RegExp _normalizePattern = RegExp(r'[\s_\-·•]+');
+  static const AccountSpeechAliasService _accountSpeechAliases =
+      AccountSpeechAliasService();
 
   TransactionEntryParams build(
     SpeechIntent intent, {
@@ -108,7 +111,9 @@ class SpeechEntryParamsBuilder {
     return null;
   }
 
-  List<_AccountAlias> _normalizedAccountAliases(Iterable<JiveAccount> accounts) {
+  List<_AccountAlias> _normalizedAccountAliases(
+    Iterable<JiveAccount> accounts,
+  ) {
     return accounts
         .map(
           (account) => _AccountAlias(
@@ -123,7 +128,11 @@ class SpeechEntryParamsBuilder {
   }
 
   List<String> _accountAliases(JiveAccount account) {
-    final values = <String>[account.name, account.type, account.currency];
+    final values = <String>{
+      ..._accountSpeechAliases.aliasesFor(account),
+      account.type,
+      account.currency,
+    }.toList();
     if (account.subType != null) values.add(account.subType!);
     final tailMatch = _accountTailPattern.firstMatch(account.name);
     if (tailMatch != null) values.add(tailMatch.group(1)!);
@@ -131,10 +140,7 @@ class SpeechEntryParamsBuilder {
   }
 
   String _normalize(String? value) {
-    return (value ?? '')
-        .toLowerCase()
-        .replaceAll(_normalizePattern, '')
-        .trim();
+    return (value ?? '').toLowerCase().replaceAll(_normalizePattern, '').trim();
   }
 }
 
