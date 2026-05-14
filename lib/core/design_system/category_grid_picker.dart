@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../database/category_model.dart';
+import '../service/category_path_service.dart';
 import '../service/category_service.dart';
 import 'theme.dart';
 
@@ -12,7 +13,8 @@ import 'theme.dart';
 /// Selected item is highlighted with a green border.
 class CategoryGridPicker extends StatefulWidget {
   final List<JiveCategory> categories;
-  final void Function(String categoryKey, String? subCategoryKey) onCategorySelected;
+  final void Function(String categoryKey, String? subCategoryKey)
+  onCategorySelected;
 
   /// Currently selected category key (for highlighting).
   final String? selectedCategoryKey;
@@ -41,12 +43,52 @@ class _CategoryGridPickerState extends State<CategoryGridPicker> {
   String? _selectedParentKey;
 
   List<JiveCategory> get _parents =>
-      widget.categories.where((c) => c.parentKey == null && !c.isHidden).toList()
+      widget.categories
+          .where((c) => c.parentKey == null && !c.isHidden)
+          .toList()
         ..sort((a, b) => a.order.compareTo(b.order));
 
   List<JiveCategory> _childrenOf(String parentKey) =>
-      widget.categories.where((c) => c.parentKey == parentKey && !c.isHidden).toList()
+      widget.categories
+          .where((c) => c.parentKey == parentKey && !c.isHidden)
+          .toList()
         ..sort((a, b) => a.order.compareTo(b.order));
+
+  Map<String, JiveCategory> get _categoryByKey => {
+    for (final category in widget.categories) category.key: category,
+  };
+
+  List<JiveCategory> _descendantsOf(String parentKey) {
+    final result = <JiveCategory>[];
+    void visit(String key) {
+      for (final child in _childrenOf(key)) {
+        result.add(child);
+        visit(child.key);
+      }
+    }
+
+    visit(parentKey);
+    result.sort((a, b) {
+      final pathA = _pathFor(a);
+      final pathB = _pathFor(b);
+      for (
+        var i = 0;
+        i < pathA.segments.length && i < pathB.segments.length;
+        i++
+      ) {
+        final orderCompare = pathA.segments[i].order.compareTo(
+          pathB.segments[i].order,
+        );
+        if (orderCompare != 0) return orderCompare;
+      }
+      final depthCompare = pathA.segments.length.compareTo(
+        pathB.segments.length,
+      );
+      if (depthCompare != 0) return depthCompare;
+      return pathA.displayName.compareTo(pathB.displayName);
+    });
+    return result;
+  }
 
   @override
   void initState() {
@@ -76,7 +118,13 @@ class _CategoryGridPickerState extends State<CategoryGridPicker> {
       return category.key == widget.selectedCategoryKey &&
           widget.selectedSubCategoryKey == null;
     }
-    return category.key == widget.selectedSubCategoryKey;
+    if (category.key == widget.selectedSubCategoryKey) return true;
+    final keys = const CategoryPathService().toTransactionKeys(
+      widget.categories,
+      category,
+    );
+    return keys.categoryKey == widget.selectedCategoryKey &&
+        keys.subCategoryKey == widget.selectedSubCategoryKey;
   }
 
   @override
@@ -146,11 +194,12 @@ class _CategoryGridPickerState extends State<CategoryGridPicker> {
   Widget _buildBody() {
     if (_selectedParentKey == null) return const SizedBox.shrink();
 
-    final selectedParent =
-        _parents.where((p) => p.key == _selectedParentKey).firstOrNull;
+    final selectedParent = _parents
+        .where((p) => p.key == _selectedParentKey)
+        .firstOrNull;
     if (selectedParent == null) return const SizedBox.shrink();
 
-    final children = _childrenOf(_selectedParentKey!);
+    final children = _descendantsOf(_selectedParentKey!);
 
     // Include parent as first selectable item
     final items = <JiveCategory>[selectedParent, ...children];
@@ -177,18 +226,15 @@ class _CategoryGridPickerState extends State<CategoryGridPicker> {
 
   Widget _buildGridItem(JiveCategory category) {
     final selected = _isSelected(category);
-    final color = CategoryService.parseColorHex(category.colorHex) ??
+    final color =
+        CategoryService.parseColorHex(category.colorHex) ??
         JiveTheme.categoryIconInactive;
     final isParent = category.parentKey == null;
+    final label = _displayLabel(category);
+    final subtitle = _displaySubtitle(category);
 
     return GestureDetector(
-      onTap: () {
-        if (isParent) {
-          widget.onCategorySelected(category.key, null);
-        } else {
-          widget.onCategorySelected(category.parentKey!, category.key);
-        }
-      },
+      onTap: () => _selectCategory(category),
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
@@ -219,7 +265,7 @@ class _CategoryGridPickerState extends State<CategoryGridPicker> {
             ),
             const SizedBox(height: 6),
             Text(
-              isParent ? '全部${category.name}' : category.name,
+              isParent ? '全部${category.name}' : label,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
@@ -229,6 +275,21 @@ class _CategoryGridPickerState extends State<CategoryGridPicker> {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: selected
+                      ? JiveTheme.primaryGreen
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
         ),
       ),
@@ -243,9 +304,11 @@ class _CategoryGridPickerState extends State<CategoryGridPicker> {
       itemBuilder: (_, i) {
         final category = items[i];
         final selected = _isSelected(category);
-        final color = CategoryService.parseColorHex(category.colorHex) ??
+        final color =
+            CategoryService.parseColorHex(category.colorHex) ??
             JiveTheme.categoryIconInactive;
         final isParent = category.parentKey == null;
+        final subtitle = _displaySubtitle(category);
 
         return ListTile(
           leading: CircleAvatar(
@@ -257,24 +320,49 @@ class _CategoryGridPickerState extends State<CategoryGridPicker> {
             ),
           ),
           title: Text(
-            isParent ? '全部${category.name}' : category.name,
+            isParent ? '全部${category.name}' : _displayLabel(category),
             style: TextStyle(
               fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
               color: selected ? JiveTheme.primaryGreen : null,
             ),
           ),
+          subtitle: subtitle == null ? null : Text(subtitle),
           trailing: selected
               ? const Icon(Icons.check_circle, color: JiveTheme.primaryGreen)
               : null,
-          onTap: () {
-            if (isParent) {
-              widget.onCategorySelected(category.key, null);
-            } else {
-              widget.onCategorySelected(category.parentKey!, category.key);
-            }
-          },
+          onTap: () => _selectCategory(category),
         );
       },
+    );
+  }
+
+  CategoryPath _pathFor(JiveCategory category) {
+    return const CategoryPathService().resolveFromMap(
+      _categoryByKey,
+      categoryKey: category.key,
+    );
+  }
+
+  String _displayLabel(JiveCategory category) {
+    final path = _pathFor(category);
+    if (path.segments.length <= 2) return category.name;
+    return path.segments.skip(1).map((segment) => segment.name).join(' / ');
+  }
+
+  String? _displaySubtitle(JiveCategory category) {
+    final path = _pathFor(category);
+    if (path.segments.length <= 2) return null;
+    return path.primaryName == null ? null : '属于${path.primaryName}';
+  }
+
+  void _selectCategory(JiveCategory category) {
+    final keys = const CategoryPathService().toTransactionKeys(
+      widget.categories,
+      category,
+    );
+    widget.onCategorySelected(
+      keys.categoryKey ?? category.key,
+      keys.subCategoryKey,
     );
   }
 }
