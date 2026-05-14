@@ -30,35 +30,38 @@ design gate.
 
 ## Wave 0: Merge Queue Closure
 
+Status: ready clean PR queue completed on 2026-05-14. Draft and stacked PR
+cleanup remains open.
+
 ### Ready clean PRs to merge
 
-- [ ] Merge `#269` Preserve quick action editor params.
-- [ ] Merge `#271` Scene template contract tests.
-- [ ] Merge `#272` Scene template picker test.
-- [ ] Merge `#273` Deep link entry contract tests.
-- [ ] Merge `#275` Account group contract tests.
-- [ ] Merge `#276` Source banner contract tests.
-- [ ] Merge `#278` Transaction footer contract tests.
-- [ ] Merge `#281` Three-level category grid picker support.
-- [ ] Merge `#282` Account group UI contract.
-- [ ] Merge `#288` Scene candidates in transaction entry.
-- [ ] Merge `#289` Category third-level widget smoke.
-- [ ] Merge `#291` Third-level categories opt-in.
-- [ ] Merge `#294` Quick action entry link builder.
-- [ ] Merge `#295` Grouped account paths in filters.
-- [ ] Merge `#297` Shared transaction hint banner.
-- [ ] Merge `#298` Default bank asset groups to bank name.
-- [ ] Merge `#300` Account paths in report exports.
-- [ ] Merge `#301` Account paths in transaction details.
-- [ ] Merge `#303` MoneyThings TODO status calibration.
-- [ ] Merge `#304` Account paths in CSV exports.
-- [ ] Merge `#305` Account paths in capital flow.
-- [ ] Merge `#308` Account paths in credit analysis.
-- [ ] Merge `#309` Account paths in Excel exports.
-- [ ] Merge `#310` Speech account path aliases.
-- [ ] Merge `#311` Account paths in currency overview.
-- [ ] Merge `#312` Account paths in recurring rules.
-- [ ] Merge `#313` Account paths in investments.
+- [x] Merge `#269` Preserve quick action editor params.
+- [x] Merge `#271` Scene template contract tests.
+- [x] Merge `#272` Scene template picker test.
+- [x] Merge `#273` Deep link entry contract tests.
+- [x] Merge `#275` Account group contract tests.
+- [x] Merge `#276` Source banner contract tests.
+- [x] Merge `#278` Transaction footer contract tests.
+- [x] Merge `#281` Three-level category grid picker support.
+- [x] Merge `#282` Account group UI contract.
+- [x] Merge `#288` Scene candidates in transaction entry.
+- [x] Merge `#289` Category third-level widget smoke.
+- [x] Merge `#291` Third-level categories opt-in.
+- [x] Merge `#294` Quick action entry link builder.
+- [x] Merge `#295` Grouped account paths in filters.
+- [x] Merge `#297` Shared transaction hint banner.
+- [x] Merge `#298` Default bank asset groups to bank name.
+- [x] Merge `#300` Account paths in report exports.
+- [x] Merge `#301` Account paths in transaction details.
+- [x] Merge `#303` MoneyThings TODO status calibration.
+- [x] Merge `#304` Account paths in CSV exports.
+- [x] Merge `#305` Account paths in capital flow.
+- [x] Merge `#308` Account paths in credit analysis.
+- [x] Merge `#309` Account paths in Excel exports.
+- [x] Merge `#310` Speech account path aliases.
+- [x] Merge `#311` Account paths in currency overview.
+- [x] Merge `#312` Account paths in recurring rules.
+- [x] Merge `#313` Account paths in investments.
 
 ### Draft or stacked PRs to restack or supersede
 
@@ -96,7 +99,7 @@ design gate.
 
 ### Wave 0 acceptance
 
-- [ ] All ready clean PRs are merged or explicitly superseded.
+- [x] All ready clean PRs are merged or explicitly superseded.
 - [ ] All draft/stacked PRs are either restacked on fresh `main`, superseded, or
       documented as deferred.
 - [ ] Fresh `main` passes `flutter analyze --no-fatal-infos`.
