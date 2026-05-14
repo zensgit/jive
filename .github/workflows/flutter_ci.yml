@@ -176,6 +176,10 @@ jobs:
             scripts/test_saas_internal_test_release_artifact_report.sh \
             scripts/render_saas_play_internal_upload_handoff.sh \
             scripts/test_saas_play_internal_upload_handoff.sh \
+            scripts/check_saas_play_upload_readiness.sh \
+            scripts/test_saas_play_upload_readiness.sh \
+            scripts/upload_saas_google_play_internal_test.sh \
+            scripts/test_saas_google_play_internal_upload.sh \
             scripts/test_saas_deployment_readiness.sh \
             scripts/build_saas_staging_apk.sh \
             scripts/test_saas_staging_apk_builder.sh \
@@ -216,6 +220,12 @@ jobs:
           scripts/render_saas_play_internal_upload_handoff.sh --help >/dev/null
           scripts/test_saas_play_internal_upload_handoff.sh --help >/dev/null
           scripts/test_saas_play_internal_upload_handoff.sh
+          scripts/check_saas_play_upload_readiness.sh --help >/dev/null
+          scripts/test_saas_play_upload_readiness.sh --help >/dev/null
+          scripts/test_saas_play_upload_readiness.sh
+          scripts/upload_saas_google_play_internal_test.sh --help >/dev/null
+          scripts/test_saas_google_play_internal_upload.sh --help >/dev/null
+          scripts/test_saas_google_play_internal_upload.sh
           scripts/test_saas_staging_apk_builder.sh --help >/dev/null
           scripts/test_saas_staging_apk_builder.sh
           scripts/install_saas_staging_apk.sh --help >/dev/null
