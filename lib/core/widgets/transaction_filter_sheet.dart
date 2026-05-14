@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../database/account_model.dart';
 import '../database/category_model.dart';
 import '../model/transaction_list_filter_state.dart';
+import '../service/account_group_service.dart';
 import 'jive_calendar/jive_calendar.dart';
 
 class TransactionFilterSheet extends StatefulWidget {
@@ -98,13 +99,22 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
         final label = category.parentKey == null
             ? category.name
             : '  └ ${category.name}';
-        return DropdownMenuItem<String?>(value: category.key, child: Text(label));
+        return DropdownMenuItem<String?>(
+          value: category.key,
+          child: Text(label),
+        );
       }),
     ];
     _accountItems = [
       const DropdownMenuItem<int?>(value: null, child: Text('全部账户')),
       ...widget.accounts.map((account) {
-        return DropdownMenuItem<int?>(value: account.id, child: Text(account.name));
+        return DropdownMenuItem<int?>(
+          value: account.id,
+          child: Text(
+            transactionFilterAccountLabel(account),
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
       }),
     ];
   }
@@ -442,4 +452,8 @@ class _TransactionFilterSheetState extends State<TransactionFilterSheet> {
       ),
     );
   }
+}
+
+String transactionFilterAccountLabel(JiveAccount account) {
+  return const AccountGroupService().displayPath(account);
 }
