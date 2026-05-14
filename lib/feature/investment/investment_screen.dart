@@ -5,6 +5,7 @@ import 'package:isar/isar.dart';
 import '../../core/database/account_model.dart';
 import '../../core/database/currency_model.dart';
 import '../../core/database/investment_model.dart';
+import '../../core/service/account_group_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
@@ -37,6 +38,14 @@ class InvestmentScreen extends StatefulWidget {
 
   @override
   State<InvestmentScreen> createState() => _InvestmentScreenState();
+}
+
+@visibleForTesting
+String investmentAccountDisplayLabel(JiveAccount? account, int? accountId) {
+  if (account == null) {
+    return accountId == null ? '未关联账户' : '账户 #$accountId';
+  }
+  return const AccountGroupService().displayPath(account);
 }
 
 class _InvestmentScreenState extends State<InvestmentScreen> {
@@ -83,7 +92,8 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
       _isar = widget.debugIsar ?? await DatabaseService.getInstance();
       _service = InvestmentService(_isar);
       _currencyService = CurrencyService(_isar);
-      _quoteService = widget.debugQuoteService ?? StockQuoteService(_isar, _service);
+      _quoteService =
+          widget.debugQuoteService ?? StockQuoteService(_isar, _service);
       _interactiveEnabled = true;
       await _currencyService.initCurrencies();
       await _load();
@@ -161,7 +171,8 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
         return;
       }
       final security = _securities.cast<JiveSecurity?>().firstWhere(
-        (candidate) => candidate?.ticker.toUpperCase().trim() == normalizedTicker,
+        (candidate) =>
+            candidate?.ticker.toUpperCase().trim() == normalizedTicker,
         orElse: () => null,
       );
       if (security == null) {
@@ -367,7 +378,12 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
                         ..._accounts.map(
                           (account) => DropdownMenuItem<int?>(
                             value: account.id,
-                            child: Text(account.name),
+                            child: Text(
+                              investmentAccountDisplayLabel(
+                                account,
+                                account.id,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -526,8 +542,8 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
     final unheldSecurities = _portfolio == null
         ? List<JiveSecurity>.from(_securities)
         : _securities
-            .where((security) => !holdingSecurityIds.contains(security.id))
-            .toList();
+              .where((security) => !holdingSecurityIds.contains(security.id))
+              .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -585,8 +601,9 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
                     const SizedBox(height: 12),
                     ..._securities
                         .where(
-                          (s) =>
-                              _quotes.containsKey(s.ticker.toUpperCase().trim()),
+                          (s) => _quotes.containsKey(
+                            s.ticker.toUpperCase().trim(),
+                          ),
                         )
                         .map(
                           (s) => StockQuoteCard(
@@ -730,10 +747,7 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
         children: [
           Row(
             children: [
-              Icon(
-                Icons.info_outline,
-                color: Colors.amber.shade800,
-              ),
+              Icon(Icons.info_outline, color: Colors.amber.shade800),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
@@ -746,18 +760,12 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
           const SizedBox(height: 8),
           Text(
             message,
-            style: TextStyle(
-              color: Colors.amber.shade900,
-              height: 1.5,
-            ),
+            style: TextStyle(color: Colors.amber.shade900, height: 1.5),
           ),
           const SizedBox(height: 12),
           Text(
             '你仍然可以继续更新价格、删除证券或补充汇率后重试。',
-            style: TextStyle(
-              color: Colors.amber.shade900,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Colors.amber.shade900, fontSize: 12),
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
@@ -967,10 +975,7 @@ class _InvestmentScreenState extends State<InvestmentScreen> {
   }
 
   String _accountLabel(int? accountId) {
-    if (accountId == null) {
-      return '未关联账户';
-    }
-    return _accountById[accountId]?.name ?? '账户 #$accountId';
+    return investmentAccountDisplayLabel(_accountById[accountId], accountId);
   }
 
   String _currencyCodeLabel(JiveCurrency currency) {
