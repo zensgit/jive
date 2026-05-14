@@ -36,11 +36,13 @@ import '../../core/widgets/jive_calendar/jive_calendar.dart';
 import '../../core/database/category_model.dart';
 import '../../core/service/auto_rule_engine.dart';
 import '../../core/service/merchant_memory_service.dart';
+import '../../core/service/scene_candidate_service.dart';
 import '../../core/service/speech_intent_parser.dart';
 import '../../core/service/speech_settings.dart';
 import '../../core/service/speech_service.dart';
 import '../../core/service/voice_quota_service.dart';
 import '../../core/utils/logger_util.dart';
+import '../../core/data/scene_templates.dart';
 import '../category/category_create_dialog.dart';
 import '../category/category_create_screen.dart';
 import '../category/category_edit_dialog.dart';
@@ -114,6 +116,8 @@ class AddTransactionScreen extends StatefulWidget {
   @visibleForTesting
   final List<JiveProject>? initialProjects;
   @visibleForTesting
+  final JiveBook? initialCurrentBook;
+  @visibleForTesting
   final AddTransactionSaver? transactionSaver;
   @visibleForTesting
   final AddTransactionSmartTagResolver? smartTagResolver;
@@ -135,6 +139,7 @@ class AddTransactionScreen extends StatefulWidget {
     this.initialAccountBalances,
     this.initialTags,
     this.initialProjects,
+    this.initialCurrentBook,
     this.transactionSaver,
     this.smartTagResolver,
   }) : assert(
@@ -143,7 +148,8 @@ class AddTransactionScreen extends StatefulWidget {
                  initialAccounts == null &&
                  initialAccountBalances == null &&
                  initialTags == null &&
-                 initialProjects == null) ||
+                 initialProjects == null &&
+                 initialCurrentBook == null) ||
              isar != null,
          'Initial transaction entry data requires an injected Isar.',
        );
@@ -392,11 +398,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         await AccountService(_isar).initDefaultAccounts();
         await TagService(_isar).initDefaultGroups();
       }
+      await _loadBooks();
       await _loadAccounts();
       await _loadAccountUsage();
       await _loadTags();
       await _loadProjects();
-      await _loadBooks();
       await _loadParentsForType(
         selectParentKey: _editingParentKey,
         selectParentName: _editingParentName,
@@ -421,9 +427,15 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
       widget.initialProjects != null;
 
   void _applyInitialEntryData() {
-    final parents = widget.initialParentCategories ?? const <JiveCategory>[];
+    _currentBook = widget.initialCurrentBook;
+    final parents = _sceneOrderedParentCategories(
+      widget.initialParentCategories ?? const <JiveCategory>[],
+      isIncome: _txType == TransactionType.income,
+    );
     final subs = widget.initialSubCategories ?? const <JiveCategory>[];
-    final accounts = widget.initialAccounts ?? const <JiveAccount>[];
+    final accounts = _sceneOrderedAccounts(
+      widget.initialAccounts ?? const <JiveAccount>[],
+    );
     final tags = widget.initialTags ?? const <JiveTag>[];
     final projects = widget.initialProjects ?? const <JiveProject>[];
     if (!mounted) return;
@@ -483,6 +495,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
         .findAll();
 
     parents.sort(_compareCategoryForDisplay);
+    parents = _sceneOrderedParentCategories(parents, isIncome: showIncome);
 
     // FALLBACK (only for expense)
     if (parents.isEmpty && !showIncome) {
@@ -553,7 +566,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Future<void> _loadAccounts() async {
     final service = AccountService(_isar);
-    final accounts = await service.getActiveAccounts();
+    final accounts = _sceneOrderedAccounts(await service.getActiveAccounts());
     final balances = await service.computeBalances(accounts: accounts);
     if (!mounted) return;
 
@@ -779,6 +792,13 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     );
     if (picked != null && mounted) {
       setState(() => _currentBook = picked);
+      await _loadAccounts();
+      await _loadParentsForType(
+        selectParentKey: _selectedParent?.key,
+        selectParentName: _selectedParent?.name,
+        selectSubKey: _selectedSub?.key,
+        selectSubName: _selectedSub?.name,
+      );
     }
   }
 
@@ -873,6 +893,74 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final orderCompare = a.order.compareTo(b.order);
     if (orderCompare != 0) return orderCompare;
     return a.name.compareTo(b.name);
+  }
+
+  SceneTemplate? get _currentSceneTemplate {
+    final book = _currentBook;
+    if (book == null) return null;
+    final bookLabel = _normalizeSceneLabel(book.name);
+    if (bookLabel.isEmpty) return null;
+    for (final template in kSceneTemplates) {
+      final templateLabel = _normalizeSceneLabel(template.name);
+      final templateEmoji = _normalizeSceneLabel(template.emoji);
+      if (bookLabel == templateLabel ||
+          bookLabel.contains(templateLabel) ||
+          (templateEmoji.isNotEmpty && bookLabel.contains(templateEmoji))) {
+        return template;
+      }
+    }
+    return null;
+  }
+
+  List<JiveCategory> _sceneOrderedParentCategories(
+    List<JiveCategory> categories, {
+    required bool isIncome,
+  }) {
+    final template = _currentSceneTemplate;
+    if (template == null || categories.length <= 1) return categories;
+    final promoted = const SceneCandidateService().categoryCandidates(
+      template: template,
+      categories: categories,
+      isIncome: isIncome,
+      includeRemainder: false,
+    );
+    if (promoted.isEmpty) return categories;
+    final seen = promoted.map((category) => category.key).toSet();
+    return [
+      ...promoted,
+      for (final category in categories)
+        if (seen.add(category.key)) category,
+    ];
+  }
+
+  List<JiveAccount> _sceneOrderedAccounts(List<JiveAccount> accounts) {
+    if (accounts.length <= 1) return accounts;
+    final currentBookId = _currentBook?.id ?? widget.bookId;
+    final prioritized = const SceneCandidateService().accountCandidates(
+      bookId: currentBookId,
+      accounts: accounts,
+    );
+    final seen = prioritized.map((account) => account.key).toSet();
+    return [
+      ...prioritized,
+      for (final account in accounts)
+        if (seen.add(account.key)) account,
+    ];
+  }
+
+  int _accountSceneBucket(JiveAccount account) {
+    final currentBookId = _currentBook?.id ?? widget.bookId;
+    if (currentBookId != null && account.bookId == currentBookId) return 0;
+    if (account.bookId == null) return currentBookId == null ? 0 : 1;
+    return 2;
+  }
+
+  String _normalizeSceneLabel(String value) {
+    return value
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll('\u{FE0F}', '')
+        .trim()
+        .toLowerCase();
   }
 
   Future<void> _switchType(TransactionType type) async {
@@ -3409,9 +3497,12 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
 
   Future<void> _showAccountPicker({required bool pickTo}) async {
     if (_accounts.isEmpty) return;
-    // Flat list sorted by usage frequency
+    // Flat list sorted by scene/book priority, then usage frequency.
     final sortedAccounts = List<JiveAccount>.from(_accounts)
       ..sort((a, b) {
+        final bucketA = _accountSceneBucket(a);
+        final bucketB = _accountSceneBucket(b);
+        if (bucketA != bucketB) return bucketA.compareTo(bucketB);
         final countA = _accountUsageCount[a.id] ?? 0;
         final countB = _accountUsageCount[b.id] ?? 0;
         if (countA != countB) return countB.compareTo(countA);
