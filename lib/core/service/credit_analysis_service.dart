@@ -2,6 +2,7 @@ import 'package:isar/isar.dart';
 
 import '../database/account_model.dart';
 import '../database/transaction_model.dart';
+import 'account_group_service.dart';
 
 /// Analysis result for a single credit-card account.
 class CreditAnalysis {
@@ -30,6 +31,11 @@ class CreditAnalysisService {
 
   CreditAnalysisService(this._isar);
 
+  static String accountDisplayLabel(JiveAccount? account) {
+    if (account == null) return '未知';
+    return const AccountGroupService().displayPath(account);
+  }
+
   /// Analyse a single credit-card account.
   Future<CreditAnalysis> getCreditUtilization(int accountId) async {
     final account = await _isar.collection<JiveAccount>().get(accountId);
@@ -47,7 +53,9 @@ class CreditAnalysisService {
 
     final limit = account.creditLimit ?? 0;
     final balance = await _computeBalance(accountId);
-    final utilization = limit > 0 ? (balance.abs() / limit).clamp(0.0, 1.0) : 0.0;
+    final utilization = limit > 0
+        ? (balance.abs() / limit).clamp(0.0, 1.0)
+        : 0.0;
 
     final now = DateTime.now();
     final sixMonthsAgo = DateTime(now.year, now.month - 6, 1);
@@ -71,11 +79,13 @@ class CreditAnalysisService {
     // Count months with data (at least 1, cap at 6).
     final months = _monthsBetween(sixMonthsAgo, now).clamp(1, 6);
     final avgSpend = totalSpend / months;
-    final paymentRate = totalSpend > 0 ? (totalPayments / totalSpend).clamp(0.0, 2.0) : 0.0;
+    final paymentRate = totalSpend > 0
+        ? (totalPayments / totalSpend).clamp(0.0, 2.0)
+        : 0.0;
 
     return CreditAnalysis(
       accountId: accountId,
-      accountName: account.name,
+      accountName: accountDisplayLabel(account),
       creditLimit: limit,
       currentBalance: balance,
       utilizationRate: utilization,
