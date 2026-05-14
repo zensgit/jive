@@ -237,6 +237,37 @@ JIVE_SAAS_INTERNAL_TEST_REQUIRE_MANIFEST_CHECK=true JIVE_BUNDLETOOL_BIN=bundleto
 scripts/render_saas_play_internal_upload_handoff.sh --artifact-dir /tmp/jive-saas-release-candidate --completion-report docs/$(date +%F)-saas-internal-test-release-completion.md --output docs/$(date +%F)-saas-play-internal-upload-handoff.md --service-account-json /secure/google-play-service-account.json --release-status completed
 ```
 
+上传前建议先跑 Google Play 内测 readiness 门禁。它会重新校验 prod AAB artifact、`release-candidate.json`、AAB SHA-256、Play track、包名、release status，并确认 artifact 内没有 `.env`、keystore、secret 等敏感文件名；默认不要求 service account，适合本地/CI dry-run：
+
+```bash
+scripts/check_saas_play_upload_readiness.sh --artifact-dir /tmp/jive-saas-release-candidate --package-name com.jivemoney.app --track internal --release-status draft
+```
+
+如果已安装 `bundletool`，正式上传前建议加严 manifest 校验：
+
+```bash
+scripts/check_saas_play_upload_readiness.sh --artifact-dir /tmp/jive-saas-release-candidate --package-name com.jivemoney.app --track internal --release-status draft --require-manifest-check --bundletool bundletool
+```
+
+也可以使用上传包装器先跑安全 dry-run。默认模式不会上传 Google Play，只会执行 readiness 检查、打印 fastlane `supply` 命令形状，并刷新 handoff 报告：
+
+```bash
+scripts/upload_saas_google_play_internal_test.sh --artifact-dir /tmp/jive-saas-release-candidate --output docs/$(date +%F)-saas-play-internal-upload-handoff.md
+```
+
+确认 Google Play service account JSON 已通过本地安全路径准备好后，再显式加 `--apply` 执行上传。JSON 文件不要放进仓库；脚本只把路径传给 fastlane，不读取也不打印文件内容：
+
+```bash
+scripts/upload_saas_google_play_internal_test.sh --artifact-dir /tmp/jive-saas-release-candidate --service-account-json /secure/google-play-service-account.json --release-status completed --output docs/$(date +%F)-saas-play-internal-upload-handoff.md --apply
+```
+
+如机器未安装 fastlane，可先安装 Ruby 依赖，或用 `--supply-bin` 指定已安装的 fastlane wrapper：
+
+```bash
+bundle install
+bundle exec scripts/upload_saas_google_play_internal_test.sh --artifact-dir /tmp/jive-saas-release-candidate --service-account-json /secure/google-play-service-account.json --release-status completed --apply
+```
+
 上传完成后可用 `--play-release-id`、`--tester-link`、`--rollout-status` 重新渲染同一份报告，保留 Play Console 的可追溯信息。
 
 ### Secrets 检查与上传
