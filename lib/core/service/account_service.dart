@@ -143,10 +143,7 @@ class AccountService {
       iconName: 'account_balance_wallet',
       colorHex: '#E53935',
     ),
-    'paypal': _AccountStyle(
-      iconName: 'brands/paypal.png',
-      colorHex: '#1565C0',
-    ),
+    'paypal': _AccountStyle(iconName: 'brands/paypal.png', colorHex: '#1565C0'),
     'credit': _AccountStyle(iconName: 'credit_card', colorHex: '#EF5350'),
     'loan': _AccountStyle(iconName: 'request_page', colorHex: '#FF7043'),
     'other_asset': _AccountStyle(iconName: 'savings', colorHex: '#607D8B'),
@@ -323,8 +320,12 @@ class AccountService {
       double convertedBalance = balance;
       if (accountCurrency != baseCurrency) {
         convertedBalance =
-            await currencyService.convert(balance.abs(), accountCurrency, baseCurrency) ??
-                balance.abs();
+            await currencyService.convert(
+              balance.abs(),
+              accountCurrency,
+              baseCurrency,
+            ) ??
+            balance.abs();
         if (balance < 0) convertedBalance = -convertedBalance;
       }
 
@@ -445,6 +446,23 @@ class AccountService {
     if (type == typeAsset) return groupAssets;
     if (type == typeLiability) return groupDebt;
     return groupOther;
+  }
+
+  static String defaultGroupNameForCreation({
+    required String type,
+    required String? subType,
+    String? selectedBankName,
+    String? fallbackGroupName,
+  }) {
+    final option = AccountTypeCatalog.optionFor(subType);
+    final bankName = selectedBankName?.trim();
+    if (type == typeAsset &&
+        option?.requiresBank == true &&
+        bankName != null &&
+        bankName.isNotEmpty) {
+      return bankName;
+    }
+    return resolveGroupName(type, subType, fallbackGroupName ?? option?.group);
   }
 
   static String displayGroupName(JiveAccount account) {
