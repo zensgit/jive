@@ -450,7 +450,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
     final books = widget.initialBooks ?? const <JiveBook>[];
     final tags = widget.initialTags ?? const <JiveTag>[];
     final projects = widget.initialProjects ?? const <JiveProject>[];
-    final selectedBook = _selectInitialBook(books);
+    final selectedBook = _selectInitialBook(books) ?? widget.initialCurrentBook;
     if (!mounted) return;
     setState(() {
       _parentCategories = parents;
