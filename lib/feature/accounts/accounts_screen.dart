@@ -20,7 +20,6 @@ import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/object_share_policy_service.dart';
 import 'account_reconcile_screen.dart';
-import 'widgets/account_group_summary_header.dart';
 
 class AccountsScreen extends StatefulWidget {
   final ValueListenable<int>? reloadSignal;
