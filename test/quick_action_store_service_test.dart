@@ -308,6 +308,27 @@ void main() {
     expect(action!.iconName, 'movie');
   });
 
+  test('presentation keeps custom icon source names', () async {
+    final templateId = await _putTemplate(
+      isar,
+      _template(name: '咖啡', amount: 18, accountId: 1, categoryKey: 'food'),
+    );
+    await service.getActions();
+
+    for (final iconName in [
+      'emoji:2615',
+      'text:咖',
+      'file:/tmp/jive_quick_action_icon.png',
+    ]) {
+      await store.updatePresentation(
+        'template:$templateId',
+        iconName: iconName,
+      );
+      final action = await service.findActionById('template:$templateId');
+      expect(action!.iconName, iconName);
+    }
+  });
+
   test('saveTransaction writes transaction and marks action used', () async {
     final templateId = await _putTemplate(
       isar,

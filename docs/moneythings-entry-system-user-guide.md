@@ -25,6 +25,8 @@ Expected behavior:
 - Existing templates are now mirrored into local quick action records, so home, quick entry, deep link, widget, shortcut, and share entry points can converge on the same stable action protocol.
 - The quick action management page can hide/show actions on home, pin actions, adjust icon/color, drag actions by the right-side handle, move actions up/down, and delete template-backed actions safely.
 - Quick action icon choices reuse the category icon library and add One Touch-specific icons such as transfer, credit card, and payment.
+- Quick action custom icons reuse the category icon source picker, so a local quick action can use system icons, emoji, text icons, or a local gallery image.
+- Local gallery image icons are current-device presentation only until quick action cloud sync and file backup semantics are designed.
 
 ## Structured Transaction Editor
 
@@ -120,6 +122,7 @@ Expected behavior:
 - Run a complete quick action and confirm it saves or confirms according to mode.
 - Open quick action management, hide one action, and confirm it leaves home/quick entry but remains manageable in the hidden section.
 - Change one quick action icon/color, drag it by the right-side handle, and reopen the page to confirm the local presentation persists.
+- Use `更多图标` to set an emoji or text icon for a quick action and confirm the card updates.
 - Drag one hidden quick action and confirm it stays hidden after reload.
 - Open `jive://transaction/new?amount=15&type=expense` and confirm the editor receives the amount.
 - Open `jive://transaction/new?entrySource=quickAction&quickActionId=template:<id>&mode=direct` and confirm the editor banner/metadata reflect the quick action source.
@@ -142,7 +145,7 @@ Expected behavior:
 ## Explicitly Deferred
 
 - Cross-device quick action sync and cloud-backed independent quick action source.
-- Custom user-uploaded quick action icon packs.
+- Cross-device sync/backup semantics for `file:` quick action custom icons.
 - True parent-child account migration with `parentAccountKey`.
 - Full object-level sharing table, RLS, offline conflict handling, and audit log.
 - E2EE/key-management work.

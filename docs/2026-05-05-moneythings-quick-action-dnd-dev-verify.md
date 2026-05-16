@@ -91,4 +91,5 @@ Results:
 
 - Cross-device quick action sync and conflict handling remain deferred.
 - A cloud-backed independent quick action source replacing template compatibility persistence remains deferred.
-- Custom user-uploaded quick action icon packs remain deferred.
+- Local quick action custom icons are handled in the follow-up `codex/moneythings-quick-action-custom-icons` slice.
+- Sync/backup semantics for `file:` custom quick action icons remain deferred.
