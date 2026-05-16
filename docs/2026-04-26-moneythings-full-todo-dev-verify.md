@@ -49,6 +49,7 @@
 - 2026-05-07：PR #232 / `codex/moneythings-account-group-collapse` 为资产页账户组补齐折叠/展开、按账本/资产区块持久化折叠状态、组级余额摘要和子账户数量/币种提示。
 - 2026-05-07：PR #233 / `codex/moneythings-quick-action-edit-validation` 已打开并通过 CI，把快速动作编辑页的金额校验、模式预览和账户路径显示收为独立 stacked PR。
 - 2026-05-07：PR #235 / `codex/moneythings-account-picker-paths` 已打开，交易高频账户选择器、结构化编辑器账户选择器和账户 chip 展示改为账户组路径，选择时仍保存具体 `accountId`。
+- 2026-05-07：PR #240 / `codex/moneythings-account-filter-paths` 将账户组路径延伸到账单筛选器账户下拉，筛选值仍保持具体 `accountId`。
 - 2026-05-07：PR #236 / `codex/moneythings-category-share-warnings` 为分类编辑、隐藏/恢复、提升层级、转移账单和删除流程补齐共享场景风险提示，仍只使用 `ObjectSharePolicyService` 提示层。
 - 2026-05-07：PR #237 / `codex/moneythings-tag-share-warnings` 将同一共享提示策略扩展到标签和标签分组编辑、归档/恢复、删除分组流程，不新增对象级权限真相。
 - 2026-05-10：`codex/moneythings-quick-action-editor-params` 补齐 Quick Action edit fallback 参数映射测试，并保留 `bookId` 作为结构化编辑器的场景/账本预填上下文。
@@ -90,7 +91,7 @@
 - 快速动作管理页已支持编辑核心字段，用户可以在不重建动作、不更换 stable id 的情况下调整 One Touch 内容。
 - 账户组已支持按账本和资产分区记住折叠状态，收起时保留子账户数量、币种和组内余额摘要。
 - 快速动作编辑页已支持保存前预览 direct / confirm / edit 执行模式，非空无效金额会阻止保存，避免误改 One Touch 行为。
-- 交易入口账户选择已显示账户组路径，降低多子账户或同名账户选错的风险，同时保持交易 `accountId` 语义不变。
+- 交易入口与账单筛选器账户选择已显示账户组路径，降低多子账户或同名账户选错的风险，同时保持交易 `accountId` 语义不变。
 - iOS Shortcuts / Siri 可通过 App Intent 打开结构化记账编辑器，或通过快速动作 ID 打开 One Touch 入口。
 - iOS 系统分享可把文本或 URL 作为 `shareReceive/rawText` 打开结构化编辑器。
 - 外部交易入口已统一到 `TransactionEntryParams`，复杂或缺字段场景进入 `TransactionFormScreen`；结构化编辑器可展示传入账本/共享场景上下文，并在共享场景保存前确认。
@@ -132,6 +133,7 @@
 - `docs/2026-05-07-moneythings-account-group-collapse-dev-verify.md`
 - `docs/2026-05-07-moneythings-quick-action-edit-validation-dev-verify.md`
 - `docs/2026-05-07-moneythings-account-picker-paths-dev-verify.md`
+- `docs/2026-05-07-moneythings-account-filter-paths-dev-verify.md`
 - `docs/2026-05-07-moneythings-category-share-warnings-dev-verify.md`
 - `docs/2026-05-07-moneythings-tag-share-warnings-dev-verify.md`
 - `docs/2026-05-10-moneythings-quick-action-editor-params-dev-verify.md`
