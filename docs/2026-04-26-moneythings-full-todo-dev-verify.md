@@ -37,6 +37,7 @@
 - PR #209 已补齐入口体系 closure 与 Android 验证文档。
 - 2026-05-05：`codex/moneythings-ios-shortcuts-entry` 补齐 iOS App Intent / Shortcuts 原生入口，继续复用 `jive://transaction/new` 与 `jive://quick-action` 协议。
 - 2026-05-05：`codex/moneythings-ios-share-extension` 补齐 iOS 系统分享入口，`text/url` 分享统一进入 `jive://transaction/new`。
+- 2026-05-05：`codex/moneythings-quick-action-store` 新增本地 `JiveQuickAction` shadow collection，模板自动回填为稳定 quick action，首页/快记中心/Deep Link 统一读取 `QuickActionService`。
 - 2026-05-10：`codex/moneythings-quick-action-editor-params` 补齐 Quick Action edit fallback 参数映射测试，并保留 `bookId` 作为结构化编辑器的场景/账本预填上下文。
 - 2026-05-10：`codex/moneythings-scene-template-contracts` 固定日常、旅行、装修、家庭、宠物、自由职业 6 个场景模板的 ID 顺序与核心分类/标签语义，避免场景产品化后续回退。
 - 2026-05-10：`codex/moneythings-transaction-entry-protocol` 补齐 `TransactionEntryParams` 协议回归测试，固定来源横幅、提交按钮、缺字段高亮和复杂转账预填合同。
@@ -78,7 +79,7 @@
 
 ## Post-Beta / 迁移型待评估
 
-- 独立 `JiveQuickAction` collection 与跨端排序/图标/同步。
+- 跨端 quick action 同步、独立图标/排序 UI、从模板兼容源迁到独立云端 quick action 源。
 - `parentAccountKey` migration，用于真实父子账户。
 - 对象级 sharing table、RLS、离线冲突处理和审计日志。
 - E2EE / 密钥管理。
@@ -98,6 +99,7 @@
 - `docs/2026-05-05-moneythings-postmerge-closure-dev-verify.md`
 - `docs/2026-05-05-moneythings-ios-shortcuts-dev-verify.md`
 - `docs/2026-05-05-moneythings-ios-share-extension-dev-verify.md`
+- `docs/2026-05-05-moneythings-quick-action-store-dev-verify.md`
 - `docs/2026-05-10-moneythings-quick-action-editor-params-dev-verify.md`
 - `docs/2026-05-10-moneythings-scene-template-contracts-dev-verify.md`
 - `docs/2026-05-10-moneythings-transaction-entry-protocol-dev-verify.md`
