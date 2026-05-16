@@ -105,6 +105,9 @@ Expected behavior:
 - A book with a `sharedLedgerKey` should be treated as an inherited shared scene even if only the ledger link is present locally.
 - Explicitly shared objects should show the stable `共享` label and shared-member warning copy.
 - Private objects should be blocked or replaced before they are used in shared-scene transactions.
+- Creating a manual transaction in a shared scene should ask for confirmation before saving.
+- Canceling the shared-scene confirmation should keep the user on the entry page and save nothing.
+- Continuing the shared-scene confirmation should preserve the selected shared book on the saved transaction.
 - Deleting shared categories or tags should show impact copy.
 - Permissions still come from the existing shared ledger/book role model.
 - No object-level sharing table or RLS is introduced in this wave.
@@ -128,6 +131,7 @@ Expected behavior:
 - Save a SmartList from filters, pin it, set it as default, delete it, and confirm default view is cleared.
 - In a shared scene, check shared badges and delete warning copy.
 - In a shared scene, try a private account/category/tag and confirm Jive asks you to replace it before saving.
+- In a shared scene, save a manual transaction and confirm the `保存到共享场景？` prompt appears before saving.
 
 ## Explicitly Deferred
 

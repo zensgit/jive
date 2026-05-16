@@ -364,6 +364,172 @@ void main() {
     },
   );
 
+  testWidgets('shared scene save asks before creating transaction', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    JiveTransaction? savedTransaction;
+    var saverCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () async {
+              await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AddTransactionScreen(
+                    isar: harness.isar,
+                    bootstrapDefaults: false,
+                    initialParentCategories: [harness.parent],
+                    initialSubCategories: [harness.child],
+                    initialAccounts: [harness.account],
+                    initialAccountBalances: {harness.account.id: 0},
+                    initialBooks: [harness.sharedBook],
+                    bookId: harness.sharedBook.id,
+                    initialTags: const [],
+                    initialProjects: const [],
+                    smartTagResolver: (_) async => const [],
+                    transactionSaver: (tx) async {
+                      saverCalls++;
+                      savedTransaction = tx;
+                    },
+                  ),
+                ),
+              );
+            },
+            child: const Text('open add transaction'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open add transaction'));
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await _pumpUntilFound(
+      tester,
+      find.byKey(AddTransactionScreenKeys.amountKey('1')),
+    );
+
+    await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('1')));
+    await tester.tap(
+      find.byKey(AddTransactionScreenKeys.subCategory('custom_coffee')),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(AddTransactionScreenKeys.saveButton));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(AddTransactionScreenKeys.sharedSceneSaveDialog),
+      findsOneWidget,
+    );
+    expect(find.text('保存到共享场景？'), findsOneWidget);
+    expect(find.textContaining('其他成员也能看到'), findsOneWidget);
+
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+
+    expect(saverCalls, 0);
+    expect(find.byKey(AddTransactionScreenKeys.saveButton), findsOneWidget);
+
+    await tester.tap(find.byKey(AddTransactionScreenKeys.saveButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('继续保存'));
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+
+    expect(saverCalls, 1);
+    expect(savedTransaction, isNotNull);
+    expect(savedTransaction!.bookId, harness.sharedBook.id);
+  });
+
+  testWidgets('local scene save does not ask for shared confirmation', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 932);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    JiveTransaction? savedTransaction;
+    var saverCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => ElevatedButton(
+            onPressed: () async {
+              await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AddTransactionScreen(
+                    isar: harness.isar,
+                    bootstrapDefaults: false,
+                    initialParentCategories: [harness.parent],
+                    initialSubCategories: [harness.child],
+                    initialAccounts: [harness.account],
+                    initialAccountBalances: {harness.account.id: 0},
+                    initialBooks: [harness.localBook],
+                    bookId: harness.localBook.id,
+                    initialTags: const [],
+                    initialProjects: const [],
+                    smartTagResolver: (_) async => const [],
+                    transactionSaver: (tx) async {
+                      saverCalls++;
+                      savedTransaction = tx;
+                    },
+                  ),
+                ),
+              );
+            },
+            child: const Text('open add transaction'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open add transaction'));
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+    await _pumpUntilFound(
+      tester,
+      find.byKey(AddTransactionScreenKeys.amountKey('1')),
+    );
+
+    await tester.tap(find.byKey(AddTransactionScreenKeys.amountKey('1')));
+    await tester.tap(
+      find.byKey(AddTransactionScreenKeys.subCategory('custom_coffee')),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byKey(AddTransactionScreenKeys.saveButton));
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    });
+
+    expect(
+      find.byKey(AddTransactionScreenKeys.sharedSceneSaveDialog),
+      findsNothing,
+    );
+    expect(saverCalls, 1);
+    expect(savedTransaction, isNotNull);
+    expect(savedTransaction!.bookId, harness.localBook.id);
+  });
+
   testWidgets(
     'continuous entry save resets operator toggle state for next transaction',
     (tester) async {
@@ -696,6 +862,8 @@ class _AddTransactionHarness {
   late JiveCategory parent;
   late JiveCategory child;
   late JiveCategory grandchild;
+  late JiveBook localBook;
+  late JiveBook sharedBook;
 
   _AddTransactionHarness({required this.dir, required this.isar});
 
@@ -705,6 +873,7 @@ class _AddTransactionHarness {
     );
     final isar = await Isar.open([
       JiveAccountSchema,
+      JiveBookSchema,
       JiveCategorySchema,
       JiveCategoryOverrideSchema,
       JiveTransactionSchema,
@@ -763,9 +932,34 @@ class _AddTransactionHarness {
       ..isHidden = false
       ..isIncome = false
       ..updatedAt = now;
+    localBook = JiveBook()
+      ..key = 'book_daily'
+      ..name = '日常'
+      ..currency = 'CNY'
+      ..order = 0
+      ..isDefault = true
+      ..isArchived = false
+      ..isShared = false
+      ..memberCount = 1
+      ..createdAt = now
+      ..updatedAt = now;
+    sharedBook = JiveBook()
+      ..key = 'book_family'
+      ..name = '家庭共享'
+      ..currency = 'CNY'
+      ..order = 1
+      ..isDefault = false
+      ..isArchived = false
+      ..isShared = true
+      ..sharedLedgerKey = 'ledger_family'
+      ..memberCount = 2
+      ..createdAt = now
+      ..updatedAt = now;
 
     await isar.writeTxn(() async {
       account.id = await isar.jiveAccounts.put(account);
+      localBook.id = await isar.jiveBooks.put(localBook);
+      sharedBook.id = await isar.jiveBooks.put(sharedBook);
       await isar.jiveCategorys.putAll([parent, child, grandchild]);
     });
   }

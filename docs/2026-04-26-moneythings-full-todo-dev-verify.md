@@ -60,6 +60,7 @@
 - 2026-05-10：`codex/moneythings-account-display-paths` 优化账户组路径展示，避免子账户名称已含类型/币种时重复显示。
 - 2026-05-10：`codex/moneythings-smartlist-stale-default` 增加 SmartList 默认视图 stale id 清理，避免默认视图指向已删除记录。
 - 2026-05-10：`codex/moneythings-category-hidden-paths` 修正三层分类可见路径解析，隐藏父级不再导致可见叶子丢失完整路径上下文。
+- 2026-05-07：`codex/moneythings-shared-transaction-warning` 补齐共享场景手动新增交易保存前提示，取消不保存、继续后保持原交易保存路径。
 
 ## 当前波次已完成
 
@@ -70,7 +71,7 @@
 - 三层分类在选择、展示、详情、导入、导出上使用兼容路径，不新增 `tertiaryCategoryKey`。
 - 账户组以视图层表达，交易仍保存到具体 `accountId`。
 - SmartList 支持默认视图、置顶、当前筛选/搜索保存，以及固定分类页面保存；服务级测试已覆盖保存视图映射、置顶排序和默认视图清理。
-- 对象共享第一阶段保持提示层，覆盖场景、账户、分类、标签的共享状态与删除风险提示；策略测试覆盖继承共享、显式共享、私有对象阻止和空影响删除提示。
+- 对象共享第一阶段保持提示层，覆盖场景、账户、分类、标签的共享状态、共享场景交易保存提示与删除风险提示。
 
 ## Post-Beta / 迁移型待评估
 
@@ -105,4 +106,5 @@
 - `docs/2026-05-10-moneythings-account-display-paths-dev-verify.md`
 - `docs/2026-05-10-moneythings-smartlist-stale-default-dev-verify.md`
 - `docs/2026-05-10-moneythings-category-hidden-paths-dev-verify.md`
+- `docs/2026-05-07-moneythings-shared-transaction-warning-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`
