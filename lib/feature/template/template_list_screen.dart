@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
 
+import '../../core/database/account_model.dart';
+import '../../core/database/category_model.dart';
 import '../../core/database/quick_action_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/category_path_service.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/quick_action_filter_service.dart';
@@ -544,6 +547,15 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.edit_note_outlined),
+              title: const Text('编辑内容'),
+              subtitle: const Text('名称、金额、账户、分类和备注'),
+              onTap: () {
+                Navigator.pop(context);
+                _showCoreFieldEditor(action);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.palette_outlined),
               title: const Text('设置图标和颜色'),
               onTap: () {
@@ -583,6 +595,243 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _showCoreFieldEditor(JiveQuickAction action) async {
+    final isar = await _ensureIsar();
+    final accounts = await isar.jiveAccounts.where().findAll();
+    final categories = await isar.jiveCategorys.where().findAll();
+    if (!mounted) return;
+
+    final nameController = TextEditingController(text: action.name);
+    final amountController = TextEditingController(
+      text: action.defaultAmount == null
+          ? ''
+          : action.defaultAmount!.toStringAsFixed(2),
+    );
+    final noteController = TextEditingController(
+      text: action.defaultNote ?? '',
+    );
+    var selectedType = action.transactionType;
+    var selectedAccountId = action.accountId;
+    var selectedToAccountId = action.toAccountId;
+    var selectedCategoryLeafKey = action.subCategoryKey ?? action.categoryKey;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          final isTransfer = selectedType == 'transfer';
+          final categoryPaths = isTransfer
+              ? const <CategoryPath>[]
+              : const CategoryPathService().visiblePaths(
+                  categories,
+                  isIncome: selectedType == 'income',
+                );
+          CategoryPath? selectedPath;
+          for (final path in categoryPaths) {
+            if (path.leafKey == selectedCategoryLeafKey) {
+              selectedPath = path;
+              break;
+            }
+          }
+          final accountIds = accounts.map((account) => account.id).toSet();
+          final accountValue = accountIds.contains(selectedAccountId)
+              ? selectedAccountId
+              : null;
+          final toAccountValue =
+              accountIds.contains(selectedToAccountId) &&
+                  selectedToAccountId != selectedAccountId
+              ? selectedToAccountId
+              : null;
+
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 16,
+                bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '编辑「${action.name}」',
+                    style: GoogleFonts.lato(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: '名称',
+                      border: OutlineInputBorder(),
+                    ),
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedType,
+                    decoration: const InputDecoration(
+                      labelText: '类型',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 'expense', child: Text('支出')),
+                      DropdownMenuItem(value: 'income', child: Text('收入')),
+                      DropdownMenuItem(value: 'transfer', child: Text('转账')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setSheetState(() {
+                        selectedType = value;
+                        if (selectedType == 'transfer') {
+                          selectedCategoryLeafKey = null;
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountController,
+                    decoration: const InputDecoration(
+                      labelText: '默认金额（留空则轻确认）',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: accountValue,
+                    decoration: const InputDecoration(
+                      labelText: '账户',
+                      border: OutlineInputBorder(),
+                    ),
+                    hint: const Text('未选择'),
+                    items: accounts
+                        .map(
+                          (account) => DropdownMenuItem<int>(
+                            value: account.id,
+                            child: Text(account.name),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (value) =>
+                        setSheetState(() => selectedAccountId = value),
+                  ),
+                  if (isTransfer) ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      initialValue: toAccountValue,
+                      decoration: const InputDecoration(
+                        labelText: '转入账户',
+                        border: OutlineInputBorder(),
+                      ),
+                      hint: const Text('未选择'),
+                      items: accounts
+                          .where((account) => account.id != selectedAccountId)
+                          .map(
+                            (account) => DropdownMenuItem<int>(
+                              value: account.id,
+                              child: Text(account.name),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) =>
+                          setSheetState(() => selectedToAccountId = value),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedPath?.leafKey,
+                      decoration: const InputDecoration(
+                        labelText: '分类',
+                        border: OutlineInputBorder(),
+                      ),
+                      hint: const Text('未选择'),
+                      items: categoryPaths
+                          .map(
+                            (path) => DropdownMenuItem<String>(
+                              value: path.leafKey,
+                              child: Text(path.displayName),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (value) =>
+                          setSheetState(() => selectedCategoryLeafKey = value),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteController,
+                    decoration: const InputDecoration(
+                      labelText: '默认备注',
+                      border: OutlineInputBorder(),
+                    ),
+                    minLines: 1,
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final name = nameController.text.trim();
+                        if (name.isEmpty) {
+                          ScaffoldMessenger.of(sheetContext).showSnackBar(
+                            const SnackBar(content: Text('请输入快速动作名称')),
+                          );
+                          return;
+                        }
+                        final amountText = amountController.text.trim();
+                        final amount = amountText.isEmpty
+                            ? null
+                            : double.tryParse(amountText);
+                        final categoryKeys =
+                            selectedType == 'transfer' || selectedPath == null
+                            ? null
+                            : const CategoryPathService().toTransactionKeys(
+                                categories,
+                                selectedPath.leaf,
+                              );
+                        Navigator.pop(sheetContext);
+                        final service = await _quickActionStore();
+                        await service.updateCoreFields(
+                          action.stableId,
+                          name: name,
+                          transactionType: selectedType,
+                          accountId: accountValue,
+                          toAccountId: toAccountValue,
+                          categoryKey: categoryKeys?.categoryKey,
+                          subCategoryKey: categoryKeys?.subCategoryKey,
+                          categoryName: categoryKeys?.categoryName,
+                          subCategoryName: categoryKeys?.subCategoryName,
+                          defaultAmount: amount,
+                          defaultNote: noteController.text,
+                        );
+                        await _loadActions();
+                      },
+                      child: const Text('保存内容'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    nameController.dispose();
+    amountController.dispose();
+    noteController.dispose();
   }
 
   void _showStylePicker(JiveQuickAction action) {

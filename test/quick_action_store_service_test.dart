@@ -329,6 +329,99 @@ void main() {
     }
   });
 
+  test('updateCoreFields updates quick action and legacy template', () async {
+    final templateId = await _putTemplate(
+      isar,
+      _template(
+        name: '旧咖啡',
+        amount: 18,
+        accountId: 1,
+        categoryKey: 'food',
+        category: '餐饮',
+        note: '旧备注',
+      ),
+    );
+    await service.getActions();
+
+    await store.updateCoreFields(
+      'template:$templateId',
+      name: '手冲咖啡',
+      transactionType: 'expense',
+      accountId: 9,
+      categoryKey: 'food',
+      subCategoryKey: 'pourover',
+      categoryName: '餐饮',
+      subCategoryName: '手冲',
+      defaultAmount: 28,
+      defaultNote: '浅烘',
+    );
+
+    final record = await isar.jiveQuickActions.getByStableId(
+      'template:$templateId',
+    );
+    final template = await isar.jiveTemplates.get(templateId);
+    final action = await service.findActionById('template:$templateId');
+
+    expect(record, isNotNull);
+    expect(record!.name, '手冲咖啡');
+    expect(record.accountId, 9);
+    expect(record.categoryKey, 'food');
+    expect(record.subCategoryKey, 'pourover');
+    expect(record.categoryName, '餐饮');
+    expect(record.subCategoryName, '手冲');
+    expect(record.defaultAmount, 28);
+    expect(record.defaultNote, '浅烘');
+    expect(record.mode, 'direct');
+    expect(template, isNotNull);
+    expect(template!.name, '手冲咖啡');
+    expect(template.amount, 28);
+    expect(template.accountId, 9);
+    expect(template.subCategoryKey, 'pourover');
+    expect(template.note, '浅烘');
+    expect(action!.mode, QuickActionMode.direct);
+    expect(action.defaultAmount, 28);
+  });
+
+  test(
+    'updateCoreFields can clear amount and note for confirm actions',
+    () async {
+      final templateId = await _putTemplate(
+        isar,
+        _template(
+          name: '午餐',
+          amount: 25,
+          accountId: 1,
+          categoryKey: 'food',
+          category: '餐饮',
+          note: '旧备注',
+        ),
+      );
+      await service.getActions();
+
+      await store.updateCoreFields(
+        'template:$templateId',
+        name: '午餐',
+        transactionType: 'expense',
+        accountId: 1,
+        categoryKey: 'food',
+        categoryName: '餐饮',
+        defaultAmount: null,
+        defaultNote: '   ',
+      );
+
+      final record = await isar.jiveQuickActions.getByStableId(
+        'template:$templateId',
+      );
+      final template = await isar.jiveTemplates.get(templateId);
+
+      expect(record!.defaultAmount, isNull);
+      expect(record.defaultNote, isNull);
+      expect(record.mode, 'confirm');
+      expect(template!.amount, 0);
+      expect(template.note, isNull);
+    },
+  );
+
   test('saveTransaction writes transaction and marks action used', () async {
     final templateId = await _putTemplate(
       isar,
