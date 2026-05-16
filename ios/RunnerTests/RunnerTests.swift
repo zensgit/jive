@@ -52,6 +52,39 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(id, "template:42")
   }
 
+  func testSceneSwitchURLBuildsSceneLinkByName() {
+    let url = JiveShortcutLinkBuilder.sceneSwitchURL(sceneName: "旅行")
+    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    let name = components?.queryItems?.first { $0.name == "name" }?.value
+
+    XCTAssertEqual(url.scheme, "jive")
+    XCTAssertEqual(url.host, "scene")
+    XCTAssertEqual(url.path, "/switch")
+    XCTAssertEqual(name, "旅行")
+  }
+
+  func testSceneSwitchURLFallsBackToAllScenes() {
+    let url = JiveExternalEntryLinkBuilder.sceneSwitchURL()
+    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    let all = components?.queryItems?.first { $0.name == "all" }?.value
+
+    XCTAssertEqual(url.scheme, "jive")
+    XCTAssertEqual(url.host, "scene")
+    XCTAssertEqual(url.path, "/switch")
+    XCTAssertEqual(all, "true")
+  }
+
+  func testSceneSwitchURLBuildsSceneLinkByBookId() {
+    let url = JiveExternalEntryLinkBuilder.sceneSwitchURL(bookId: 7)
+    let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+    let bookId = components?.queryItems?.first { $0.name == "bookId" }?.value
+
+    XCTAssertEqual(url.scheme, "jive")
+    XCTAssertEqual(url.host, "scene")
+    XCTAssertEqual(url.path, "/switch")
+    XCTAssertEqual(bookId, "7")
+  }
+
   func testShareTransactionURLBuildsShareReceiveLink() {
     let url = JiveExternalEntryLinkBuilder.transactionURL(
       entrySource: "shareReceive",

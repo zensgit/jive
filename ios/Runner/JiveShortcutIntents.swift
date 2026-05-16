@@ -22,6 +22,10 @@ enum JiveShortcutLinkBuilder {
   static func quickActionURL(actionId: String) -> URL? {
     JiveExternalEntryLinkBuilder.quickActionURL(actionId: actionId)
   }
+
+  static func sceneSwitchURL(sceneName: String? = nil) -> URL {
+    JiveExternalEntryLinkBuilder.sceneSwitchURL(sceneName: sceneName)
+  }
 }
 
 @available(iOS 16.0, *)
@@ -115,6 +119,31 @@ struct RunJiveQuickActionIntent: AppIntent {
 }
 
 @available(iOS 16.0, *)
+struct SwitchJiveSceneIntent: AppIntent {
+  static var title: LocalizedStringResource = "切换 Jive 场景"
+  static var description = IntentDescription("打开 Jive 并切换到指定场景；未填写时进入全部场景。")
+  static var openAppWhenRun = true
+
+  @Parameter(title: "场景名称")
+  var sceneName: String?
+
+  init() {
+    self.sceneName = nil
+  }
+
+  init(sceneName: String? = nil) {
+    self.sceneName = sceneName
+  }
+
+  @MainActor
+  func perform() async throws -> some IntentResult {
+    let url = JiveShortcutLinkBuilder.sceneSwitchURL(sceneName: sceneName)
+    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+    return .result()
+  }
+}
+
+@available(iOS 16.0, *)
 struct JiveShortcutsProvider: AppShortcutsProvider {
   static var shortcutTileColor: ShortcutTileColor = .teal
 
@@ -127,6 +156,15 @@ struct JiveShortcutsProvider: AppShortcutsProvider {
       ],
       shortTitle: "记一笔",
       systemImageName: "plus.circle.fill"
+    )
+    AppShortcut(
+      intent: SwitchJiveSceneIntent(),
+      phrases: [
+        "用 \(.applicationName) 切换场景",
+        "在 \(.applicationName) 打开全部场景",
+      ],
+      shortTitle: "切换场景",
+      systemImageName: "rectangle.3.group.fill"
     )
   }
 }

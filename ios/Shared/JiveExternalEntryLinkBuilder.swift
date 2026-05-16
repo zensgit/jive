@@ -44,6 +44,35 @@ enum JiveExternalEntryLinkBuilder {
     return components.url
   }
 
+  static func sceneSwitchURL(
+    bookId: Int? = nil,
+    bookKey: String? = nil,
+    sceneName: String? = nil,
+    allScenes: Bool = false
+  ) -> URL {
+    var components = URLComponents()
+    components.scheme = "jive"
+    components.host = "scene"
+    components.path = "/switch"
+
+    var items: [URLQueryItem] = []
+    if let bookId {
+      items.append(URLQueryItem(name: "bookId", value: String(bookId)))
+    }
+    if let bookKey = trimmed(bookKey) {
+      items.append(URLQueryItem(name: "bookKey", value: bookKey))
+    }
+    if let sceneName = trimmed(sceneName) {
+      items.append(URLQueryItem(name: "name", value: sceneName))
+    }
+    if allScenes || items.isEmpty {
+      items.append(URLQueryItem(name: "all", value: "true"))
+    }
+
+    components.queryItems = items
+    return components.url!
+  }
+
   private static func normalizedEntrySource(_ raw: String) -> String {
     switch raw.trimmingCharacters(in: .whitespacesAndNewlines) {
     case "shareReceive", "share_receive":
