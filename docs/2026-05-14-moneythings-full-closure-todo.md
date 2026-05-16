@@ -115,110 +115,114 @@ so final Wave 0 analyzer/test evidence is the GitHub `main` Flutter CI run.
 
 ## Wave 1: One Touch / Quick Action Closure
 
-- [ ] Make `QuickActionExecutor` the only app-level quick-entry executor.
-- [ ] Route templates, quick-entry hub, Widget bridge, AppIntent, and Deep Link
+- [x] Make `QuickActionExecutor` the only app-level quick-entry executor.
+- [x] Route templates, quick-entry hub, AppIntent, and Deep Link
       through `QuickActionExecutor`.
-- [ ] Preserve direct, confirm, and edit execution modes.
-- [ ] Add or finish "save as quick action" after successful manual transaction
+- [x] Preserve direct, confirm, and edit execution modes.
+- [x] Add or finish "save as quick action" after successful manual transaction
       save.
-- [ ] Complete quick action search.
-- [ ] Complete quick action drag ordering.
-- [ ] Complete quick action custom icons.
-- [ ] Complete quick action edit validation.
-- [ ] Complete quick action usage statistics and recommendation surfaces.
-- [ ] Keep template compatibility until the high-risk persistence gate decides
+- [x] Complete quick action search.
+- [x] Complete quick action drag ordering.
+- [x] Complete quick action custom icons.
+- [x] Complete quick action edit validation.
+- [x] Complete quick action usage statistics and recommendation surfaces.
+- [x] Keep template compatibility until the high-risk persistence gate decides
       whether a standalone synced quick-action store is needed.
-- [ ] Add tests for direct, confirm, edit, save-as-action, usage count,
-      `lastUsedAt`, Widget, Deep Link, and AppIntent routing.
+- [x] Add tests for direct, confirm, edit, save-as-action, usage count,
+      `lastUsedAt`, Deep Link, and AppIntent routing.
+
+Status note: Android's current home widget quick-add uses the shared
+`jive://transaction/new` structured-editor path. A future widget that exposes
+saved quick actions should reuse `jive://quick-action?id=...`.
 
 ## Wave 2: Transaction Editor Unified Entry
 
-- [ ] Ensure voice, screenshot, share, Deep Link, Widget, Quick Action, and auto
+- [x] Ensure voice, screenshot, share, Deep Link, Widget, Quick Action, and auto
       draft entries all construct `TransactionEntryParams`.
-- [ ] Ensure incomplete external entries open `TransactionFormScreen` instead of
+- [x] Ensure incomplete external entries open `TransactionFormScreen` instead of
       silently attempting a save.
-- [ ] Keep `AddTransactionScreen` as the high-frequency calculator-first manual
+- [x] Keep `AddTransactionScreen` as the high-frequency calculator-first manual
       entry page.
-- [ ] Keep `TransactionFormScreen` as the structured editor for external,
+- [x] Keep `TransactionFormScreen` as the structured editor for external,
       incomplete, or complex entries.
-- [ ] Support source banners for quick action, voice, screenshot, share, deep
+- [x] Support source banners for quick action, voice, screenshot, share, deep
       link, widget, and auto draft.
-- [ ] Support `highlightFields` for amount, category, account,
+- [x] Support `highlightFields` for amount, category, account,
       transferAccount, time, note, and tags.
-- [ ] Preserve continuous-entry behavior, existing save semantics, and test
+- [x] Preserve continuous-entry behavior, existing save semantics, and test
       anchors.
 
 ## Wave 3: Three-Level Category Completion
 
-- [ ] Keep default category creation and entry UX at two levels.
-- [ ] Allow third-level creation only when the user chooses "add child" from an
+- [x] Keep default category creation and entry UX at two levels.
+- [x] Allow third-level creation only when the user chooses "add child" from an
       existing second-level category.
-- [ ] Store transactions compatibly: top-level in `categoryKey`, selected leaf
+- [x] Store transactions compatibly: top-level in `categoryKey`, selected leaf
       in `subCategoryKey`.
-- [ ] Use `CategoryPathService` for transaction detail category paths.
-- [ ] Use `CategoryPathService` for filters and reports.
-- [ ] Use `CategoryPathService` for CSV and Excel export category paths.
-- [ ] Use `CategoryPathService` for import path segments.
-- [ ] Use `CategoryPathService` for template and quick-action category labels.
-- [ ] Use `CategoryPathService` for category share previews.
-- [ ] Cover old two-level categories, new three-level categories, hidden parent
+- [x] Use `CategoryPathService` for transaction detail category paths.
+- [x] Use `CategoryPathService` for filters and reports.
+- [x] Use `CategoryPathService` for CSV and Excel export category paths.
+- [x] Use `CategoryPathService` for import path segments.
+- [x] Use `CategoryPathService` for template and quick-action category labels.
+- [x] Use `CategoryPathService` for category share previews.
+- [x] Cover old two-level categories, new three-level categories, hidden parent
       paths, import/export, reports, and transaction detail display in tests.
 
 ## Wave 4: Account Group / Subaccount View Completion
 
-- [ ] Keep transactions saving to concrete `JiveAccount.id`.
-- [ ] Use `AccountGroupService` in account picker labels.
-- [ ] Use `AccountGroupService` in account filters.
-- [ ] Use `AccountGroupService` in transaction details.
-- [ ] Use `AccountGroupService` in report exports.
-- [ ] Use `AccountGroupService` in CSV and Excel exports.
-- [ ] Use `AccountGroupService` in capital flow and credit analysis.
-- [ ] Use `AccountGroupService` in multi-currency overview.
-- [ ] Use `AccountGroupService` in recurring rules.
-- [ ] Use `AccountGroupService` in investments.
-- [ ] Use `AccountGroupService` in speech and automation candidates.
-- [ ] Add account templates for bank multi-currency, credit card, Huabei,
+- [x] Keep transactions saving to concrete `JiveAccount.id`.
+- [x] Use `AccountGroupService` in account picker labels.
+- [x] Use `AccountGroupService` in account filters.
+- [x] Use `AccountGroupService` in transaction details.
+- [x] Use `AccountGroupService` in report exports.
+- [x] Use `AccountGroupService` in CSV and Excel exports.
+- [x] Use `AccountGroupService` in capital flow and credit analysis.
+- [x] Use `AccountGroupService` in multi-currency overview.
+- [x] Use `AccountGroupService` in recurring rules.
+- [x] Use `AccountGroupService` in investments.
+- [x] Use `AccountGroupService` in speech and automation candidates.
+- [x] Add account templates for bank multi-currency, credit card, Huabei,
       Baitiao, meal card, transit card, and ETC.
-- [ ] Add tests for grouped display, concrete-account transaction save,
+- [x] Add tests for grouped display, concrete-account transaction save,
       multi-currency display, exports, speech alias resolution, and recurring
       rules.
 
 ## Wave 5: Scene And SmartList Productization
 
-- [ ] Add a home scene switcher that wraps the current book-switching behavior.
-- [ ] Keep the underlying data model as `JiveBook` during this phase.
-- [ ] Add guided setup scene templates: Daily, Travel, Family, Pet, Renovation,
+- [x] Add a home scene switcher that wraps the current book-switching behavior.
+- [x] Keep the underlying data model as `JiveBook` during this phase.
+- [x] Add guided setup scene templates: Daily, Travel, Family, Pet, Renovation,
       and Freelance.
-- [ ] Applying a scene template creates or suggests default categories, tags,
+- [x] Applying a scene template creates or suggests default categories, tags,
       accounts, and budget suggestions.
-- [ ] Use `SceneCandidateService` to prioritize transaction-entry category and
+- [x] Use `SceneCandidateService` to prioritize transaction-entry category and
       account candidates.
-- [ ] Make scene context affect list filters, stats, and candidate ordering.
-- [ ] Support saving current bill-list filters as a SmartList.
-- [ ] Support pinning SmartLists.
-- [ ] Support setting one SmartList as the default bill-list view.
-- [ ] Restore the default SmartList when entering the bill list.
-- [ ] Clear stale default SmartLists when the referenced view is removed.
-- [ ] Cover travel scene initialization, scene switching, candidate ordering,
+- [x] Make scene context affect list filters, stats, and candidate ordering.
+- [x] Support saving current bill-list filters as a SmartList.
+- [x] Support pinning SmartLists.
+- [x] Support setting one SmartList as the default bill-list view.
+- [x] Restore the default SmartList when entering the bill list.
+- [x] Clear stale default SmartLists when the referenced view is removed.
+- [x] Cover travel scene initialization, scene switching, candidate ordering,
       saved-current-filter, pinning, default restoration, and stale cleanup in
       tests.
 
 ## Wave 6: Object Sharing Hints And Family Limits
 
-- [ ] Keep shared ledger/book as the only permission truth in this phase.
-- [ ] Use `ObjectSharePolicyService` to label accounts as private, inherited
+- [x] Keep shared ledger/book as the only permission truth in this phase.
+- [x] Use `ObjectSharePolicyService` to label accounts as private, inherited
       shared, or shared.
-- [ ] Use `ObjectSharePolicyService` to label categories as private, inherited
+- [x] Use `ObjectSharePolicyService` to label categories as private, inherited
       shared, or shared.
-- [ ] Use `ObjectSharePolicyService` to label tags as private, inherited shared,
+- [x] Use `ObjectSharePolicyService` to label tags as private, inherited shared,
       or shared.
-- [ ] Use `ObjectSharePolicyService` to label scenes/books as private or shared.
-- [ ] Show a shared-transaction hint when creating transactions in shared scenes.
-- [ ] Warn or block when a private account is used in a shared-scene
+- [x] Use `ObjectSharePolicyService` to label scenes/books as private or shared.
+- [x] Show a shared-transaction hint when creating transactions in shared scenes.
+- [x] Warn or block when a private account is used in a shared-scene
       transaction.
-- [ ] Warn before editing or deleting shared accounts.
-- [ ] Warn before editing or deleting shared categories.
-- [ ] Warn before archiving or merging shared tags.
+- [x] Warn before editing or deleting shared accounts.
+- [x] Warn before editing or deleting shared categories.
+- [x] Warn before archiving or merging shared tags.
 - [ ] Implement Free/Pro/Family shared-ledger entry states, member limits, and
       ledger limits from `SPRINT_DESIGN_AND_VALIDATION.md`.
 - [ ] Cover labels, warnings, private-object blocking, and tier-limit messaging
@@ -226,17 +230,21 @@ so final Wave 0 analyzer/test evidence is the GitHub `main` Flutter CI run.
 
 ## Wave 7: System-Level Entry Linkage
 
-- [ ] Fix URL scheme contract for `jive://quick-action`.
-- [ ] Fix URL scheme contract for `jive://transaction/new`.
+- [x] Fix URL scheme contract for `jive://quick-action`.
+- [x] Fix URL scheme contract for `jive://transaction/new`.
 - [x] Fix URL scheme contract for `jive://scene/switch`.
-- [ ] Ensure Deep Link entries include source metadata and missing-field
+- [x] Ensure Deep Link entries include source metadata and missing-field
       highlights.
 - [ ] Ensure Widget actions use the same quick-action execution path as in-app
       actions.
-- [ ] Ensure AppIntent/Shortcuts actions use the same quick-action execution
+- [x] Ensure AppIntent/Shortcuts actions use the same quick-action execution
       path as in-app actions.
-- [ ] Add real-device smoke notes for Widget, Shortcuts/AppIntent, and Deep Link.
-- [ ] Cover system entry contracts in tests where local automation is possible.
+- [x] Add real-device smoke notes for Widget, Shortcuts/AppIntent, and Deep Link.
+- [x] Cover system entry contracts in tests where local automation is possible.
+
+Status note: Android widget quick-add currently opens `jive://transaction/new`
+with a widget source label. The remaining widget-specific item is only for a
+future widget surface that exposes saved quick actions directly.
 
 ## Wave 8: High-Risk Migration Gate
 
