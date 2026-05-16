@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:isar/isar.dart';
 
-import '../../core/database/template_model.dart';
-import '../../core/service/quick_action_service.dart';
-import '../../core/service/template_service.dart';
-import '../../core/service/database_service.dart';
+import '../../core/database/quick_action_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/service/database_service.dart';
+import '../../core/service/quick_action_store_service.dart';
 import '../quick_entry/quick_action_executor.dart';
 
 class TemplateListScreen extends StatefulWidget {
@@ -17,26 +16,54 @@ class TemplateListScreen extends StatefulWidget {
 }
 
 class _TemplateListScreenState extends State<TemplateListScreen> {
+  static const _iconChoices = <String, IconData>{
+    'restaurant': Icons.restaurant,
+    'local_cafe': Icons.local_cafe,
+    'directions_bus': Icons.directions_bus,
+    'shopping_bag': Icons.shopping_bag,
+    'home': Icons.home,
+    'credit_card': Icons.credit_card,
+    'swap_horiz': Icons.swap_horiz,
+    'payments': Icons.payments,
+  };
+  static const _iconLabels = <String, String>{
+    'restaurant': '餐饮',
+    'local_cafe': '咖啡',
+    'directions_bus': '通勤',
+    'shopping_bag': '购物',
+    'home': '家庭',
+    'credit_card': '还款',
+    'swap_horiz': '转账',
+    'payments': '收款',
+  };
+  static const _colorChoices = <String, Color>{
+    '#2E7D32': Color(0xFF2E7D32),
+    '#EF6C00': Color(0xFFEF6C00),
+    '#1565C0': Color(0xFF1565C0),
+    '#6A1B9A': Color(0xFF6A1B9A),
+    '#C62828': Color(0xFFC62828),
+    '#455A64': Color(0xFF455A64),
+  };
+
   Isar? _isar;
   bool _isLoading = true;
-  Map<String, List<JiveTemplate>> _groupedTemplates = {};
+  List<JiveQuickAction> _actions = [];
 
   @override
   void initState() {
     super.initState();
-    _loadTemplates();
+    _loadActions();
   }
 
-  Future<void> _loadTemplates() async {
+  Future<void> _loadActions() async {
     setState(() => _isLoading = true);
 
-    final isar = await _ensureIsar();
-    final service = TemplateService(isar);
-    final grouped = await service.getTemplatesGrouped();
+    final service = await _quickActionStore();
+    final actions = await service.getRecords();
 
     if (!mounted) return;
     setState(() {
-      _groupedTemplates = grouped;
+      _actions = actions;
       _isLoading = false;
     });
   }
@@ -47,11 +74,16 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     return _isar!;
   }
 
+  Future<QuickActionStoreService> _quickActionStore() async {
+    final isar = await _ensureIsar();
+    return QuickActionStoreService(isar);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('交易模板'),
+        title: const Text('快速动作'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
@@ -59,9 +91,9 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
       backgroundColor: JiveTheme.surfaceWhite,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _groupedTemplates.isEmpty
+          : _actions.isEmpty
           ? _buildEmptyState()
-          : _buildTemplateList(),
+          : _buildActionList(),
     );
   }
 
@@ -70,15 +102,15 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.bookmark_border, size: 64, color: Colors.grey.shade300),
+          Icon(Icons.bolt_outlined, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
           Text(
-            '暂无模板',
+            '暂无快速动作',
             style: GoogleFonts.lato(fontSize: 16, color: Colors.grey),
           ),
           const SizedBox(height: 8),
           Text(
-            '在交易详情中点击"模板"按钮保存',
+            '在交易编辑器中点击"保存为快速动作"',
             style: GoogleFonts.lato(fontSize: 14, color: Colors.grey.shade400),
           ),
         ],
@@ -86,56 +118,89 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     );
   }
 
-  Widget _buildTemplateList() {
-    final groups = _groupedTemplates.keys.toList();
+  Widget _buildActionList() {
+    final visible = _actions.where((action) => action.showOnHome).toList();
+    final hidden = _actions.where((action) => !action.showOnHome).toList();
 
-    return ListView.builder(
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: groups.length,
-      itemBuilder: (context, index) {
-        final group = groups[index];
-        final templates = _groupedTemplates[group]!;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                group,
-                style: GoogleFonts.lato(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-            ),
-            ...templates.map((t) => _buildTemplateCard(t)),
-            const SizedBox(height: 8),
-          ],
-        );
-      },
+      children: [
+        _buildIntroCard(),
+        if (visible.isNotEmpty) ...[
+          _buildSectionHeader('首页快速动作', '会出现在首页和快记中心'),
+          ...visible.map(_buildActionCard),
+        ],
+        if (hidden.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _buildSectionHeader('已隐藏', '仍可通过 Deep Link 或快捷指令使用'),
+          ...hidden.map(_buildActionCard),
+        ],
+      ],
     );
   }
 
-  Widget _buildTemplateCard(JiveTemplate template) {
-    final typeIcon = template.type == 'income'
-        ? Icons.arrow_downward
-        : template.type == 'transfer'
-        ? Icons.swap_horiz
-        : Icons.arrow_upward;
-    final typeColor = template.type == 'income'
-        ? Colors.green
-        : template.type == 'transfer'
-        ? Colors.blueGrey
-        : Colors.redAccent;
+  Widget _buildIntroCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: JiveTheme.primaryGreen.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.auto_awesome, color: JiveTheme.primaryGreen, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '快速动作会复用同一套 One Touch 执行协议：信息完整直接保存，缺金额轻确认，复杂交易进入编辑器。',
+              style: GoogleFonts.lato(
+                fontSize: 13,
+                height: 1.35,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, String subtitle) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.lato(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionCard(JiveQuickAction action) {
+    final color = _actionColor(action);
+    final icon = _actionIcon(action);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () => _useTemplate(template),
-        onLongPress: () => _showTemplateOptions(template),
+        onTap: () => _useAction(action),
+        onLongPress: () => _showActionOptions(action),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
@@ -144,10 +209,10 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: typeColor.withValues(alpha: 0.1),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(typeIcon, color: typeColor, size: 20),
+                child: Icon(icon, color: color, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -156,7 +221,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                   children: [
                     Row(
                       children: [
-                        if (template.isPinned)
+                        if (action.isPinned)
                           Padding(
                             padding: const EdgeInsets.only(right: 4),
                             child: Icon(
@@ -167,7 +232,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                           ),
                         Expanded(
                           child: Text(
-                            template.name,
+                            action.name,
                             style: GoogleFonts.lato(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
@@ -178,7 +243,7 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${template.category ?? '未分类'} · 使用 ${template.usageCount} 次',
+                      '${_categoryLabel(action)} · ${_modeLabel(action.mode)} · 使用 ${action.usageCount} 次',
                       style: GoogleFonts.lato(
                         fontSize: 12,
                         color: Colors.grey.shade500,
@@ -187,15 +252,32 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
                   ],
                 ),
               ),
-              Text(
-                template.amount > 0
-                    ? '¥${template.amount.toStringAsFixed(2)}'
-                    : '金额待输入',
-                style: GoogleFonts.rubik(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: template.amount > 0 ? Colors.black87 : Colors.grey,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    action.defaultAmount != null
+                        ? '¥${action.defaultAmount!.toStringAsFixed(2)}'
+                        : '金额待输入',
+                    style: GoogleFonts.rubik(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: action.defaultAmount != null
+                          ? Colors.black87
+                          : Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    action.showOnHome ? '首页显示' : '已隐藏',
+                    style: GoogleFonts.lato(
+                      fontSize: 11,
+                      color: action.showOnHome
+                          ? JiveTheme.primaryGreen
+                          : Colors.grey.shade500,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -204,19 +286,19 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     );
   }
 
-  Future<void> _useTemplate(JiveTemplate template) async {
+  Future<void> _useAction(JiveQuickAction record) async {
     await QuickActionExecutor.execute(
       context,
-      QuickActionService.toQuickAction(template),
+      QuickActionStoreService.toQuickAction(record),
       onCompleted: () {
         if (!mounted) return;
-        _loadTemplates();
+        _loadActions();
         Navigator.maybePop(context, true);
       },
     );
   }
 
-  void _showTemplateOptions(JiveTemplate template) {
+  void _showActionOptions(JiveQuickAction action) {
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
@@ -225,13 +307,62 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
           children: [
             ListTile(
               leading: Icon(
-                template.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+                action.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
               ),
-              title: Text(template.isPinned ? '取消置顶' : '置顶'),
+              title: Text(action.isPinned ? '取消置顶' : '置顶'),
               onTap: () async {
                 Navigator.pop(context);
-                await TemplateService(_isar!).togglePin(template);
-                _loadTemplates();
+                final service = await _quickActionStore();
+                await service.updatePresentation(
+                  action.stableId,
+                  isPinned: !action.isPinned,
+                );
+                _loadActions();
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                action.showOnHome
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+              ),
+              title: Text(action.showOnHome ? '从首页隐藏' : '显示在首页'),
+              onTap: () async {
+                Navigator.pop(context);
+                final service = await _quickActionStore();
+                await service.updatePresentation(
+                  action.stableId,
+                  showOnHome: !action.showOnHome,
+                );
+                _loadActions();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.palette_outlined),
+              title: const Text('设置图标和颜色'),
+              onTap: () {
+                Navigator.pop(context);
+                _showStylePicker(action);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.keyboard_arrow_up),
+              title: const Text('上移'),
+              onTap: () async {
+                Navigator.pop(context);
+                final service = await _quickActionStore();
+                await service.moveAction(action.stableId, -1);
+                _loadActions();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.keyboard_arrow_down),
+              title: const Text('下移'),
+              onTap: () async {
+                Navigator.pop(context);
+                final service = await _quickActionStore();
+                await service.moveAction(action.stableId, 1);
+                _loadActions();
               },
             ),
             ListTile(
@@ -239,35 +370,196 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
               title: const Text('删除', style: TextStyle(color: Colors.red)),
               onTap: () async {
                 Navigator.pop(context);
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('删除模板'),
-                    content: Text('确定删除模板"${template.name}"？'),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('取消'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red,
-                        ),
-                        child: const Text('删除'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirmed == true) {
-                  await TemplateService(_isar!).deleteTemplate(template.id);
-                  _loadTemplates();
-                }
+                await _confirmDelete(action);
               },
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _showStylePicker(JiveQuickAction action) {
+    var selectedIcon = action.iconName ?? _defaultIconName(action);
+    var selectedColor = action.colorHex ?? _defaultColorHex(action);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '设置「${action.name}」',
+                    style: GoogleFonts.lato(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('图标', style: GoogleFonts.lato(fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _iconChoices.entries.map((entry) {
+                      final selected = selectedIcon == entry.key;
+                      return ChoiceChip(
+                        selected: selected,
+                        avatar: Icon(entry.value, size: 18),
+                        label: Text(_iconLabels[entry.key] ?? entry.key),
+                        onSelected: (_) {
+                          setSheetState(() => selectedIcon = entry.key);
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('颜色', style: GoogleFonts.lato(fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 10,
+                    children: _colorChoices.entries.map((entry) {
+                      final selected = selectedColor == entry.key;
+                      return InkWell(
+                        onTap: () {
+                          setSheetState(() => selectedColor = entry.key);
+                        },
+                        borderRadius: BorderRadius.circular(18),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: entry.value,
+                            border: Border.all(
+                              color: selected
+                                  ? Colors.black87
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                          child: selected
+                              ? const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 18,
+                                )
+                              : null,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(context);
+                        final service = await _quickActionStore();
+                        await service.updatePresentation(
+                          action.stableId,
+                          iconName: selectedIcon,
+                          colorHex: selectedColor,
+                        );
+                        _loadActions();
+                      },
+                      child: const Text('保存样式'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(JiveQuickAction action) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除快速动作'),
+        content: Text('确定删除快速动作「${action.name}」？关联的旧模板也会同步删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final service = await _quickActionStore();
+    await service.deleteAction(action.stableId);
+    _loadActions();
+  }
+
+  IconData _actionIcon(JiveQuickAction action) {
+    final name = action.iconName ?? _defaultIconName(action);
+    return _iconChoices[name] ?? Icons.bolt;
+  }
+
+  Color _actionColor(JiveQuickAction action) {
+    final hex = action.colorHex ?? _defaultColorHex(action);
+    return _parseColor(hex) ?? _colorChoices[_defaultColorHex(action)]!;
+  }
+
+  String _defaultIconName(JiveQuickAction action) {
+    if (action.transactionType == 'income') return 'payments';
+    if (action.transactionType == 'transfer') return 'swap_horiz';
+    return 'restaurant';
+  }
+
+  String _defaultColorHex(JiveQuickAction action) {
+    if (action.transactionType == 'income') return '#2E7D32';
+    if (action.transactionType == 'transfer') return '#455A64';
+    return '#C62828';
+  }
+
+  Color? _parseColor(String hex) {
+    final value = hex.replaceFirst('#', '');
+    if (value.length != 6 && value.length != 8) return null;
+    final parsed = int.tryParse(
+      value.length == 6 ? 'FF$value' : value,
+      radix: 16,
+    );
+    return parsed == null ? null : Color(parsed);
+  }
+
+  String _categoryLabel(JiveQuickAction action) {
+    final names = [
+      action.categoryName,
+      action.subCategoryName,
+    ].where((name) => name != null && name.trim().isNotEmpty).join(' / ');
+    if (names.isNotEmpty) return names;
+    if (action.transactionType == 'transfer') return '转账';
+    return '未分类';
+  }
+
+  String _modeLabel(String mode) {
+    switch (mode) {
+      case 'direct':
+        return '直接保存';
+      case 'confirm':
+        return '轻确认';
+      case 'edit':
+        return '进编辑器';
+      default:
+        return '进编辑器';
+    }
   }
 }
