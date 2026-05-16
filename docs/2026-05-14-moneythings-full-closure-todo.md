@@ -1,6 +1,7 @@
 # Jive MoneyThings Full Closure TODO
 
 Date: 2026-05-14
+Last updated: 2026-05-16
 Baseline: `origin/main`
 Branch: `codex/moneythings-full-closure-todo-20260514`
 
@@ -16,22 +17,23 @@ design gate.
 
 ## Guardrails
 
-- [ ] Keep the dirty primary worktree untouched.
-- [ ] Use fresh `origin/main` worktrees for all follow-up implementation work.
-- [ ] Do not change `supabase/migrations` before Wave 8.
-- [ ] Do not change `lib/core/sync` before Wave 8.
-- [ ] Do not change `.github/workflows` in MoneyThings closure PRs.
-- [ ] Do not change SaaS entitlement, payment, or sync truth logic in these PRs.
-- [ ] Default category UX remains two-level; third-level categories are opt-in.
-- [ ] Merchant support remains lightweight memory/search, not a complex merchant
+- [x] Keep the dirty primary worktree untouched.
+- [x] Use fresh `origin/main` worktrees for all follow-up implementation work.
+- [x] Do not change `supabase/migrations` before Wave 8.
+- [x] Do not change `lib/core/sync` before Wave 8.
+- [x] Do not change `.github/workflows` in MoneyThings closure PRs.
+- [x] Do not change SaaS entitlement, payment, or sync truth logic in these PRs.
+- [x] Default category UX remains two-level; third-level categories are opt-in.
+- [x] Merchant support remains lightweight memory/search, not a complex merchant
       master-data system.
-- [ ] Object sharing remains a visibility and warning layer until the Wave 8
+- [x] Object sharing remains a visibility and warning layer until the Wave 8
       permission gate.
 
 ## Wave 0: Merge Queue Closure
 
 Status: ready clean PR queue completed on 2026-05-14. Draft and stacked PR
-cleanup remains open.
+cleanup completed on 2026-05-16. `#266` was closed as superseded; all other
+listed draft/stacked PRs were merged into `main`.
 
 ### Ready clean PRs to merge
 
@@ -65,45 +67,51 @@ cleanup remains open.
 
 ### Draft or stacked PRs to restack or supersede
 
-- [ ] Restack or supersede `#220` Persistent quick action store.
-- [ ] Restack or supersede `#222` Quick action management.
-- [ ] Restack or supersede `#223` Quick action drag ordering.
-- [ ] Restack or supersede `#225` Quick action custom icons.
-- [ ] Restack or supersede `#227` Quick action search.
-- [ ] Restack or supersede `#229` Add-entry quick action save.
-- [ ] Restack or supersede `#230` Quick action core editing.
-- [ ] Restack or supersede `#232` Account group collapse.
-- [ ] Restack or supersede `#233` Quick action edit validation.
-- [ ] Restack or supersede `#235` Grouped account paths in pickers.
-- [ ] Restack or supersede `#236` Category share warnings.
-- [ ] Restack or supersede `#237` Tag share warnings.
-- [ ] Restack or supersede `#240` Grouped account paths in filters.
-- [ ] Restack or supersede `#241` Tag archive warnings.
-- [ ] Restack or supersede `#243` Tag merge warnings.
-- [ ] Restack or supersede `#244` Grouped account paths in automation.
-- [ ] Restack or supersede `#246` Shared account edit warnings.
-- [ ] Restack or supersede `#248` SmartList regression tests.
-- [ ] Restack or supersede `#249` Object share policy tests.
-- [ ] Restack or supersede `#251` Shared scene transaction warning.
-- [ ] Restack or supersede `#255` Form book context for structured entries.
-- [ ] Restack or supersede `#256` SmartList regression coverage.
-- [ ] Restack or supersede `#257` Transaction deep link source coverage.
-- [ ] Resolve `#259` hidden parent category path conflicts; merge only if the
-      final diff stays limited to category path preservation.
-- [ ] Restack or supersede `#260` Account group display path dedupe.
-- [ ] Restack or supersede `#262` Stale SmartList default cleanup.
-- [ ] Restack or supersede `#264` Category import path segments.
-- [ ] Restack or supersede `#265` Category share preview paths.
-- [ ] Restack or supersede `#266` Transaction entry protocol tests.
-- [ ] Restack or supersede `#268` Shared-ledger object share boundary.
+- [x] Merge `#220` Persistent quick action store.
+- [x] Merge `#222` Quick action management.
+- [x] Merge `#223` Quick action drag ordering.
+- [x] Merge `#225` Quick action custom icons.
+- [x] Merge `#227` Quick action search.
+- [x] Merge `#229` Add-entry quick action save.
+- [x] Merge `#230` Quick action core editing.
+- [x] Merge `#232` Account group collapse.
+- [x] Merge `#233` Quick action edit validation.
+- [x] Merge `#235` Grouped account paths in pickers.
+- [x] Merge `#236` Category share warnings.
+- [x] Merge `#237` Tag share warnings.
+- [x] Merge `#240` Grouped account paths in filters.
+- [x] Merge `#241` Tag archive warnings.
+- [x] Merge `#243` Tag merge warnings.
+- [x] Merge `#244` Grouped account paths in automation.
+- [x] Merge `#246` Shared account edit warnings.
+- [x] Merge `#248` SmartList regression tests.
+- [x] Merge `#249` Object share policy tests.
+- [x] Merge `#251` Shared scene transaction warning.
+- [x] Merge `#255` Form book context for structured entries.
+- [x] Merge `#256` SmartList regression coverage.
+- [x] Merge `#257` Transaction deep link source coverage.
+- [x] Resolve and merge `#259` hidden parent category path conflicts; merge only
+      if the final diff stays limited to category path preservation.
+- [x] Merge `#260` Account group display path dedupe.
+- [x] Merge `#262` Stale SmartList default cleanup.
+- [x] Merge `#264` Category import path segments.
+- [x] Merge `#265` Category share preview paths.
+- [x] Close `#266` Transaction entry protocol tests as superseded by merged
+      transaction entry protocol coverage.
+- [x] Merge `#268` Shared-ledger object share boundary.
 
 ### Wave 0 acceptance
 
 - [x] All ready clean PRs are merged or explicitly superseded.
-- [ ] All draft/stacked PRs are either restacked on fresh `main`, superseded, or
+- [x] All draft/stacked PRs are either restacked on fresh `main`, superseded, or
       documented as deferred.
-- [ ] Fresh `main` passes `flutter analyze --no-fatal-infos`.
-- [ ] Fresh `main` passes the merged MoneyThings-related test set.
+- [x] Fresh `main` passes GitHub Flutter CI analyze/test at
+      `main@4109c589` (run `25958116674`).
+- [x] Fresh `main` passes the merged MoneyThings-related test set through the
+      same GitHub Flutter CI run.
+
+Local note: Flutter is not available in the shell PATH for this agent session,
+so final Wave 0 analyzer/test evidence is the GitHub `main` Flutter CI run.
 
 ## Wave 1: One Touch / Quick Action Closure
 
