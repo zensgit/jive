@@ -235,16 +235,16 @@ saved quick actions should reuse `jive://quick-action?id=...`.
 - [x] Fix URL scheme contract for `jive://scene/switch`.
 - [x] Ensure Deep Link entries include source metadata and missing-field
       highlights.
-- [ ] Ensure Widget actions use the same quick-action execution path as in-app
+- [x] Ensure Widget actions use the same quick-action execution path as in-app
       actions.
 - [x] Ensure AppIntent/Shortcuts actions use the same quick-action execution
       path as in-app actions.
 - [x] Add real-device smoke notes for Widget, Shortcuts/AppIntent, and Deep Link.
 - [x] Cover system entry contracts in tests where local automation is possible.
 
-Status note: Android widget quick-add currently opens `jive://transaction/new`
-with a widget source label. The remaining widget-specific item is only for a
-future widget surface that exposes saved quick actions directly.
+Status note: Android widget quick-add opens `jive://transaction/new` by default,
+and can open `jive://quick-action?id=...` when Flutter configures a widget quick
+action shortcut.
 
 ## Wave 8: High-Risk Migration Gate
 
