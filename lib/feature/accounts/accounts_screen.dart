@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/data/account_type_catalog.dart';
 import '../../core/data/bank_catalog.dart';
 import '../../core/database/book_model.dart';
@@ -19,7 +20,6 @@ import '../../core/service/currency_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/object_share_policy_service.dart';
 import 'account_reconcile_screen.dart';
-import 'widgets/account_group_summary_header.dart';
 
 class AccountsScreen extends StatefulWidget {
   final ValueListenable<int>? reloadSignal;
@@ -57,6 +57,10 @@ class _AccountsScreenState extends State<AccountsScreen> {
   // 货币筛选
   String? _filterCurrency;
   List<String> _availableCurrencies = [];
+  final Set<String> _collapsedAccountGroups = <String>{};
+
+  static const String _accountGroupCollapsePrefKey =
+      'accounts_collapsed_groups_v1';
 
   static const List<String> _accountColorPalette = [
     '#43A047',
@@ -115,6 +119,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
     final currentBook = widget.bookId == null
         ? null
         : await _isar.jiveBooks.get(widget.bookId!);
+    final prefs = await SharedPreferences.getInstance();
+    final collapsedAccountGroups =
+        prefs.getStringList(_accountGroupCollapsePrefKey) ?? const <String>[];
 
     // 初始化货币服务并获取基础货币
     _currencyService ??= CurrencyService(_isar);
@@ -167,6 +174,9 @@ class _AccountsScreenState extends State<AccountsScreen> {
       _baseCurrency = baseCurrency;
       _availableCurrencies = currencies;
       _convertedBalances = convertedBalances;
+      _collapsedAccountGroups
+        ..clear()
+        ..addAll(collapsedAccountGroups);
       // 如果筛选的货币不再可用，重置筛选
       if (_filterCurrency != null && !currencies.contains(_filterCurrency)) {
         _filterCurrency = null;
@@ -1520,17 +1530,34 @@ class _AccountsScreenState extends State<AccountsScreen> {
                 if (group.isSingleAccount)
                   _buildAccountItem(group.accounts.first)
                 else
-                  _buildAccountGroupCard(group),
+                  _buildAccountGroupCard(
+                    group,
+                    collapseSection: _accountGroupCollapseSection(title),
+                  ),
             ],
           ),
       ],
     );
   }
 
-  Widget _buildAccountGroupCard(AccountGroupSummary group) {
+  Widget _buildAccountGroupCard(
+    AccountGroupSummary group, {
+    required String collapseSection,
+  }) {
+    final groupService = const AccountGroupService();
+    final isCollapsed = groupService.isCollapsed(
+      group,
+      _collapsedAccountGroups,
+      section: collapseSection,
+    );
+    final currencies = group.currencies.toList()..sort();
+    final currencyLabel = currencies.join(' / ');
+    final balanceLabel = _accountGroupBalanceLabel(group, currencies);
+    final groupMeta =
+        '${group.accounts.length} 个子账户 · $currencyLabel · $balanceLabel';
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      padding: EdgeInsets.fromLTRB(12, 12, 12, isCollapsed ? 12 : 4),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -1548,12 +1575,129 @@ class _AccountsScreenState extends State<AccountsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AccountGroupSummaryHeader(group: group),
-          const SizedBox(height: 10),
-          for (final account in group.accounts) _buildAccountItem(account),
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => _toggleAccountGroupCollapsed(group, collapseSection),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: JiveTheme.primaryGreen.withValues(alpha: 0.10),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.account_balance_outlined,
+                    color: JiveTheme.primaryGreen,
+                    size: 19,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        group.name,
+                        style: GoogleFonts.lato(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        isCollapsed ? '$groupMeta · 已折叠' : groupMeta,
+                        style: GoogleFonts.lato(
+                          color: Colors.grey.shade500,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  isCollapsed
+                      ? Icons.keyboard_arrow_right_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  color: Colors.grey.shade500,
+                ),
+              ],
+            ),
+          ),
+          if (!isCollapsed) ...[
+            const SizedBox(height: 10),
+            for (final account in group.accounts) _buildAccountItem(account),
+          ],
         ],
       ),
     );
+  }
+
+  String _accountGroupCollapseSection(String sectionTitle) {
+    final bookScope = widget.bookId?.toString() ?? _currentBook?.key ?? 'all';
+    return 'book:$bookScope::$sectionTitle';
+  }
+
+  String _accountGroupBalanceLabel(
+    AccountGroupSummary group,
+    List<String> currencies,
+  ) {
+    if (currencies.length == 1) {
+      final currency = currencies.first;
+      final total = group.accounts.fold<double>(
+        0,
+        (sum, account) => sum + _displayBalanceForAccount(account),
+      );
+      final symbol = CurrencyDefaults.getSymbol(currency);
+      return '$symbol${NumberFormat('#,##0.00').format(total)}';
+    }
+
+    final total = group.accounts.fold<double>(
+      0,
+      (sum, account) => sum + _displayConvertedBalanceForAccount(account),
+    );
+    final symbol = CurrencyDefaults.getSymbol(_baseCurrency);
+    return '约 $symbol${NumberFormat('#,##0.00').format(total)}';
+  }
+
+  double _displayBalanceForAccount(JiveAccount account) {
+    final balance = _balances[account.id] ?? account.openingBalance;
+    return account.type == AccountService.typeLiability
+        ? balance.abs()
+        : balance;
+  }
+
+  double _displayConvertedBalanceForAccount(JiveAccount account) {
+    if (account.currency == _baseCurrency) {
+      return _displayBalanceForAccount(account);
+    }
+    final converted = _convertedBalances[account.id];
+    if (converted == null) {
+      return _displayBalanceForAccount(account);
+    }
+    return account.type == AccountService.typeLiability
+        ? converted.abs()
+        : converted;
+  }
+
+  Future<void> _toggleAccountGroupCollapsed(
+    AccountGroupSummary group,
+    String collapseSection,
+  ) async {
+    final next = const AccountGroupService().toggledCollapsedKeys(
+      group,
+      _collapsedAccountGroups,
+      section: collapseSection,
+    );
+    setState(() {
+      _collapsedAccountGroups
+        ..clear()
+        ..addAll(next);
+    });
+
+    final sorted = _collapsedAccountGroups.toList()..sort();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_accountGroupCollapsePrefKey, sorted);
   }
 
   Widget _buildAccountItem(JiveAccount account) {

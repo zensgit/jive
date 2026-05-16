@@ -562,6 +562,60 @@ void main() {
         '中国银行 / 定期 / USD',
       );
     });
+
+    test('uses section scoped collapse keys for account groups', () {
+      final group = AccountGroupSummary(
+        name: '中国银行',
+        accounts: [
+          _account(id: 1, name: '活期', groupName: '中国银行'),
+          _account(id: 2, name: '定期', groupName: '中国银行'),
+        ],
+      );
+      const service = AccountGroupService();
+
+      expect(
+        service.collapseKey(group, section: 'book:1::资产账户'),
+        'book:1::资产账户::中国银行',
+      );
+      expect(
+        service.collapseKey(group, section: 'book:2::资产账户'),
+        isNot(service.collapseKey(group, section: 'book:1::资产账户')),
+      );
+    });
+
+    test('toggles collapsed account groups without mutating input set', () {
+      final group = AccountGroupSummary(
+        name: '中国银行',
+        accounts: [
+          _account(id: 1, name: '活期', groupName: '中国银行'),
+          _account(id: 2, name: '定期', groupName: '中国银行'),
+        ],
+      );
+      const service = AccountGroupService();
+      final original = <String>{'book:1::资产账户::招商银行'};
+
+      final collapsed = service.toggledCollapsedKeys(
+        group,
+        original,
+        section: 'book:1::资产账户',
+      );
+      final expanded = service.toggledCollapsedKeys(
+        group,
+        collapsed,
+        section: 'book:1::资产账户',
+      );
+
+      expect(original, {'book:1::资产账户::招商银行'});
+      expect(
+        service.isCollapsed(group, collapsed, section: 'book:1::资产账户'),
+        isTrue,
+      );
+      expect(
+        service.isCollapsed(group, expanded, section: 'book:1::资产账户'),
+        isFalse,
+      );
+      expect(expanded, original);
+    });
   });
 
   group('SceneCandidateService', () {

@@ -87,6 +87,36 @@ class AccountGroupService {
     return '$groupName / ${account.name} / $suffix';
   }
 
+  String collapseKey(AccountGroupSummary group, {String? section}) {
+    final groupName = group.name.trim();
+    final sectionName = section?.trim();
+    if (sectionName == null || sectionName.isEmpty) {
+      return groupName;
+    }
+    return '$sectionName::$groupName';
+  }
+
+  bool isCollapsed(
+    AccountGroupSummary group,
+    Set<String> collapsedKeys, {
+    String? section,
+  }) {
+    return collapsedKeys.contains(collapseKey(group, section: section));
+  }
+
+  Set<String> toggledCollapsedKeys(
+    AccountGroupSummary group,
+    Set<String> collapsedKeys, {
+    String? section,
+  }) {
+    final key = collapseKey(group, section: section);
+    final next = <String>{...collapsedKeys};
+    if (!next.add(key)) {
+      next.remove(key);
+    }
+    return next;
+  }
+
   static String _groupNameFor(JiveAccount account) {
     final groupName = account.groupName?.trim();
     if (groupName == null ||
