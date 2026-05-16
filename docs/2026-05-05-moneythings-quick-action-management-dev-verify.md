@@ -42,6 +42,7 @@ The page supports:
 - show/hide on home and quick entry hub
 - icon/color style picker
 - manual up/down ordering
+- drag-and-drop ordering in the follow-up `codex/moneythings-quick-action-dnd` slice
 - delete with template-backed archive semantics
 
 ### Store API
@@ -100,4 +101,4 @@ Results:
 
 - Cross-device quick action sync and conflict handling.
 - Cloud-backed independent quick action source replacing template compatibility persistence.
-- Richer icon catalog and drag-and-drop ordering.
+- Custom user-uploaded quick action icon packs.
