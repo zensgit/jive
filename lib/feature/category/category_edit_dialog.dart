@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:isar/isar.dart';
+import '../../core/database/book_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/service/category_icon_style.dart';
 import '../../core/service/category_service.dart';
+import '../../core/service/object_share_policy_service.dart';
 import '../../core/service/transaction_service.dart';
 import '../../core/design_system/theme.dart';
 import '../stats/stats_screen.dart';
@@ -13,11 +15,13 @@ import 'category_transactions_screen.dart';
 class CategoryEditDialog extends StatefulWidget {
   final JiveCategory category;
   final Isar isar;
+  final JiveBook? currentBook;
 
   const CategoryEditDialog({
     super.key,
     required this.category,
     required this.isar,
+    this.currentBook,
   });
 
   @override
@@ -434,6 +438,12 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   Future<void> _save() async {
     final newName = _nameController.text.trim();
     if (newName.isEmpty) return;
+    final confirmed = await _confirmSharedCategoryChange(
+      title: "修改共享分类？",
+      actionLabel: "继续保存",
+      description: "保存分类名称、图标、父级、颜色或预算设置。",
+    );
+    if (!confirmed) return;
 
     setState(() => _isSaving = true);
     await CategoryService(widget.isar).updateCategory(
@@ -487,11 +497,17 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
     final sourceName = widget.category.name;
 
     if (!mounted) return;
+    final sharedWarning = _categoryShareWarning;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("确认转移账单"),
-        content: Text("将 $sourceName 的账单转移到 $targetName？"),
+        content: Text(
+          [
+            "将 $sourceName 的账单转移到 $targetName？",
+            if (sharedWarning != null) sharedWarning,
+          ].join("\n\n"),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -638,6 +654,12 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   Future<void> _promoteToParent() async {
     final newName = _nameController.text.trim();
     if (newName.isEmpty) return;
+    final confirmed = await _confirmSharedCategoryChange(
+      title: "调整共享分类层级？",
+      actionLabel: "继续调整",
+      description: "该分类会从子分类变为一级分类，成员看到的分类结构也会变化。",
+    );
+    if (!confirmed) return;
     await CategoryService(widget.isar).updateCategory(
       widget.category.id,
       newName,
@@ -651,6 +673,14 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
   }
 
   Future<void> _toggleHidden() async {
+    final confirmed = await _confirmSharedCategoryChange(
+      title: _isHidden ? "恢复共享分类？" : "隐藏共享分类？",
+      actionLabel: _isHidden ? "继续恢复" : "继续隐藏",
+      description: _isHidden
+          ? "该分类会重新出现在候选列表中，可能影响共享成员的分类选择。"
+          : "该分类会从候选列表隐藏，可能影响共享成员的分类选择。",
+    );
+    if (!confirmed) return;
     await CategoryService(
       widget.isar,
     ).setCategoryHidden(widget.category.id, !_isHidden);
@@ -693,7 +723,7 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("该分类有账单"),
-        content: Text("检测到 $txCount 笔账单，请选择处理方式。"),
+        content: Text("${_categoryDeletionWarning(txCount)}\n\n请选择处理方式。"),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -733,7 +763,9 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("删除分类？"),
-        content: const Text("删除后分类将无法恢复，相关账单会保留原名称。"),
+        content: Text(
+          "${_categoryDeletionWarning(txCount)}\n\n删除后分类将无法恢复，相关账单会保留原名称。",
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -759,6 +791,49 @@ class _CategoryEditDialogState extends State<CategoryEditDialog> {
       return;
     }
     Navigator.pop(context, true);
+  }
+
+  String? get _categoryShareWarning {
+    return const ObjectSharePolicyService()
+        .evaluate(book: widget.currentBook, objectLabel: "分类")
+        .warning;
+  }
+
+  String _categoryDeletionWarning(int txCount) {
+    return const ObjectSharePolicyService().deletionWarning(
+      objectLabel: widget.category.name,
+      affectedTransactionCount: txCount,
+      shared: _categoryShareWarning != null,
+    );
+  }
+
+  Future<bool> _confirmSharedCategoryChange({
+    required String title,
+    required String actionLabel,
+    required String description,
+  }) async {
+    final warning = _categoryShareWarning;
+    if (warning == null) return true;
+    if (!mounted) return false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text("$warning\n\n$description"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("取消"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
   }
 
   Widget _buildColorPicker() {
