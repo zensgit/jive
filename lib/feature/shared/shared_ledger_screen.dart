@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/database/shared_ledger_model.dart';
 import '../../core/design_system/theme.dart';
+import '../../core/entitlement/entitlement_service.dart';
+import '../../core/entitlement/user_tier.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/shared_ledger_limit_policy.dart';
 import '../../core/service/shared_ledger_service.dart';
 
 /// Screen for managing shared family ledgers.
@@ -15,6 +19,8 @@ class SharedLedgerScreen extends StatefulWidget {
 }
 
 class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
+  static const _limitPolicy = SharedLedgerLimitPolicy();
+
   List<JiveSharedLedger> _ledgers = [];
   bool _isLoading = true;
   late SharedLedgerService _service;
@@ -43,34 +49,56 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tier = context.watch<EntitlementService?>()?.tier ?? UserTier.free;
+    final createDecision = _limitPolicy.canCreateLedger(
+      tier: tier,
+      existingLedgers: _ledgers,
+    );
+    final joinDecision = _limitPolicy.canJoinLedger(
+      tier: tier,
+      existingLedgers: _ledgers,
+    );
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: const Text('家庭共享账本', style: TextStyle(fontWeight: FontWeight.w600)),
+        title: const Text(
+          '家庭共享账本',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         backgroundColor: Colors.grey.shade100,
         elevation: 0,
         actions: [
           IconButton(
             icon: const Icon(Icons.person_add),
             tooltip: '加入账本',
-            onPressed: _showJoinDialog,
+            onPressed: joinDecision.allowed
+                ? _showJoinDialog
+                : () => _showLimitDecision(joinDecision),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showCreateDialog,
-        backgroundColor: JiveTheme.primaryGreen,
+        onPressed: createDecision.allowed
+            ? _showCreateDialog
+            : () => _showLimitDecision(createDecision),
+        backgroundColor: createDecision.allowed
+            ? JiveTheme.primaryGreen
+            : Colors.grey.shade400,
         child: const Icon(Icons.add),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _ledgers.isEmpty
-              ? _buildEmptyState()
-              : _buildLedgerList(),
+          ? _buildEmptyState(tier, createDecision, joinDecision)
+          : _buildLedgerList(tier),
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(
+    UserTier tier,
+    SharedLedgerLimitDecision createDecision,
+    SharedLedgerLimitDecision joinDecision,
+  ) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40),
@@ -79,10 +107,13 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
           children: [
             Icon(Icons.family_restroom, size: 72, color: Colors.grey.shade300),
             const SizedBox(height: 20),
-            const Text('还没有共享账本', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            const Text(
+              '还没有共享账本',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 8),
             Text(
-              '创建一个共享账本，邀请家人一起记账',
+              _limitPolicy.limitsFor(tier).summary,
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade500, height: 1.5),
             ),
@@ -91,16 +122,22 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 OutlinedButton.icon(
-                  onPressed: _showJoinDialog,
+                  onPressed: joinDecision.allowed
+                      ? _showJoinDialog
+                      : () => _showLimitDecision(joinDecision),
                   icon: const Icon(Icons.login),
                   label: const Text('加入'),
                 ),
                 const SizedBox(width: 16),
                 FilledButton.icon(
-                  onPressed: _showCreateDialog,
+                  onPressed: createDecision.allowed
+                      ? _showCreateDialog
+                      : () => _showLimitDecision(createDecision),
                   icon: const Icon(Icons.add),
                   label: const Text('创建'),
-                  style: FilledButton.styleFrom(backgroundColor: JiveTheme.primaryGreen),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: JiveTheme.primaryGreen,
+                  ),
                 ),
               ],
             ),
@@ -110,19 +147,71 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
     );
   }
 
-  Widget _buildLedgerList() {
+  Widget _buildLedgerList(UserTier tier) {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-        itemCount: _ledgers.length,
+        itemCount: _ledgers.length + 1,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (_, i) => _buildLedgerCard(_ledgers[i]),
+        itemBuilder: (_, i) {
+          if (i == 0) return _buildLimitBanner(tier);
+          return _buildLedgerCard(_ledgers[i - 1], tier);
+        },
       ),
     );
   }
 
-  Widget _buildLedgerCard(JiveSharedLedger ledger) {
+  Widget _buildLimitBanner(UserTier tier) {
+    final limit = _limitPolicy.limitsFor(tier);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: limit.canUseSharedLedgers
+            ? JiveTheme.primaryGreen.withAlpha(18)
+            : Colors.orange.withAlpha(22),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: limit.canUseSharedLedgers
+              ? JiveTheme.primaryGreen.withAlpha(45)
+              : Colors.orange.withAlpha(70),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            limit.canUseSharedLedgers
+                ? Icons.verified_user_outlined
+                : Icons.lock_outline,
+            color: limit.canUseSharedLedgers
+                ? JiveTheme.primaryGreen
+                : Colors.orange.shade700,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  limit.summary,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '已使用 ${_ledgers.length}/${limit.maxLedgers} 个共享账本',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLedgerCard(JiveSharedLedger ledger, UserTier tier) {
+    final limit = _limitPolicy.limitsFor(tier);
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -132,12 +221,18 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
       child: Column(
         children: [
           ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
             leading: CircleAvatar(
               backgroundColor: JiveTheme.primaryGreen.withAlpha(30),
               child: Icon(Icons.family_restroom, color: JiveTheme.primaryGreen),
             ),
-            title: Text(ledger.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+            title: Text(
+              ledger.name,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -148,7 +243,21 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
                     const SizedBox(width: 8),
                     Icon(Icons.people, size: 14, color: Colors.grey.shade500),
                     const SizedBox(width: 4),
-                    Text('${ledger.memberCount}人', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+                    Text(
+                      '${ledger.memberCount}人',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '上限 ${limit.maxMembersPerLedger} 人',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -159,7 +268,10 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
                   const PopupMenuItem(value: 'invite', child: Text('邀请码')),
                 const PopupMenuItem(value: 'members', child: Text('成员管理')),
                 if (ledger.isOwner)
-                  const PopupMenuItem(value: 'delete', child: Text('删除', style: TextStyle(color: Colors.red))),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Text('删除', style: TextStyle(color: Colors.red)),
+                  ),
               ],
               onSelected: (action) => _handleAction(ledger, action),
             ),
@@ -173,17 +285,30 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
                   const SizedBox(width: 8),
                   Text(
                     '邀请码: ${ledger.inviteCode}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600, fontFamily: 'monospace'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      fontFamily: 'monospace',
+                    ),
                   ),
                   const SizedBox(width: 8),
                   InkWell(
                     onTap: () {
-                      Clipboard.setData(ClipboardData(text: ledger.inviteCode!));
+                      Clipboard.setData(
+                        ClipboardData(text: ledger.inviteCode!),
+                      );
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('邀请码已复制'), duration: Duration(seconds: 1)),
+                        const SnackBar(
+                          content: Text('邀请码已复制'),
+                          duration: Duration(seconds: 1),
+                        ),
                       );
                     },
-                    child: Icon(Icons.copy, size: 14, color: JiveTheme.primaryGreen),
+                    child: Icon(
+                      Icons.copy,
+                      size: 14,
+                      color: JiveTheme.primaryGreen,
+                    ),
                   ),
                 ],
               ),
@@ -206,11 +331,27 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
         color: color.withAlpha(20),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Text(label, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 
   Future<void> _showCreateDialog() async {
+    final decision = _limitPolicy.canCreateLedger(
+      tier: _currentTier(),
+      existingLedgers: _ledgers,
+    );
+    if (!decision.allowed) {
+      await _showLimitDecision(decision);
+      return;
+    }
+
     final nameCtrl = TextEditingController();
     final result = await showDialog<String>(
       context: context,
@@ -226,10 +367,15 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, nameCtrl.text.trim()),
-            style: FilledButton.styleFrom(backgroundColor: JiveTheme.primaryGreen),
+            style: FilledButton.styleFrom(
+              backgroundColor: JiveTheme.primaryGreen,
+            ),
             child: const Text('创建'),
           ),
         ],
@@ -241,13 +387,22 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
     await _service.createLedger(name: result, ownerUserId: 'local_user');
     await _load();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已创建"$result"')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已创建"$result"')));
     }
   }
 
   Future<void> _showJoinDialog() async {
+    final decision = _limitPolicy.canJoinLedger(
+      tier: _currentTier(),
+      existingLedgers: _ledgers,
+    );
+    if (!decision.allowed) {
+      await _showLimitDecision(decision);
+      return;
+    }
+
     final codeCtrl = TextEditingController();
     final result = await showDialog<String>(
       context: context,
@@ -265,10 +420,16 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
           maxLength: 6,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, codeCtrl.text.trim().toUpperCase()),
-            style: FilledButton.styleFrom(backgroundColor: JiveTheme.primaryGreen),
+            onPressed: () =>
+                Navigator.pop(ctx, codeCtrl.text.trim().toUpperCase()),
+            style: FilledButton.styleFrom(
+              backgroundColor: JiveTheme.primaryGreen,
+            ),
             child: const Text('加入'),
           ),
         ],
@@ -284,9 +445,9 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
     );
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(success ? '已加入共享账本' : '邀请码无效')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(success ? '已加入共享账本' : '邀请码无效')));
       if (success) await _load();
     }
   }
@@ -294,6 +455,14 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
   Future<void> _handleAction(JiveSharedLedger ledger, String action) async {
     switch (action) {
       case 'invite':
+        final decision = _limitPolicy.canInviteMember(
+          tier: _currentTier(),
+          ledger: ledger,
+        );
+        if (!decision.allowed) {
+          await _showLimitDecision(decision);
+          return;
+        }
         if (ledger.inviteCode != null) {
           await Clipboard.setData(ClipboardData(text: ledger.inviteCode!));
           if (mounted) {
@@ -313,7 +482,10 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
             title: const Text('删除共享账本'),
             content: Text('确定删除"${ledger.name}"吗？此操作不可撤销。'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('取消'),
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('删除', style: TextStyle(color: Colors.red)),
@@ -348,7 +520,9 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
                 contentPadding: EdgeInsets.zero,
                 leading: CircleAvatar(
                   backgroundColor: Colors.grey.shade200,
-                  child: Text(m.displayName.isNotEmpty ? m.displayName[0] : '?'),
+                  child: Text(
+                    m.displayName.isNotEmpty ? m.displayName[0] : '?',
+                  ),
                 ),
                 title: Text(m.displayName),
                 trailing: _roleChip(m.role),
@@ -357,7 +531,35 @@ class _SharedLedgerScreenState extends State<SharedLedgerScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('关闭')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  UserTier _currentTier() {
+    return Provider.of<EntitlementService?>(context, listen: false)?.tier ??
+        UserTier.free;
+  }
+
+  Future<void> _showLimitDecision(SharedLedgerLimitDecision decision) async {
+    if (decision.allowed || !mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(decision.title),
+        content: Text(decision.message),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: FilledButton.styleFrom(
+              backgroundColor: JiveTheme.primaryGreen,
+            ),
+            child: const Text('知道了'),
+          ),
         ],
       ),
     );
