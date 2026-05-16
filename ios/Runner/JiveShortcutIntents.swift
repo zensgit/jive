@@ -158,6 +158,15 @@ struct JiveShortcutsProvider: AppShortcutsProvider {
       systemImageName: "plus.circle.fill"
     )
     AppShortcut(
+      intent: RunJiveQuickActionIntent(),
+      phrases: [
+        "用 \(.applicationName) 运行快速动作",
+        "在 \(.applicationName) 执行 One Touch",
+      ],
+      shortTitle: "快速动作",
+      systemImageName: "bolt.circle.fill"
+    )
+    AppShortcut(
       intent: SwitchJiveSceneIntent(),
       phrases: [
         "用 \(.applicationName) 切换场景",
