@@ -223,9 +223,9 @@ saved quick actions should reuse `jive://quick-action?id=...`.
 - [x] Warn before editing or deleting shared accounts.
 - [x] Warn before editing or deleting shared categories.
 - [x] Warn before archiving or merging shared tags.
-- [ ] Implement Free/Pro/Family shared-ledger entry states, member limits, and
+- [x] Implement Free/Pro/Family shared-ledger entry states, member limits, and
       ledger limits from `SPRINT_DESIGN_AND_VALIDATION.md`.
-- [ ] Cover labels, warnings, private-object blocking, and tier-limit messaging
+- [x] Cover labels, warnings, private-object blocking, and tier-limit messaging
       in tests.
 
 ## Wave 7: System-Level Entry Linkage
