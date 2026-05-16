@@ -103,11 +103,12 @@ class CategoryPathService {
     Iterable<JiveCategory> categories, {
     required bool isIncome,
   }) {
-    final visible = categories
+    final all = categories.toList();
+    final visibleLeaves = all
         .where((c) => c.isIncome == isIncome && !c.isHidden)
         .toList();
-    final paths = visible
-        .map((c) => resolve(visible, categoryKey: c.key))
+    final paths = visibleLeaves
+        .map((c) => resolve(all, categoryKey: c.key))
         .where((p) => !p.isEmpty)
         .toList();
     paths.sort((a, b) {
