@@ -29,6 +29,8 @@ Expected behavior:
 - Local gallery image icons are current-device presentation only until quick action cloud sync and file backup semantics are designed.
 - The quick action management page can search by name, category, note, amount, type, mode, home/hidden state, or pinned state.
 - Search is display-only: drag ordering is disabled while searching and returns after clearing the query.
+- On the manual add transaction page, once amount, account, and category are complete, `保存为快速动作` can turn the current entry into a reusable quick action.
+- The manual-entry quick action seed resolves calculator expressions and preserves the selected account, three-level category leaf, note, time, book, and tags.
 
 ## Structured Transaction Editor
 
@@ -126,6 +128,7 @@ Expected behavior:
 - Change one quick action icon/color, drag it by the right-side handle, and reopen the page to confirm the local presentation persists.
 - Use `更多图标` to set an emoji or text icon for a quick action and confirm the card updates.
 - Search quick actions by `餐饮`, `15`, `轻确认`, or `隐藏`; confirm matched actions remain tappable and drag handles return after clearing search.
+- From manual add transaction, enter `1+2×3`, choose a custom category, add a note, and confirm `保存为快速动作` appears.
 - Drag one hidden quick action and confirm it stays hidden after reload.
 - Open `jive://transaction/new?amount=15&type=expense` and confirm the editor receives the amount.
 - Open `jive://transaction/new?entrySource=quickAction&quickActionId=template:<id>&mode=direct` and confirm the editor banner/metadata reflect the quick action source.

@@ -31,6 +31,7 @@ import '../../core/service/database_service.dart';
 import '../../core/service/tag_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/tag_rule_service.dart';
+import '../../core/service/template_service.dart';
 import '../../core/service/transaction_service.dart';
 import '../../core/widgets/jive_calendar/jive_calendar.dart';
 import '../../core/database/category_model.dart';
@@ -54,10 +55,12 @@ import '../accounts/accounts_screen.dart';
 import '../stats/stats_screen.dart';
 import '../tag/tag_icon_catalog.dart';
 import '../tag/tag_picker_sheet.dart';
+import '../template/widgets/save_template_dialog.dart';
 import 'transaction_amount_expression.dart';
 import 'widgets/account_selector_section.dart';
 import 'widgets/compact_amount_bar.dart';
 import 'widgets/quick_field_pills_bar.dart';
+import 'widgets/quick_action_suggest_bar.dart';
 import 'widgets/transaction_datetime_sheet.dart';
 import 'widgets/transaction_split_sheet.dart';
 import 'widgets/transaction_calculator_key.dart';
@@ -74,12 +77,95 @@ enum TransactionType { expense, income, transfer }
 typedef AddTransactionSaver = Future<void> Function(JiveTransaction tx);
 typedef AddTransactionSmartTagResolver =
     Future<List<String>> Function(JiveTransaction tx);
+typedef AddTransactionQuickActionCreator =
+    Future<void> Function({
+      required JiveTransaction transaction,
+      required String name,
+      required bool saveAmount,
+      String? groupName,
+    });
+
+@visibleForTesting
+double? resolveAddTransactionQuickActionAmount(String amountText) {
+  if (TransactionAmountExpression.hasExpression(amountText)) {
+    return TransactionAmountExpression.preview(amountText);
+  }
+  return double.tryParse(amountText);
+}
+
+@visibleForTesting
+JiveTransaction? buildAddTransactionQuickActionSeed({
+  required String amountText,
+  required DateTime selectedTime,
+  required TransactionType txType,
+  required bool isSplitMode,
+  required JiveAccount? selectedAccount,
+  required JiveAccount? selectedToAccount,
+  required JiveCategory? selectedParent,
+  required JiveCategory? selectedSub,
+  required List<JiveCategory> categoryUniverse,
+  required String note,
+  required int? currentBookId,
+  required int? widgetBookId,
+  required List<String> selectedTagKeys,
+}) {
+  if (isSplitMode) return null;
+  final amount = resolveAddTransactionQuickActionAmount(amountText);
+  if (amount == null || amount <= 0 || selectedAccount == null) return null;
+  if (txType != TransactionType.transfer && selectedParent == null) {
+    return null;
+  }
+  if (txType == TransactionType.transfer &&
+      (selectedToAccount == null ||
+          selectedToAccount.id == selectedAccount.id)) {
+    return null;
+  }
+
+  final categoryKeys = txType == TransactionType.transfer
+      ? null
+      : const CategoryPathService().toTransactionKeys(
+          categoryUniverse,
+          selectedSub ?? selectedParent,
+        );
+  final trimmedNote = note.trim();
+  return JiveTransaction()
+    ..amount = amount
+    ..source = 'quick_action_seed'
+    ..timestamp = selectedTime
+    ..type = switch (txType) {
+      TransactionType.expense => 'expense',
+      TransactionType.income => 'income',
+      TransactionType.transfer => 'transfer',
+    }
+    ..categoryKey = txType == TransactionType.transfer
+        ? null
+        : categoryKeys?.categoryKey ?? selectedParent!.key
+    ..subCategoryKey = txType == TransactionType.transfer
+        ? null
+        : categoryKeys?.subCategoryKey ?? selectedSub?.key
+    ..category = txType == TransactionType.transfer
+        ? '转账'
+        : categoryKeys?.categoryName ?? selectedParent!.name
+    ..subCategory = txType == TransactionType.transfer
+        ? null
+        : categoryKeys?.subCategoryName
+    ..accountId = selectedAccount.id
+    ..toAccountId = txType == TransactionType.transfer
+        ? selectedToAccount?.id
+        : null
+    ..note = trimmedNote.isEmpty ? null : trimmedNote
+    ..bookId = currentBookId ?? widgetBookId
+    ..tagKeys = List<String>.from(selectedTagKeys);
+}
 
 class AddTransactionScreenKeys {
   static const amountFormula = ValueKey('add-transaction-amount-formula');
   static const amountResult = ValueKey('add-transaction-amount-result');
   static const noteCollapsed = ValueKey('add-transaction-note-collapsed');
   static const noteTextField = ValueKey('add-transaction-note-text-field');
+  static const saveQuickActionButton = ValueKey(
+    'add-transaction-save-quick-action-button',
+  );
   static const saveButton = ValueKey('add-transaction-save-button');
   static const sharedSceneSaveDialog = ValueKey(
     'add-transaction-shared-scene-save-dialog',
@@ -127,6 +213,8 @@ class AddTransactionScreen extends StatefulWidget {
   final AddTransactionSaver? transactionSaver;
   @visibleForTesting
   final AddTransactionSmartTagResolver? smartTagResolver;
+  @visibleForTesting
+  final AddTransactionQuickActionCreator? quickActionCreator;
 
   const AddTransactionScreen({
     super.key,
@@ -149,6 +237,7 @@ class AddTransactionScreen extends StatefulWidget {
     this.initialCurrentBook,
     this.transactionSaver,
     this.smartTagResolver,
+    this.quickActionCreator,
   }) : assert(
          (initialParentCategories == null &&
                  initialSubCategories == null &&
@@ -1579,6 +1668,84 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
   double? _expressionPreview() =>
       TransactionAmountExpression.preview(_amountStr);
 
+  double? _currentResolvedAmount() =>
+      resolveAddTransactionQuickActionAmount(_amountStr);
+
+  bool get _canSaveCurrentAsQuickAction {
+    if (_isSplitMode) return false;
+    final amount = _currentResolvedAmount();
+    if (amount == null || amount <= 0) return false;
+    if (_selectedAccount == null) return false;
+    if (_txType == TransactionType.transfer) {
+      return _selectedToAccount != null &&
+          _selectedToAccount?.id != _selectedAccount?.id;
+    }
+    return _selectedParent != null;
+  }
+
+  JiveTransaction? _buildQuickActionSeedTransaction() {
+    return buildAddTransactionQuickActionSeed(
+      amountText: _amountStr,
+      selectedTime: _selectedTime,
+      txType: _txType,
+      isSplitMode: _isSplitMode,
+      selectedAccount: _selectedAccount,
+      selectedToAccount: _selectedToAccount,
+      selectedParent: _selectedParent,
+      selectedSub: _selectedSub,
+      categoryUniverse: _currentCategoryUniverse,
+      note: _noteController.text,
+      currentBookId: _currentBook?.id,
+      widgetBookId: widget.bookId,
+      selectedTagKeys: _selectedTagKeys,
+    );
+  }
+
+  Future<void> _saveCurrentAsQuickAction() async {
+    final seed = _buildQuickActionSeedTransaction();
+    if (seed == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先补全金额、账户和分类')));
+      return;
+    }
+
+    final result = await showSaveTemplateDialog(
+      context: context,
+      transaction: seed,
+      categoryName: seed.subCategory?.isNotEmpty == true
+          ? seed.subCategory
+          : seed.category,
+    );
+    if (result == null) return;
+
+    final name = result['name'] as String;
+    final saveAmount = result['saveAmount'] as bool? ?? true;
+    final groupName = result['groupName'] as String?;
+    final creator = widget.quickActionCreator;
+    if (creator != null) {
+      await creator(
+        transaction: seed,
+        name: name,
+        saveAmount: saveAmount,
+        groupName: groupName,
+      );
+    } else {
+      await TemplateService(_isar).createFromTransaction(
+        transaction: seed,
+        name: name,
+        saveAmount: saveAmount,
+        groupName: groupName,
+      );
+    }
+    if (!mounted) return;
+    _hasDataChanges = true;
+    DataReloadBus.notify();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已保存为快速动作')));
+  }
+
   Future<void> _pickTransactionDate() async {
     final now = DateTime.now();
     final lastDay = DateTime(now.year, now.month, now.day);
@@ -2291,6 +2458,14 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                   reimbursementStatus: _reimbursementStatus,
                   onTapReimbursement: _toggleReimbursementFlag,
                 ),
+
+                if (_canSaveCurrentAsQuickAction)
+                  KeyedSubtree(
+                    key: AddTransactionScreenKeys.saveQuickActionButton,
+                    child: QuickActionSuggestBar(
+                      onSaveAsAction: _saveCurrentAsQuickAction,
+                    ),
+                  ),
 
                 // 6. 紧凑金额条
                 if (!hideAmountInSearch)
