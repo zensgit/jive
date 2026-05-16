@@ -49,6 +49,14 @@ class JiveTodayWidget : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_today_income, "¥${fmt.format(todayIncome)}")
             views.setTextViewText(R.id.widget_today_count, "${todayCount}笔")
             views.setTextViewText(R.id.widget_month_expense, "本月 ¥${fmt.format(monthExpense)}")
+            val quickActionId = prefs
+                .getString("flutter.widget_quick_action_id", null)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+            val quickActionLabel = prefs
+                .getString("flutter.widget_quick_action_label", null)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
 
             // Tap anywhere on the widget to open the app.
             val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
@@ -61,12 +69,26 @@ class JiveTodayWidget : AppWidgetProvider() {
                 )
                 views.setOnClickPendingIntent(R.id.widget_root, pendingIntent)
             }
-            val quickEntryUri = Uri.Builder()
-                .scheme("jive")
-                .authority("transaction")
-                .appendPath("new")
-                .appendQueryParameter("sourceLabel", "来自桌面小组件")
-                .build()
+            val quickEntryUri = if (quickActionId != null) {
+                views.setTextViewText(
+                    R.id.widget_quick_add,
+                    quickActionLabel ?: "⚡ 快速动作"
+                )
+                Uri.Builder()
+                    .scheme("jive")
+                    .authority("quick-action")
+                    .appendQueryParameter("id", quickActionId)
+                    .build()
+            } else {
+                views.setTextViewText(R.id.widget_quick_add, "+ 记一笔")
+                Uri.Builder()
+                    .scheme("jive")
+                    .authority("transaction")
+                    .appendPath("new")
+                    .appendQueryParameter("entrySource", "deepLink")
+                    .appendQueryParameter("sourceLabel", "来自桌面小组件")
+                    .build()
+            }
             val quickEntryIntent = Intent(Intent.ACTION_VIEW, quickEntryUri).apply {
                 setPackage(context.packageName)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)

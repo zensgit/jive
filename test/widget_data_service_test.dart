@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jive/core/service/home_widget_updater.dart';
 import 'package:jive/core/service/widget_data_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('WidgetSummary', () {
@@ -87,6 +89,43 @@ void main() {
       expect(summary.todayIncome, 0.99);
       expect(summary.monthExpense, 123.45);
       expect(summary.monthBudgetRemaining, 876.55);
+    });
+  });
+
+  group('HomeWidgetUpdater quick action shortcut', () {
+    test('persists trimmed quick action id and label', () async {
+      SharedPreferences.setMockInitialValues({});
+
+      await HomeWidgetUpdater.setQuickActionShortcut(
+        actionId: ' template:42 ',
+        label: ' 午餐 ',
+      );
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(
+        prefs.getString(HomeWidgetUpdater.widgetQuickActionIdKey),
+        'template:42',
+      );
+      expect(
+        prefs.getString(HomeWidgetUpdater.widgetQuickActionLabelKey),
+        '午餐',
+      );
+    });
+
+    test('clears quick action shortcut for blank ids', () async {
+      SharedPreferences.setMockInitialValues({
+        HomeWidgetUpdater.widgetQuickActionIdKey: 'template:42',
+        HomeWidgetUpdater.widgetQuickActionLabelKey: '午餐',
+      });
+
+      await HomeWidgetUpdater.setQuickActionShortcut(actionId: ' ');
+
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(HomeWidgetUpdater.widgetQuickActionIdKey), isNull);
+      expect(
+        prefs.getString(HomeWidgetUpdater.widgetQuickActionLabelKey),
+        isNull,
+      );
     });
   });
 }
