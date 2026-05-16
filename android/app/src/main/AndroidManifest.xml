@@ -63,6 +63,7 @@
                 <data android:scheme="jive" android:host="auto"/>
                 <data android:scheme="jive" android:host="quick-action"/>
                 <data android:scheme="jive" android:host="transaction"/>
+                <data android:scheme="jive" android:host="scene"/>
             </intent-filter>
             <!-- Android system share entry for receipt/payment text. -->
             <intent-filter>

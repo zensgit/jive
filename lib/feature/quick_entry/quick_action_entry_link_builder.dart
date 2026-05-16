@@ -42,6 +42,28 @@ class QuickActionEntryLinkBuilder {
     );
   }
 
+  static Uri sceneSwitch({
+    int? bookId,
+    String? bookKey,
+    String? sceneName,
+    bool allScenes = false,
+  }) {
+    final query = <String, String>{};
+    _put(query, 'bookId', bookId?.toString());
+    _put(query, 'bookKey', bookKey);
+    _put(query, 'name', sceneName);
+    if (allScenes || query.isEmpty) {
+      query['all'] = 'true';
+    }
+
+    return Uri(
+      scheme: 'jive',
+      host: 'scene',
+      path: '/switch',
+      queryParameters: query,
+    );
+  }
+
   static void _put(Map<String, String> query, String key, String? value) {
     final text = value?.trim();
     if (text == null || text.isEmpty) return;

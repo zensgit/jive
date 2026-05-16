@@ -103,5 +103,26 @@ void main() {
         expect(uri.queryParameters['amount'], '0');
       },
     );
+
+    test('builds parseable scene switch links', () {
+      final byId = QuickActionEntryLinkBuilder.sceneSwitch(bookId: 7);
+      final byKey = QuickActionEntryLinkBuilder.sceneSwitch(
+        bookKey: 'travel_book',
+      );
+      final byName = QuickActionEntryLinkBuilder.sceneSwitch(sceneName: '旅行');
+      final allScenes = QuickActionEntryLinkBuilder.sceneSwitch();
+
+      expect(byId.toString(), 'jive://scene/switch?bookId=7');
+      expect(QuickActionDeepLinkService.parse(byId)?.sceneBookId, 7);
+      expect(
+        QuickActionDeepLinkService.parse(byKey)?.sceneBookKey,
+        'travel_book',
+      );
+      expect(QuickActionDeepLinkService.parse(byName)?.sceneName, '旅行');
+      expect(
+        QuickActionDeepLinkService.parse(allScenes)?.switchToAllScenes,
+        isTrue,
+      );
+    });
   });
 }

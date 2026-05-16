@@ -99,5 +99,40 @@ void main() {
         contains(TransactionHighlightField.amount),
       );
     });
+
+    test(
+      'parses scene switch links by id, key, name, or all-scenes target',
+      () {
+        final byId = QuickActionDeepLinkService.parse(
+          Uri.parse('jive://scene/switch?bookId=7'),
+        );
+        final byKey = QuickActionDeepLinkService.parse(
+          Uri.parse('jive://scene/switch?bookKey=travel_book'),
+        );
+        final byName = QuickActionDeepLinkService.parse(
+          Uri.parse('jive://scene/switch?name=%E6%97%85%E8%A1%8C'),
+        );
+        final allScenes = QuickActionDeepLinkService.parse(
+          Uri.parse('jive://scene/switch?all=true'),
+        );
+
+        expect(byId?.isSceneSwitch, isTrue);
+        expect(byId?.sceneBookId, 7);
+        expect(byKey?.isSceneSwitch, isTrue);
+        expect(byKey?.sceneBookKey, 'travel_book');
+        expect(byName?.isSceneSwitch, isTrue);
+        expect(byName?.sceneName, '旅行');
+        expect(allScenes?.isSceneSwitch, isTrue);
+        expect(allScenes?.switchToAllScenes, isTrue);
+      },
+    );
+
+    test('ignores incomplete scene switch links without a target', () {
+      final request = QuickActionDeepLinkService.parse(
+        Uri.parse('jive://scene/switch'),
+      );
+
+      expect(request, isNull);
+    });
   });
 }

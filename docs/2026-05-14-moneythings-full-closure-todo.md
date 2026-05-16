@@ -228,7 +228,7 @@ so final Wave 0 analyzer/test evidence is the GitHub `main` Flutter CI run.
 
 - [ ] Fix URL scheme contract for `jive://quick-action`.
 - [ ] Fix URL scheme contract for `jive://transaction/new`.
-- [ ] Fix URL scheme contract for `jive://scene/switch`.
+- [x] Fix URL scheme contract for `jive://scene/switch`.
 - [ ] Ensure Deep Link entries include source metadata and missing-field
       highlights.
 - [ ] Ensure Widget actions use the same quick-action execution path as in-app
