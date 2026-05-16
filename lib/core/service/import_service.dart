@@ -38,6 +38,7 @@ class ImportParsedRecord {
   final String? toAccountName;
   final String? parentCategoryName;
   final String? childCategoryName;
+  final List<String> categoryPathSegments;
   final double? serviceCharge;
   final List<String> tagNames;
   final int lineNumber;
@@ -55,6 +56,7 @@ class ImportParsedRecord {
     this.toAccountName,
     this.parentCategoryName,
     this.childCategoryName,
+    this.categoryPathSegments = const [],
     this.serviceCharge,
     this.tagNames = const [],
     required this.lineNumber,
@@ -76,6 +78,7 @@ class ImportParsedRecord {
     Object? toAccountName = _unsetValue,
     Object? parentCategoryName = _unsetValue,
     Object? childCategoryName = _unsetValue,
+    Object? categoryPathSegments = _unsetValue,
     Object? serviceCharge = _unsetValue,
     Object? tagNames = _unsetValue,
     int? lineNumber,
@@ -105,6 +108,9 @@ class ImportParsedRecord {
       childCategoryName: identical(childCategoryName, _unsetValue)
           ? this.childCategoryName
           : childCategoryName as String?,
+      categoryPathSegments: identical(categoryPathSegments, _unsetValue)
+          ? this.categoryPathSegments
+          : List<String>.from(categoryPathSegments as List<String>),
       serviceCharge: identical(serviceCharge, _unsetValue)
           ? this.serviceCharge
           : serviceCharge as double?,
@@ -691,6 +697,7 @@ class ImportService {
         toAccountName: record.toAccountName,
         parentCategoryName: record.parentCategoryName,
         childCategoryName: record.childCategoryName,
+        categoryPathSegments: record.categoryPathSegments,
         serviceCharge: record.serviceCharge,
         tagNames: record.tagNames,
       );
@@ -952,6 +959,7 @@ class ImportService {
           toAccountName: toAccountName,
           parentCategoryName: parentCategoryName,
           childCategoryName: childCategoryName,
+          categoryPathSegments: categoryPath.segments,
           serviceCharge: serviceCharge,
           tagNames: tagNames,
           lineNumber: lineNumber,
