@@ -50,6 +50,7 @@
 - 2026-05-07：PR #233 / `codex/moneythings-quick-action-edit-validation` 已打开并通过 CI，把快速动作编辑页的金额校验、模式预览和账户路径显示收为独立 stacked PR。
 - 2026-05-07：PR #235 / `codex/moneythings-account-picker-paths` 已打开，交易高频账户选择器、结构化编辑器账户选择器和账户 chip 展示改为账户组路径，选择时仍保存具体 `accountId`。
 - 2026-05-07：PR #236 / `codex/moneythings-category-share-warnings` 为分类编辑、隐藏/恢复、提升层级、转移账单和删除流程补齐共享场景风险提示，仍只使用 `ObjectSharePolicyService` 提示层。
+- 2026-05-07：PR #237 / `codex/moneythings-tag-share-warnings` 将同一共享提示策略扩展到标签和标签分组编辑、归档/恢复、删除分组流程，不新增对象级权限真相。
 - 2026-05-10：`codex/moneythings-quick-action-editor-params` 补齐 Quick Action edit fallback 参数映射测试，并保留 `bookId` 作为结构化编辑器的场景/账本预填上下文。
 - 2026-05-10：`codex/moneythings-scene-template-contracts` 固定日常、旅行、装修、家庭、宠物、自由职业 6 个场景模板的 ID 顺序与核心分类/标签语义，避免场景产品化后续回退。
 - 2026-05-10：`codex/moneythings-transaction-entry-protocol` 补齐 `TransactionEntryParams` 协议回归测试，固定来源横幅、提交按钮、缺字段高亮和复杂转账预填合同。
@@ -97,7 +98,7 @@
 - 账户组以视图层表达，交易仍保存到具体 `accountId`。
 - SmartList 支持默认视图、置顶、当前筛选/搜索保存，以及固定分类页面保存；服务级测试已覆盖保存视图映射、置顶排序和默认视图清理。
 - 账户选择器在交易高频入口和结构化编辑器中显示账户组路径，避免用户在复杂子账户中选错具体账户。
-- 对象共享第一阶段保持提示层，覆盖场景、账户、分类、标签的共享状态、共享场景交易保存提示与删除风险提示；分类编辑关键操作会在共享场景中追加确认。
+- 对象共享第一阶段保持提示层，覆盖场景、账户、分类、标签的共享状态、共享场景交易保存提示与删除风险提示；分类、标签和标签分组的关键编辑操作会在共享场景中追加确认。
 
 ## Post-Beta / 迁移型待评估
 
@@ -132,6 +133,7 @@
 - `docs/2026-05-07-moneythings-quick-action-edit-validation-dev-verify.md`
 - `docs/2026-05-07-moneythings-account-picker-paths-dev-verify.md`
 - `docs/2026-05-07-moneythings-category-share-warnings-dev-verify.md`
+- `docs/2026-05-07-moneythings-tag-share-warnings-dev-verify.md`
 - `docs/2026-05-10-moneythings-quick-action-editor-params-dev-verify.md`
 - `docs/2026-05-10-moneythings-scene-template-contracts-dev-verify.md`
 - `docs/2026-05-10-moneythings-transaction-entry-protocol-dev-verify.md`

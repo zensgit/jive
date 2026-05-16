@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:isar/isar.dart';
+import '../../core/database/book_model.dart';
 import '../../core/database/tag_model.dart';
+import '../../core/service/object_share_policy_service.dart';
 import '../../core/service/tag_service.dart';
 import '../category/category_icon_source_picker.dart';
 import 'tag_icon_catalog.dart';
@@ -11,12 +13,14 @@ class TagGroupDialog extends StatefulWidget {
   final Isar isar;
   final JiveTagGroup? group;
   final ScrollController? scrollController;
+  final JiveBook? currentBook;
 
   const TagGroupDialog({
     super.key,
     required this.isar,
     this.group,
     this.scrollController,
+    this.currentBook,
   });
 
   @override
@@ -38,7 +42,9 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
       _nameController.text = group.name;
       _selectedColor = group.colorHex;
       final iconText = group.iconText?.trim() ?? '';
-      _selectedIcon = (group.iconName == null || group.iconName!.trim().isEmpty) && iconText.isNotEmpty
+      _selectedIcon =
+          (group.iconName == null || group.iconName!.trim().isEmpty) &&
+              iconText.isNotEmpty
           ? 'text:$iconText'
           : group.iconName;
     } else {
@@ -61,6 +67,14 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
     if (name.length > TagService.maxGroupNameLength) {
       setState(() => _error = '最多12字');
       return;
+    }
+    if (widget.group != null) {
+      final confirmed = await _confirmSharedGroupChange(
+        title: '修改共享标签分组？',
+        actionLabel: '继续保存',
+        description: '保存分组名称、图标或颜色设置。',
+      );
+      if (!confirmed) return;
     }
     setState(() {
       _error = null;
@@ -107,6 +121,40 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
     }
   }
 
+  String? get _groupShareWarning {
+    return const ObjectSharePolicyService()
+        .evaluate(book: widget.currentBook, objectLabel: '标签分组')
+        .warning;
+  }
+
+  Future<bool> _confirmSharedGroupChange({
+    required String title,
+    required String actionLabel,
+    required String description,
+  }) async {
+    final warning = _groupShareWarning;
+    if (warning == null) return true;
+    if (!mounted) return false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text('$warning\n\n$description'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(actionLabel),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,9 +183,7 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
           children: [
             _buildSheetHandle(),
             if (_loading)
-              const Expanded(
-                child: Center(child: CircularProgressIndicator()),
-              )
+              const Expanded(child: Center(child: CircularProgressIndicator()))
             else ...[
               Expanded(
                 child: SingleChildScrollView(
@@ -150,7 +196,10 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
                         children: [
                           Text(
                             widget.group == null ? '创建分组' : '编辑分组',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const Spacer(),
                           IconButton(
@@ -164,14 +213,21 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
                         controller: _nameController,
                         maxLength: 12,
                         maxLengthEnforcement: MaxLengthEnforcement.none,
-                        scrollPadding: EdgeInsets.only(bottom: bottomInset + 120),
+                        scrollPadding: EdgeInsets.only(
+                          bottom: bottomInset + 120,
+                        ),
                         decoration: InputDecoration(
                           labelText: '分组名称',
                           hintText: '最多12字',
                           errorText: _error,
                           counterText: '',
-                          suffixText: _nameController.text.trim().length > 12 ? '超过12字' : null,
-                          suffixStyle: TextStyle(color: Colors.red.shade400, fontSize: 12),
+                          suffixText: _nameController.text.trim().length > 12
+                              ? '超过12字'
+                              : null,
+                          suffixStyle: TextStyle(
+                            color: Colors.red.shade400,
+                            fontSize: 12,
+                          ),
                           border: const OutlineInputBorder(),
                         ),
                         onChanged: (_) {
@@ -180,7 +236,10 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      const Text('颜色', style: TextStyle(fontWeight: FontWeight.w500)),
+                      const Text(
+                        '颜色',
+                        style: TextStyle(fontWeight: FontWeight.w500),
+                      ),
                       const SizedBox(height: 8),
                       _buildColorGrid(),
                       const SizedBox(height: 12),
@@ -237,7 +296,8 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
 
   Widget _buildColorGrid() {
     final colors = TagService.defaultColors;
-    final isCustomSelected = _selectedColor != null && !colors.contains(_selectedColor);
+    final isCustomSelected =
+        _selectedColor != null && !colors.contains(_selectedColor);
     return GridView.count(
       crossAxisCount: 7,
       shrinkWrap: true,
@@ -276,7 +336,9 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
         decoration: BoxDecoration(
           color: color,
           shape: BoxShape.circle,
-          border: isSelected ? Border.all(color: Colors.black87, width: 2) : null,
+          border: isSelected
+              ? Border.all(color: Colors.black87, width: 2)
+              : null,
         ),
         child: isSelected
             ? const Icon(Icons.check, color: Colors.white, size: 16)
@@ -292,7 +354,9 @@ class _TagGroupDialogState extends State<TagGroupDialog> {
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: selected && customHex != null ? _colorFromHex(customHex) : null,
+          color: selected && customHex != null
+              ? _colorFromHex(customHex)
+              : null,
           gradient: showCustom
               ? null
               : const LinearGradient(

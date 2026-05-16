@@ -720,6 +720,28 @@ void main() {
       expect(warning, contains('本地账本'));
       expect(warning, contains('候选列表'));
     });
+
+    test('labels tag groups in shared books with inherited warnings', () {
+      final book = JiveBook()
+        ..key = 'book_shared_tags'
+        ..name = '家庭'
+        ..currency = 'CNY'
+        ..order = 0
+        ..isDefault = false
+        ..isArchived = false
+        ..isShared = true
+        ..memberCount = 2
+        ..createdAt = DateTime(2026)
+        ..updatedAt = DateTime(2026);
+
+      final policy = const ObjectSharePolicyService().evaluate(
+        book: book,
+        objectLabel: '标签分组',
+      );
+
+      expect(policy.label, '继承场景共享');
+      expect(policy.warning, contains('标签分组'));
+    });
   });
 }
 
