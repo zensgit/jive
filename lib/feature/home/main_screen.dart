@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/ads/banner_ad_widget.dart';
 import '../../core/auth/auth_service.dart';
+import '../../core/database/book_model.dart';
+import '../../core/service/book_service.dart';
 import '../../core/service/database_service.dart';
 import '../../core/service/quick_action_service.dart';
 import '../../core/sync/sync_engine.dart';
@@ -166,6 +168,11 @@ class _MainScreenState extends State<MainScreen>
       return;
     }
 
+    if (request.isSceneSwitch) {
+      await _switchSceneLink(request);
+      return;
+    }
+
     final params = request.transactionParams;
     if (params == null) return;
     final saved = await Navigator.of(context).push<bool>(
@@ -196,6 +203,81 @@ class _MainScreenState extends State<MainScreen>
         unawaited(loadTransactions().then((_) => notifyDataChanged()));
       },
     );
+  }
+
+  Future<void> _switchSceneLink(QuickActionDeepLinkRequest request) async {
+    if (request.switchToAllScenes) {
+      setState(() {
+        currentBookId = null;
+        _currentIndex = 0;
+      });
+      await loadTransactions();
+      notifyDataChanged();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已切换到全部场景')));
+      return;
+    }
+
+    final isar = await DatabaseService.getInstance();
+    final bookService = BookService(isar);
+    var activeBooks = books;
+    if (activeBooks.isEmpty) {
+      activeBooks = await bookService.getActiveBooks();
+    }
+
+    var target = _findSceneBook(activeBooks, request);
+    if (target == null) {
+      activeBooks = await bookService.getActiveBooks();
+      target = _findSceneBook(activeBooks, request);
+    }
+
+    final targetBook = target;
+    if (targetBook == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('场景不存在或已归档')));
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      books = activeBooks;
+      currentBookId = targetBook.id;
+      _currentIndex = 0;
+    });
+    await loadTransactions();
+    notifyDataChanged();
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('已切换到场景「${targetBook.name}」')));
+  }
+
+  JiveBook? _findSceneBook(
+    List<JiveBook> activeBooks,
+    QuickActionDeepLinkRequest request,
+  ) {
+    for (final book in activeBooks) {
+      if (request.sceneBookId != null && book.id == request.sceneBookId) {
+        return book;
+      }
+      if (_sameSceneText(book.key, request.sceneBookKey)) {
+        return book;
+      }
+      if (_sameSceneText(book.name, request.sceneName)) {
+        return book;
+      }
+    }
+    return null;
+  }
+
+  bool _sameSceneText(String value, String? candidate) {
+    final text = candidate?.trim();
+    if (text == null || text.isEmpty) return false;
+    return value.trim().toLowerCase() == text.toLowerCase();
   }
 
   Widget _buildHomeContent() {

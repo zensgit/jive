@@ -5,10 +5,18 @@ import '../transactions/transaction_entry_params.dart';
 class QuickActionDeepLinkRequest {
   final String? quickActionId;
   final TransactionEntryParams? transactionParams;
+  final int? sceneBookId;
+  final String? sceneBookKey;
+  final String? sceneName;
+  final bool switchToAllScenes;
 
   const QuickActionDeepLinkRequest._({
     this.quickActionId,
     this.transactionParams,
+    this.sceneBookId,
+    this.sceneBookKey,
+    this.sceneName,
+    this.switchToAllScenes = false,
   });
 
   const QuickActionDeepLinkRequest.quickAction(String id)
@@ -17,8 +25,25 @@ class QuickActionDeepLinkRequest {
   const QuickActionDeepLinkRequest.transaction(TransactionEntryParams params)
     : this._(transactionParams: params);
 
+  const QuickActionDeepLinkRequest.sceneSwitch({
+    int? bookId,
+    String? bookKey,
+    String? name,
+    bool allScenes = false,
+  }) : this._(
+         sceneBookId: bookId,
+         sceneBookKey: bookKey,
+         sceneName: name,
+         switchToAllScenes: allScenes,
+       );
+
   bool get isQuickAction => quickActionId != null;
   bool get isTransaction => transactionParams != null;
+  bool get isSceneSwitch =>
+      switchToAllScenes ||
+      sceneBookId != null ||
+      sceneBookKey != null ||
+      sceneName != null;
 }
 
 /// Parses MoneyThings-style external entry links into the same in-app protocol
@@ -44,6 +69,12 @@ class QuickActionDeepLinkService {
         uri.pathSegments.isNotEmpty &&
         uri.pathSegments.first == 'new') {
       return QuickActionDeepLinkRequest.transaction(_parseTransaction(uri));
+    }
+
+    if (uri.host == 'scene' &&
+        uri.pathSegments.isNotEmpty &&
+        uri.pathSegments.first == 'switch') {
+      return _parseSceneSwitch(uri);
     }
 
     return null;
@@ -151,6 +182,29 @@ class QuickActionDeepLinkService {
     }
   }
 
+  static QuickActionDeepLinkRequest? _parseSceneSwitch(Uri uri) {
+    final query = uri.queryParameters;
+    final rawBookId = _firstNonEmpty(query['bookId'], query['id']);
+    final bookKey = _firstNonEmpty(query['bookKey'], query['key']);
+    final sceneName = _firstNonEmpty(
+      query['name'],
+      _firstNonEmpty(query['sceneName'], query['scene']),
+    );
+    final allScenes = _isTruthy(query['all']) || rawBookId == 'all';
+    final bookId = allScenes ? null : int.tryParse(rawBookId ?? '');
+
+    if (!allScenes && bookId == null && bookKey == null && sceneName == null) {
+      return null;
+    }
+
+    return QuickActionDeepLinkRequest.sceneSwitch(
+      bookId: bookId,
+      bookKey: bookKey,
+      name: sceneName,
+      allScenes: allScenes,
+    );
+  }
+
   static String _normalizedType(String? raw) {
     switch (raw?.trim()) {
       case 'income':
@@ -208,6 +262,17 @@ class QuickActionDeepLinkService {
     )?.toLowerCase();
     if (raw == 'true' || raw == '1' || raw == 'yes') return true;
     return query['mode']?.trim() == 'direct';
+  }
+
+  static bool _isTruthy(String? raw) {
+    switch (raw?.trim().toLowerCase()) {
+      case 'true':
+      case '1':
+      case 'yes':
+        return true;
+      default:
+        return false;
+    }
   }
 
   static String? _firstNonEmpty(String? first, String? second) {
