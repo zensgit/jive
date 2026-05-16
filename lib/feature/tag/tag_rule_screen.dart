@@ -7,6 +7,7 @@ import '../../core/database/account_model.dart';
 import '../../core/database/category_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/tag_rule_model.dart';
+import '../../core/service/account_group_service.dart';
 import '../../core/service/account_service.dart';
 import '../../core/service/data_reload_bus.dart';
 import '../../core/service/database_service.dart';
@@ -21,11 +22,7 @@ class TagRuleScreen extends StatefulWidget {
   final JiveTag tag;
   final Isar? isar;
 
-  const TagRuleScreen({
-    super.key,
-    required this.tag,
-    this.isar,
-  });
+  const TagRuleScreen({super.key, required this.tag, this.isar});
 
   @override
   State<TagRuleScreen> createState() => _TagRuleScreenState();
@@ -98,7 +95,9 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
       if (!_titleScrollController.hasClients) return;
       final max = _titleScrollController.position.maxScrollExtent;
       if (max <= 8) return;
-      final durationMs = (max / pixelsPerSecond * 1000).clamp(1200, 8000).round();
+      final durationMs = (max / pixelsPerSecond * 1000)
+          .clamp(1200, 8000)
+          .round();
       final duration = Duration(milliseconds: durationMs);
       try {
         await _titleScrollController.animateTo(
@@ -225,18 +224,22 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogContext, _DeleteAction.cancel),
+              onPressed: () =>
+                  Navigator.pop(dialogContext, _DeleteAction.cancel),
               child: const Text('取消'),
             ),
             if (willDisableAll)
               TextButton(
-                onPressed: () => Navigator.pop(dialogContext, _DeleteAction.deleteOnly),
+                onPressed: () =>
+                    Navigator.pop(dialogContext, _DeleteAction.deleteOnly),
                 child: const Text('仅删除'),
               ),
             TextButton(
               onPressed: () => Navigator.pop(
                 dialogContext,
-                willDisableAll ? _DeleteAction.deleteAndCleanup : _DeleteAction.deleteOnly,
+                willDisableAll
+                    ? _DeleteAction.deleteAndCleanup
+                    : _DeleteAction.deleteOnly,
               ),
               child: Text(willDisableAll ? '删除并清理' : '删除'),
             ),
@@ -266,15 +269,20 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         content: const Text('停用后将没有启用中的规则，该标签不会再自动打标。是否同时清理历史智能标签？'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, _DisableAllAction.cancel),
+            onPressed: () =>
+                Navigator.pop(dialogContext, _DisableAllAction.cancel),
             child: const Text('取消'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, _DisableAllAction.disableOnly),
+            onPressed: () =>
+                Navigator.pop(dialogContext, _DisableAllAction.disableOnly),
             child: const Text('仅停用'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, _DisableAllAction.disableAndCleanup),
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              _DisableAllAction.disableAndCleanup,
+            ),
             child: const Text('停用并清理'),
           ),
         ],
@@ -353,33 +361,44 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: Text(_error!, style: const TextStyle(color: Colors.redAccent)))
-              : _rules.isEmpty
-                  ? _buildEmpty()
-                  : Column(
-                      children: [
-                        _buildFilterBar(isLandscape: isLandscape),
-                        Expanded(
-                          child: visibleRules.isEmpty
-                              ? _buildEmptySearch()
-                              : ListView.separated(
-                                  padding: EdgeInsets.fromLTRB(
-                                    16,
-                                    4,
-                                    16,
-                                    isLandscape ? 12 : 24,
-                                  ),
-                                  itemCount: visibleRules.length,
-                                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                  itemBuilder: (context, index) =>
-                                      _buildRuleCard(visibleRules[index]),
-                                ),
+          ? Center(
+              child: Text(
+                _error!,
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+            )
+          : _rules.isEmpty
+          ? _buildEmpty()
+          : Column(
+              children: [
+                _buildFilterBar(isLandscape: isLandscape),
+                Expanded(
+                  child: visibleRules.isEmpty
+                      ? _buildEmptySearch()
+                      : ListView.separated(
+                          padding: EdgeInsets.fromLTRB(
+                            16,
+                            4,
+                            16,
+                            isLandscape ? 12 : 24,
+                          ),
+                          itemCount: visibleRules.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (context, index) =>
+                              _buildRuleCard(visibleRules[index]),
                         ),
-                      ],
-                    ),
+                ),
+              ],
+            ),
       bottomNavigationBar: SafeArea(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(16, isLandscape ? 4 : 8, 16, isLandscape ? 8 : 16),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            isLandscape ? 4 : 8,
+            16,
+            isLandscape ? 8 : 16,
+          ),
           child: ElevatedButton.icon(
             onPressed: _loading ? null : () => _editRule(),
             icon: const Icon(Icons.add),
@@ -416,7 +435,10 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
             foregroundColor: fg,
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
             visualDensity: VisualDensity.compact,
-            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+            textStyle: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       );
@@ -428,21 +450,19 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         enabled: !busy,
         onSelected: (value) => setState(() => _sort = value),
         itemBuilder: (context) => const [
-          PopupMenuItem(
-            value: _RuleSort.updatedDesc,
-            child: Text('最近更新'),
-          ),
-          PopupMenuItem(
-            value: _RuleSort.createdDesc,
-            child: Text('最近创建'),
-          ),
+          PopupMenuItem(value: _RuleSort.updatedDesc, child: Text('最近更新')),
+          PopupMenuItem(value: _RuleSort.createdDesc, child: Text('最近创建')),
         ],
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.sort, size: 16, color: busy ? Colors.grey.shade500 : accent),
+              Icon(
+                Icons.sort,
+                size: 16,
+                color: busy ? Colors.grey.shade500 : accent,
+              ),
               const SizedBox(width: 4),
               Text(
                 '排序',
@@ -463,9 +483,9 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
         : () async {
             await _loadData();
             if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('已更新规则')),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('已更新规则')));
           };
 
     final recentPressed = busy
@@ -474,10 +494,8 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
             await Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => SmartTagRecentMatchesScreen(
-                  tag: widget.tag,
-                  isar: _isar,
-                ),
+                builder: (_) =>
+                    SmartTagRecentMatchesScreen(tag: widget.tag, isar: _isar),
               ),
             );
             if (!mounted) return;
@@ -590,9 +608,11 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
       final message = result.cancelled
           ? '已取消补标（已处理 ${result.scannedCount} 笔）'
           : result.updatedCount == 0
-              ? '没有需要补标的交易'
-              : '已补标 ${result.updatedCount} 笔交易（匹配 ${result.matchedCount}/${result.scannedCount}）';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+          ? '没有需要补标的交易'
+          : '已补标 ${result.updatedCount} 笔交易（匹配 ${result.matchedCount}/${result.scannedCount}）';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       await SmartTagLogService().addLog(
         SmartTagLogEntry(
           tagKey: widget.tag.key,
@@ -613,9 +633,9 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     } catch (e) {
       if (!mounted) return;
       final errorMessage = '补标失败：$e';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage)));
       await SmartTagLogService().addLog(
         SmartTagLogEntry(
           tagKey: widget.tag.key,
@@ -657,7 +677,9 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     );
     var estimating = false;
 
-    Future<void> refreshEstimate(void Function(void Function()) setDialogState) async {
+    Future<void> refreshEstimate(
+      void Function(void Function()) setDialogState,
+    ) async {
       setDialogState(() => estimating = true);
       final next = await service.estimateCleanupForTag(
         widget.tag.key,
@@ -707,9 +729,12 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
                       estimate.smartTaggedCount == 0
                           ? '该范围内没有需要清理的智能标签'
                           : '扫描 ${estimate.scannedCount} 笔，智能标签 ${estimate.smartTaggedCount} 笔；'
-                              '预计清理智能标记 ${estimate.willRemoveSmartCount} 笔，'
-                              '${removeTagToo ? '移除标签 ${estimate.willRemoveTagCount} 笔' : '保留原标签'}。',
-                      style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                                '预计清理智能标记 ${estimate.willRemoveSmartCount} 笔，'
+                                '${removeTagToo ? '移除标签 ${estimate.willRemoveTagCount} 笔' : '保留原标签'}。',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                      ),
                     ),
                 ],
               ),
@@ -759,11 +784,13 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
       final message = result.cancelled
           ? '已取消清理（已处理 ${result.scannedCount} 笔）'
           : result.updatedCount == 0
-              ? '没有需要清理的智能标签'
-              : removeTagToo
-                  ? '已清理智能标签 ${result.updatedCount} 笔，移除标签 ${result.removedTagCount} 笔'
-                  : '已清理智能标签 ${result.updatedCount} 笔';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+          ? '没有需要清理的智能标签'
+          : removeTagToo
+          ? '已清理智能标签 ${result.updatedCount} 笔，移除标签 ${result.removedTagCount} 笔'
+          : '已清理智能标签 ${result.updatedCount} 笔';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       await SmartTagLogService().addLog(
         SmartTagLogEntry(
           tagKey: widget.tag.key,
@@ -787,7 +814,9 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     } catch (e) {
       if (!mounted) return;
       final errorMessage = '清理失败：$e';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage)));
       await SmartTagLogService().addLog(
         SmartTagLogEntry(
           tagKey: widget.tag.key,
@@ -833,9 +862,7 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
                 children: [
                   LinearProgressIndicator(value: progress),
                   const SizedBox(height: 8),
-                  Text(
-                    total == 0 ? '准备中...' : '已处理 $processed / $total',
-                  ),
+                  Text(total == 0 ? '准备中...' : '已处理 $processed / $total'),
                 ],
               ),
               actions: [
@@ -993,9 +1020,17 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     final enabled = _rules.where((rule) => rule.isEnabled).length;
     final disabled = total - enabled;
     final selectedColor = const Color(0xFF2E7D32);
-    final textStyle = const TextStyle(fontSize: 12, fontWeight: FontWeight.w600);
+    final textStyle = const TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+    );
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, isLandscape ? 4 : 10, 16, isLandscape ? 0 : 4),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        isLandscape ? 4 : 10,
+        16,
+        isLandscape ? 0 : 4,
+      ),
       child: Row(
         children: [
           ChoiceChip(
@@ -1032,7 +1067,10 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
           const SizedBox(height: 12),
           Text('暂无智能规则', style: TextStyle(color: Colors.grey.shade500)),
           const SizedBox(height: 8),
-          Text('新增规则后，仅对新增交易生效', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+          Text(
+            '新增规则后，仅对新增交易生效',
+            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+          ),
         ],
       ),
     );
@@ -1069,7 +1107,9 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
                 rule.isEnabled ? '已启用' : '已关闭',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: rule.isEnabled ? const Color(0xFF2E7D32) : Colors.grey.shade600,
+                  color: rule.isEnabled
+                      ? const Color(0xFF2E7D32)
+                      : Colors.grey.shade600,
                 ),
               ),
               const Spacer(),
@@ -1084,7 +1124,11 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
               ),
               IconButton(
                 onPressed: () => _deleteRule(rule),
-                icon: const Icon(Icons.delete_outline, size: 20, color: Colors.redAccent),
+                icon: const Icon(
+                  Icons.delete_outline,
+                  size: 20,
+                  color: Colors.redAccent,
+                ),
               ),
             ],
           ),
@@ -1092,7 +1136,10 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
           for (final line in lines)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Text(line, style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
+              child: Text(
+                line,
+                style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+              ),
             ),
         ],
       ),
@@ -1113,8 +1160,12 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
       lines.add('账户：${names.join('、')}');
     }
     if (rule.categoryKey != null || rule.subCategoryKey != null) {
-      final parent = rule.categoryKey == null ? null : _categoryByKey[rule.categoryKey!];
-      final child = rule.subCategoryKey == null ? null : _categoryByKey[rule.subCategoryKey!];
+      final parent = rule.categoryKey == null
+          ? null
+          : _categoryByKey[rule.categoryKey!];
+      final child = rule.subCategoryKey == null
+          ? null
+          : _categoryByKey[rule.subCategoryKey!];
       if (parent != null && child != null) {
         lines.add('分类：${parent.name} / ${child.name}');
       } else if (parent != null) {
@@ -1135,7 +1186,11 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   List<JiveTagRule> _applyFilterAndSort(List<JiveTagRule> source) {
     var filtered = _query.isEmpty
         ? List<JiveTagRule>.from(source)
-        : source.where((rule) => _ruleSearchText(rule).contains(_query.toLowerCase())).toList();
+        : source
+              .where(
+                (rule) => _ruleSearchText(rule).contains(_query.toLowerCase()),
+              )
+              .toList();
     if (_filter == _RuleFilter.enabled) {
       filtered = filtered.where((rule) => rule.isEnabled).toList();
     } else if (_filter == _RuleFilter.disabled) {
@@ -1171,7 +1226,10 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
     if (rule.minAmount != null || rule.maxAmount != null) {
       parts.add(_amountRange(rule.minAmount, rule.maxAmount));
     }
-    return parts.where((item) => item.trim().isNotEmpty).join(' ').toLowerCase();
+    return parts
+        .where((item) => item.trim().isNotEmpty)
+        .join(' ')
+        .toLowerCase();
   }
 
   String? _typeLabel(String? value) {
@@ -1191,7 +1249,9 @@ class _TagRuleScreenState extends State<TagRuleScreen> {
   }
 
   String _amountRange(double? min, double? max) {
-    if (min != null && max != null) return '¥${min.toStringAsFixed(0)} - ¥${max.toStringAsFixed(0)}';
+    if (min != null && max != null) {
+      return '¥${min.toStringAsFixed(0)} - ¥${max.toStringAsFixed(0)}';
+    }
     if (min != null) return '≥ ¥${min.toStringAsFixed(0)}';
     if (max != null) return '≤ ¥${max.toStringAsFixed(0)}';
     return '不限';
@@ -1368,7 +1428,8 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
         .where((item) => item.isNotEmpty)
         .toSet()
         .toList();
-    final hasCondition = (minValue != null ||
+    final hasCondition =
+        (minValue != null ||
         maxValue != null ||
         _selectedAccountIds.isNotEmpty ||
         (_categoryKey != null && _categoryKey!.isNotEmpty) ||
@@ -1379,16 +1440,24 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
       return null;
     }
     setState(() => _error = null);
-    return _RuleInput(minAmount: minValue, maxAmount: maxValue, keywords: keywords);
+    return _RuleInput(
+      minAmount: minValue,
+      maxAmount: maxValue,
+      keywords: keywords,
+    );
   }
 
   List<JiveCategory> _parentOptions() {
-    final parents = widget.categoryByKey.values.where((cat) => cat.parentKey == null).toList();
+    final parents = widget.categoryByKey.values
+        .where((cat) => cat.parentKey == null)
+        .toList();
     if (_type == 'income') {
-      return parents.where((cat) => cat.isIncome).toList()..sort((a, b) => a.order.compareTo(b.order));
+      return parents.where((cat) => cat.isIncome).toList()
+        ..sort((a, b) => a.order.compareTo(b.order));
     }
     if (_type == 'expense') {
-      return parents.where((cat) => !cat.isIncome).toList()..sort((a, b) => a.order.compareTo(b.order));
+      return parents.where((cat) => !cat.isIncome).toList()
+        ..sort((a, b) => a.order.compareTo(b.order));
     }
     parents.sort((a, b) => a.order.compareTo(b.order));
     return parents;
@@ -1429,7 +1498,10 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                   children: [
                     Text(
                       widget.rule == null ? '新增规则' : '编辑规则',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const Spacer(),
                     IconButton(
@@ -1447,7 +1519,10 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                   activeThumbColor: const Color(0xFF2E7D32),
                 ),
                 const SizedBox(height: 6),
-                Text('类型', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                Text(
+                  '类型',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
@@ -1459,7 +1534,10 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text('金额区间', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                Text(
+                  '金额区间',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
@@ -1489,7 +1567,10 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                Text('账户', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                Text(
+                  '账户',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
@@ -1497,7 +1578,9 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                   children: widget.accounts.values
                       .map(
                         (account) => FilterChip(
-                          label: Text(account.name),
+                          label: Text(
+                            const AccountGroupService().displayPath(account),
+                          ),
                           selected: _selectedAccountIds.contains(account.id),
                           selectedColor: Colors.green.shade50,
                           onSelected: (selected) {
@@ -1514,7 +1597,10 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                       .toList(),
                 ),
                 const SizedBox(height: 12),
-                Text('分类', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                Text(
+                  '分类',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
                 const SizedBox(height: 6),
                 DropdownButtonFormField<String?>(
                   initialValue: _categoryKey,
@@ -1567,7 +1653,10 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                   },
                 ),
                 const SizedBox(height: 12),
-                Text('关键词', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                Text(
+                  '关键词',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                ),
                 const SizedBox(height: 6),
                 TextField(
                   controller: _keywords,
@@ -1603,7 +1692,13 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
                 ],
                 if (_error != null) ...[
                   const SizedBox(height: 8),
-                  Text(_error!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                  Text(
+                    _error!,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 12,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 12),
                 Row(
@@ -1659,23 +1754,35 @@ class _TagRuleEditSheetState extends State<TagRuleEditSheet> {
       decoration: BoxDecoration(
         color: const Color(0xFFE8F5E9),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF2E7D32).withValues(alpha: 0.25)),
+        border: Border.all(
+          color: const Color(0xFF2E7D32).withValues(alpha: 0.25),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.insights_outlined, size: 16, color: Color(0xFF2E7D32)),
+              const Icon(
+                Icons.insights_outlined,
+                size: 16,
+                color: Color(0xFF2E7D32),
+              ),
               const SizedBox(width: 6),
               const Text(
                 '命中预览',
-                style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF2E7D32)),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF2E7D32),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          Text(summary, style: TextStyle(fontSize: 12, color: Colors.grey.shade800)),
+          Text(
+            summary,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade800),
+          ),
         ],
       ),
     );

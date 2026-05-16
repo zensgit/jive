@@ -525,6 +525,7 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                           value: account.id,
                           child: Text(
                             recurringRuleAccountDisplayLabel(account),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       )
@@ -546,6 +547,7 @@ class _RecurringRuleFormScreenState extends State<RecurringRuleFormScreen> {
                             value: account.id,
                             child: Text(
                               recurringRuleAccountDisplayLabel(account),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         )
