@@ -72,10 +72,18 @@ class AccountGroupService {
         _isBroadGroupName(groupName)) {
       return account.name;
     }
+    final suffixParts = <String>[];
     final subtype = account.subType?.trim();
-    final suffix = subtype == null || subtype.isEmpty
-        ? account.currency
-        : '$subtype ${account.currency}';
+    if (subtype != null &&
+        subtype.isNotEmpty &&
+        !_containsDisplayToken(account.name, subtype)) {
+      suffixParts.add(subtype);
+    }
+    if (!_containsDisplayToken(account.name, account.currency)) {
+      suffixParts.add(account.currency);
+    }
+    final suffix = suffixParts.join(' ');
+    if (suffix.isEmpty) return '$groupName / ${account.name}';
     return '$groupName / ${account.name} / $suffix';
   }
 
@@ -93,5 +101,11 @@ class AccountGroupService {
   static bool _isBroadGroupName(String groupName) {
     return accountGroupOrder.contains(groupName) ||
         _legacyBroadGroupNames.contains(groupName);
+  }
+
+  static bool _containsDisplayToken(String text, String token) {
+    final normalizedText = text.trim().toLowerCase();
+    final normalizedToken = token.trim().toLowerCase();
+    return normalizedToken.isEmpty || normalizedText.contains(normalizedToken);
   }
 }

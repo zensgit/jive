@@ -489,6 +489,35 @@ void main() {
         '中国银行 / 活期 / bank CNY',
       );
     });
+
+    test('deduplicates repeated subtype and currency in display paths', () {
+      final service = const AccountGroupService();
+
+      expect(
+        service.displayPath(
+          _account(
+            id: 1,
+            name: '活期 CNY',
+            groupName: '中国银行',
+            subType: '活期',
+            currency: 'CNY',
+          ),
+        ),
+        '中国银行 / 活期 CNY',
+      );
+      expect(
+        service.displayPath(
+          _account(
+            id: 2,
+            name: '定期',
+            groupName: '中国银行',
+            subType: '定期',
+            currency: 'USD',
+          ),
+        ),
+        '中国银行 / 定期 / USD',
+      );
+    });
   });
 
   group('SceneCandidateService', () {
@@ -529,7 +558,8 @@ void main() {
       final accounts = [
         _account(id: 1, name: '默认现金', order: 1),
         _account(id: 2, name: '旅行卡', order: 2, bookId: 7),
-        _account(id: 3, name: '旅行信用卡', order: 3, bookId: 7)..type = 'liability',
+        _account(id: 3, name: '旅行信用卡', order: 3, bookId: 7)
+          ..type = 'liability',
         _account(id: 4, name: '其他账本', order: 4, bookId: 8),
         _account(id: 5, name: '已隐藏', order: 5, bookId: 7)..isHidden = true,
       ];

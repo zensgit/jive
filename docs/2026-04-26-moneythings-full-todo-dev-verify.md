@@ -57,6 +57,7 @@
 - 2026-05-07：`codex/moneythings-form-book-context` 补齐结构化交易编辑器的账本上下文展示与共享场景保存前提示，外部入口带 `prefillBookId` 时保存语义保持一致。
 - 2026-05-10：`codex/moneythings-deeplink-source-coverage` 补齐 `jive://transaction/new` 的 `entrySource` 覆盖，支持 quickAction / voice / conversation / autoDraft / OCR 等结构化入口来源。
 - 2026-05-07：`codex/moneythings-smartlist-regression` 增加 SmartList 默认视图、删除清理、置顶排序与筛选快照往返回归测试，不改变产品逻辑。
+- 2026-05-10：`codex/moneythings-account-display-paths` 优化账户组路径展示，避免子账户名称已含类型/币种时重复显示。
 
 ## 当前波次已完成
 
@@ -99,4 +100,5 @@
 - `docs/2026-05-07-moneythings-form-book-context-dev-verify.md`
 - `docs/2026-05-10-moneythings-deeplink-source-coverage-dev-verify.md`
 - `docs/2026-05-07-moneythings-smartlist-regression-dev-verify.md`
+- `docs/2026-05-10-moneythings-account-display-paths-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`
