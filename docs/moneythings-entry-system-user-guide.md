@@ -46,6 +46,8 @@ Expected behavior:
 - The editor shows a source banner when the entry came from an external source.
 - If the entry carries a `bookId`, the editor shows whether it will save to a local book or shared scene.
 - Saving a new structured entry into a shared scene asks for confirmation before writing the transaction.
+- `jive://transaction/new` accepts `entrySource=quickAction|voice|conversation|autoDraft|shareReceive|ocrScreenshot` and maps each source into the same `TransactionEntryParams` contract.
+- Quick action transaction links can carry `quickActionId=template:<id>` and `mode=direct` metadata without bypassing the editor contract.
 - Missing fields such as amount, category, account, transfer account, time, note, or tags are highlighted.
 - The editor owns final validation and saving.
 - Native/platform code must not create transactions directly.
@@ -111,6 +113,7 @@ Expected behavior:
 
 - Run a complete quick action and confirm it saves or confirms according to mode.
 - Open `jive://transaction/new?amount=15&type=expense` and confirm the editor receives the amount.
+- Open `jive://transaction/new?entrySource=quickAction&quickActionId=template:<id>&mode=direct` and confirm the editor banner/metadata reflect the quick action source.
 - Parse a conversational sentence and confirm the editor opens before save.
 - Open an AutoDraft with incomplete fields and confirm the editor highlights missing fields.
 - Use AI Assistant voice or clipboard recognition and confirm it opens the editor.

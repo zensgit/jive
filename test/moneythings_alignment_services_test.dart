@@ -349,6 +349,45 @@ void main() {
       );
     });
 
+    test('parses quick action transaction links with executor metadata', () {
+      final request = QuickActionDeepLinkService.parse(
+        Uri.parse(
+          'jive://transaction/new?entrySource=quickAction&quickActionId=template:42&mode=direct&type=expense&amount=15&categoryKey=food&accountId=8&sourceLabel=%E6%9D%A5%E8%87%AA%E5%BF%AB%E9%80%9F%E5%8A%A8%E4%BD%9C%E3%80%8C%E6%97%A9%E9%A4%90%E3%80%8D',
+        ),
+      );
+
+      final params = request?.transactionParams;
+      expect(params?.source, TransactionEntrySource.quickAction);
+      expect(params?.sourceBannerText, '来自快速动作「早餐」');
+      expect(params?.quickActionId, 'template:42');
+      expect(params?.canDirectSubmit, isTrue);
+      expect(params?.prefillAmount, 15);
+      expect(params?.prefillAccountId, 8);
+      expect(params?.prefillCategoryKey, 'food');
+      expect(params?.highlightFields, isEmpty);
+    });
+
+    test('supports structured editor source aliases in transaction links', () {
+      final cases = {
+        'voice': TransactionEntrySource.voice,
+        'conversation': TransactionEntrySource.conversation,
+        'auto_draft': TransactionEntrySource.autoDraft,
+        'ocr': TransactionEntrySource.ocrScreenshot,
+      };
+
+      for (final entry in cases.entries) {
+        final request = QuickActionDeepLinkService.parse(
+          Uri.parse('jive://transaction/new?entrySource=${entry.key}'),
+        );
+
+        expect(request?.transactionParams?.source, entry.value);
+        expect(
+          request?.transactionParams?.highlightFields,
+          contains(TransactionHighlightField.amount),
+        );
+      }
+    });
+
     test('parses Android share text links into share receive params', () {
       final request = QuickActionDeepLinkService.parse(
         Uri.parse(

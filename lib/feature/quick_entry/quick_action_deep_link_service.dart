@@ -76,6 +76,10 @@ class QuickActionDeepLinkService {
     final explicitNote = _firstNonEmpty(query['note'], query['memo']);
     final source = _entrySource(query['entrySource']);
     final sourceLabel = _firstNonEmpty(query['sourceLabel'], query['source']);
+    final quickActionId = _firstNonEmpty(
+      query['quickActionId'],
+      _firstNonEmpty(query['quickAction'], query['id']),
+    );
 
     if (source == TransactionEntrySource.shareReceive &&
         amount == null &&
@@ -95,6 +99,8 @@ class QuickActionDeepLinkService {
     return TransactionEntryParams(
       source: source,
       sourceLabel: sourceLabel,
+      canDirectSubmit: _canDirectSubmit(query),
+      quickActionId: quickActionId,
       prefillAmount: amount,
       prefillType: type,
       prefillCategoryKey: categoryKey,
@@ -121,12 +127,25 @@ class QuickActionDeepLinkService {
 
   static TransactionEntrySource _entrySource(String? raw) {
     switch (raw?.trim()) {
+      case 'quickAction':
+      case 'quick_action':
+        return TransactionEntrySource.quickAction;
+      case 'voice':
+        return TransactionEntrySource.voice;
+      case 'conversation':
+        return TransactionEntrySource.conversation;
+      case 'autoDraft':
+      case 'auto_draft':
+        return TransactionEntrySource.autoDraft;
       case 'shareReceive':
       case 'share_receive':
         return TransactionEntrySource.shareReceive;
       case 'ocrScreenshot':
       case 'ocr_screenshot':
+      case 'ocr':
         return TransactionEntrySource.ocrScreenshot;
+      case 'manual':
+        return TransactionEntrySource.manual;
       default:
         return TransactionEntrySource.deepLink;
     }
@@ -180,6 +199,15 @@ class QuickActionDeepLinkService {
   static DateTime? _parseDate(String? raw) {
     if (raw == null || raw.trim().isEmpty) return null;
     return DateTime.tryParse(raw.trim());
+  }
+
+  static bool _canDirectSubmit(Map<String, String> query) {
+    final raw = _firstNonEmpty(
+      query['canDirectSubmit'],
+      query['directSubmit'],
+    )?.toLowerCase();
+    if (raw == 'true' || raw == '1' || raw == 'yes') return true;
+    return query['mode']?.trim() == 'direct';
   }
 
   static String? _firstNonEmpty(String? first, String? second) {
