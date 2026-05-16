@@ -54,13 +54,14 @@
 
 - 2026-05-07：PR #248 / `codex/moneythings-smartlist-regression-tests` 补齐 SmartList 服务级回归测试，覆盖筛选状态映射、置顶排序和默认视图删除清理。
 - 2026-05-07：`codex/moneythings-object-share-policy-tests` 补齐对象共享提示策略测试，覆盖 shared ledger key、显式共享、私有对象阻止和空影响删除提示。
+- 2026-05-07：`codex/moneythings-form-book-context` 补齐结构化交易编辑器的账本上下文展示与共享场景保存前提示，外部入口带 `prefillBookId` 时保存语义保持一致。
 
 ## 当前波次已完成
 
 - Quick Action / One Touch 兼容协议已覆盖模板、Deep Link、Android widget、Android share、iOS Shortcuts 与 iOS share 的低风险入口。
 - iOS Shortcuts / Siri 可通过 App Intent 打开结构化记账编辑器，或通过快速动作 ID 打开 One Touch 入口。
 - iOS 系统分享可把文本或 URL 作为 `shareReceive/rawText` 打开结构化编辑器。
-- 外部交易入口已统一到 `TransactionEntryParams`，复杂或缺字段场景进入 `TransactionFormScreen`。
+- 外部交易入口已统一到 `TransactionEntryParams`，复杂或缺字段场景进入 `TransactionFormScreen`；结构化编辑器可展示传入账本/共享场景上下文，并在共享场景保存前确认。
 - 三层分类在选择、展示、详情、导入、导出上使用兼容路径，不新增 `tertiaryCategoryKey`。
 - 账户组以视图层表达，交易仍保存到具体 `accountId`。
 - SmartList 支持默认视图、置顶、当前筛选/搜索保存，以及固定分类页面保存；服务级测试已覆盖保存视图映射、置顶排序和默认视图清理。
@@ -93,4 +94,5 @@
 - `docs/2026-05-10-moneythings-transaction-entry-protocol-dev-verify.md`
 - `docs/2026-05-07-moneythings-smartlist-regression-tests-dev-verify.md`
 - `docs/2026-05-07-moneythings-object-share-policy-tests-dev-verify.md`
+- `docs/2026-05-07-moneythings-form-book-context-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`

@@ -27,15 +27,30 @@ import 'widgets/transaction_footer_bar.dart';
 import 'widgets/quick_action_suggest_bar.dart';
 import 'widgets/transaction_share_hint_banner.dart';
 
+typedef TransactionFormSaver = Future<void> Function(JiveTransaction tx);
+
 /// Form-based transaction editor (完整编辑页).
 ///
 /// An alternative to [AddTransactionScreen] (the calculator-based quick entry),
 /// this screen provides a structured form layout using extracted S6 widgets.
 /// Best suited for entries from voice, quick actions, deep links, and editing.
 class TransactionFormScreen extends StatefulWidget {
-  final TransactionEntryParams params;
+  static const sharedSceneSaveDialogKey = ValueKey(
+    'transaction-form-shared-scene-save-dialog',
+  );
 
-  const TransactionFormScreen({super.key, required this.params});
+  final TransactionEntryParams params;
+  @visibleForTesting
+  final Isar? isar;
+  @visibleForTesting
+  final TransactionFormSaver? transactionSaver;
+
+  const TransactionFormScreen({
+    super.key,
+    required this.params,
+    this.isar,
+    this.transactionSaver,
+  });
 
   @override
   State<TransactionFormScreen> createState() => _TransactionFormScreenState();
@@ -77,11 +92,12 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
   }
 
   Future<void> _initData() async {
-    _isar = await DatabaseService.getInstance();
+    _isar = widget.isar ?? await DatabaseService.getInstance();
     _transactionRepo = IsarTransactionRepository(_isar);
 
     final categories = _isar.jiveCategorys.where().findAllSync();
     final accounts = _isar.jiveAccounts.where().findAllSync();
+    final books = _isar.jiveBooks.where().findAllSync();
     final tags = _isar.jiveTags.where().findAllSync();
     final projects = _isar.jiveProjects.where().findAllSync();
 
@@ -106,7 +122,6 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
           .where((a) => a.id == p.prefillToAccountId)
           .firstOrNull;
     }
-
     // For edit mode, populate from existing transaction
     if (p.editingTransaction != null) {
       final tx = p.editingTransaction!;
@@ -127,10 +142,8 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _selectedTagKeys = List.of(tx.tagKeys);
       _selectedProjectId = tx.projectId;
     }
-    final entryBookId = p.prefillBookId ?? p.editingTransaction?.bookId;
-    final entryBook = entryBookId == null
-        ? null
-        : _isar.jiveBooks.getSync(entryBookId);
+    final entryBookId = p.editingTransaction?.bookId ?? p.prefillBookId;
+    final entryBook = _resolveBook(books, entryBookId);
 
     setState(() {
       _categories = categories;
@@ -218,10 +231,16 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
       _categories,
       _selectedCategory,
     );
+    final canSaveToSharedScene = await _confirmSharedSceneSaveIfNeeded();
+    if (!canSaveToSharedScene || !mounted) return;
+
     final tx = widget.params.editingTransaction ?? JiveTransaction();
     tx.amount = _amount;
     tx.timestamp = _selectedDate;
-    tx.source = _sourceStorageValue(widget.params.source, existing: tx.source);
+    tx.source = _sourceStorageValue(
+      widget.params.source,
+      existing: widget.params.editingTransaction?.source,
+    );
     tx.note = _note.isEmpty ? null : _note;
     tx.rawText = widget.params.prefillRawText ?? tx.rawText;
     tx.categoryKey = _txType == 'transfer' ? null : categoryKeys.categoryKey;
@@ -245,12 +264,15 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     tx.excludeFromBudget = _excludeFromBudget;
     tx.tagKeys = _selectedTagKeys;
     tx.projectId = _selectedProjectId;
-    tx.bookId = widget.params.prefillBookId ?? tx.bookId;
+    tx.bookId = _entryBook?.id ?? widget.params.prefillBookId ?? tx.bookId;
     tx.type = _txType;
     tx.quickActionId = _parseQuickActionLegacyId(widget.params.quickActionId);
     tx.updatedAt = DateTime.now();
 
-    if (widget.params.editingTransaction != null) {
+    final transactionSaver = widget.transactionSaver;
+    if (transactionSaver != null) {
+      await transactionSaver(tx);
+    } else if (widget.params.editingTransaction != null) {
       await _transactionRepo.update(tx);
     } else {
       await _transactionRepo.insert(tx);
@@ -277,6 +299,50 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
     } else {
       Navigator.pop(context, true);
     }
+  }
+
+  JiveBook? _resolveBook(List<JiveBook> books, int? bookId) {
+    if (bookId == null) return null;
+    return books.where((book) => book.id == bookId).firstOrNull;
+  }
+
+  bool get _isCurrentBookShared {
+    final book = _entryBook;
+    if (book == null) return false;
+    final sharedLedgerKey = book.sharedLedgerKey?.trim();
+    return book.isShared ||
+        (sharedLedgerKey != null && sharedLedgerKey.isNotEmpty);
+  }
+
+  Future<bool> _confirmSharedSceneSaveIfNeeded() async {
+    if (widget.params.editingTransaction != null || !_isCurrentBookShared) {
+      return true;
+    }
+    if (!mounted) return false;
+
+    final bookName = _entryBook?.name.trim();
+    final displayName = bookName == null || bookName.isEmpty
+        ? '共享场景'
+        : bookName;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        key: TransactionFormScreen.sharedSceneSaveDialogKey,
+        title: const Text('保存到共享场景？'),
+        content: Text('此交易将保存到「$displayName」，其他成员也能看到。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('继续保存'),
+          ),
+        ],
+      ),
+    );
+    return proceed == true;
   }
 
   void _showAmountInput() async {
@@ -658,6 +724,10 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
                     const SizedBox(height: 12),
                   TransactionShareHintBanner(policy: sharePolicy),
                   if (sharePolicy.warning != null) const SizedBox(height: 12),
+                  if (_entryBook != null) ...[
+                    _BookContextBanner(book: _entryBook!),
+                    const SizedBox(height: 12),
+                  ],
 
                   // Type selector
                   _TypeSelector(
@@ -775,6 +845,57 @@ class _TransactionFormScreenState extends State<TransactionFormScreen> {
             enabled: canSave,
             onSave: () => _save(),
             onSaveAndNew: () => _save(andNew: true),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BookContextBanner extends StatelessWidget {
+  final JiveBook book;
+
+  const _BookContextBanner({required this.book});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final sharedLedgerKey = book.sharedLedgerKey?.trim();
+    final isShared =
+        book.isShared ||
+        (sharedLedgerKey != null && sharedLedgerKey.isNotEmpty);
+    final foreground = isShared
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isShared
+            ? theme.colorScheme.primaryContainer.withValues(alpha: 0.45)
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isShared
+              ? theme.colorScheme.primary.withValues(alpha: 0.25)
+              : theme.dividerColor.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isShared ? Icons.groups_2_outlined : Icons.book_outlined,
+            size: 18,
+            color: foreground,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isShared ? '将保存到共享场景「${book.name}」' : '将保存到账本「${book.name}」',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),

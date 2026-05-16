@@ -44,6 +44,8 @@ Covered sources:
 Expected behavior:
 
 - The editor shows a source banner when the entry came from an external source.
+- If the entry carries a `bookId`, the editor shows whether it will save to a local book or shared scene.
+- Saving a new structured entry into a shared scene asks for confirmation before writing the transaction.
 - Missing fields such as amount, category, account, transfer account, time, note, or tags are highlighted.
 - The editor owns final validation and saving.
 - Native/platform code must not create transactions directly.
@@ -117,6 +119,7 @@ Expected behavior:
 - Run the iOS Shortcut `记一笔` and confirm Jive opens the structured editor.
 - Run the iOS Shortcut action `运行 Jive 快速动作` with `template:<id>` and confirm it follows the same One Touch behavior as the app.
 - Share text or a URL from iOS into `记到 Jive` and confirm the structured editor opens with the shared content as raw text.
+- Open a structured entry with a shared `bookId`, then confirm the shared-scene banner and save confirmation appear.
 - Create or choose `出行 / 私家车 / 加油`, save a transaction, and confirm the detail/export path.
 - Create grouped accounts and confirm transactions still save to the child account.
 - Save a SmartList from filters, pin it, set it as default, delete it, and confirm default view is cleared.
