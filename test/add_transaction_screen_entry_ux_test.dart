@@ -834,7 +834,7 @@ void main() {
         ),
       );
 
-      await _pumpUntilFound(tester, find.text('旅行卡'));
+      await _pumpUntilFound(tester, find.textContaining('旅行卡'));
       expect(find.text('现金'), findsNothing);
     },
   );

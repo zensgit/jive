@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jive/core/database/account_model.dart';
 import 'package:jive/feature/transactions/add_transaction_screen.dart'
     show TransactionType;
+import 'package:jive/feature/transactions/widgets/account_selector_section.dart';
 import 'package:jive/feature/transactions/widgets/compact_amount_bar.dart';
 import 'package:jive/feature/transactions/widgets/transaction_calculator_key.dart';
 
@@ -115,5 +117,30 @@ void main() {
     expect(find.text('÷'), findsOneWidget);
     expect(find.text('当前÷'), findsOneWidget);
     expect(find.text('长按÷'), findsNothing);
+  });
+
+  testWidgets('account chip displays grouped account path', (tester) async {
+    final account = JiveAccount()
+      ..name = '活期'
+      ..groupName = '中国银行'
+      ..currency = 'CNY'
+      ..iconName = 'wallet'
+      ..colorHex = '#2E7D32'
+      ..order = 0
+      ..isArchived = false;
+
+    await tester.pumpWidget(
+      wrap(
+        AccountChip(
+          label: '账户',
+          account: account,
+          textSize: 12,
+          expand: true,
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(find.textContaining('中国银行 / 活期 / CNY'), findsOneWidget);
   });
 }

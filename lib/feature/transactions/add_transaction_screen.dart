@@ -17,6 +17,7 @@ import '../../core/database/currency_model.dart';
 import '../../core/database/transaction_model.dart';
 import '../../core/database/tag_model.dart';
 import '../../core/database/project_model.dart';
+import '../../core/service/account_group_service.dart';
 import '../../core/service/book_service.dart';
 import '../../core/service/project_service.dart';
 import '../../core/service/category_service.dart';
@@ -2489,7 +2490,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                     onTapTime: _showTimePicker,
                     onTapCurrency: _showCurrencyPicker,
                     expressionResult: _expressionPreview(),
-                    accountName: _selectedAccount?.name,
+                    accountName: _selectedAccount == null
+                        ? null
+                        : const AccountGroupService().displayPath(
+                            _selectedAccount!,
+                          ),
                     onTapAccount: () => _showAccountPicker(pickTo: false),
                   ),
 
@@ -4184,8 +4189,13 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
   List<JiveAccount> get _filtered {
     if (_query.isEmpty) return widget.accounts;
     final lower = _query.toLowerCase();
+    final accountGroupService = const AccountGroupService();
     return widget.accounts
-        .where((a) => a.name.toLowerCase().contains(lower))
+        .where(
+          (a) =>
+              a.name.toLowerCase().contains(lower) ||
+              accountGroupService.displayPath(a).toLowerCase().contains(lower),
+        )
         .toList();
   }
 
@@ -4288,6 +4298,8 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                       itemCount: accounts.length,
                       itemBuilder: (context, index) {
                         final account = accounts[index];
+                        final accountPath = const AccountGroupService()
+                            .displayPath(account);
                         final color =
                             AccountService.parseColorHex(account.colorHex) ??
                             JiveTheme.primaryGreen;
@@ -4332,11 +4344,13 @@ class _AccountPickerSheetState extends State<_AccountPickerSheet> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
-                                    account.name,
-                                    maxLines: 1,
+                                    accountPath,
+                                    maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: accountPath == account.name
+                                          ? 13
+                                          : 12,
                                       fontWeight: isSelected
                                           ? FontWeight.w600
                                           : FontWeight.w400,
