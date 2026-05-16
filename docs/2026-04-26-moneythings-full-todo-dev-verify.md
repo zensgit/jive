@@ -50,6 +50,10 @@
 - 交易仍保存到具体 `accountId`，账户组只做视图聚合。
 - 对象级共享仍是提示层，不新增对象级权限真相。
 
+## 继续收口记录
+
+- 2026-05-07：PR #248 / `codex/moneythings-smartlist-regression-tests` 补齐 SmartList 服务级回归测试，覆盖筛选状态映射、置顶排序和默认视图删除清理。
+
 ## 当前波次已完成
 
 - Quick Action / One Touch 兼容协议已覆盖模板、Deep Link、Android widget、Android share、iOS Shortcuts 与 iOS share 的低风险入口。
@@ -58,7 +62,7 @@
 - 外部交易入口已统一到 `TransactionEntryParams`，复杂或缺字段场景进入 `TransactionFormScreen`。
 - 三层分类在选择、展示、详情、导入、导出上使用兼容路径，不新增 `tertiaryCategoryKey`。
 - 账户组以视图层表达，交易仍保存到具体 `accountId`。
-- SmartList 支持默认视图、置顶、当前筛选/搜索保存，以及固定分类页面保存。
+- SmartList 支持默认视图、置顶、当前筛选/搜索保存，以及固定分类页面保存；服务级测试已覆盖保存视图映射、置顶排序和默认视图清理。
 - 对象共享第一阶段保持提示层，覆盖场景、账户、分类、标签的共享状态与删除风险提示。
 
 ## Post-Beta / 迁移型待评估
@@ -86,4 +90,5 @@
 - `docs/2026-05-10-moneythings-quick-action-editor-params-dev-verify.md`
 - `docs/2026-05-10-moneythings-scene-template-contracts-dev-verify.md`
 - `docs/2026-05-10-moneythings-transaction-entry-protocol-dev-verify.md`
+- `docs/2026-05-07-moneythings-smartlist-regression-tests-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`

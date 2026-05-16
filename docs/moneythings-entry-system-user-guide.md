@@ -89,6 +89,7 @@ Expected behavior:
 - Users can save the current search/filter as a SmartList.
 - Category/subcategory transaction pages can be saved as SmartLists without losing the fixed category context.
 - SmartLists can be pinned, deleted, and set as default.
+- Deleting the default SmartList should clear the default-view preference.
 
 ## Sharing Visibility
 
@@ -115,6 +116,7 @@ Expected behavior:
 - Share text or a URL from iOS into `记到 Jive` and confirm the structured editor opens with the shared content as raw text.
 - Create or choose `出行 / 私家车 / 加油`, save a transaction, and confirm the detail/export path.
 - Create grouped accounts and confirm transactions still save to the child account.
+- Save a SmartList from filters, pin it, set it as default, delete it, and confirm default view is cleared.
 - In a shared scene, check shared badges and delete warning copy.
 
 ## Explicitly Deferred
