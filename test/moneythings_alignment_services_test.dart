@@ -755,6 +755,32 @@ void main() {
       expect(policy.label, '继承场景共享');
       expect(policy.warning, contains('标签分组'));
     });
+
+    test(
+      'labels tag archive actions in shared books with inherited warnings',
+      () {
+        final book = JiveBook()
+          ..key = 'book_shared_tag_archive'
+          ..name = '家庭'
+          ..currency = 'CNY'
+          ..order = 0
+          ..isDefault = false
+          ..isArchived = false
+          ..isShared = true
+          ..memberCount = 2
+          ..createdAt = DateTime(2026)
+          ..updatedAt = DateTime(2026);
+
+        final policy = const ObjectSharePolicyService().evaluate(
+          book: book,
+          objectLabel: '标签',
+        );
+
+        expect(policy.visibility, ObjectShareVisibility.inheritedFromScene);
+        expect(policy.warning, contains('标签'));
+        expect(policy.warning, contains('场景成员'));
+      },
+    );
   });
 }
 

@@ -2668,8 +2668,7 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
     if (action == _TagAction.edit) {
       await _editTag(tag);
     } else if (action == _TagAction.archive) {
-      await TagService(_isar).setTagArchived(tag.key, !tag.isArchived);
-      await _loadData();
+      await _archiveTag(tag);
     } else if (action == _TagAction.delete) {
       await _deleteTag(tag);
     } else if (action == _TagAction.merge) {
@@ -2826,6 +2825,35 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
   Future<void> _editGroup(JiveTagGroup group) async {
     final result = await _openGroupSheet(group: group);
     if (result == true) await _loadData();
+  }
+
+  Future<void> _archiveTag(JiveTag tag) async {
+    final shareWarning = _tagSharePolicy.warning;
+    if (shareWarning != null) {
+      final actionLabel = tag.isArchived ? '继续恢复' : '继续归档';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(tag.isArchived ? '恢复共享标签？' : '归档共享标签？'),
+          content: Text(
+            '$shareWarning\n\n${tag.isArchived ? '恢复' : '归档'}标签 "${tag.name}" 会影响共享成员看到的标签候选状态。',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(actionLabel),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    await TagService(_isar).setTagArchived(tag.key, !tag.isArchived);
+    await _loadData();
   }
 
   Future<void> _archiveGroup(JiveTagGroup group) async {

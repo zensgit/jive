@@ -161,6 +161,7 @@ Expected behavior:
 - In a shared scene, save a manual transaction and confirm the `保存到共享场景？` prompt appears before saving.
 - In a shared scene, edit, hide, restore, promote, transfer, or delete a category and confirm the warning explains the shared-member impact before the change is applied.
 - In a shared scene, edit an existing tag or tag group, archive/restore a tag group, or delete a tag group and confirm the warning explains the shared-member impact before the change is applied.
+- In a shared scene, archive or restore a single tag and confirm the warning appears before the change is applied.
 
 ## Explicitly Deferred
 
