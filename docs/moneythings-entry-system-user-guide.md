@@ -98,6 +98,9 @@ Object sharing is currently a visibility and warning layer.
 Expected behavior:
 
 - Shared scene state can appear on scene/book/account/category/tag surfaces.
+- A book with a `sharedLedgerKey` should be treated as an inherited shared scene even if only the ledger link is present locally.
+- Explicitly shared objects should show the stable `共享` label and shared-member warning copy.
+- Private objects should be blocked or replaced before they are used in shared-scene transactions.
 - Deleting shared categories or tags should show impact copy.
 - Permissions still come from the existing shared ledger/book role model.
 - No object-level sharing table or RLS is introduced in this wave.
@@ -118,6 +121,7 @@ Expected behavior:
 - Create grouped accounts and confirm transactions still save to the child account.
 - Save a SmartList from filters, pin it, set it as default, delete it, and confirm default view is cleared.
 - In a shared scene, check shared badges and delete warning copy.
+- In a shared scene, try a private account/category/tag and confirm Jive asks you to replace it before saving.
 
 ## Explicitly Deferred
 
