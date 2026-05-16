@@ -6,6 +6,7 @@ import '../../core/database/quick_action_model.dart';
 import '../../core/design_system/theme.dart';
 import '../../core/service/category_service.dart';
 import '../../core/service/database_service.dart';
+import '../../core/service/quick_action_filter_service.dart';
 import '../../core/service/quick_action_store_service.dart';
 import '../category/category_icon_library.dart';
 import '../category/category_icon_source_picker.dart';
@@ -42,6 +43,8 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
   Isar? _isar;
   bool _isLoading = true;
   List<JiveQuickAction> _actions = [];
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -71,6 +74,12 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
   Future<QuickActionStoreService> _quickActionStore() async {
     final isar = await _ensureIsar();
     return QuickActionStoreService(isar);
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -113,26 +122,45 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
   }
 
   Widget _buildActionList() {
-    final visible = _actions.where((action) => action.showOnHome).toList();
-    final hidden = _actions.where((action) => !action.showOnHome).toList();
+    final isSearching = _searchQuery.trim().isNotEmpty;
+    final filtered = QuickActionFilterService.filterRecords(
+      _actions,
+      _searchQuery,
+    );
+    final visible = filtered.where((action) => action.showOnHome).toList();
+    final hidden = filtered.where((action) => !action.showOnHome).toList();
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _buildIntroCard(),
-        _buildReorderableSection(
-          title: '首页快速动作',
-          subtitle: '拖拽右侧把手排序，会出现在首页和快记中心',
-          actions: visible,
-          showOnHome: true,
+        _buildSearchField(
+          totalCount: _actions.length,
+          matchCount: filtered.length,
         ),
-        const SizedBox(height: 12),
-        _buildReorderableSection(
-          title: '已隐藏',
-          subtitle: '拖拽右侧把手排序，仍可通过 Deep Link 或快捷指令使用',
-          actions: hidden,
-          showOnHome: false,
-        ),
+        if (filtered.isEmpty)
+          _buildSearchEmptyState()
+        else ...[
+          _buildActionSection(
+            title: '首页快速动作',
+            subtitle: isSearching
+                ? '搜索结果仅供查找，清空搜索后可拖拽排序'
+                : '拖拽右侧把手排序，会出现在首页和快记中心',
+            actions: visible,
+            showOnHome: true,
+            canReorder: !isSearching,
+          ),
+          const SizedBox(height: 12),
+          _buildActionSection(
+            title: '已隐藏',
+            subtitle: isSearching
+                ? '这些隐藏动作匹配当前搜索，可点按执行或长按管理'
+                : '拖拽右侧把手排序，仍可通过 Deep Link 或快捷指令使用',
+            actions: hidden,
+            showOnHome: false,
+            canReorder: !isSearching,
+          ),
+        ],
       ],
     );
   }
@@ -189,11 +217,95 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
     );
   }
 
-  Widget _buildReorderableSection({
+  Widget _buildSearchField({required int totalCount, required int matchCount}) {
+    final isSearching = _searchQuery.trim().isNotEmpty;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: TextField(
+        key: const ValueKey('quick_action_search_field'),
+        controller: _searchController,
+        onChanged: (value) => setState(() => _searchQuery = value),
+        textInputAction: TextInputAction.search,
+        decoration: InputDecoration(
+          hintText: '搜索名称、分类、金额或模式',
+          hintStyle: GoogleFonts.lato(color: Colors.grey.shade400),
+          prefixIcon: Icon(Icons.search, color: Colors.grey.shade500),
+          suffixIcon: isSearching
+              ? IconButton(
+                  tooltip: '清空搜索',
+                  icon: const Icon(Icons.close),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _searchQuery = '');
+                  },
+                )
+              : Padding(
+                  padding: const EdgeInsets.only(right: 14),
+                  child: Center(
+                    widthFactor: 1,
+                    child: Text(
+                      '$totalCount',
+                      style: GoogleFonts.rubik(
+                        fontSize: 12,
+                        color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ),
+                ),
+          helperText: isSearching ? '匹配 $matchCount / $totalCount 个快速动作' : null,
+          helperStyle: GoogleFonts.lato(fontSize: 11, color: Colors.grey),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchEmptyState() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.manage_search, size: 40, color: Colors.grey.shade300),
+          const SizedBox(height: 10),
+          Text(
+            '没有找到匹配的快速动作',
+            style: GoogleFonts.lato(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '试试搜索名称、分类、金额、备注、直接保存或轻确认',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.lato(fontSize: 12, color: Colors.grey.shade500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionSection({
     required String title,
     required String subtitle,
     required List<JiveQuickAction> actions,
     required bool showOnHome,
+    required bool canReorder,
   }) {
     if (actions.isEmpty) return const SizedBox.shrink();
 
@@ -201,38 +313,51 @@ class _TemplateListScreenState extends State<TemplateListScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildSectionHeader(title, subtitle),
-        ReorderableListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          buildDefaultDragHandles: false,
-          itemCount: actions.length,
-          onReorder: (oldIndex, newIndex) {
-            _reorderSection(
-              actions: actions,
-              oldIndex: oldIndex,
-              newIndex: newIndex,
-              showOnHome: showOnHome,
-            );
-          },
-          itemBuilder: (context, index) {
-            final action = actions[index];
-            return _buildActionCard(
-              action,
-              key: ValueKey('quick_action_${action.stableId}'),
-              dragHandle: ReorderableDragStartListener(
-                index: index,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Icon(
-                    Icons.drag_handle,
-                    color: Colors.grey.shade400,
-                    size: 20,
+        if (canReorder)
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: actions.length,
+            onReorder: (oldIndex, newIndex) {
+              _reorderSection(
+                actions: actions,
+                oldIndex: oldIndex,
+                newIndex: newIndex,
+                showOnHome: showOnHome,
+              );
+            },
+            itemBuilder: (context, index) {
+              final action = actions[index];
+              return _buildActionCard(
+                action,
+                key: ValueKey('quick_action_${action.stableId}'),
+                dragHandle: ReorderableDragStartListener(
+                  index: index,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Icon(
+                      Icons.drag_handle,
+                      color: Colors.grey.shade400,
+                      size: 20,
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
+              );
+            },
+          )
+        else
+          Column(
+            children: actions
+                .map(
+                  (action) => _buildActionCard(
+                    action,
+                    key: ValueKey('quick_action_${action.stableId}'),
+                    dragHandle: const SizedBox(width: 28),
+                  ),
+                )
+                .toList(growable: false),
+          ),
       ],
     );
   }
