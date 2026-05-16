@@ -110,8 +110,11 @@ listed draft/stacked PRs were merged into `main`.
 - [x] Fresh `main` passes the merged MoneyThings-related test set through the
       same GitHub Flutter CI run.
 
-Local note: Flutter is not available in the shell PATH for this agent session,
-so final Wave 0 analyzer/test evidence is the GitHub `main` Flutter CI run.
+Final closure note: later closure PRs `#318`, `#319`, and `#320` were merged
+after Wave 0 to close system-entry visibility, shared-ledger tier limits, and
+widget quick-action routing. Fresh-main local verification for the final
+MoneyThings closure is recorded in
+`docs/2026-05-16-moneythings-final-closure-dev-verify.md`.
 
 ## Wave 1: One Touch / Quick Action Closure
 
@@ -131,9 +134,10 @@ so final Wave 0 analyzer/test evidence is the GitHub `main` Flutter CI run.
 - [x] Add tests for direct, confirm, edit, save-as-action, usage count,
       `lastUsedAt`, Deep Link, and AppIntent routing.
 
-Status note: Android's current home widget quick-add uses the shared
-`jive://transaction/new` structured-editor path. A future widget that exposes
-saved quick actions should reuse `jive://quick-action?id=...`.
+Status note: Android's home widget quick-add uses the shared
+`jive://transaction/new` structured-editor path by default. When Flutter
+configures a saved quick-action shortcut, the same widget button opens
+`jive://quick-action?id=...` and enters the shared Quick Action execution path.
 
 ## Wave 2: Transaction Editor Unified Entry
 
@@ -259,15 +263,24 @@ Only start this wave after Waves 0-7 are merged and verified on fresh `main`.
 - [ ] Decide whether object-level sharing needs server-side tables and RLS.
 - [ ] If needed, design object sharing tables, permissions, offline conflict
       handling, audit logs, and sync semantics separately.
-- [ ] Do not combine Wave 8 migrations with UI closure PRs.
+- [x] Do not combine Wave 8 migrations with UI closure PRs.
+
+Wave 8 status: deferred by design. The current closure intentionally stops at
+the migration-free MoneyThings borrowing layer. QuickAction cross-device sync,
+`parentAccountKey`, object-level sharing tables, object-level RLS, and audit-log
+semantics require a separate design review and migration PR set.
 
 ## Final Acceptance
 
-- [ ] All non-risky MoneyThings borrowing features are merged into `main`.
-- [ ] Fresh `main` passes `flutter analyze --no-fatal-infos`.
-- [ ] Fresh `main` passes MoneyThings closure unit/widget tests.
+- [x] All non-risky MoneyThings borrowing features are merged into `main`.
+- [x] Fresh `main` passes `flutter analyze --no-fatal-infos`.
+- [x] Fresh `main` passes MoneyThings closure unit/widget tests.
 - [ ] Manual smoke passes: one-tap breakfast, lunch confirm, complex transfer
       editor fallback, third-level category save, account group display, shared
       transaction warning, SmartList default restore, Widget/Deep Link entry.
-- [ ] A final development and verification document summarizes implemented
+- [x] A final development and verification document summarizes implemented
       features, remaining Wave 8 decisions, and validation evidence.
+
+Manual smoke status: the checklist is ready for real device or simulator
+execution before external beta. This final documentation slice does not claim a
+device smoke pass unless it is run on an actual app build.
