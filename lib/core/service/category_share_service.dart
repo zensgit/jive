@@ -126,9 +126,14 @@ class CategoryShareService {
   List<String> previewNames(String jsonData) {
     try {
       final list = jsonDecode(jsonData) as List<dynamic>;
-      return list
-          .whereType<Map<String, dynamic>>()
-          .map((m) => m['name'] as String? ?? '')
+      final items = list.whereType<Map<String, dynamic>>().toList();
+      final byKey = <String, Map<String, dynamic>>{
+        for (final item in items)
+          if ((item['key'] as String?)?.isNotEmpty == true)
+            item['key'] as String: item,
+      };
+      return items
+          .map((item) => _previewPathName(item, byKey))
           .where((n) => n.isNotEmpty)
           .toList();
     } catch (_) {
@@ -169,6 +174,32 @@ class CategoryShareService {
       ..isHidden = (m['isHidden'] as bool?) ?? false
       ..isIncome = (m['isIncome'] as bool?) ?? false
       ..updatedAt = DateTime.now();
+  }
+
+  String _previewPathName(
+    Map<String, dynamic> item,
+    Map<String, Map<String, dynamic>> byKey,
+  ) {
+    final segments = <String>[];
+    final seen = <String>{};
+    Map<String, dynamic>? current = item;
+
+    while (current != null) {
+      final key = current['key'] as String?;
+      if (key != null && key.isNotEmpty && !seen.add(key)) break;
+
+      final name = (current['name'] as String?)?.trim();
+      if (name != null && name.isNotEmpty) {
+        segments.add(name);
+      }
+
+      final parentKey = current['parentKey'] as String?;
+      current = parentKey == null || parentKey.isEmpty
+          ? null
+          : byKey[parentKey];
+    }
+
+    return segments.reversed.join(' / ');
   }
 
   String _generateShareCode(String data) {

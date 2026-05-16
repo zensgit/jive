@@ -41,6 +41,7 @@
 - 2026-05-10：`codex/moneythings-scene-template-contracts` 固定日常、旅行、装修、家庭、宠物、自由职业 6 个场景模板的 ID 顺序与核心分类/标签语义，避免场景产品化后续回退。
 - 2026-05-10：`codex/moneythings-transaction-entry-protocol` 补齐 `TransactionEntryParams` 协议回归测试，固定来源横幅、提交按钮、缺字段高亮和复杂转账预填合同。
 - 2026-05-10：`codex/moneythings-category-import-segments` 补齐三层分类导入路径保真，CSV / 映射导入可保留完整 `大类 / 中类 / 小类` segments，并在同名叶子分类时按完整路径解析到正确叶子。
+- 2026-05-10：`codex/moneythings-category-share-path-preview` 补齐分类分享预览的三层路径显示，导入前可看到 `大类 / 中类 / 小类`，并用 roundtrip 测试确认 `parentKey` 不丢失。
 
 ## 保持不变
 
@@ -109,4 +110,5 @@
 - `docs/2026-05-10-moneythings-category-hidden-paths-dev-verify.md`
 - `docs/2026-05-07-moneythings-shared-transaction-warning-dev-verify.md`
 - `docs/2026-05-10-moneythings-category-import-segments-dev-verify.md`
+- `docs/2026-05-10-moneythings-category-share-path-preview-dev-verify.md`
 - `docs/moneythings-entry-system-user-guide.md`
