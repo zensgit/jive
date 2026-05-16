@@ -3012,11 +3012,58 @@ class _TagManagementScreenState extends State<TagManagementScreen> {
       },
     );
     if (target == null) return;
+    if (!await _confirmSharedTagMerge(source: source, target: target)) {
+      return;
+    }
     await TagService(
       _isar,
     ).mergeTags(targetKey: target.key, sourceKeys: [source.key]);
     await _loadData();
     _showMessage('已合并 "${source.name}" -> "${target.name}"');
+  }
+
+  Future<bool> _confirmSharedTagMerge({
+    required JiveTag source,
+    required JiveTag target,
+  }) async {
+    final sharePolicy = _tagSharePolicy;
+    if (sharePolicy.visibility == ObjectShareVisibility.private) {
+      return true;
+    }
+    final shareWarning = sharePolicy.warning;
+    final deletionWarning = const ObjectSharePolicyService().deletionWarning(
+      objectLabel: source.name,
+      affectedTransactionCount: source.usageCount,
+      shared: true,
+    );
+    final ruleCount = _rulesByTagKey[source.key]?.length ?? 0;
+    if (!mounted) return false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认合并共享标签'),
+        content: Text(
+          [
+            if (shareWarning != null) shareWarning,
+            deletionWarning,
+            '合并后会将交易和智能规则迁移到「${target.name}」，并删除「${source.name}」。',
+            if (ruleCount > 0) '将迁移 $ruleCount 条智能规则。',
+            '确定继续合并吗？',
+          ].join('\n\n'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('合并'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
   }
 
   Future<void> _convertTag(JiveTag tag) async {
