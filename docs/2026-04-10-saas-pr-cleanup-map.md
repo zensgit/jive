@@ -4,6 +4,7 @@
 > 主线 PR: [#144](https://github.com/zensgit/jive/pull/144)
 > 当前 head: `f753c50`
 > 用途: `#144` merge 后，统一给旧 SaaS PR 做收尾标注
+> 2026-05-18 更新: 旧 open SaaS PR 队列已完成关闭收尾，当前 open PR 队列为空。
 
 ## 原则
 
@@ -77,3 +78,39 @@ The SaaS Beta stack was integrated and advanced through `#144` as the single mai
 可用这个脚本直接打印所有建议评论：
 
 - [print_saas_pr_cleanup_comments.sh](/Users/chauhua/Documents/GitHub/Jive/worktrees/codex-saas-mainline-next/scripts/print_saas_pr_cleanup_comments.sh)
+
+## 2026-05-18 实际收尾结果
+
+`#144` 已于 2026-04-10 合入 `main`，当前 `main@10228185` 已包含 SaaS Beta
+主线与后续收口文档。2026-05-18 对仍然 open 的旧 SaaS 栈 PR 做了最终
+队列清理。
+
+已统一评论并关闭的旧 PR：
+
+| PR | 标题 | 最终处理 |
+|---|---|---|
+| `#125` | `feat(saas): scope shared ledgers to default workspace key` | closed as superseded by `#144` |
+| `#126` | `feat(saas): add phone and Apple auth entrypoints` | closed as superseded by `#144` |
+| `#130` | `feat(saas): add ops overview summary` | closed as superseded by `#144` |
+| `#131` | `feat(saas): add Apple App Store webhook handling` | closed as superseded by `#144` |
+| `#132` | `feat(saas): harden email auth reset flow` | closed as superseded by `#144` |
+| `#133` | `feat(saas): add App Store payment service` | closed as superseded by `#144` |
+| `#135` | `feat(saas): restack email auth reset flow onto main auth stack` | closed as superseded by `#144` |
+| `#137` | `feat(saas): restack B1.2 stable account sync keys` | closed as superseded by `#144` |
+| `#138` | `feat(saas): verify Apple purchases against server truth` | closed as superseded by `#144` |
+| `#140` | `feat(saas): restack B1.2 sync-key architecture onto clean B1.1` | closed as superseded by `#144` |
+| `#141` | `feat(saas): restack B1.3 tombstone sync onto clean B1.2` | closed as superseded by `#144` |
+
+Post-cleanup verification:
+
+- `gh pr list --repo zensgit/jive --state open --json number,title,url --limit 20`
+  returned `[]`.
+- `gh api repos/zensgit/jive/branches/main --jq .commit.sha` returned
+  `10228185aff3d9f383b15421733c49aad542a734`.
+- The latest `main` Flutter CI run for `10228185` completed successfully.
+
+Future SaaS follow-up rule:
+
+- Do not reopen the old stacked PRs as merge paths.
+- Branch fresh from `main` for any SaaS follow-up.
+- Keep `#144` and the closed PRs as audit/review material only.
