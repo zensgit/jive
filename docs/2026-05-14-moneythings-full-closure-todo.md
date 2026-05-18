@@ -268,7 +268,9 @@ Only start this wave after Waves 0-7 are merged and verified on fresh `main`.
 Wave 8 status: deferred by design. The current closure intentionally stops at
 the migration-free MoneyThings borrowing layer. QuickAction cross-device sync,
 `parentAccountKey`, object-level sharing tables, object-level RLS, and audit-log
-semantics require a separate design review and migration PR set.
+semantics require a separate design review and migration PR set. See
+`docs/2026-05-18-moneythings-wave8-decision-gate.md` for entry criteria and
+stop conditions.
 
 ## Final Acceptance
 
@@ -283,4 +285,7 @@ semantics require a separate design review and migration PR set.
 
 Manual smoke status: the checklist is ready for real device or simulator
 execution before external beta. This final documentation slice does not claim a
-device smoke pass unless it is run on an actual app build.
+device smoke pass unless it is run on an actual app build. Use
+`docs/2026-05-18-moneythings-prebeta-manual-smoke-runbook.md` and
+`scripts/print_moneythings_prebeta_smoke_checklist.sh` for repeatable pre-beta
+execution.
