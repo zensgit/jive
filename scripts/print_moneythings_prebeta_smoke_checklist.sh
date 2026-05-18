@@ -4,19 +4,21 @@ set -euo pipefail
 target="${1:-all}"
 
 case "$target" in
-  all|android|ios|core)
+  all|android|ios|core|status)
     ;;
   -h|--help|help)
     cat <<'USAGE'
-Usage: scripts/print_moneythings_prebeta_smoke_checklist.sh [all|android|ios|core]
+Usage: scripts/print_moneythings_prebeta_smoke_checklist.sh [all|android|ios|core|status]
 
 Prints the MoneyThings pre-beta manual smoke checklist.
+
+Use "status" to print the latest committed smoke evidence summary.
 USAGE
     exit 0
     ;;
   *)
     echo "Unknown target: $target" >&2
-    echo "Expected one of: all, android, ios, core" >&2
+    echo "Expected one of: all, android, ios, core, status" >&2
     exit 2
     ;;
 esac
@@ -124,6 +126,49 @@ print_footer() {
 - Any FAIL or BLOCKED item has an issue or PR linked before external beta.
 EOF
 }
+
+print_status() {
+  cat <<'EOF'
+# Jive MoneyThings Smoke Evidence Status
+
+Latest recorded evidence: 2026-05-18 Android physical-device smoke.
+
+## PASS
+
+- MT-CORE-03 partial core proxy: `jive://transaction/new?...` opens
+  `TransactionFormScreen` / `快速记录` with widget source copy and missing
+  `分类` / `账户` highlights.
+- MT-CORE onboarding regression: welcome-page `记一笔 -> 选择分类 -> 下一步`
+  advances to the category setup step after amount and category selection.
+- MT-ANDROID transaction URL route: Android external transaction deep link
+  launches the structured editor without a crash.
+
+## PARTIAL
+
+- MT-ANDROID scene switch route: `jive://scene/switch?...` cold-launches
+  without a crash, but visible scene switching still needs a seeded scene.
+- MT-ANDROID quick-action route: `jive://quick-action?id=...` cold-launches
+  without a crash, but executor behavior still needs a seeded quick action.
+
+## BLOCKED / NOT YET RUN
+
+- Actual Android home-widget tap smoke has not been run from a placed widget.
+- iOS Shortcuts/AppIntent smoke has not been run because no iOS simulator was
+  booted in the last validation session.
+- Full core data smoke still needs seeded quick actions, accounts, categories,
+  SmartLists, and shared-scene data on a target device.
+
+See:
+
+- `docs/2026-05-18-moneythings-prebeta-manual-smoke-runbook.md`
+- `docs/2026-05-18-moneythings-android-system-entry-smoke-dev-verify.md`
+EOF
+}
+
+if [[ "$target" == "status" ]]; then
+  print_status
+  exit 0
+fi
 
 print_header
 print_core

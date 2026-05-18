@@ -49,6 +49,18 @@ Additional Android observation later on 2026-05-18:
   launched without crashes, but semantic validation was blocked by clean test
   data: there was no seeded `旅行` scene and no template `42`.
 
+Follow-up Android observation on the same device after `main@5458327`:
+
+- PR `#324` merged into `main`; the merge commit was `5458327`.
+- The post-merge `main` Flutter CI run `26040307190` completed successfully.
+- The temporary `prod` debug package was installed again as
+  `com.jivemoney.app`, without replacing the existing `dev` or `auto`
+  packages.
+- Onboarding `记一笔` regression passed: after entering an amount, selecting
+  `餐饮`, and tapping `下一步`, the app advanced to `设分类`.
+- `jive://scene/switch?name=旅行` still launched cleanly, but semantic
+  switching remains blocked on a seeded scene/book named `旅行`.
+
 ## Checklist Generator
 
 Print the full checklist:
@@ -63,6 +75,12 @@ Print platform-specific sections:
 scripts/print_moneythings_prebeta_smoke_checklist.sh core
 scripts/print_moneythings_prebeta_smoke_checklist.sh android
 scripts/print_moneythings_prebeta_smoke_checklist.sh ios
+```
+
+Print the latest committed smoke status summary:
+
+```bash
+scripts/print_moneythings_prebeta_smoke_checklist.sh status
 ```
 
 Suggested evidence capture:
