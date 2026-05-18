@@ -32,6 +32,23 @@ Current local observation on 2026-05-18:
 - `flutter devices` also attempted a Flutter SDK git fetch and reported a
   GitHub connection failure before returning the local device list.
 
+Additional Android observation later on 2026-05-18:
+
+- A physical Android device became available:
+  `EP0110MZ0BC110087W`, model `P0110`, Android `16`.
+- Existing `com.jivemoney.app.dev` could not be replaced by the local debug
+  build because of a signature mismatch; it was not uninstalled to avoid
+  deleting dev-package data.
+- A temporary `prod` debug build was installed as `com.jivemoney.app`, used for
+  system-entry smoke, and then uninstalled. Existing `dev` and `auto` packages
+  remained installed.
+- `jive://transaction/new?...` passed the automated Android deep-link smoke
+  after onboarding was skipped: the app opened `快速记录`, showed source copy
+  `来自桌面小组件`, and highlighted missing `分类` / `账户` fields.
+- `jive://scene/switch?...` and `jive://quick-action?id=template%3A42` cold
+  launched without crashes, but semantic validation was blocked by clean test
+  data: there was no seeded `旅行` scene and no template `42`.
+
 ## Checklist Generator
 
 Print the full checklist:
